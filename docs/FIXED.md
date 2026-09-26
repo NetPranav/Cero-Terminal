@@ -6,8 +6,9 @@ This document tracks verified resolutions, architectural implementations, touche
 
 ## Table of Contents
 1. [Issue 1: Cloud API "Test Connection" Transient Failures](#issue-1-cloud-api-test-connection-transient-failures)
-2. [Issue 3: Persistent Execution Plan HUD Notification Overlay](#issue-3-persistent-execution-plan-hud-notification-overlay)
-3. [Issue 7: Workflows Section Cleanup & Onboarding Selection](#issue-7-workflows-section-cleanup--onboarding-selection)
+2. [Issue 2: Workflow Plan Failure on Complex Multi-Step Prompt](#issue-2-workflow-plan-failure-on-complex-multi-step-prompt)
+3. [Issue 3: Persistent Execution Plan HUD Notification Overlay](#issue-3-persistent-execution-plan-hud-notification-overlay)
+4. [Issue 7: Workflows Section Cleanup & Onboarding Selection](#issue-7-workflows-section-cleanup--onboarding-selection)
 4. [Issue 8: Clipboard Paste Failure on Prompt Entry (Ctrl+Shift+V / Ctrl+V)](#issue-8-clipboard-paste-failure-on-prompt-entry-ctrlshiftv--ctrlv)
 5. [Issue 9: Arrow Key In-Buffer Line Navigation vs. History Ingestion in Long Prompts](#issue-9-arrow-key-in-buffer-line-navigation-vs-history-ingestion-in-long-prompts)
 6. [Issue 10: Diminutive Tab Close Button Hit-Target and Sub-Pixel Dot Artifact](#issue-10-diminutive-tab-close-button-hit-target-and-sub-pixel-dot-artifact)
@@ -70,6 +71,77 @@ This behavior created user friction and confusion, falsely signaling that entere
 - [`src/ui/components/AiSettingsPage.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/AiSettingsPage.tsx): Connection testing state and visual spinner.
 - [`src/App.css`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.css): Spinner animation keyframes adhering to grayscale aesthetics.
 - [`src/ai/provider/CloudApiProvider.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/provider/CloudApiProvider.test.ts): Unit test coverage for retry behavior, 401 fast abort, timeout handling, and URL normalization.
+
+---
+
+## Issue 2: Workflow Plan Failure on Complex Multi-Step Prompt
+
+### 2.1 Problem Statement
+When executing compound procedural instructions with multiple sequential steps and a post-execution workflow save directive:
+```
+Create a temporary testing workspace at /tmp/sentinel-workflow-test.
+
+Inside it:
+1. Create a directory called project.
+2. Inside project create three files: frontend.txt, backend.txt, and README.md.
+3. Put "Frontend module" inside frontend.txt.
+4. Put "Backend module" inside backend.txt.
+5. Put "Sentinel Workflow Test" inside README.md.
+6. Finally list the project directory and display the contents of all three files.
+
+After successfully completing all of these steps, save the verified execution as a workflow named workflow-basic-test.
+```
+
+Execution previously failed with:
+- Intent routed: `workflow.run (98% confidence, 12ms CPU tier)`
+- Terminal error: `✗ Workflow plan failed: Command string required for shell.execute; Command string required for shell.execute`
+- The prompt was compressed into 2 vague dummy phases, no files were created, and the workflow was not saved.
+
+### 2.2 Resolution Status
+- **Status:** Resolved & Verified
+- **Validation:** 100% test pass rate across test suite (195 test files, 1,403 tests), dedicated regression suite ([`ComplexWorkflowPlanning.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/ComplexWorkflowPlanning.test.ts)), clean production bundle build (`npm run build`), and `cargo check`.
+
+### 2.3 Technical Root Causes
+1. **Natural Language Save Directive Ignored by Decomposer:**
+   - In [`MultistagePromptDecomposer.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/engine/MultistagePromptDecomposer.ts), `extractSaveAsDirective()` only matched explicit delimited syntax (`task :: save [as] workflow <name>`).
+   - Natural language concluding sentences (e.g. `After successfully completing all of these steps, save the verified execution as a workflow named <name>`) were not extracted, leaving the trailing clause attached to the prompt.
+2. **Intent Classifier Keyword Hijacking:**
+   - In [`IntentModel.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/models/IntentModel.ts), `classifyHeuristic` matched any prompt containing `"workflow"` with `/\b(?:workflow|save\s+workflow|run\s+workflow)\b/i`.
+   - Even though the body was a complex procedural instruction, the presence of the word "workflow" in the final sentence routed the entire prompt to `workflow.run`.
+3. **Heuristic Project Scaffolding Interception:**
+   - In [`AdaptivePlanEngine.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/AdaptivePlanEngine.ts), Heuristic #7 matched prompts containing `create`, `project`, and `inside`.
+   - This erroneously hijacked the 6-step prompt into a 2-phase dummy `npm init -y` plan before model planning or structured step extraction could run.
+4. **Planning Prompt Token Clamping & Missing Command Schema:**
+   - `buildPhasePlanningPrompt()` instructed the LLM to emit 2 to 5 phases with only `id`, `title`, and `tool`, omitting `command` parameters from the schema.
+   - `maxTokens` was capped at 350, truncating responses on compound instructions.
+5. **Empty Parameter Driver Invocation in `shell.execute`:**
+   - In `executeSinglePhase()`, when `phase.tool === 'shell.execute'` and `params.command` was missing, `resolveShellCommandForPhase()` failed to parse compound titles like `"Create the workspace directory"`.
+   - `options.toolExecutor.execute('shell.execute', {})` was invoked with an empty object, triggering `Command string required for shell.execute` in [`ShellSDKCapability.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/sdk/capabilities/drivers/ShellSDKCapability.ts).
+
+### 2.4 Implemented Architecture & Remediation
+1. **Natural Language Save Directive Extraction:**
+   - In [`MultistagePromptDecomposer.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/engine/MultistagePromptDecomposer.ts), upgraded `extractSaveAsDirective()` to support natural language concluding instructions, splitting the inner task prompt and workflow name cleanly.
+2. **Procedural Intent Disambiguation:**
+   - In [`IntentModel.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/models/IntentModel.ts), preserved procedural action verbs (`create`, `mkdir`, `put`, `echo`, `write`, `cat`, etc.) from being routed to `workflow.run` or `workflow.save`.
+3. **Bypass Single-Intent Heuristics on Numbered Multi-Step Prompts:**
+   - In [`AdaptivePlanEngine.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/AdaptivePlanEngine.ts), added a multi-step check at the start of `createHeuristicPhases()` and refined Heuristic #7 to prevent hijacking numbered procedural tasks.
+4. **Direct Numbered Step Extraction & Robust Command Synthesis:**
+   - Extracted numbered steps (`1. ... 2. ...`) into individual 1-to-1 execution phases.
+   - Enhanced `resolveShellCommandForPhase()` to extract workspace root paths (`/tmp/...`), subdirectory paths, multiple files for `touch`, `echo "content" > file`, and `ls -la && cat`.
+   - Upgraded `buildPhasePlanningPrompt()` to require `tool: 'shell.execute'` and explicit bash commands in JSON output, increasing `maxTokens` to 1,500.
+   - In `executeSinglePhase()`, added single-phase LLM synthesis fallback and explicitly guarded against passing empty commands to `shell.execute`.
+5. **Post-Execution Workflow Persistence:**
+   - Connected `AgentLoop.run()` completion hook to serialize successful multi-step executions directly into `~/.sentinel/workflows/<name>.json` with `schemaVersion: 1`.
+6. **Strict Grayscale & Zero-Emoji Enforcement:**
+   - Cleaned all status markers in `AgentLoop.ts` (`onPhaseDone`, failures, and progress messages) to use monochrome vector icons and typographical glyphs (`✓`, `✗`, `[WAIT]`).
+
+### 2.5 Touched Components & Files
+- [`src/workflows/engine/MultistagePromptDecomposer.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/engine/MultistagePromptDecomposer.ts): Natural language workflow save directive extraction.
+- [`src/ai/models/IntentModel.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/models/IntentModel.ts): Procedural intent protection against workflow domain hijacking.
+- [`src/ai/agent/AdaptivePlanEngine.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/AdaptivePlanEngine.ts): Multi-step heuristic bypass, robust command synthesis, JSON schema updates, and execution guards.
+- [`src/ai/agent/AgentLoop.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/AgentLoop.ts): Zero-emoji status reporting and automated workflow serialization upon completion.
+- [`src/ui/components/InstallerWizard.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/InstallerWizard.tsx): IDE profile button state consistency and error inspection.
+- [`src/ai/agent/ComplexWorkflowPlanning.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/ComplexWorkflowPlanning.test.ts): Unit and integration tests for decomposition, intent routing, multi-step execution, and workflow persistence.
 
 ---
 

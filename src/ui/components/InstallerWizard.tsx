@@ -193,9 +193,13 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
 
   const handleConfigureIdes = async () => {
     setLoading(true);
-    await installer.configureVsCodeIntegration();
-    await installer.configureCursorIntegration();
-    setMessage('✓ VS Code and Cursor profiles configured!');
+    const vsRes = await installer.configureVsCodeIntegration();
+    const cursorRes = await installer.configureCursorIntegration();
+    if (vsRes.success || cursorRes.success) {
+      setMessage('✓ VS Code and Cursor profiles configured!');
+    } else {
+      setMessage(`Error: ${vsRes.error || cursorRes.error || 'Failed to configure IDE profiles'}`);
+    }
     await refreshStatus();
     setLoading(false);
   };
@@ -699,7 +703,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
 
                 <button
                   onClick={handleConfigureIdes}
-                  disabled={loading || (status.vscodeConfigured && status.cursorConfigured)}
+                  disabled={loading || status.vscodeConfigured || status.cursorConfigured}
                   style={{
                     padding: '5px 14px',
                     borderRadius: '6px',
@@ -708,7 +712,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
                     color: (status.vscodeConfigured || status.cursorConfigured) ? '#ffffff' : 'rgba(255, 255, 255, 0.9)',
                     fontSize: '11.5px',
                     fontWeight: 600,
-                    cursor: (status.vscodeConfigured && status.cursorConfigured) ? 'default' : 'pointer',
+                    cursor: (status.vscodeConfigured || status.cursorConfigured) ? 'default' : 'pointer',
                     transition: 'all 0.15s ease',
                     flexShrink: 0
                   }}

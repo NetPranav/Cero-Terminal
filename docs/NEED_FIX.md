@@ -90,6 +90,8 @@ Execution failed with:
 - Terminal error: `✗ Workflow plan failed: Command string required for shell.execute; Command string required for shell.execute`
 - No directories or files were created, and the workflow was not saved.
 
+**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/FIXED.md#issue-2-workflow-plan-failure-on-complex-multi-step-prompt))
+
 ### 2.2 Code Locations
 - [src/sdk/capabilities/drivers/ShellSDKCapability.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/sdk/capabilities/drivers/ShellSDKCapability.ts#L41-L43) (`Command string required for shell.execute`)
 - [src/ai/agent/AdaptivePlanEngine.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/AdaptivePlanEngine.ts#L112-L139) (`createPlan`)

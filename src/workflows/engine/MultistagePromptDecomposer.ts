@@ -68,19 +68,33 @@ export class MultistagePromptDecomposer {
   }
 
   /**
-   * Extract ":: save as workflow <name>" or ":: save workflow <name>" directive.
-   * Strips the directive suffix and returns the inner task prompt alongside the target workflow name.
+   * Extract workflow save directives, supporting both delimited (":: save as workflow <name>")
+   * and natural language suffixes (e.g. "After successfully completing all of these steps, save the verified execution as a workflow named <name>").
    */
   public extractSaveAsDirective(prompt: string): WorkflowSaveDirective {
     const trimmed = prompt.replace(/^>\s*/, '').trim();
-    const match = trimmed.match(/^(.+?)\s*::\s*save\s+(?:as\s+)?workflow\s+["']?([a-zA-Z0-9_\-]+)["']?\s*$/i);
-    if (match) {
+
+    // 1. Explicit delimited suffix: "task :: save [as] workflow <name>"
+    const delimitedMatch = trimmed.match(/^([\s\S]+?)\s*::\s*save\s+(?:as\s+)?workflow\s+["']?([a-zA-Z0-9_\-]+)["']?\s*$/i);
+    if (delimitedMatch) {
       return {
-        taskPrompt: match[1].trim(),
-        workflowName: match[2].trim(),
+        taskPrompt: delimitedMatch[1].trim(),
+        workflowName: delimitedMatch[2].trim(),
         isSaveAsWorkflow: true
       };
     }
+
+    // 2. Natural language concluding instruction:
+    // "After successfully completing all of these steps, save the verified execution as a workflow named workflow-basic-test."
+    const naturalMatch = trimmed.match(/^([\s\S]+?)(?:[.\r\n]+\s*|\s+)(?:after\s+(?:successfully\s+)?(?:completing|finishing)\s+(?:all\s+of\s+these\s+steps|everything|this|all\s+steps)[,.]?\s+)?(?:then\s+|and\s+)?save\s+(?:(?:the|this)\s+)?(?:verified\s+)?(?:execution|pipeline|result|steps|workflow)?\s*as\s+(?:a\s+)?workflow(?:\s+named|\s+called|\s*[:=])?\s+["']?([a-zA-Z0-9_\-]+)["']?\.?\s*$/i);
+    if (naturalMatch && naturalMatch[1].trim()) {
+      return {
+        taskPrompt: naturalMatch[1].trim(),
+        workflowName: naturalMatch[2].trim(),
+        isSaveAsWorkflow: true
+      };
+    }
+
     return {
       taskPrompt: trimmed,
       isSaveAsWorkflow: false

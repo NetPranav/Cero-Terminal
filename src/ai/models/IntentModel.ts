@@ -271,8 +271,12 @@ Context: os=${context?.os || 'linux'}, cwd=${context?.cwd || '~'}, lastExitCode=
       return { domain: 'filesystem', action: 'read', confidence: 0.95 };
     }
 
-    // 8. Workflow Engine
-    if (/\b(?:workflow|save\s+workflow|run\s+workflow)\b/i.test(clean)) {
+    // 8. Workflow Engine (Dedicated run or save commands, not compound multi-step instructions)
+    const isPureWorkflowCmd = /^(?:run|save|list|replay|delete)\s+workflow\b/i.test(clean) ||
+      /^workflow\s+(?:run|save|list|replay|delete)\b/i.test(clean);
+    const hasProceduralAction = /\b(?:create|mkdir|put|echo|touch|write|cat|build|test|install|remove|delete|clone)\b/i.test(clean);
+
+    if (isPureWorkflowCmd || (/\b(?:save\s+workflow|run\s+workflow)\b/i.test(clean) && !hasProceduralAction)) {
       return { domain: 'workflow', action: clean.includes('save') ? 'save' : 'run', confidence: 0.98 };
     }
 

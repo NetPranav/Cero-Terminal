@@ -1630,7 +1630,7 @@ export class AgentLoop {
       const success = toolRes.success;
       const summary = success
         ? `✓ Executed learned workflow: ${learnedMatch.interpolatedCommand}`
-        : `⚠ Failed to execute learned workflow: ${toolRes.error || 'unknown error'}`;
+        : `✗ Failed to execute learned workflow: ${toolRes.error || 'unknown error'}`;
 
       this.emit({ type: success ? 'done' : 'error', message: summary });
 
@@ -1695,7 +1695,7 @@ export class AgentLoop {
           const success = toolRes.success;
           const summary = success
             ? (toolRes.data?.stdout || `✓ Executed verified recipe: ${tldrMatch.interpolatedCommand}`)
-            : `⚠ Execution failed: ${toolRes.error || 'unknown error'}`;
+            : `✗ Execution failed: ${toolRes.error || 'unknown error'}`;
 
           this.emit({ type: success ? 'done' : 'error', message: summary });
 
@@ -2136,7 +2136,7 @@ export class AgentLoop {
               this.emit({ type: 'tool_start', message: `Phase ${phase.id}: ${phase.title}` });
             },
             onPhaseDone: (phase) => {
-              const icon = phase.status === 'completed' ? '✓' : phase.status === 'skipped' ? '⊘' : phase.status === 'awaiting_action' ? '⏳' : '⚠';
+              const icon = phase.status === 'completed' ? '✓' : phase.status === 'skipped' ? '⊘' : phase.status === 'awaiting_action' ? '[WAIT]' : '✗';
               this.emit({ 
                 type: 'tool_done', 
                 message: `${icon} Phase ${phase.id}: ${phase.title}${phase.skippedReason ? ` (${phase.skippedReason})` : ''}` 
@@ -2490,7 +2490,7 @@ export class AgentLoop {
 
             this.emit({ 
               type: 'tool_done', 
-              message: `⚠ ${result.error || result.data?.stderr || 'Command failed'}` 
+              message: `✗ ${result.error || result.data?.stderr || 'Command failed'}` 
             });
 
             // Phase 0.5, Item 10: Failure Classification Before Retry
@@ -2681,7 +2681,7 @@ Output JSON:
 
     const summary = allSuccess
       ? `✓ Completed multi-stage workflow: ${overallGoal}`
-      : `⚠ Multi-stage workflow interrupted: ${overallGoal}`;
+      : `✗ Multi-stage workflow interrupted: ${overallGoal}`;
 
     this.emit({ type: allSuccess ? 'done' : 'error', message: summary });
 
