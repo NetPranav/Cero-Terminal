@@ -43,6 +43,23 @@ describe('PromptNavigationEngine (Issue 9 Behavioral Specifications)', () => {
       expect(rangeRow1.totalRows).toBe(3);
       expect(rangeRow1.currentRowOffset).toBe(0);
     });
+
+    it('calculates multi-row range when lines have isWrapped: false (GNU Readline redisplay)', () => {
+      const lines: BufferLineInfo[] = [
+        { text: 'previous command output', isWrapped: false },
+        { text: '[overxpowered@archlinux ~]$ git commit -m "First line', isWrapped: false }, // row 1
+        { text: 'Second line of message', isWrapped: false },                               // row 2
+        { text: 'Third line of message"', isWrapped: false },                               // row 3
+        { text: '', isWrapped: false },                                                     // row 4 (empty)
+      ];
+
+      // Cursor on row 2 (middle line)
+      const range = PromptNavigationEngine.getPromptRowRange(lines, 2);
+      expect(range.startRow).toBe(1);
+      expect(range.endRow).toBe(3);
+      expect(range.totalRows).toBe(3);
+      expect(range.currentRowOffset).toBe(1);
+    });
   });
 
   describe('evaluateNavigation', () => {
@@ -215,15 +232,15 @@ describe('PromptNavigationEngine (Issue 9 Behavioral Specifications)', () => {
     it('moves up and down lines on middle lines of a 3-line prompt', () => {
       const cols = 50;
       const lines: BufferLineInfo[] = [
-        { text: 'user@host:~$ > First line of prompt', isWrapped: false }, // row 0
+        { text: 'user@host:~$ > First line of prompt', isWrapped: false }, // row 0 (prefix + '>' = 13)
         { text: 'Second line of prompt', isWrapped: true },                // row 1
         { text: 'Third line of prompt.', isWrapped: true },                // row 2
       ];
 
-      // On row 1 (middle line) moving up
+      // On row 1 (middle line) at col 20 (where 20 >= firstCharCol 13) moving up
       const moveUp = PromptNavigationEngine.evaluateNavigation({
         direction: 'up',
-        cursorX: 10,
+        cursorX: 20,
         cursorY: 1,
         cols,
         lines,
@@ -232,10 +249,10 @@ describe('PromptNavigationEngine (Issue 9 Behavioral Specifications)', () => {
       expect(moveUp.action).toBe('move-up-line');
       expect(moveUp.payload).toBe('\x1b[D'.repeat(cols));
 
-      // On row 1 (middle line) moving down
+      // On row 1 (middle line) at col 20 moving down
       const moveDown = PromptNavigationEngine.evaluateNavigation({
         direction: 'down',
-        cursorX: 10,
+        cursorX: 20,
         cursorY: 1,
         cols,
         lines,
@@ -243,6 +260,48 @@ describe('PromptNavigationEngine (Issue 9 Behavioral Specifications)', () => {
       expect(moveDown.handled).toBe(true);
       expect(moveDown.action).toBe('move-down-line');
       expect(moveDown.payload).toBe('\x1b[C'.repeat(cols));
+    });
+
+    it('clamps target column to firstCharCol when cursor is left of prompt terminator', () => {
+      const cols = 50;
+      const lines: BufferLineInfo[] = [
+        { text: 'user@host:~$ > First line of prompt', isWrapped: false }, // row 0: prefix len 13, '>' at 13
+        { text: 'Second line of prompt', isWrapped: true },                // row 1
+      ];
+
+      // Cursor at col 10 on row 1 (left of firstCharCol 13 on row 0)
+      const decision = PromptNavigationEngine.evaluateNavigation({
+        direction: 'up',
+        cursorX: 10,
+        cursorY: 1,
+        cols,
+        lines,
+      });
+      expect(decision.handled).toBe(true);
+      expect(decision.action).toBe('move-up-line');
+      // 10 chars to start of row 1 + (50 - 13) chars to '>' at col 13 on row 0 = 47 chars
+      expect(decision.payload).toBe('\x1b[D'.repeat(47));
+    });
+
+    it('moves between non-wrapped lines with exact character distance based on line lengths', () => {
+      const cols = 80;
+      const lines: BufferLineInfo[] = [
+        { text: 'user@host:~$ echo "line 1"', isWrapped: false }, // row 0: len 27, prefix 13, 'e' at 13
+        { text: 'echo "line 2"', isWrapped: false },              // row 1: len 13, starts at 0
+      ];
+
+      // Cursor at col 5 on row 1 moving up to col 5 on row 0 (clamped to firstCharCol 13)
+      const moveUp = PromptNavigationEngine.evaluateNavigation({
+        direction: 'up',
+        cursorX: 5,
+        cursorY: 1,
+        cols,
+        lines,
+      });
+      expect(moveUp.handled).toBe(true);
+      expect(moveUp.action).toBe('move-up-line');
+      // 5 chars to start of row 1 + (26 - 13) chars to col 13 on row 0 = 18 chars
+      expect(moveUp.payload).toBe('\x1b[D'.repeat(18));
     });
 
     it('moves to end of text when Down arrow is pressed on bottom row inside text', () => {

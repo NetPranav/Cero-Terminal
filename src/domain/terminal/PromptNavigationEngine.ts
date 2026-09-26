@@ -86,6 +86,9 @@ export class PromptNavigationEngine {
 
   /**
    * Determine boundaries of the current command/prompt in the terminal buffer.
+   * Walks backward from cursorY to locate the active prompt line (detectPromptPrefixLength > 0).
+   * All continuation lines down to cursorY are recognized as part of the multi-line command
+   * regardless of the isWrapped flag (fixing GNU Readline redisplay unwrapping).
    */
   public static getPromptRowRange(
     lines: BufferLineInfo[],
@@ -96,18 +99,54 @@ export class PromptNavigationEngine {
     totalRows: number;
     currentRowOffset: number;
   } {
-    const safeCursorY = Math.max(0, Math.min(cursorY, lines.length - 1));
-
-    // Walk backwards while current row is a wrapped continuation of previous row
-    let startRow = safeCursorY;
-    while (startRow > 0 && lines[startRow]?.isWrapped) {
-      startRow--;
+    if (!lines || lines.length === 0) {
+      return { startRow: 0, endRow: 0, totalRows: 1, currentRowOffset: 0 };
     }
 
-    // Walk forwards while next row is a wrapped continuation
+    const safeCursorY = Math.max(0, Math.min(cursorY, lines.length - 1));
+
+    // 1. Walk backward from safeCursorY to locate the active prompt line
+    let startRow = safeCursorY;
+    if (this.detectPromptPrefixLength(lines[safeCursorY]?.text || '') > 0) {
+      startRow = safeCursorY;
+    } else {
+      let foundPrompt = false;
+      for (let r = safeCursorY - 1; r >= 0; r--) {
+        const text = lines[r]?.text || '';
+        if (this.detectPromptPrefixLength(text) > 0) {
+          startRow = r;
+          foundPrompt = true;
+          break;
+        }
+        // If line is empty and not wrapped, we hit the boundary of previous command output
+        if (!lines[r]?.isWrapped && text.trim().length === 0) {
+          break;
+        }
+      }
+      if (!foundPrompt) {
+        // Fallback to checking isWrapped if no prompt prefix was found
+        startRow = safeCursorY;
+        while (startRow > 0 && lines[startRow]?.isWrapped) {
+          startRow--;
+        }
+      }
+    }
+
+    // 2. Walk forward from safeCursorY to locate the end of the current command
     let endRow = safeCursorY;
-    while (endRow < lines.length - 1 && lines[endRow + 1]?.isWrapped) {
-      endRow++;
+    for (let r = safeCursorY + 1; r < lines.length; r++) {
+      const text = lines[r]?.text || '';
+      // If the next line has a new prompt prefix, the current command ended
+      if (this.detectPromptPrefixLength(text) > 0) {
+        break;
+      }
+      // If next line is a wrapped continuation or has non-empty text
+      if (lines[r]?.isWrapped || text.trim().length > 0) {
+        endRow = r;
+      } else {
+        // Empty non-wrapped line marks the end of active command input buffer
+        break;
+      }
     }
 
     const totalRows = Math.max(1, endRow - startRow + 1);
@@ -119,6 +158,25 @@ export class PromptNavigationEngine {
       totalRows,
       currentRowOffset,
     };
+  }
+
+  /**
+   * Helper to determine the effective physical line width for character movement calculations.
+   */
+  private static getEffectiveRowWidth(
+    rowIdx: number,
+    lines: BufferLineInfo[],
+    cols: number
+  ): number {
+    // If the next row is marked as wrapped, this row wrapped at terminal width (cols)
+    if (rowIdx + 1 < lines.length && lines[rowIdx + 1]?.isWrapped) {
+      return cols;
+    }
+    // If this row itself is wrapped and length >= cols
+    if (lines[rowIdx]?.isWrapped && (lines[rowIdx]?.text?.length ?? 0) >= cols) {
+      return cols;
+    }
+    return Math.max(1, lines[rowIdx]?.text?.length ?? 0);
   }
 
   /**
@@ -189,14 +247,26 @@ export class PromptNavigationEngine {
 
     // Rule: "But if user uses right arrow to move cursor behind the first character or left arrow to move cursor ahead of the last character, user should be able be able to use up and down arrow to move between lines in the long command."
     const cols = Math.max(1, input.cols);
+    const currentRow = input.cursorY;
 
     if (input.direction === 'up') {
-      if (currentRowOffset > 0) {
-        // Move up one visual line
+      if (currentRowOffset > 0 && currentRow > startRow) {
+        // Move up one visual line: compute exact character distance to target visual column on row above
+        const targetRow = currentRow - 1;
+        const targetWidth = this.getEffectiveRowWidth(targetRow, input.lines, cols);
+        const minTargetCol = targetRow === startRow ? firstCharCol : 0;
+        const maxTargetCol = Math.max(minTargetCol, targetWidth - 1);
+        const clampedTargetX = Math.max(minTargetCol, Math.min(input.cursorX, maxTargetCol));
+
+        const startOfCurrentRow = currentRow === startRow ? firstCharCol : 0;
+        const charsOnCurrentRow = Math.max(0, input.cursorX - startOfCurrentRow);
+        const charsOnTargetRow = Math.max(0, targetWidth - clampedTargetX);
+        const dist = Math.max(1, charsOnCurrentRow + charsOnTargetRow);
+
         return {
           handled: true,
           action: 'move-up-line',
-          payload: '\x1b[D'.repeat(cols),
+          payload: '\x1b[D'.repeat(dist),
         };
       } else {
         // Already on top line (startRow), but cursor is inside text (cursorX > firstCharCol).
@@ -210,12 +280,24 @@ export class PromptNavigationEngine {
       }
     } else {
       // direction === 'down'
-      if (input.cursorY < targetEndRow) {
-        // Move down one visual line
+      if (currentRow < targetEndRow) {
+        // Move down one visual line: compute exact character distance to target visual column on row below
+        const currentWidth = this.getEffectiveRowWidth(currentRow, input.lines, cols);
+        const charsOnCurrentRow = Math.max(0, currentWidth - input.cursorX);
+
+        const targetRow = currentRow + 1;
+        const targetWidth = this.getEffectiveRowWidth(targetRow, input.lines, cols);
+        const minTargetCol = targetRow === startRow ? firstCharCol : 0;
+        const maxTargetCol = Math.max(minTargetCol, targetWidth - 1);
+        const clampedTargetX = Math.max(minTargetCol, Math.min(input.cursorX, maxTargetCol));
+        const charsOnTargetRow = Math.max(0, clampedTargetX - minTargetCol);
+
+        const dist = Math.max(1, charsOnCurrentRow + charsOnTargetRow);
+
         return {
           handled: true,
           action: 'move-down-line',
-          payload: '\x1b[C'.repeat(cols),
+          payload: '\x1b[C'.repeat(dist),
         };
       } else {
         // Already on bottom line (targetEndRow), but cursor is inside text (cursorX <= lastCharCol).
