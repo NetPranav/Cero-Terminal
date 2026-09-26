@@ -32,3 +32,12 @@ For the complete development rules documentation, see [docs/rules.md](file:///ho
 
 ## 5. Verification Before Delivery
 - Always run `npm test` and `npm run build` to guarantee 100% test pass rate and zero compilation errors before declaring work complete or committing.
+
+## 6. ECC Specialized Subagents & Agentic Workflows
+When executing complex tasks or refactoring, delegate to the adapted workspace subagents:
+- Rust / PTY / Tokio / Cargo: Use `rust-reviewer` and `rust-build-resolver` for borrow-checker, lifetime, and async errors.
+- React 19 / TypeScript / Vite: Use `react-reviewer` and `typescript-reviewer` for hook discipline and rendering performance.
+- Tauri IPC & Architecture: Use `architect` to design clean communication boundaries between Rust PTY and React.
+- Terminal & Tool Security: Use `security-reviewer` for command injection audits, PTY isolation, and filesystem capability safety.
+- TDD & Vitest Testing: Use `tdd-guide` to write failing Vitest specs first and maintain the 980+ passing test suites.
+- Pre-Delivery Verification: Always run `npm run check:triple` (`npm test && npm run build && cargo check --manifest-path src-tauri/Cargo.toml`) before completion.
