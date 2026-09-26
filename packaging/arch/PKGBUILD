@@ -1,7 +1,7 @@
 # Maintainer: Sentinel Terminal Contributors
 pkgname=sentinel-terminal-bin
 pkgver=2.0.0
-pkgrel=4
+pkgrel=5
 pkgdesc="Autonomous AI-Native Linux Terminal Copilot"
 arch=('x86_64')
 license=('Apache-2.0')
