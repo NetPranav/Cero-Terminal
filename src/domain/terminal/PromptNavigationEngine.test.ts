@@ -208,7 +208,8 @@ describe('PromptNavigationEngine (Issue 9 Behavioral Specifications)', () => {
       });
       expect(decisionUp.handled).toBe(true);
       expect(decisionUp.action).toBe('move-to-start');
-      expect(decisionUp.payload).toBe('\x01');
+      // Moves 3 characters left onto '>' at col 13
+      expect(decisionUp.payload).toBe('\x1b[D'.repeat(3));
     });
 
     it('moves up and down lines on middle lines of a 3-line prompt', () => {
@@ -261,7 +262,81 @@ describe('PromptNavigationEngine (Issue 9 Behavioral Specifications)', () => {
       });
       expect(decision.handled).toBe(true);
       expect(decision.action).toBe('move-to-end');
-      expect(decision.payload).toBe('\x05');
+      // Moves 12 characters right behind '.' at col 22
+      expect(decision.payload).toBe('\x1b[C'.repeat(12));
+    });
+
+    it('correctly parses Arch Linux bash prompt without greedily matching command variables', () => {
+      const promptLine = '[overxpowered@archlinux sentinal]$ echo $PATH $USER';
+      const prefixLen = PromptNavigationEngine.detectPromptPrefixLength(promptLine);
+      expect(prefixLen).toBe(35);
+      expect(promptLine.substring(prefixLen)).toBe('echo $PATH $USER');
+    });
+
+    it('correctly parses Oh-My-Zsh and Starship prompts', () => {
+      const zshLine = '➜  sentinal git:(main) ✗ git status';
+      const zshPrefixLen = PromptNavigationEngine.detectPromptPrefixLength(zshLine);
+      expect(zshPrefixLen).toBe(25);
+      expect(zshLine.substring(zshPrefixLen)).toBe('git status');
+
+      const starshipLine = 'user@arch ❯ ls -la';
+      const starshipPrefixLen = PromptNavigationEngine.detectPromptPrefixLength(starshipLine);
+      expect(starshipPrefixLen).toBe(12);
+      expect(starshipLine.substring(starshipPrefixLen)).toBe('ls -la');
+    });
+
+    it('navigates history on subsequent arrow press after landing on first character or behind last character', () => {
+      const cols = 50;
+      const lines: BufferLineInfo[] = [
+        { text: '[overxpowered@archlinux ~]$ git commit -m "long message', isWrapped: false }, // row 0: prefix 28, 'g' at 28
+        { text: 'wrapped onto second line"', isWrapped: true },                                 // row 1: last char '"' at col 24
+      ];
+
+      // 1. Moving to start: Cursor at col 30 on row 0
+      const stepToStart = PromptNavigationEngine.evaluateNavigation({
+        direction: 'up',
+        cursorX: 30,
+        cursorY: 0,
+        cols,
+        lines,
+      });
+      expect(stepToStart.handled).toBe(true);
+      expect(stepToStart.action).toBe('move-to-start');
+      expect(stepToStart.payload).toBe('\x1b[D'.repeat(2)); // Moves left from 30 to 28 ('g')
+
+      // 2. Now on first character ('g' at col 28): Next Up arrow passes to history!
+      const nextUp = PromptNavigationEngine.evaluateNavigation({
+        direction: 'up',
+        cursorX: 28,
+        cursorY: 0,
+        cols,
+        lines,
+      });
+      expect(nextUp.handled).toBe(false);
+      expect(nextUp.action).toBe('pass-to-history');
+
+      // 3. Moving to end: Cursor at col 20 on row 1
+      const stepToEnd = PromptNavigationEngine.evaluateNavigation({
+        direction: 'down',
+        cursorX: 20,
+        cursorY: 1,
+        cols,
+        lines,
+      });
+      expect(stepToEnd.handled).toBe(true);
+      expect(stepToEnd.action).toBe('move-to-end');
+      expect(stepToEnd.payload).toBe('\x1b[C'.repeat(5)); // Moves right from 20 to 25 (behind '"')
+
+      // 4. Now behind last character (col 25 on row 1): Next Down arrow passes to history!
+      const nextDown = PromptNavigationEngine.evaluateNavigation({
+        direction: 'down',
+        cursorX: 25,
+        cursorY: 1,
+        cols,
+        lines,
+      });
+      expect(nextDown.handled).toBe(false);
+      expect(nextDown.action).toBe('pass-to-history');
     });
   });
 });

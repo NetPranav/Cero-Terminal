@@ -414,12 +414,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
         });
 
         if (decision.handled) {
-          if (event.type === 'keydown' && decision.payload) {
+          if (event.type === 'keydown') {
             event.preventDefault();
             event.stopPropagation();
-            const activeSessionId = sessionIdRef.current || sessionId;
-            if (activeSessionId) {
-              SessionManager.getInstance().write(activeSessionId, decision.payload);
+            if (decision.payload) {
+              const activeSessionId = sessionIdRef.current || sessionId;
+              if (activeSessionId) {
+                SessionManager.getInstance().write(activeSessionId, decision.payload);
+              }
             }
           }
           return false;

@@ -40,6 +40,51 @@ export interface NavigationDecision {
 
 export class PromptNavigationEngine {
   /**
+   * Robustly detect the length of any shell prompt prefix (e.g. "user@host:~$ ",
+   * "[user@host path]$ ", "➜  sentinal git:(main) ✗ ", "❯ ", "> ", "bash-5.3$ ").
+   * Uses non-greedy matching to avoid capturing command content containing $, #, %, or >.
+   */
+  public static detectPromptPrefixLength(lineText: string): number {
+    if (!lineText) return 0;
+
+    // 1. Sentinel AI prompt starting with '>' (e.g. "> Create workspace...")
+    const trimmed = lineText.trimStart();
+    const leadingSpaces = lineText.length - trimmed.length;
+    if (trimmed.startsWith('>')) {
+      const afterPrompt = trimmed.substring(1);
+      const postSpaces = afterPrompt.length - afterPrompt.trimStart().length;
+      return leadingSpaces + 1 + postSpaces;
+    }
+
+    // 2. Standard shell prompts with username@host or bracketed formats:
+    //    e.g. "[overxpowered@archlinux sentinal]$ ", "user@host:~$ ", "bash-5.3$ "
+    const standardPromptMatch = lineText.match(/^(?:\[?[a-zA-Z0-9_.-]+@[a-zA-Z0-9_.-]+[^$%#❯>➜→\n]*?|bash-[0-9.]+|zsh|fish|root|[a-zA-Z0-9_.-]+)?.*?[@:][^$%#❯>➜→\n]*?([$%#❯>➜→:]|\u2713|\u2717)\s+/);
+    if (standardPromptMatch) {
+      return standardPromptMatch[0].length;
+    }
+
+    // 3. Prompt termination with prompt symbol followed by space:
+    const simpleMatch = lineText.match(/^.*?[^a-zA-Z0-9_.-]([$%#❯➜→]|\u2713|\u2717)\s+/);
+    if (simpleMatch) {
+      return simpleMatch[0].length;
+    }
+
+    // 4. Standalone prompt symbol at start of line, e.g. "$ ", "# ", "% ", "❯ ", "> "
+    const standaloneMatch = lineText.match(/^[$%#❯>➜→]\s+/);
+    if (standaloneMatch) {
+      return standaloneMatch[0].length;
+    }
+
+    // 5. Fallback non-greedy match ending in prompt symbol followed by whitespace
+    const fallbackMatch = lineText.match(/^.*?(?:[$%#❯])\s+/);
+    if (fallbackMatch) {
+      return fallbackMatch[0].length;
+    }
+
+    return 0;
+  }
+
+  /**
    * Determine boundaries of the current command/prompt in the terminal buffer.
    */
   public static getPromptRowRange(
@@ -101,10 +146,9 @@ export class PromptNavigationEngine {
     }
 
     // Find first character of the prompt/command on startRow
-    // The command/prompt starts after any standard shell prompt prefix (e.g. "user@host:~$ ")
+    // The command/prompt starts after any standard shell prompt prefix
     const startLineRaw = input.lines[startRow]?.text || '';
-    const promptMatch = startLineRaw.match(/.*(?:[$%#❯])\s*/);
-    const prefixLen = promptMatch ? promptMatch[0].length : 0;
+    const prefixLen = this.detectPromptPrefixLength(startLineRaw);
     const commandPart = startLineRaw.substring(prefixLen);
     const firstCharRelIdx = commandPart.search(/\S/);
     const firstCharCol = firstCharRelIdx !== -1 ? prefixLen + firstCharRelIdx : prefixLen;
@@ -130,18 +174,20 @@ export class PromptNavigationEngine {
       return { handled: false, action: 'pass-to-history' };
     }
 
-    // Rule: "If the cursor is behind the last character or on the first character user should be able to perform the Default History Browsing using the up and down arrow."
-    // 1. Behind the last character (trailing space after the last character on targetEndRow)
-    if (input.cursorY === targetEndRow && input.cursorX > lastCharCol) {
+    // Rule: "when the cursor is behind the last character of the command or ahead or on the first character of the command user should be able to use the up and down arraow to navigate through the previously ran commands."
+    // 1. Behind the last character of the command (trailing space or line after targetEndRow)
+    const isBehindLastChar = input.cursorY > targetEndRow || 
+      (input.cursorY === targetEndRow && input.cursorX > lastCharCol);
+
+    // 2. Ahead of or on the first character of the command (line before or col <= firstCharCol on startRow)
+    const isAheadOrOnFirstChar = input.cursorY < startRow || 
+      (input.cursorY === startRow && input.cursorX <= firstCharCol);
+
+    if (isBehindLastChar || isAheadOrOnFirstChar) {
       return { handled: false, action: 'pass-to-history' };
     }
 
-    // 2. On or ahead of the first character on startRow
-    if (input.cursorY === startRow && input.cursorX <= firstCharCol) {
-      return { handled: false, action: 'pass-to-history' };
-    }
-
-    // Rule: "once the user has used the left arrow to move on or ahead of the last character or used the right arrow to move behind the first character, then user should be able to use the up and down arrows to move between lines in the long prompt or command."
+    // Rule: "But if user uses right arrow to move cursor behind the first character or left arrow to move cursor ahead of the last character, user should be able be able to use up and down arrow to move between lines in the long command."
     const cols = Math.max(1, input.cols);
 
     if (input.direction === 'up') {
@@ -153,16 +199,18 @@ export class PromptNavigationEngine {
           payload: '\x1b[D'.repeat(cols),
         };
       } else {
-        // On top line (startRow), move to start of text (onto first character)
+        // Already on top line (startRow), but cursor is inside text (cursorX > firstCharCol).
+        // Move cursor to the first character of the command so that a subsequent Up arrow will pass to history.
+        const distToFirst = Math.max(1, input.cursorX - firstCharCol);
         return {
           handled: true,
           action: 'move-to-start',
-          payload: '\x01',
+          payload: '\x1b[D'.repeat(distToFirst),
         };
       }
     } else {
       // direction === 'down'
-      if (currentRowOffset < totalRows - 1) {
+      if (input.cursorY < targetEndRow) {
         // Move down one visual line
         return {
           handled: true,
@@ -170,11 +218,13 @@ export class PromptNavigationEngine {
           payload: '\x1b[C'.repeat(cols),
         };
       } else {
-        // On bottom line (endRow), move to end of text (behind last character)
+        // Already on bottom line (targetEndRow), but cursor is inside text (cursorX <= lastCharCol).
+        // Move cursor behind the last character of the command so that a subsequent Down arrow will pass to history.
+        const distToEnd = Math.max(1, (lastCharCol + 1) - input.cursorX);
         return {
           handled: true,
           action: 'move-to-end',
-          payload: '\x05',
+          payload: '\x1b[C'.repeat(distToEnd),
         };
       }
     }
