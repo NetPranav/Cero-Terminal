@@ -118,6 +118,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
     handleCopyRef.current = handleCopy;
   });
 
+  const currentPathRef = useRef(currentPath);
+  useEffect(() => {
+    currentPathRef.current = currentPath;
+  });
+
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const [securityModalPlan, setSecurityModalPlan] = useState<{
@@ -531,7 +536,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
         outputCallback = (data: Uint8Array) => {
           const text = new TextDecoder().decode(data);
           ptyTrackerRef.current.feedOutput(text);
-          PtyOutputObserver.getInstance().ingest(text, currentPath);
+          PtyOutputObserver.getInstance().ingest(text, currentPathRef.current);
           writeTerm(text);
         };
 

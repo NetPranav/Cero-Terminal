@@ -114,5 +114,86 @@ describe('SessionPersistenceEngine (Issue 5.3)', () => {
     const sessions = await engine.listSavedSessions();
     expect(sessions).toContain('prod-cluster');
   });
+
+  describe('resolveInitialSessionState & CLI startup synchronization', () => {
+    it('overrides restored session path for active pane when initialPath is provided', () => {
+      const savedSession = {
+        version: 1,
+        tabs: [
+          { id: 'tab_prev', name: 'Terminal 1', rootPane: { type: 'terminal', data: { id: 'pane_prev' } } }
+        ],
+        activeTabId: 'tab_prev',
+        activePaneId: 'pane_prev',
+        panePaths: { pane_prev: '/home/user/stale-old-dir' },
+        timestamp: Date.now()
+      };
+
+      const resolved = engine.resolveInitialState('/home/user/new-requested-folder');
+      // Set storage to savedSession first
+      mockStore['sentinel_session_state'] = JSON.stringify(savedSession);
+      const resolvedFromStorage = engine.resolveInitialState('/home/user/new-requested-folder');
+
+      expect(resolvedFromStorage.activePaneId).toBe('pane_prev');
+      expect(resolvedFromStorage.panePaths['pane_prev']).toBe('/home/user/new-requested-folder');
+      expect(resolvedFromStorage.tabs.length).toBe(1);
+    });
+
+    it('preserves restored session paths when no initialPath is passed', () => {
+      const savedSession = {
+        version: 1,
+        tabs: [
+          { id: 'tab_prev', name: 'Terminal 1', rootPane: { type: 'terminal', data: { id: 'pane_prev' } } }
+        ],
+        activeTabId: 'tab_prev',
+        activePaneId: 'pane_prev',
+        panePaths: { pane_prev: '/home/user/stale-old-dir' },
+        timestamp: Date.now()
+      };
+      mockStore['sentinel_session_state'] = JSON.stringify(savedSession);
+
+      const resolved = engine.resolveInitialState();
+      expect(resolved.activePaneId).toBe('pane_prev');
+      expect(resolved.panePaths['pane_prev']).toBe('/home/user/stale-old-dir');
+    });
+
+    it('correctly targets active pane inside complex split pane tree', () => {
+      const savedSession = {
+        version: 1,
+        tabs: [
+          {
+            id: 'tab_split',
+            name: 'Split Work',
+            rootPane: {
+              type: 'split',
+              data: {
+                id: 'split_root',
+                direction: 'horizontal',
+                pane1: { type: 'terminal', data: { id: 'pane_left' } },
+                pane2: { type: 'terminal', data: { id: 'pane_right' } }
+              }
+            }
+          }
+        ],
+        activeTabId: 'tab_split',
+        activePaneId: 'pane_right',
+        panePaths: { pane_left: '/var/log', pane_right: '/home/user/workspace' },
+        timestamp: Date.now()
+      };
+      mockStore['sentinel_session_state'] = JSON.stringify(savedSession);
+
+      const resolved = engine.resolveInitialState('/home/user/target-split');
+      expect(resolved.activePaneId).toBe('pane_right');
+      expect(resolved.panePaths['pane_right']).toBe('/home/user/target-split');
+      expect(resolved.panePaths['pane_left']).toBe('/var/log');
+    });
+
+    it('creates fresh tab and pane at target initialPath when no saved session exists', () => {
+      mockStore = {};
+      const resolved = engine.resolveInitialState('/home/user/from-file-manager');
+      expect(resolved.tabs.length).toBe(1);
+      expect(resolved.activeTabId).toBe('tab_initial');
+      expect(resolved.panePaths[resolved.activePaneId]).toBe('/home/user/from-file-manager');
+    });
+  });
 });
 

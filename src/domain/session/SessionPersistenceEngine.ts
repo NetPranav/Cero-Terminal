@@ -383,4 +383,86 @@ export class SessionPersistenceEngine {
       }
     } catch { /* ignore */ }
   }
+
+  /**
+   * Resolves initial workspace state merging stored session data with optional startup launch path.
+   */
+  public resolveInitialState(initialPath?: string, createDefaultPane?: () => any): ResolvedInitialSessionState {
+    const session = this.loadSession();
+    return resolveInitialSessionState(session, initialPath, createDefaultPane);
+  }
+}
+
+export interface ResolvedInitialSessionState {
+  tabs: SerializedTab[];
+  activeTabId: string;
+  activePaneId: string;
+  panePaths: Record<string, string>;
+}
+
+/**
+ * Recursively find a terminal pane inside a pane tree.
+ * If targetId is provided, returns the terminal pane matching targetId.
+ * Otherwise returns the first terminal pane encountered.
+ */
+export function findTerminalPane(node: any, targetId?: string): { id: string; sessionId?: string } | null {
+  if (!node) return null;
+  if (targetId) {
+    if (node.type === 'terminal' && node.data?.id === targetId) return node.data;
+    if (node.type === 'split' && node.data) {
+      return findTerminalPane(node.data.pane1, targetId) || findTerminalPane(node.data.pane2, targetId);
+    }
+    return null;
+  }
+  if (node.type === 'terminal') return node.data;
+  if (node.type === 'split' && node.data) {
+    return findTerminalPane(node.data.pane1) || findTerminalPane(node.data.pane2);
+  }
+  return null;
+}
+
+/**
+ * Resolves initial workspace state by merging restored session data with startup CLI path arguments.
+ * Startup path arguments strictly override the restored path for the active terminal pane.
+ */
+export function resolveInitialSessionState(
+  savedSession: SerializedSessionState | null,
+  initialPath?: string,
+  createDefaultPane?: () => any
+): ResolvedInitialSessionState {
+  if (savedSession && savedSession.tabs && savedSession.tabs.length > 0) {
+    const activeTab = savedSession.tabs.find(t => t.id === savedSession.activeTabId) || savedSession.tabs[0];
+    const activePane = findTerminalPane(activeTab.rootPane, savedSession.activePaneId) || findTerminalPane(activeTab.rootPane);
+    const activePaneId = activePane?.id || savedSession.activePaneId || '';
+    const panePaths = { ...(savedSession.panePaths || {}) };
+
+    if (initialPath && activePaneId) {
+      panePaths[activePaneId] = initialPath;
+    }
+
+    return {
+      tabs: savedSession.tabs,
+      activeTabId: savedSession.activeTabId || savedSession.tabs[0].id,
+      activePaneId,
+      panePaths,
+    };
+  }
+
+  const defaultPane = createDefaultPane
+    ? createDefaultPane()
+    : { type: 'terminal', data: { id: `pane_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36)}` } };
+
+  const defaultTab: SerializedTab = {
+    id: 'tab_initial',
+    name: 'Terminal 1',
+    rootPane: defaultPane,
+  };
+
+  const defaultPaneId = defaultPane.data?.id || 'pane_initial';
+  return {
+    tabs: [defaultTab],
+    activeTabId: defaultTab.id,
+    activePaneId: defaultPaneId,
+    panePaths: { [defaultPaneId]: initialPath || '~' },
+  };
 }

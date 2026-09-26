@@ -65,35 +65,31 @@ interface Tab {
   rootPane: PaneNode;
 }
 
-function App() {
+export interface AppProps {
+  initialPath?: string;
+}
+
+export function App({ initialPath }: AppProps = {}) {
   const getUniqueId = (prefix = 'id') => `${prefix}_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36)}`;
 
   const splitContainerRefs = useRef<Record<string, HTMLDivElement>>({});
   const [resizingSplit, setResizingSplit] = useState<{ id: string, isVertical: boolean } | null>(null);
 
-  const createTerminalPane = (): PaneNode => ({
+  const createTerminalPane = useCallback((): PaneNode => ({
     type: 'terminal',
     data: { id: getUniqueId('pane') }
+  }), []);
+
+  const [initialResolvedState] = useState(() => {
+    return SessionPersistenceEngine.getInstance().resolveInitialState(initialPath, () => ({
+      type: 'terminal',
+      data: { id: `pane_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36)}` }
+    }));
   });
 
-  const initialSession = SessionPersistenceEngine.getInstance().loadSession();
-
-  const [tabs, setTabs] = useState<Tab[]>(() => {
-    if (initialSession && initialSession.tabs.length > 0) {
-      return initialSession.tabs;
-    }
-    return [{ 
-      id: 'tab_initial', 
-      name: 'Terminal 1', 
-      rootPane: createTerminalPane() 
-    }];
-  });
-  const [activeTabId, setActiveTabId] = useState<string>(() => {
-    return initialSession?.activeTabId || 'tab_initial';
-  });
-  const [activePaneId, setActivePaneId] = useState<string>(() => {
-    return initialSession?.activePaneId || '';
-  }); // For focusing
+  const [tabs, setTabs] = useState<Tab[]>(() => initialResolvedState.tabs);
+  const [activeTabId, setActiveTabId] = useState<string>(() => initialResolvedState.activeTabId);
+  const [activePaneId, setActivePaneId] = useState<string>(() => initialResolvedState.activePaneId); // For focusing
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editingTabName, setEditingTabName] = useState<string>('');
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -101,9 +97,7 @@ function App() {
   const [settingsTab, setSettingsTab] = useState<SettingsTabId>('ai');
 
   // New UI & Theme customization states
-  const [panePaths, setPanePaths] = useState<Record<string, string>>(() => {
-    return initialSession?.panePaths || {};
-  });
+  const [panePaths, setPanePaths] = useState<Record<string, string>>(() => initialResolvedState.panePaths);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showWorkflowManager, setShowWorkflowManager] = useState(false);
   const [showHistorySearch, setShowHistorySearch] = useState(false);
@@ -286,23 +280,17 @@ function App() {
           const primaryAction = actions[0];
           if (primaryAction.path) {
             const targetPath = primaryAction.path;
-            setTabs(currentTabs => {
-              if (currentTabs.length === 1 && currentTabs[0].id === 'tab_initial') {
-                const rootPane = currentTabs[0].rootPane;
-                const paneId = rootPane.type === 'terminal' ? rootPane.data.id : undefined;
-                if (paneId) {
-                  setPanePaths(prev => ({ ...prev, [paneId]: targetPath }));
-                  const existingSessionId = activeSessionIdsRef.current[paneId] || (rootPane.type === 'terminal' ? rootPane.data.sessionId : undefined);
-                  if (existingSessionId) {
-                    SessionManager.getInstance().write(existingSessionId, `cd ${JSON.stringify(targetPath)}\n`);
-                  }
-                }
-                return currentTabs;
-              } else {
-                addTab(targetPath);
-                return currentTabs;
+            const targetPaneId = activeTerminalRef.current?.id || activePaneId || initialResolvedState.activePaneId;
+            if (targetPaneId) {
+              setPanePaths(prev => {
+                if (prev[targetPaneId] === targetPath) return prev;
+                return { ...prev, [targetPaneId]: targetPath };
+              });
+              const existingSessionId = activeSessionIdsRef.current[targetPaneId] || activeTerminalRef.current?.sessionId;
+              if (existingSessionId) {
+                SessionManager.getInstance().write(existingSessionId, `cd ${JSON.stringify(targetPath)}\n`);
               }
-            });
+            }
           }
 
           for (let i = 1; i < actions.length; i++) {
@@ -548,6 +536,11 @@ function App() {
 
     return getActiveTerminalPane(activeTab.rootPane);
   }, [activeTab, activePaneId]);
+
+  const activeTerminalRef = useRef<TerminalPane | null>(null);
+  useEffect(() => {
+    activeTerminalRef.current = activeTerminal;
+  }, [activeTerminal]);
 
   const currentDisplayPath = activeTerminal ? (panePaths[activeTerminal.id] || '~') : '~';
 

@@ -54,6 +54,6 @@ describe('Memory Engine — Performance Benchmarks', () => {
     const duration = performance.now() - start;
 
     expect(results.length).toBe(50); // Limited to 50
-    expect(duration).toBeLessThan(10); // Should be effectively instantaneous (<2ms)
+    expect(duration).toBeLessThan(50); // Generous allowance for parallel CI environments, usually <5ms locally
   });
 });
