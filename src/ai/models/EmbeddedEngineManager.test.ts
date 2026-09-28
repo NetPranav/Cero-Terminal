@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { EmbeddedEngineManager, PINNED_MANIFEST } from './EmbeddedEngineManager';
+import { EmbeddedEngineManager, PINNED_MANIFEST, EMBEDDED_MODEL_TIERS, selectEngineAsset } from './EmbeddedEngineManager';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -194,8 +194,14 @@ describe('EmbeddedEngineManager (In-App Local AI Integration)', () => {
 
     it('contains pinned manifest entries for recommended model and server binaries', () => {
       expect(PINNED_MANIFEST['qwen2.5-coder-3b-instruct-q4_k_m.gguf']).toBeDefined();
-      expect(PINNED_MANIFEST['llama-b4522-bin-ubuntu-x64.zip']).toBeDefined();
-      expect(PINNED_MANIFEST['llama-b4522-bin-macos-arm64.zip']).toBeDefined();
+      expect(PINNED_MANIFEST['llama-b11227-bin-ubuntu-x64.tar.gz']).toBeDefined();
+      expect(PINNED_MANIFEST['llama-b11227-bin-macos-arm64.tar.gz']).toBeDefined();
+
+      // Every pin must be a real SHA-256 (the old Linux pin was the hash of an empty file)
+      for (const entry of Object.values(PINNED_MANIFEST)) {
+        expect(entry.sha256).toMatch(/^[0-9a-f]{64}$/);
+        expect(entry.sha256).not.toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+      }
 
       const modelEntry = PINNED_MANIFEST['qwen2.5-coder-3b-instruct-q4_k_m.gguf'];
       expect(modelEntry.sha256).toHaveLength(64);
@@ -291,3 +297,24 @@ describe('EmbeddedEngineManager (In-App Local AI Integration)', () => {
   });
 });
 
+describe('Engine asset selection and model tiers', () => {
+  it('selects the pinned build for each platform', () => {
+    expect(selectEngineAsset('Linux', 'x86_64', false)?.key).toBe('linux-x64-cpu');
+    expect(selectEngineAsset('Linux', 'x86_64', true)?.key).toBe('linux-x64-vulkan');
+    expect(selectEngineAsset('Linux', 'aarch64', false)?.key).toBe('linux-arm64-cpu');
+    expect(selectEngineAsset('Darwin', 'arm64', false)?.key).toBe('macos-arm64');
+    expect(selectEngineAsset('Linux', 'riscv64', false)).toBeNull();
+    expect(selectEngineAsset('Linux', 'x86_64', false)?.url)
+      .toBe('https://github.com/ggml-org/llama.cpp/releases/download/b11227/llama-b11227-bin-ubuntu-x64.tar.gz');
+  });
+
+  it('follows the selected tier and recommends one from RAM', () => {
+    expect(EmbeddedEngineManager.recommendTier(4)).toBe('lite');
+    expect(EmbeddedEngineManager.recommendTier(8)).toBe('balanced');
+    expect(EmbeddedEngineManager.recommendTier(32)).toBe('accuracy');
+    expect(EmbeddedEngineManager.RECOMMENDED_MODEL.fileName).toBe(EMBEDDED_MODEL_TIERS.balanced.fileName);
+    for (const tier of Object.values(EMBEDDED_MODEL_TIERS)) {
+      expect(PINNED_MANIFEST[tier.fileName].sha256).toBe(tier.sha256);
+    }
+  });
+});

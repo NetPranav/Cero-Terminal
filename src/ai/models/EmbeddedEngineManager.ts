@@ -37,29 +37,122 @@ export interface ArtifactManifestEntry {
   description: string;
 }
 
-export const PINNED_MANIFEST: Record<string, ArtifactManifestEntry> = {
-  'qwen2.5-coder-3b-instruct-q4_k_m.gguf': {
+export type EmbeddedModelTier = 'lite' | 'balanced' | 'accuracy';
+
+export interface EmbeddedModelSpec {
+  id: string;
+  tier: EmbeddedModelTier;
+  fileName: string;
+  displayName: string;
+  sizeBytes: number;
+  url: string;
+  /** SHA-256 from the HuggingFace LFS metadata of the exact file */
+  sha256: string;
+  ramRequiredMb: number;
+  description: string;
+}
+
+/**
+ * Downloadable models, one per hardware tier. Sizes and hashes were read from the HuggingFace
+ * API for these exact files. A download that does not match its hash is discarded.
+ */
+export const EMBEDDED_MODEL_TIERS: Record<EmbeddedModelTier, EmbeddedModelSpec> = {
+  lite: {
+    id: 'qwen2.5-coder-1.5b-instruct',
+    tier: 'lite',
+    fileName: 'qwen2.5-coder-1.5b-instruct-q4_k_m.gguf',
+    displayName: 'Qwen 2.5 Coder 1.5B Instruct',
+    sizeBytes: 1117320768,
+    url: 'https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf',
+    sha256: 'cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046',
+    ramRequiredMb: 1400,
+    description: 'Fastest; for machines with less than 8 GB of RAM'
+  },
+  balanced: {
+    id: 'qwen2.5-coder-3b-instruct',
+    tier: 'balanced',
     fileName: 'qwen2.5-coder-3b-instruct-q4_k_m.gguf',
-    sha256: '724fb256bec1ff062b2f65e4569e871ad2e95ab2a3989723d1769c54294730b7',
+    displayName: 'Qwen 2.5 Coder 3B Instruct',
     sizeBytes: 2104932800,
     url: 'https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/qwen2.5-coder-3b-instruct-q4_k_m.gguf',
-    description: 'Qwen 2.5 Coder 3B Instruct Q4_K_M (recommended embedded model)'
+    sha256: '724fb256bec1ff062b2f65e4569e871ad2e95ab2a3989723d1769c54294730b7',
+    ramRequiredMb: 2400,
+    description: 'Default; good speed and command accuracy'
   },
-  'llama-b4522-bin-ubuntu-x64.zip': {
-    fileName: 'llama-b4522-bin-ubuntu-x64.zip',
-    sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    sizeBytes: 35000000,
-    url: 'https://github.com/ggerganov/llama.cpp/releases/download/b4522/llama-b4522-bin-ubuntu-x64.zip',
-    description: 'Official llama-server binary release for Ubuntu x64'
-  },
-  'llama-b4522-bin-macos-arm64.zip': {
-    fileName: 'llama-b4522-bin-macos-arm64.zip',
-    sha256: 'b4522macosarm64checksumd0c9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0',
-    sizeBytes: 30000000,
-    url: 'https://github.com/ggerganov/llama.cpp/releases/download/b4522/llama-b4522-bin-macos-arm64.zip',
-    description: 'Official llama-server binary release for macOS arm64'
+  accuracy: {
+    id: 'qwen3-4b-instruct-2507',
+    tier: 'accuracy',
+    fileName: 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf',
+    displayName: 'Qwen3 4B Instruct 2507',
+    sizeBytes: 2497281120,
+    url: 'https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf',
+    sha256: '3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597',
+    ramRequiredMb: 3200,
+    description: 'Most accurate; stronger instruction following, about 30% slower'
   }
 };
+
+export const PINNED_MANIFEST: Record<string, ArtifactManifestEntry> = Object.fromEntries(
+  Object.values(EMBEDDED_MODEL_TIERS).map(m => [m.fileName, {
+    fileName: m.fileName,
+    sha256: m.sha256,
+    sizeBytes: m.sizeBytes,
+    url: m.url,
+    description: m.description
+  }])
+);
+
+/** llama.cpp release the installer pins. Digests are GitHub's published SHA-256 for each asset. */
+export const ENGINE_BUILD = 'b11227';
+
+export type EngineAssetKey =
+  | 'linux-x64-cpu' | 'linux-x64-vulkan' | 'linux-arm64-cpu' | 'linux-arm64-vulkan' | 'macos-arm64' | 'macos-x64';
+
+export interface EngineAsset {
+  key: EngineAssetKey;
+  fileName: string;
+  sha256: string;
+  sizeBytes: number;
+  url: string;
+}
+
+const engineAsset = (key: EngineAssetKey, suffix: string, sha256: string, sizeBytes: number): EngineAsset => {
+  const fileName = `llama-${ENGINE_BUILD}-bin-${suffix}.tar.gz`;
+  return { key, fileName, sha256, sizeBytes, url: `https://github.com/ggml-org/llama.cpp/releases/download/${ENGINE_BUILD}/${fileName}` };
+};
+
+export const ENGINE_ASSETS: Record<EngineAssetKey, EngineAsset> = {
+  'linux-x64-cpu': engineAsset('linux-x64-cpu', 'ubuntu-x64', 'da95fc780bf011cb91650fe774866cf5b1c9eb0bdb820bb7a8c7897fc6692579', 17402524),
+  'linux-x64-vulkan': engineAsset('linux-x64-vulkan', 'ubuntu-vulkan-x64', 'f1ed225047a1ecfabbaafc4acfee887cab9c381cf7923e840a8f018cb7e66dde', 31344500),
+  'linux-arm64-cpu': engineAsset('linux-arm64-cpu', 'ubuntu-arm64', '8d755bc027cfd0942b65e78a0d44aa369bd8c324fd7495f6481ea22ae48d31a6', 13497637),
+  'linux-arm64-vulkan': engineAsset('linux-arm64-vulkan', 'ubuntu-vulkan-arm64', '86ae78313c9e508f5cfca0306f7a097d92d75db32c319ab1b5e7fdea0234c458', 24667516),
+  'macos-arm64': engineAsset('macos-arm64', 'macos-arm64', '82c37e40a6066047af88b6616eb232dc830efdbd64a7cafd1a9f910130a2bfe0', 11756537),
+  'macos-x64': engineAsset('macos-x64', 'macos-x64', '4fd8194547b0af773c410b762883e59c80207f5218fd5d0220cb7df2a22f8513', 11310663),
+};
+
+for (const asset of Object.values(ENGINE_ASSETS)) {
+  PINNED_MANIFEST[asset.fileName] = {
+    fileName: asset.fileName,
+    sha256: asset.sha256,
+    sizeBytes: asset.sizeBytes,
+    url: asset.url,
+    description: `llama.cpp ${ENGINE_BUILD} (${asset.key})`
+  };
+}
+
+/**
+ * Pick the release bundle for this machine. The Vulkan build also contains the CPU backends and
+ * falls back to them when no Vulkan device initialises, so it is preferred whenever the Vulkan
+ * loader (libvulkan.so.1) is installed; that covers AMD, Intel and NVIDIA GPUs on Linux.
+ */
+export function selectEngineAsset(os: string, machine: string, hasVulkanLoader: boolean): EngineAsset | null {
+  const kernel = os.toLowerCase();
+  const arch = /^(x86_64|amd64)$/i.test(machine) ? 'x64' : /^(aarch64|arm64)$/i.test(machine) ? 'arm64' : null;
+  if (!arch) return null;
+  if (kernel === 'darwin') return ENGINE_ASSETS[arch === 'arm64' ? 'macos-arm64' : 'macos-x64'];
+  if (kernel === 'linux') return ENGINE_ASSETS[`linux-${arch}-${hasVulkanLoader ? 'vulkan' : 'cpu'}` as EngineAssetKey];
+  return null;
+}
 
 export interface InferenceQueueItem<T> {
   sessionId: string;
@@ -83,24 +176,37 @@ export interface InferenceQueueStatus {
 export class EmbeddedEngineManager {
   private static instance: EmbeddedEngineManager;
 
-  // Primary sweet-spot 3B model (Q4_K_M quantization ~ 1.93 GB)
-  public static readonly RECOMMENDED_MODEL = {
-    id: 'qwen2.5-coder-3b-instruct',
-    fileName: 'qwen2.5-coder-3b-instruct-q4_k_m.gguf',
-    displayName: 'Qwen 2.5 Coder 3B Instruct',
-    sizeBytes: 2104932800, // ~1.96 GB
-    url: 'https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/qwen2.5-coder-3b-instruct-q4_k_m.gguf',
-    sha256: PINNED_MANIFEST['qwen2.5-coder-3b-instruct-q4_k_m.gguf'].sha256,
-    ramRequiredMb: 2400,
-    metalAcceleration: true
-  };
+  public static readonly TIER_STORAGE_KEY = 'sentinel_embedded_model_tier';
 
-  // Official release archive for llama-server on Linux x64 and macOS arm64
-  public static get LLAMA_SERVER_RELEASE_URL(): string {
-    const isLinux = typeof process !== 'undefined' ? process.platform === 'linux' : true;
-    return isLinux
-      ? 'https://github.com/ggerganov/llama.cpp/releases/download/b4522/llama-b4522-bin-ubuntu-x64.zip'
-      : 'https://github.com/ggerganov/llama.cpp/releases/download/b4522/llama-b4522-bin-macos-arm64.zip';
+  /** The model tier the user picked (default: balanced). */
+  public static getSelectedTier(): EmbeddedModelTier {
+    try {
+      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(EmbeddedEngineManager.TIER_STORAGE_KEY) : null;
+      if (saved === 'lite' || saved === 'balanced' || saved === 'accuracy') return saved;
+    } catch {
+      // storage unavailable
+    }
+    return 'balanced';
+  }
+
+  public static setSelectedTier(tier: EmbeddedModelTier): void {
+    try {
+      localStorage.setItem(EmbeddedEngineManager.TIER_STORAGE_KEY, tier);
+    } catch {
+      // storage unavailable
+    }
+  }
+
+  /** Suggest a tier from total RAM in GB. */
+  public static recommendTier(ramGb: number): EmbeddedModelTier {
+    if (ramGb > 0 && ramGb < 8) return 'lite';
+    if (ramGb >= 16) return 'accuracy';
+    return 'balanced';
+  }
+
+  /** The model the download, start, delete and status paths operate on: the selected tier. */
+  public static get RECOMMENDED_MODEL(): EmbeddedModelSpec & { metalAcceleration: boolean } {
+    return { ...EMBEDDED_MODEL_TIERS[EmbeddedEngineManager.getSelectedTier()], metalAcceleration: true };
   }
 
   public static getInstance(): EmbeddedEngineManager {
@@ -234,7 +340,7 @@ export class EmbeddedEngineManager {
   public async checkEngineExists(): Promise<boolean> {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') return true;
     try {
-      const checkCmd = `test -x "$HOME/.sentinel/bin/llama-server" || test -x "/usr/lib/ollama/llama-server" || which llama-server`;
+      const checkCmd = `test -x "$HOME/.sentinel/engine/current/llama-server" || test -x "$HOME/.sentinel/bin/llama-server" || command -v llama-server >/dev/null 2>&1 || test -x "/usr/lib/ollama/llama-server"`;
       const res = await invoke<{ code: number }>('execute_command', {
         command: 'sh',
         args: ['-c', checkCmd]
@@ -332,7 +438,8 @@ export class EmbeddedEngineManager {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') return true;
     try {
       return await invoke<boolean>('start_embedded_llm', {
-        modelPath,
+        // Rust expands ~/ and falls back to discovery when the file is missing
+        modelPath: modelPath ?? `~/.sentinel/models/${EmbeddedEngineManager.RECOMMENDED_MODEL.fileName}`,
         loraPath,
         gpuLayers
       });
@@ -772,64 +879,75 @@ export class EmbeddedEngineManager {
   }
 
   /**
-   * Automatically install the Metal-accelerated llama-server binary to ~/.sentinel/bin/
-   * and verifies SHA-256 checksum against pinned manifest before extracting.
+   * Download the pinned llama.cpp release for this machine, verify its SHA-256, and unpack the
+   * whole bundle (llama-server plus its shared libraries) into ~/.sentinel/engine/<build>, with
+   * ~/.sentinel/engine/current pointing at it. Returns false with the reason logged on failure.
    */
   public async installEngine(maxRetries = 1): Promise<boolean> {
-    const zipUrl = EmbeddedEngineManager.LLAMA_SERVER_RELEASE_URL;
-    const isLinux = typeof process !== 'undefined' ? process.platform === 'linux' : true;
-    const manifestKey = isLinux ? 'llama-b4522-bin-ubuntu-x64.zip' : 'llama-b4522-bin-macos-arm64.zip';
-    const expectedSha256 = PINNED_MANIFEST[manifestKey]?.sha256;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
-        return true;
-      }
-
-      const script = `
-        mkdir -p "$HOME/.sentinel/bin" && \\
-        mkdir -p /tmp/sentinel_llama_dl && \\
-        curl -L -o /tmp/sentinel_llama_dl/llama.zip "${zipUrl}"
-      `;
-
-      try {
-        const res = await invoke<{ code: number }>('execute_command', {
-          command: 'sh',
-          args: ['-c', script]
-        });
-
-        if (res.code === 0) {
-          if (expectedSha256) {
-            const check = await this.verifyChecksum('/tmp/sentinel_llama_dl/llama.zip', expectedSha256);
-            if (!check.valid) {
-              console.warn(
-                `[EmbeddedEngineManager] SHA-256 mismatch on binary zip. Expected ${expectedSha256}, got ${check.actualSha256}.`
-              );
-              await invoke('execute_command', {
-                command: 'sh',
-                args: ['-c', 'rm -rf /tmp/sentinel_llama_dl']
-              });
-              continue;
-            }
-          }
-
-          const unpackScript = `
-            unzip -q -o /tmp/sentinel_llama_dl/llama.zip -d /tmp/sentinel_llama_dl/ && \\
-            find /tmp/sentinel_llama_dl -name "llama-server" -exec cp {} "$HOME/.sentinel/bin/llama-server" \\; && \\
-            chmod +x "$HOME/.sentinel/bin/llama-server" && \\
-            rm -rf /tmp/sentinel_llama_dl
-          `;
-          const unpackRes = await invoke<{ code: number }>('execute_command', {
-            command: 'sh',
-            args: ['-c', unpackScript]
-          });
-          return unpackRes.code === 0;
-        }
-      } catch {
-        // Retry
-      }
+    if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
+      return true;
     }
 
+    const shell = (script: string, timeoutMs?: number) =>
+      invoke<{ code: number; stdout: string; stderr: string }>('execute_command', {
+        command: 'sh',
+        args: ['-c', script],
+        timeoutMs
+      });
+
+    const probe = await shell(
+      `uname -s; uname -m; ( (ldconfig -p 2>/dev/null | grep -q 'libvulkan\\.so\\.1') || ls /usr/lib*/libvulkan.so.1 /usr/lib/*/libvulkan.so.1 >/dev/null 2>&1 ) && echo vulkan || true`,
+      10_000
+    );
+    const [os = '', machine = '', vulkan = ''] = (probe.stdout || '').trim().split('\n').map(l => l.trim());
+    const asset = selectEngineAsset(os, machine, vulkan === 'vulkan');
+    if (!asset) {
+      console.warn(`[EmbeddedEngineManager] No prebuilt llama.cpp engine for ${os} ${machine}. Install llama-server from your distribution instead.`);
+      return false;
+    }
+
+    const downloadDir = '$HOME/.sentinel/engine/.download';
+    const archive = `${downloadDir}/${asset.fileName}`;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const download = await shell(
+          `mkdir -p "${downloadDir}" && curl -fL --retry 2 -C - -o "${archive}" "${asset.url}"`,
+          15 * 60_000
+        );
+        if (download.code !== 0) {
+          console.warn(`[EmbeddedEngineManager] Engine download failed: ${download.stderr}`);
+          continue;
+        }
+
+        const check = await this.verifyChecksum(archive, asset.sha256);
+        if (!check.valid) {
+          console.warn(`[EmbeddedEngineManager] SHA-256 mismatch for ${asset.fileName}: expected ${asset.sha256}, got ${check.actualSha256}. Re-downloading.`);
+          await shell(`rm -f "${archive}"`, 10_000);
+          continue;
+        }
+
+        const unpack = await shell(
+          `set -e
+           cd "$HOME/.sentinel/engine"
+           tar -xzf "${archive}"
+           ln -sfn "llama-${ENGINE_BUILD}" current
+           ./current/llama-server --version >/dev/null 2>&1
+           rm -f "${archive}"`,
+          5 * 60_000
+        );
+        if (unpack.code === 0) return true;
+        console.warn(`[EmbeddedEngineManager] Engine unpack or self-test failed: ${unpack.stderr}`);
+      } catch (err) {
+        console.warn('[EmbeddedEngineManager] Engine install error:', err);
+      }
+    }
     return false;
+  }
+
+  /** Install the engine only when no llama-server is available yet. */
+  public async ensureEngineInstalled(): Promise<boolean> {
+    if (await this.checkEngineExists()) return true;
+    return this.installEngine();
   }
 }

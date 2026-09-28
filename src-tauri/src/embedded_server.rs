@@ -141,10 +141,18 @@ pub fn build_server_args(model: &str, port: u16, gpu_layers: &str, lora: Option<
     args
 }
 
+/// LoRA adapters live next to base models in ~/.sentinel/models; loading one as the base model
+/// fails, so discovery must skip them.
+fn is_lora_adapter(path: &std::path::Path) -> bool {
+    path.file_name()
+        .map(|n| n.to_string_lossy().to_lowercase().contains("lora"))
+        .unwrap_or(false)
+}
+
 fn find_model_file(preferred: Option<String>) -> Option<PathBuf> {
     if let Some(ref path) = preferred {
-        let p = PathBuf::from(path);
-        if p.exists() {
+        let p = crate::process_cmds::expand_tilde(path);
+        if p.exists() && !is_lora_adapter(&p) {
             return Some(p);
         }
     }
@@ -153,15 +161,17 @@ fn find_model_file(preferred: Option<String>) -> Option<PathBuf> {
 
     if let Some(home) = get_home_dir() {
         let models_dir = home.join(".sentinel").join("models");
-        // Check primary Qwen 2.5 3B model
+        // The downloadable tiers, most capable first (see EMBEDDED_MODEL_TIERS in TypeScript)
+        candidates.push(models_dir.join("Qwen3-4B-Instruct-2507-Q4_K_M.gguf"));
         candidates.push(models_dir.join("qwen2.5-coder-3b-instruct-q4_k_m.gguf"));
+        candidates.push(models_dir.join("qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"));
         candidates.push(models_dir.join("model.gguf"));
 
-        // Or search models_dir for any .gguf file
+        // Or search models_dir for any other base-model .gguf file
         if let Ok(entries) = std::fs::read_dir(&models_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().map_or(false, |ext| ext == "gguf") {
+                if path.extension().map_or(false, |ext| ext == "gguf") && !is_lora_adapter(&path) {
                     candidates.push(path);
                 }
             }
@@ -518,6 +528,13 @@ pub fn verify_file_checksum(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lora_adapters_are_never_used_as_base_models() {
+        assert!(is_lora_adapter(std::path::Path::new("/m/sentinel_lora.gguf")));
+        assert!(is_lora_adapter(std::path::Path::new("/m/sentinel_mlx_LoRA.gguf")));
+        assert!(!is_lora_adapter(std::path::Path::new("/m/qwen2.5-coder-3b-instruct-q4_k_m.gguf")));
+    }
 
     #[test]
     fn server_args_work_across_llama_cpp_versions() {

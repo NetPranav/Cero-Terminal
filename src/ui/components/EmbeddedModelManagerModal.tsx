@@ -11,7 +11,7 @@ import {
   CheckCircle2,
   RotateCcw
 } from 'lucide-react';
-import { EmbeddedEngineManager, EmbeddedStatus } from '../../ai/models/EmbeddedEngineManager';
+import { EmbeddedEngineManager, EmbeddedStatus, EMBEDDED_MODEL_TIERS, EmbeddedModelTier } from '../../ai/models/EmbeddedEngineManager';
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return '0 MB';
@@ -58,12 +58,30 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
   const [downloadMsg, setDownloadMsg] = useState<string | null>(null);
   const [isActionBusy, setIsActionBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [tier, setTier] = useState<EmbeddedModelTier>(() => EmbeddedEngineManager.getSelectedTier());
+  const model = EMBEDDED_MODEL_TIERS[tier];
+  const modelSizeLabel = `~${(model.sizeBytes / 1e9).toFixed(1)} GB`;
 
   const lastProgressRef = useRef<{ bytes: number; time: number } | null>(null);
 
   const refreshStatus = async () => {
     const s = await EmbeddedEngineManager.getInstance().getStatus();
     setStatus(s);
+  };
+
+  const handleSelectTier = async (next: EmbeddedModelTier) => {
+    if (next === tier || isActionBusy) return;
+    EmbeddedEngineManager.setSelectedTier(next);
+    setTier(next);
+    setConfirmDelete(false);
+    const manager = EmbeddedEngineManager.getInstance();
+    const s = await manager.getStatus();
+    setStatus(s);
+    // Switch a running engine over to the newly selected model if it is already downloaded
+    if (s.isRunning && s.modelDownloaded) {
+      await manager.startEngine();
+      refreshStatus();
+    }
   };
 
   useEffect(() => {
@@ -129,7 +147,7 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
 
   const handleDownload = async () => {
     setIsDownloading(true);
-    setDownloadMsg('Starting download of Qwen 2.5 Coder 3B GGUF (~2.1 GB)...');
+    setDownloadMsg(`Starting download of ${model.displayName} (${modelSizeLabel})...`);
     
     try {
       const success = await EmbeddedEngineManager.getInstance().downloadRecommendedModel((p) => {
@@ -143,7 +161,14 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
 
       setIsDownloading(false);
       if (success) {
-        setDownloadMsg('Download complete! Initializing in-app engine...');
+        setDownloadMsg('Download complete. Checking the llama.cpp engine...');
+        const engineReady = await EmbeddedEngineManager.getInstance().ensureEngineInstalled();
+        if (!engineReady) {
+          setDownloadMsg('Model ready, but the llama.cpp engine could not be installed. Install llama-server from your package manager (e.g. `pacman -S llama.cpp`) and reopen this panel.');
+          await refreshStatus();
+          return;
+        }
+        setDownloadMsg('Starting the engine...');
         await EmbeddedEngineManager.getInstance().startEngine();
         await refreshStatus();
         setTimeout(() => setDownloadMsg(null), 3500);
@@ -172,7 +197,7 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
     setIsActionBusy(true);
     const ok = await EmbeddedEngineManager.getInstance().deleteModel();
     if (ok) {
-      setDownloadMsg('Model deleted. ~2.1 GB disk space freed.');
+      setDownloadMsg(`Model deleted. ${modelSizeLabel} of disk space freed.`);
       setConfirmDelete(false);
       setDownloadProgress(null);
       setTimeout(() => setDownloadMsg(null), 3500);
@@ -403,7 +428,7 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Download size={13} color="rgba(255, 255, 255, 0.6)" />
                   <span style={{ fontSize: '12px', fontWeight: 500, color: '#f8fafc' }}>
-                    Downloading Qwen 2.5 Coder 3B GGUF
+                    Downloading {model.displayName}
                   </span>
                 </div>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: '#ffffff', fontFamily: 'ui-monospace, monospace' }}>
@@ -482,10 +507,10 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: '#f8fafc' }}>
-                  Qwen 2.5 Coder 3B Instruct
+                  {model.displayName}
                 </h3>
                 <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.38)', display: 'block', marginTop: '1px', fontFamily: 'ui-monospace, monospace' }}>
-                  qwen2.5-coder-3b-instruct-q4_k_m.gguf • 4-bit Quantized
+                  {model.fileName} • 4-bit Quantized
                 </span>
               </div>
               <span style={{
@@ -497,17 +522,42 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
                 color: status?.modelDownloaded ? '#ffffff' : isModelDownloading ? '#ffffff' : 'rgba(255, 255, 255, 0.45)',
                 fontWeight: 400
               }}>
-                {status?.modelDownloaded ? 'Installed (~2.1 GB)' : isModelDownloading ? `Downloading (${percent.toFixed(0)}%)` : 'Not Downloaded'}
+                {status?.modelDownloaded ? `Installed (${modelSizeLabel})` : isModelDownloading ? `Downloading (${percent.toFixed(0)}%)` : 'Not Downloaded'}
               </span>
             </div>
 
+            <div role="radiogroup" aria-label="Model size" style={{ display: 'flex', gap: '6px' }}>
+              {(Object.keys(EMBEDDED_MODEL_TIERS) as EmbeddedModelTier[]).map(t => (
+                <button
+                  key={t}
+                  role="radio"
+                  aria-checked={t === tier}
+                  disabled={isActionBusy || isModelDownloading}
+                  onClick={() => handleSelectTier(t)}
+                  style={{
+                    flex: 1,
+                    padding: '6px 8px',
+                    borderRadius: '6px',
+                    border: `1px solid ${t === tier ? 'rgba(255, 255, 255, 0.28)' : 'rgba(255, 255, 255, 0.08)'}`,
+                    backgroundColor: t === tier ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+                    color: t === tier ? '#ffffff' : 'rgba(255, 255, 255, 0.55)',
+                    fontSize: '11px',
+                    cursor: isActionBusy || isModelDownloading ? 'not-allowed' : 'pointer',
+                    textTransform: 'capitalize'
+                  }}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
             <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255, 255, 255, 0.55)', lineHeight: 1.5 }}>
-              Engineered specifically for terminal automation and developer workflows. High-accuracy zero-shot bash translation, strict JSON schema compliance, and autonomous multi-phase error recovery.
+              {model.description}. Runs locally through Sentinel's own llama.cpp engine; nothing leaves this machine.
             </p>
 
             <div style={{ display: 'flex', gap: '12px', fontSize: '10px', color: 'rgba(255, 255, 255, 0.35)', fontFamily: 'ui-monospace, monospace' }}>
-              <span>Download: ~2.10 GB</span>
-              <span>RAM: ~2.4 GB</span>
+              <span>Download: {modelSizeLabel}</span>
+              <span>RAM: ~{(model.ramRequiredMb / 1024).toFixed(1)} GB</span>
               <span>Hardware Acceleration: Supported</span>
             </div>
 
@@ -571,7 +621,7 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
                   <span>
                     {hasPartialDownload 
                       ? `Resume Download (${formatBytes(downloadProgress!.downloadedBytes)} saved)` 
-                      : 'Download & Activate Qwen 2.5 Coder 3B (~2.1 GB)'}
+                      : `Download & Activate ${model.displayName} (${modelSizeLabel})`}
                   </span>
                 </button>
               </div>
@@ -628,7 +678,7 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#ffffff' }}>
                       <AlertTriangle size={13} style={{ color: 'rgba(255, 255, 255, 0.7)' }} />
-                      <span>Delete model (~2.1 GB)?</span>
+                      <span>Delete model ({modelSizeLabel})?</span>
                     </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button

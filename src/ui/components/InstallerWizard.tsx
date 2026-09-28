@@ -74,8 +74,11 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
         setModelProgress(p);
       });
       if (ok) {
+        const engineReady = await EmbeddedEngineManager.getInstance().ensureEngineInstalled();
         setModelDownloaded(true);
-        setMessage('✓ Local AI model (Qwen 2.5 Coder 3B) downloaded and ready!');
+        setMessage(engineReady
+          ? `✓ Local AI model (${EmbeddedEngineManager.RECOMMENDED_MODEL.displayName}) and engine are ready.`
+          : 'Model downloaded. The llama.cpp engine could not be installed automatically; install llama-server from your package manager.');
       } else {
         setModelError('Download failed or was interrupted.');
       }
