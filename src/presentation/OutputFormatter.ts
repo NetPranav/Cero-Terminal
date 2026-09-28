@@ -48,11 +48,35 @@ function bar(percent: number, cells = 10, color?: string): string {
   return `${c}${'━'.repeat(filled)}${S.faint}${'─'.repeat(cells - filled)}${S.reset}`;
 }
 
-/** Glyph line: "  ✓ text" with continuation lines indented under the text */
-function glyphLine(glyph: string, glyphColor: string, message: string, textColor = S.text): string {
+/** Word-wrap to `width` columns (0 = no wrapping); words longer than a line are split */
+export function wrapWords(text: string, width: number): string[] {
+  if (!width || width < 10 || text.length <= width) return [text];
+  const lines: string[] = [];
+  let line = '';
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    let w = word;
+    while (w.length > width) {
+      if (line) { lines.push(line); line = ''; }
+      lines.push(w.slice(0, width));
+      w = w.slice(width);
+    }
+    if (!line) line = w;
+    else if (line.length + 1 + w.length <= width) line += ` ${w}`;
+    else { lines.push(line); line = w; }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/** Glyph line: "  ✓ text" with wrapped and continuation lines indented under the text */
+function glyphLine(glyph: string, glyphColor: string, message: string, textColor = S.text, width = 0): string {
   const [first, ...rest] = message.replace(/\r/g, '').split('\n');
-  const more = rest.length ? `\r\n${rest.map(l => `    ${S.soft}${l}${S.reset}`).join('\r\n')}` : '';
-  return `  ${glyphColor}${glyph}${S.reset} ${textColor}${first}${S.reset}${more}`;
+  const wrap = (t: string) => wrapWords(t, width ? width - 4 : 0);
+  const [head, ...tail] = wrap(first);
+  const tailLines = tail.map(l => `    ${textColor}${l}${S.reset}`);
+  const restLines = rest.flatMap(l => wrap(l)).map(l => `    ${S.soft}${l}${S.reset}`);
+  const more = [...tailLines, ...restLines];
+  return `  ${glyphColor}${glyph}${S.reset} ${textColor}${head}${S.reset}${more.length ? `\r\n${more.join('\r\n')}` : ''}`;
 }
 
 /**
@@ -107,8 +131,8 @@ export function formatMarkdownTerminal(text: string): string {
 
 const isMarkdown = (m: string) => m.includes('\n') || m.includes('**') || m.includes('```');
 
-/** Format one agent event as a self-contained block (always ends in CRLF). */
-export function formatAgentEvent(event: AgentEventFormatted): string {
+/** Format one agent event as a self-contained block (always ends in CRLF). `width` wraps long lines. */
+export function formatAgentEvent(event: AgentEventFormatted, width = 0): string {
   const message = event.message || '';
   switch (event.type) {
     case 'thinking':
@@ -119,23 +143,23 @@ export function formatAgentEvent(event: AgentEventFormatted): string {
       return '';
 
     case 'question':
-      return `\r\n${glyphLine('?', S.warn, message)}\r\n  ${S.muted}Type your answer to continue, or /cancel to stop.${S.reset}\r\n`;
+      return `\r\n${glyphLine('?', S.warn, message, S.text, width)}\r\n  ${S.muted}Type your answer to continue, or /cancel to stop.${S.reset}\r\n`;
 
     case 'tool_start':
       return `${glyphLine('›', S.muted, message, S.soft)}\r\n`;
 
     case 'tool_done':
-      if (message.startsWith('✓')) return `${glyphLine('✓', S.ok, message.replace(/^✓\s*/, ''))}\r\n`;
-      if (message.startsWith('✗')) return `${glyphLine('✗', S.err, message.replace(/^✗\s*/, ''))}\r\n`;
-      if (message.startsWith('Warning:')) return `${glyphLine('!', S.warn, message.replace(/^Warning:\s*/, ''))}\r\n`;
-      return `${glyphLine('✓', S.ok, message)}\r\n`;
+      if (message.startsWith('✓')) return `${glyphLine('✓', S.ok, message.replace(/^✓\s*/, ''), S.text, width)}\r\n`;
+      if (message.startsWith('✗')) return `${glyphLine('✗', S.err, message.replace(/^✗\s*/, ''), S.text, width)}\r\n`;
+      if (message.startsWith('Warning:')) return `${glyphLine('!', S.warn, message.replace(/^Warning:\s*/, ''), S.text, width)}\r\n`;
+      return `${glyphLine('✓', S.ok, message, S.text, width)}\r\n`;
 
     case 'done':
       if (isMarkdown(message)) return `\r\n${formatMarkdownTerminal(message)}\r\n`;
-      return `${glyphLine('✓', S.ok, message)}\r\n`;
+      return `${glyphLine('✓', S.ok, message, S.text, width)}\r\n`;
 
     case 'error':
-      return `${glyphLine('✗', S.err, message)}\r\n`;
+      return `${glyphLine('✗', S.err, message, S.text, width)}\r\n`;
 
     case 'step_output':
       return `${crlf(message)}\r\n`;
@@ -422,17 +446,17 @@ export class AgentEventRenderer {
         out = this.settle(true) + formatAgentEvent(event);
         break;
       case 'tool_done':
-        out = this.settle(false) + formatAgentEvent(event);
+        out = this.settle(false) + formatAgentEvent(event, this.columns());
         this.lastWasSuccess = !/^(✗|Warning:)/.test(event.message || '');
         break;
       case 'done': {
         const pre = this.settle(false);
         const ack = !isMarkdown(event.message || '') && /^(done|launched|completed|ok)\.?$/i.test((event.message || '').trim());
-        out = pre + (ack && this.lastWasSuccess ? '' : formatAgentEvent(event));
+        out = pre + (ack && this.lastWasSuccess ? '' : formatAgentEvent(event, this.columns()));
         break;
       }
       default:
-        out = this.settle(false) + formatAgentEvent(event);
+        out = this.settle(false) + formatAgentEvent(event, this.columns());
     }
     return lead + out;
   }

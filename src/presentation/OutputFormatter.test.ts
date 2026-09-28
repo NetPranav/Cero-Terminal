@@ -210,3 +210,14 @@ describe('AgentEventRenderer', () => {
     expect(all).not.toMatch(/\x1b\[(?:[0-9;]*;)?2m/);
   });
 });
+
+describe('Long answers wrap under the text', () => {
+  it('wraps at the terminal width with a hanging indent', () => {
+    const text = plain(formatAgentEvent({ type: 'done', message: 'math.js exports a single function add that takes two numbers and returns their sum, and nothing else.' }, 40));
+    const lines = text.split('\r\n').filter(Boolean);
+    expect(lines.length).toBeGreaterThan(2);
+    expect(lines.every(l => l.length <= 40)).toBe(true);
+    expect(lines[1].startsWith('    ')).toBe(true);
+  });
+});
+

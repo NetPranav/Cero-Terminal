@@ -820,7 +820,9 @@ export function isSingleShotInspection(goal: string, command: string): boolean {
 
   const asksToInspect = /^(?:what|what's|whats|which|who|where|when|how\s+(?:much|many|long|big|fast|full|old)|is|are|does|do|did|has|have|show|list|display|print|check|tell\s+me|give\s+me|get|find|count|search|look\s+up|view|see|inspect|verify)\b/.test(normalized);
   const wantsMore = /\b(?:then|after|afterwards|also|explain|why|delete|remove|kill|stop|restart|start|install|uninstall|open|launch|close|create|make|move|copy|rename|fix|change|set|update|upgrade|enable|disable|write|edit|push|commit|deploy|build|compile|clean|clear|free\s+up|summari[sz]e|compare)\b/.test(normalized);
-  return asksToInspect && !wantsMore && isReadOnlyCommandLine(command).readOnly;
+  // "how many files ... and how many lines ..." needs a second command
+  const secondQuestion = /\b(?:and|plus|as\s+well\s+as)\s+(?:how|what|which|where|when|who|whether|is|are|do|does|the\s+total)\b/.test(normalized);
+  return asksToInspect && !wantsMore && !secondQuestion && isReadOnlyCommandLine(command).readOnly;
 }
 
 /**
@@ -2046,7 +2048,10 @@ export class AgentLoop {
   /** Write this tab's transcript as Markdown under ~/.sentinel/transcripts/ and return a notice. */
   public exportTranscript(): string {
     if (this.transcript.length === 0) return 'Nothing to export yet.';
-    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+    // Local time, so the file name matches the clock the user sees
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
     const home = typeof process !== 'undefined' && process.env?.HOME ? process.env.HOME : '/tmp';
     const file = `${home}/.sentinel/transcripts/session-${stamp}.md`;
     const body = [`# Sentinel session transcript (${new Date().toLocaleString()})`, ''];
@@ -2159,6 +2164,12 @@ export class AgentLoop {
       : (answer.params || {});
     this.emit({ type: 'tool_start', message: answer.explanation });
     const result = await this.toolExecutor.execute(tool, params, context.cwd, this.authorizationHandler);
+    if (result.errorCode === 'USER_CANCELLED') {
+      // Declined: the answer is "no", not a reason to let the model try another way
+      const summary = `Not run: you declined \`${answer.command}\`. Nothing was changed.`;
+      this.emit({ type: 'tool_done', message: `✗ ${summary}` });
+      return { success: false, summary, steps: [{ tool, params, result }], declined: true };
+    }
     if (!result.success) return null;
     const stdout = typeof result.data?.stdout === 'string' ? result.data.stdout.trim() : '';
     const summaryText = stdout || this.formatSuccessSummary(tool, params, result);
@@ -2170,6 +2181,27 @@ export class AgentLoop {
       summary: AgentLoop.truncateObservation(summaryText),
       steps: [{ tool, params, result }]
     };
+  }
+
+  /**
+   * Text files the request asks about ("explain math.js", "review src/app.ts") that exist in the
+   * working directory, read with a bounded, read-only `head`. Secrets are redacted and .env-style
+   * files are never read.
+   */
+  private async readReferencedFiles(goal: string, cwd: string): Promise<string | null> {
+    if (!/\b(?:explain|what\s+does|what\s+is\s+in|summari[sz]e|describe|review|read|look\s+at|understand|how\s+does|walk\s+me\s+through|find\s+(?:the\s+)?bugs?|bugs?\s+in|check)\b/i.test(goal)) return null;
+    const TEXT_EXT = /\.(?:js|mjs|cjs|ts|tsx|jsx|py|rs|go|java|kt|c|h|cc|cpp|hpp|cs|rb|php|swift|lua|sh|bash|zsh|fish|md|txt|json|ya?ml|toml|ini|cfg|conf|css|scss|html|xml|sql|gradle|cmake|mk|dockerfile|vue|svelte)$/i;
+    const names = Array.from(new Set((goal.match(/[\w@.\-/~]+\.[A-Za-z0-9]{1,10}\b/g) || [])))
+      .filter(n => TEXT_EXT.test(n) && !/(^|\/)\.env/i.test(n) && !/^https?:/i.test(n))
+      .slice(0, 2);
+    const parts: string[] = [];
+    for (const name of names) {
+      const quoted = `'${name.replace(/'/g, `'\\''`)}'`;
+      const res = await this.toolExecutor.execute('shell.execute', { command: `head -c 6000 -- ${quoted}`, explanation: `Read ${name}` }, cwd, this.authorizationHandler);
+      const text = typeof res.data?.stdout === 'string' ? res.data.stdout : '';
+      if (res.success && text.trim()) parts.push(`--- ${name} ---\n${SecretRedactor.redact(text)}`);
+    }
+    return parts.length ? parts.join('\n\n') : null;
   }
 
   /** How long to wait for the local engine to load its model before giving up (CPU loads can take ~20 s). */
@@ -2263,6 +2295,12 @@ export class AgentLoop {
       // Terminal output attached by auto-heal. Delimited as untrusted data: it may contain text
       // that looks like instructions.
       systemPrompt += `\n\nTERMINAL OUTPUT FOR THIS REQUEST:\n${AgentLoop.formatToolObservation('terminal.output', context.attachedContext)}`;
+    }
+    const fileContext = await this.readReferencedFiles(goal, context.cwd);
+    if (fileContext) {
+      // "explain math.js" must be answered from the file, not from what the model knows about
+      // an npm package of that name. Delimited as untrusted data like any tool output.
+      systemPrompt += `\n\nFILES NAMED IN THIS REQUEST (answer from these contents):\n${AgentLoop.formatToolObservation('filesystem.read', fileContext)}`;
     }
 
     // Phase 5.1: Ground-Truth Exemplar Enrichment from TLDR Knowledge Base

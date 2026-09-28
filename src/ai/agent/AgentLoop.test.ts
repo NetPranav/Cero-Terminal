@@ -1151,3 +1151,40 @@ describe('Declined commands and read-only questions', () => {
     expect(isInspectionQuestion('how do I fix my wifi')).toBe(false);
   });
 });
+
+describe('Two-part questions are not answered by the first command alone', () => {
+  it('keeps going for "... and how many ..."', async () => {
+    const { isSingleShotInspection } = await import('./AgentLoop');
+    expect(isSingleShotInspection('how many javascript files are in this folder', 'find . -name "*.js" | wc -l')).toBe(true);
+    expect(isSingleShotInspection('how many javascript files are in this folder and how many lines do they have in total', 'find . -name "*.js" | wc -l')).toBe(false);
+  });
+});
+
+describe('Questions about a file are answered from the file', () => {
+  it('reads math.js and gives its contents to the model', async () => {
+    const generate = vi.fn().mockResolvedValue({ content: JSON.stringify({ action: 'done', summary: 'math.js exports add(a, b), which returns a + b.' }) });
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    const execute = vi.fn().mockResolvedValue({ success: true, data: { stdout: 'function add(a, b) {\n  return a + b;\n}\nmodule.exports = { add };\n', code: 0 } });
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+
+    const result = await loop.run('explain what math.js does', { os: 'macos', cwd: '/tmp/repo' });
+
+    expect(execute).toHaveBeenCalledWith('shell.execute', expect.objectContaining({ command: "head -c 6000 -- 'math.js'" }), '/tmp/repo', undefined);
+    const prompt = generate.mock.calls[0][0] + generate.mock.calls[0][1];
+    expect(prompt).toContain('return a + b;');
+    expect(result.summary).toContain('add');
+  });
+
+  it('never reads .env files or files the request does not ask about', async () => {
+    const execute = vi.fn();
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any);
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+    expect(await (loop as any).readReferencedFiles('explain .env.local', '/tmp')).toBeNull();
+    expect(await (loop as any).readReferencedFiles('convert video.mp4 to gif', '/tmp')).toBeNull();
+    expect(execute).not.toHaveBeenCalled();
+  });
+});
