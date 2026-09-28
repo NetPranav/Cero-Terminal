@@ -18,7 +18,6 @@ import { DiskWorkflowStorage } from '../storage/DiskWorkflowStorage';
 import { SecurityEngine, RiskAnalysisResult } from '../../domain/security/SecurityEngine';
 import { UndoLog } from '../../domain/session/UndoLog';
 import { CrossPlatformCommandAdapter } from './CrossPlatformCommandAdapter';
-import { invoke } from '@tauri-apps/api/core';
 
 export interface ReplayOptions {
   sessionId?: string;
@@ -524,16 +523,24 @@ export class DeterministicReplayEngine {
       return { code: 0, stdout: `Executed: ${command}`, stderr: '' };
     }
 
+    // Same path as a fresh agent command: SecurityEngine risk analysis, ConsentQueue prompt for
+    // anything not read-only, execution timeout. Replays (including imported/shared workflows)
+    // previously ran through raw execute_command without asking.
     try {
-      const invocation = CrossPlatformCommandAdapter.getInstance().getShellInvocation(command, cwd);
-      const res = await invoke<{ code: number; stdout: string; stderr: string }>('execute_command', {
-        command: invocation.command,
-        args: invocation.args
-      });
+      const [{ ToolExecutor }, { ConsentQueue }] = await Promise.all([
+        import('../../ai/agent/ToolExecutor'),
+        import('../../domain/security/ConsentQueue')
+      ]);
+      const res = await new ToolExecutor().execute(
+        'shell.execute',
+        { command, cwd, explanation: `Workflow step: ${command}` },
+        cwd,
+        plan => ConsentQueue.getInstance().enqueue(plan)
+      );
       return {
-        code: res.code ?? 0,
-        stdout: res.stdout || '',
-        stderr: res.stderr || ''
+        code: res.success ? (res.data?.code ?? 0) : (res.data?.code ?? 1),
+        stdout: res.data?.stdout || '',
+        stderr: res.data?.stderr || (res.success ? '' : (res.error || 'Execution failed'))
       };
     } catch (err: any) {
       return {

@@ -224,6 +224,7 @@ export const WorkflowManagerDrawer: React.FC<WorkflowManagerDrawerProps> = ({
       const result = await engine.replay(wf.name, {
         parameters: replayParams,
         dryRun: isDryRun,
+        // Do not halt on sensitive steps: the default executor asks for consent per step
         autoApprove: true,
         onStepStart: (_step, idx) => {
           setActiveStepIndex(idx);

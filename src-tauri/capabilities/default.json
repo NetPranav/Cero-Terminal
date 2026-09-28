@@ -2,16 +2,12 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "opener:default",
-    "shell:default",
-    "shell:allow-spawn",
-    "shell:allow-execute",
-    "shell:allow-stdin-write",
-    "shell:allow-kill",
-    "shell:allow-open",
     "fs:default",
     "fs:allow-read-file",
     "fs:allow-write-file",
@@ -25,11 +21,8 @@
       "identifier": "fs:scope",
       "allow": [
         "$HOME/**",
-        "$HOME/**/*",
-        "/home/**",
-        "/home/**/*",
-        "**",
-        "**/*"
+        "$TEMP/**",
+        "/tmp/**"
       ]
     },
     "os:default",
@@ -45,14 +38,12 @@
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "https://**" },
-        { "url": "http://**" }
-      ]
-    },
-    {
-      "identifier": "shell:allow-spawn",
-      "allow": [
-        { "name": "binaries/llama-server", "sidecar": true, "args": true }
+        {
+          "url": "https://**"
+        },
+        {
+          "url": "http://**"
+        }
       ]
     }
   ]

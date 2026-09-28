@@ -7,7 +7,6 @@
 
 import { BaseCapabilityDriver, CapabilityExecutionResult, ExecutionContext, Platform } from '../CapabilitySDK';
 import { readTextFile, readDir, copyFile, remove, exists, type DirEntry, rename, mkdir, writeTextFile } from '@tauri-apps/plugin-fs';
-import { Command } from '@tauri-apps/plugin-shell';
 import { invoke } from '@tauri-apps/api/core';
 
 export type FsOperation =
