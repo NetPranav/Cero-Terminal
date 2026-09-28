@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DemonstrationLearningEngine } from './DemonstrationLearningEngine';
+import { DemonstrationLearningEngine, isPlausibleDemonstration } from './DemonstrationLearningEngine';
 
 describe('DemonstrationLearningEngine — Experiential Learning & Pattern Generalization', () => {
   let engine: DemonstrationLearningEngine;
@@ -104,3 +104,24 @@ describe('DemonstrationLearningEngine — Experiential Learning & Pattern Genera
   });
 });
 
+
+describe('isPlausibleDemonstration', () => {
+  it.each([
+    ['delete the build folder', 'rm -rf build'],
+    ['compress the logs folder', 'tar -czf logs.tgz logs && rm -rf logs'],
+    ['show disk usage', 'df -h'],
+    ['what is listening on port 3000', 'lsof -i :3000'],
+    ['convert video.mp4 to gif', 'ffmpeg -i video.mp4 out.gif'],
+  ])('learns "%s" -> %s', (goal, cmd) => {
+    expect(isPlausibleDemonstration(goal, cmd)).toBe(true);
+  });
+
+  it.each([
+    ['delete the build folder', 'ls build'],
+    ['install htop', 'which htop'],
+    ['what changed in the last commit', 'git reset --hard'],
+    ['show disk usage', 'rm -rf ~/Downloads/big'],
+  ])('ignores "%s" -> %s', (goal, cmd) => {
+    expect(isPlausibleDemonstration(goal, cmd)).toBe(false);
+  });
+});

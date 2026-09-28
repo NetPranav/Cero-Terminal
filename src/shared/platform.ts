@@ -67,3 +67,10 @@ export function formatShortcut(key: string, hasShift = false): string {
   }
   return hasShift ? `Ctrl+Shift+${key.toUpperCase()}` : `Ctrl+${key.toUpperCase()}`;
 }
+
+/**
+ * True only for Windows platform names. Substring checks are wrong here: "darwin" contains "win".
+ */
+export function isWindowsName(os: string | undefined | null): boolean {
+  return /^win(?:32|64|dows)?$/.test((os || '').trim().toLowerCase());
+}

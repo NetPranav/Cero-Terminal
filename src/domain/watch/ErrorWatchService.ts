@@ -12,6 +12,7 @@ import { ERROR_SIGNAL } from '../observer/PtyOutputObserver';
 import { DeterministicRuleOracle, RemediationSuggestion } from '../remediation/DeterministicRuleOracle';
 import { AutoRemediationPolicy, AutoRemediationMode } from '../remediation/AutoRemediationPolicy';
 import { UndoLog } from '../session/UndoLog';
+import { getPlatform } from '../../shared/platform';
 
 export interface WatchTarget {
   id: number;
@@ -170,7 +171,7 @@ export class ErrorWatchService {
 
     const context = buffer.join('\n');
     const cwd = watch.kind === 'file' ? dirname(watch.target) : '~';
-    const suggestion = DeterministicRuleOracle.getInstance().diagnose({ command: '', output: context, cwd, os: 'linux' });
+    const suggestion = DeterministicRuleOracle.getInstance().diagnose({ command: '', output: context, cwd, os: getPlatform() === 'macos' ? 'mac' : 'linux' });
 
     if (!suggestion) {
       const lastUnmatched = this.lastUnmatched.get(id) ?? -Infinity;
@@ -182,7 +183,7 @@ export class ErrorWatchService {
       return;
     }
 
-    const decision = this.policy.decide(suggestion, { mode: this.modeProvider(), source: 'rule_oracle', cwd });
+    const decision = this.policy.decide(suggestion, { mode: this.modeProvider(), source: 'rule_oracle', cwd, output: context });
     if (decision.action === 'ignore') return;
     this.reported.set(key, now);
 

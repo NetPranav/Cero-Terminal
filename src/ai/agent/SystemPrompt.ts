@@ -9,6 +9,7 @@ import { ToolRegistryState } from '../../tools/loader/ToolLoader';
 import { DynamicToolPruner } from './DynamicToolPruner';
 import { EpisodicMemoryEngine } from '../../domain/learning/EpisodicMemoryEngine';
 import { SystemKnowledgeScanner } from '../../domain/knowledge/SystemKnowledgeScanner';
+import { isWindowsName } from '../../shared/platform';
 
 export interface ToolSpec {
   id: string;
@@ -246,7 +247,7 @@ export function buildSystemPrompt(
 }
 
 function shellForOs(os: string): string {
-  return os.toLowerCase().includes('win')
+  return isWindowsName(os)
     ? 'powershell'
     : (os === 'linux' ? '/bin/bash' : '/bin/zsh');
 }

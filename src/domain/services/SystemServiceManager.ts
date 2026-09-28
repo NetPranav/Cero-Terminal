@@ -5,6 +5,8 @@
  * macOS (launchctl / brew services), and Windows (PowerShell Service cmdlets).
  */
 
+import { isWindowsName } from '../../shared/platform';
+
 export type ServiceAction = 'start' | 'stop' | 'restart' | 'enable' | 'disable' | 'status';
 
 export interface ServiceCommandOptions {
@@ -40,7 +42,7 @@ export class SystemServiceManager {
     options: ServiceCommandOptions = {}
   ): ServiceCommand {
     const rawOs = (options.os || process.platform).toLowerCase();
-    const isWindows = rawOs.includes('win');
+    const isWindows = isWindowsName(rawOs);
     const isMac = rawOs.includes('darwin') || rawOs.includes('mac');
     const isLinux = !isWindows && !isMac;
     const userScope = options.userScope ?? false;

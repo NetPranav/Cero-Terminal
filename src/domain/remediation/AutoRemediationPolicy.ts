@@ -20,18 +20,36 @@ export interface RemediationDecision {
 }
 
 interface VettedFix {
-  /** Standalone command for the given working directory; must be idempotent and unprivileged */
-  command: (cwd: string) => string;
+  /** Standalone command for the working directory and the error text; idempotent and unprivileged */
+  command: (cwd: string, output: string) => string;
   why: string;
 }
 
 const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
 
+/**
+ * Absolute path of the lock file named in git's "Unable to create '<path>/.git/index.lock'"
+ * error. A watched log usually lives outside the repository, so the error line is the only
+ * reliable pointer to the right repo. Only a file literally named .git/index.lock qualifies.
+ */
+export function extractIndexLockPath(output: string): string | null {
+  const m = output.match(/Unable to create '([^'\n]+\/\.git\/index\.lock)'/);
+  if (!m) return null;
+  const path = m[1];
+  if (!path.startsWith('/') || /(^|\/)\.\.(\/|$)/.test(path) || /[\x00-\x1f]/.test(path)) return null;
+  return path;
+}
+
 /** The only fixes that may run unattended, keyed by DeterministicRuleOracle rule id. */
 export const VETTED_AUTO_FIXES: Record<string, VettedFix> = {
   git_index_lock: {
     // Only remove the lock when no git process is alive, otherwise it is not stale
-    command: (cwd) => `cd ${shellQuote(cwd)} && ! pgrep -x git >/dev/null && rm -f .git/index.lock`,
+    command: (cwd, output) => {
+      const lock = extractIndexLockPath(output);
+      return lock
+        ? `! pgrep -x git >/dev/null && rm -f ${shellQuote(lock)}`
+        : `cd ${shellQuote(cwd)} && ! pgrep -x git >/dev/null && rm -f .git/index.lock`;
+    },
     why: 'Removes a stale .git/index.lock left by a crashed git process (only when no git process is running)'
   }
 };
@@ -72,7 +90,7 @@ export class AutoRemediationPolicy {
 
   public decide(
     suggestion: RemediationSuggestion,
-    options: { mode: AutoRemediationMode; source: 'rule_oracle' | 'model'; cwd: string }
+    options: { mode: AutoRemediationMode; source: 'rule_oracle' | 'model'; cwd: string; output?: string }
   ): RemediationDecision {
     if (options.mode === 'off') return { action: 'ignore', reason: 'Automatic remediation is off' };
     if (options.source !== 'rule_oracle') {
@@ -95,7 +113,7 @@ export class AutoRemediationPolicy {
       return { action: 'propose', reason: 'Hourly limit for unattended fixes reached' };
     }
 
-    return { action: 'auto', command: vetted.command(options.cwd), reason: vetted.why };
+    return { action: 'auto', command: vetted.command(options.cwd, options.output || ''), reason: vetted.why };
   }
 
   /** Call after an automatic fix actually ran, so rate limits apply. */

@@ -8,6 +8,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { isClearlyMutating } from '../security/ReadOnlyCommandPolicy';
 import { safeBase64Encode } from '../../utils/encodingUtils';
 import { SecretRedactor } from '../security/SecretRedactor';
 import { ProjectFingerprint } from './ProjectFingerprint';
@@ -401,3 +402,20 @@ export class DemonstrationLearningEngine {
     }
   }
 }
+
+const CHANGE_VERBS = /\b(?:delete|remove|rm|kill|stop|install|uninstall|create|make|add|move|rename|copy|clean|clear|free\s+up|restart|start|enable|disable|update|upgrade|fix|set|change|compress|extract|unzip|zip|download|mount|unmount|format|build|deploy|push|commit|reset)\b/;
+
+/**
+ * Whether a command typed after an unanswered request plausibly performs that request.
+ * A read-only command after "delete the build folder" is the user looking around, not a
+ * demonstration; a modifying command after a question is not an answer to it either.
+ */
+export function isPlausibleDemonstration(goal: string, command: string): boolean {
+  const g = goal.trim().toLowerCase();
+  const asksForChange = CHANGE_VERBS.test(g) && !/^(?:what|which|who|where|when|why|is|are|does|did|show|list|how\s+(?:much|many|big|full))\b/.test(g);
+  const changes = isClearlyMutating(command);
+  if (asksForChange && !changes) return false;
+  if (!asksForChange && changes) return false;
+  return true;
+}
+

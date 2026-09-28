@@ -81,7 +81,8 @@ To push the current branch and set the remote as upstream, use
       const suggestion = oracle.diagnose(ctx);
       expect(suggestion).not.toBeNull();
       expect(suggestion?.ruleId).toBe('git_index_lock');
-      expect(suggestion?.fixedCommand).toBe('rm -f .git/index.lock && git add .');
+      // Targets the repository named in the error, then retries the command
+      expect(suggestion?.fixedCommand).toBe("rm -f '/project/.git/index.lock' && git add .");
     });
 
     it('forces git clean when requireForce defaults to true', () => {

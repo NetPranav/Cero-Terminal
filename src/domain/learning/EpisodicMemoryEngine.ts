@@ -257,7 +257,9 @@ export class EpisodicMemoryEngine {
   }
 
   private appendTrainingSampleFromMemory(memory: EpisodicMemory): void {
-    const osName = memory.os?.includes('win') ? 'Windows' : 'macOS';
+    // "darwin" contains "win": match whole platform names
+    const os = (memory.os || '').toLowerCase();
+    const osName = /^(?:win32|windows)$/.test(os) ? 'Windows' : /^(?:darwin|mac|macos)$/.test(os) ? 'macOS' : 'Linux';
     const messages = [
       {
         role: 'system',

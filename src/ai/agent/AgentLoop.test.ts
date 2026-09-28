@@ -1138,7 +1138,8 @@ describe('Declined commands and read-only questions', () => {
     expect(result.success).toBe(false);
     expect(result.summary).toContain('not a git repository');
     expect(result.summary).toContain('did not run `git init && git log -1`');
-    expect(execute).toHaveBeenCalledTimes(1);
+    // The instant `git show` and the model's `git log` may run; `git init` never does
+    expect(execute.mock.calls.some((c: any[]) => String(c[1]?.command).includes('git init'))).toBe(false);
   });
 
   it('tells questions from requests to change something', async () => {

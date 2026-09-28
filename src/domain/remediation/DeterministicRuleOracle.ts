@@ -8,6 +8,8 @@
  * without calling or waiting for an LLM model.
  */
 
+import { extractIndexLockPath } from './AutoRemediationPolicy';
+
 export interface RuleContext {
   command: string;      // The command that failed (e.g. "git push", "rm dir", "npm start")
   output: string;       // Combined stdout and stderr
@@ -94,7 +96,8 @@ export class DeterministicRuleOracle {
         const matchesPlatform = rule.platforms.some(p => {
           if (p === 'mac' && (currentOs.includes('mac') || currentOs.includes('darwin'))) return true;
           if (p === 'linux' && currentOs.includes('linux')) return true;
-          if (p === 'win' && currentOs.includes('win')) return true;
+          // Whole-name match: "darwin" contains "win"
+          if (p === 'win' && /^(?:win|win32|windows)$/.test(currentOs)) return true;
           return false;
         });
         if (!matchesPlatform) continue;
@@ -366,7 +369,12 @@ export class DeterministicRuleOracle {
         ruleName: 'Git Remove Index Lock',
         title: 'Delete stale .git/index.lock',
         explanation: 'A previous git process terminated abruptly leaving the lockfile behind',
-        fixedCommand: `rm -f .git/index.lock && ${ctx.command}`,
+        fixedCommand: (() => {
+          const lock = extractIndexLockPath(ctx.output);
+          const rm = lock ? `rm -f '${lock.replace(/'/g, `'\\''`)}'` : 'rm -f .git/index.lock';
+          // Watched files have no failed command to re-run
+          return ctx.command ? `${rm} && ${ctx.command}` : rm;
+        })(),
         confidence: 0.99,
         autoExecutable: true
       })

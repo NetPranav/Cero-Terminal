@@ -12,6 +12,7 @@
  */
 
 import { PlanningRequest, PlanningResponse } from './types';
+import { isWindowsName } from '../../shared/platform';
 import { ToolSearcher } from '../../tools/search/ToolSearcher';
 import { WorkflowCompiler, CompilationContext } from '../../tools/compiler/WorkflowCompiler';
 import { ToolRegistryState } from '../../tools/loader/ToolLoader';
@@ -315,7 +316,7 @@ export class Planner {
   private osToPlatform(os: string): Platform {
     const normalized = os.toLowerCase();
     if (normalized.includes('mac') || normalized.includes('darwin')) return 'macos';
-    if (normalized.includes('win')) return 'windows';
+    if (isWindowsName(normalized)) return 'windows';
     return 'linux';
   }
 

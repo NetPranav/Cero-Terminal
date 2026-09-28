@@ -22,11 +22,20 @@ function setup(mode: AutoRemediationMode) {
 describe('ErrorWatchService', () => {
   it('auto-applies a vetted fix in auto-safe mode and reports it', async () => {
     const { service, run, events } = setup('auto-safe');
-    await service.watchFile('/home/u/app/build.log');
+    // The log lives outside the repository: the lock named in the error line is removed
+    await service.watchFile('/home/u/logs/build.log');
     await service.handleLines(1, ["fatal: Unable to create '/home/u/app/.git/index.lock': File exists."]);
 
-    expect(run).toHaveBeenCalledWith("cd '/home/u/app' && ! pgrep -x git >/dev/null && rm -f .git/index.lock");
+    expect(run).toHaveBeenCalledWith("! pgrep -x git >/dev/null && rm -f '/home/u/app/.git/index.lock'");
     expect(events[0]).toMatchObject({ type: 'auto-fixed', exitCode: 0 });
+  });
+
+  it('falls back to the watched folder when the lock path is not absolute or looks crafted', async () => {
+    const { extractIndexLockPath } = await import('../remediation/AutoRemediationPolicy');
+    expect(extractIndexLockPath("fatal: Unable to create '/srv/repo/.git/index.lock': File exists.")).toBe('/srv/repo/.git/index.lock');
+    expect(extractIndexLockPath("fatal: Unable to create 'repo/.git/index.lock': File exists.")).toBeNull();
+    expect(extractIndexLockPath("fatal: Unable to create '/srv/../etc/.git/index.lock': File exists.")).toBeNull();
+    expect(extractIndexLockPath("fatal: Unable to create '/etc/passwd': File exists.")).toBeNull();
   });
 
   it('never auto-installs a package named by a log line, even in auto-safe mode', async () => {
