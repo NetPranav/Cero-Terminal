@@ -78,7 +78,11 @@ const RULES: InstantRule[] = [
     id: 'listening-ports',
     pattern: new RegExp(`^(?:${Q}(?:(?:open|listening|active)\\s+ports|ports\\s+(?:are\\s+)?(?:open|listening|in\\s+use))|what(?:'s|\\s+is)\\s+listening(?:\\s+on\\s+(?:which|what)\\s+ports)?)\\s*\\??$`, 'i'),
     build: (_m, os) => os === 'macos'
-      ? { command: 'lsof -nP -iTCP -sTCP:LISTEN', explanation: 'Listening TCP ports with their processes (your processes; system ones need sudo)' }
+      ? {
+          // One line per process and address instead of lsof's nine columns
+          command: `lsof -nP -iTCP -sTCP:LISTEN | awk 'NR==1 {printf "%-18s %-7s %s\\n", "PROCESS", "PID", "ADDRESS"} NR>1 {printf "%-18s %-7s %s\\n", $1, $2, $9}' | uniq`,
+          explanation: 'Listening TCP ports with their processes (yours; system processes need sudo)'
+        }
       : { command: 'ss -tulpn 2>/dev/null', explanation: 'Listening TCP and UDP ports with their processes', tool: 'network.ports', params: {} }
   },
   {

@@ -843,8 +843,9 @@ export function isSingleShotInspection(goal: string, command: string): boolean {
 
   const asksToInspect = /^(?:what|what's|whats|which|who|where|when|how\s+(?:much|many|long|big|fast|full|old)|is|are|does|do|did|has|have|show|list|display|print|check|tell\s+me|give\s+me|get|find|count|search|look\s+up|view|see|inspect|verify)\b/.test(normalized);
   const wantsMore = /\b(?:then|after|afterwards|also|explain|why|delete|remove|kill|stop|restart|start|install|uninstall|open|launch|close|create|make|move|copy|rename|fix|change|set|update|upgrade|enable|disable|write|edit|push|commit|deploy|build|compile|clean|clear|free\s+up|summari[sz]e|compare)\b/.test(normalized);
-  // "how many files ... and how many lines ..." needs a second command
-  const secondQuestion = /\b(?:and|plus|as\s+well\s+as)\s+(?:how|what|which|where|when|who|whether|is|are|do|does|the\s+total)\b/.test(normalized);
+  // "battery and uptime", "files ... and how many lines", "cpu, ram": more than one thing is
+  // asked, and the first command may cover only one of them
+  const secondQuestion = /\b(?:and|plus|also|as\s+well\s+as)\b|,/.test(normalized);
   return asksToInspect && !wantsMore && !secondQuestion && isReadOnlyCommandLine(command).readOnly;
 }
 

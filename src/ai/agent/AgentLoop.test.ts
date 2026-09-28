@@ -1221,3 +1221,13 @@ describe('Answers must be grounded in command output', () => {
     expect(execute).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('Questions about several things are not ended by the first command', () => {
+  it('keeps going for "battery and uptime" and lists with commas', async () => {
+    const { isSingleShotInspection } = await import('./AgentLoop');
+    expect(isSingleShotInspection("what's my battery and uptime", 'uptime')).toBe(false);
+    expect(isSingleShotInspection('show cpu, ram and disk', 'top -l 1')).toBe(false);
+    expect(isSingleShotInspection('what is my uptime', 'uptime')).toBe(true);
+  });
+});
+
