@@ -8,7 +8,7 @@ import { ToolLoader } from '../tools/loader/ToolLoader';
 import { AppAliasRegistry } from '../domain/capabilities/AppAliasRegistry';
 import { AgentLoop, AgentPlan } from '../ai/agent/AgentLoop';
 import { PromptProgressManager } from '../ai/agent/PromptProgressManager';
-import { DemonstrationLearningEngine } from '../domain/learning/DemonstrationLearningEngine';
+import { DemonstrationLearningEngine, isPlausibleDemonstration } from '../domain/learning/DemonstrationLearningEngine';
 import { EpisodicMemoryEngine } from '../domain/learning/EpisodicMemoryEngine';
 import { SentinelSerlCoordinator } from '../domain/learning/SentinelSerlCoordinator';
 import { PtyOutputObserver, type RemediationPrompt } from '../domain/observer/PtyOutputObserver';
@@ -529,6 +529,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
     // We must define the callback here so we can remove it later
     let outputCallback: ((data: Uint8Array) => void) | null = null;
     let shellRedrawMuteUntil = 0;
+    let shellRedrawSeen = false;
+    // Runs `next` once the shell has redrawn after the discarded `>` line (or the mute window
+    // ran out), then unmutes: a fast answer must not race the redraw into a double prompt
+    const afterShellRedraw = (next: () => void) => {
+      const finish = () => { shellRedrawMuteUntil = 0; next(); };
+      const poll = () => {
+        if (shellRedrawSeen) { setTimeout(finish, 40); return; }
+        if (Date.now() >= shellRedrawMuteUntil) { finish(); return; }
+        setTimeout(poll, 20);
+      };
+      poll();
+    };
     let activeRenderer: AgentEventRenderer | null = null;
     let unsubRemediation: (() => void) | null = null;
     let unsubConsent: (() => void) | null = null;
@@ -567,7 +579,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
           ptyTrackerRef.current.feedOutput(text);
           // Discarding a `>` request line makes the shell print a fresh prompt; hide that redraw so
           // agent output follows the request directly (the final prompt is printed at the end)
-          if (Date.now() < shellRedrawMuteUntil) return;
+          if (Date.now() < shellRedrawMuteUntil) { shellRedrawSeen = true; return; }
           PtyOutputObserver.getInstance().ingest(text, currentPathRef.current);
           writeTerm(text);
         };
@@ -754,10 +766,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
           agentLoop.run(aiGoal, { os: getPlatform(), cwd }).then(result => {
             const leftover = renderer.finish();
             if (leftover) writeTerm(leftover);
-            // Anything the shell prints from here on (new prompt, cd) must be visible
-            shellRedrawMuteUntil = 0;
             PromptProgressManager.getInstance().completePrompt(result.success, result.summary);
-            if (!result.success) {
+            // A declined request is answered: the user chose not to do it
+            if (!result.success && !result.declined) {
               lastUnresolvedGoalRef.current = { goal: aiGoal, timestamp: Date.now() };
               setPlanExecutionStatus('failed');
               planExecutionStatusRef.current = 'failed';
@@ -773,7 +784,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
             if (result.steps.some(s => s.tool === '__clear__')) {
               term.clear();
               writeTerm('\x1b[2J\x1b[H');
-              sessionManager.write(currentSessionId!, '\r');
+              afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
               return;
             }
 
@@ -781,10 +792,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
             if (result.cdPath) {
               notifyNavigation(result.cdPath);
               const cdCmd = result.cdPath.includes(' ') && !result.cdPath.startsWith('"') && !result.cdPath.startsWith("'") ? `cd "${result.cdPath}"` : `cd ${result.cdPath}`;
-              setTimeout(() => sessionManager.write(currentSessionId!, `${cdCmd}\r`), 50);
+              afterShellRedraw(() => sessionManager.write(currentSessionId!, `${cdCmd}\r`));
             } else {
               writeTerm('\r\n');
-              sessionManager.write(currentSessionId!, '\r');
+              afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
             }
           }).catch(err => {
             const leftover = renderer.finish();
@@ -795,8 +806,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
             planExecutionStatusRef.current = 'failed';
             schedulePlanDismiss();
             writeTerm(`\r\n${formatAgentEvent({ type: 'error', message: err.message || 'Something went wrong' })}\r\n`);
-            shellRedrawMuteUntil = 0;
-            sessionManager.write(currentSessionId!, '\r');
+            afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
           }).finally(() => {
             aiBusyRef.current = false;
             activeRenderer = null;
@@ -988,17 +998,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                 !['ls', 'pwd', 'clear', 'exit'].includes(cleanCmd.toLowerCase()) &&
                 !cleanCmd.startsWith('cd ') &&
                 !cleanCmd.startsWith('>') &&
-                !cleanCmd.startsWith('/')
+                !cleanCmd.startsWith('/') &&
+                isPlausibleDemonstration(lastUnresolvedGoalRef.current.goal, cleanCmd)
               ) {
                 const learned = DemonstrationLearningEngine.getInstance().learnFromDemonstration(
                   lastUnresolvedGoalRef.current.goal,
-                  cleanCmd
+                  cleanCmd,
+                  currentPathRef.current
                 );
                 EpisodicMemoryEngine.getInstance().recordMemory(
                   lastUnresolvedGoalRef.current.goal,
                   cleanCmd,
                   {
-                    cwd: currentPath,
+                    cwd: currentPathRef.current,
                     source: 'demonstration'
                   }
                 );
@@ -1006,12 +1018,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                 SentinelSerlCoordinator.getInstance().onHumanDemonstration(
                   lastUnresolvedGoalRef.current.goal,
                   cleanCmd,
-                  `Human demonstration in ${currentPath || '~'}`
+                  `Human demonstration in ${currentPathRef.current || '~'}`
                 ).catch(e => console.warn('[TerminalView] SERL demonstration recording error:', e));
                 if (learned) {
                   writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Learned from your command${S.reset}\r\n`);
                   writeTerm(`    ${S.muted}when you ask${S.reset}  ${S.soft}${lastUnresolvedGoalRef.current.goal}${S.reset}\r\n`);
-                  writeTerm(`    ${S.muted}Sentinel runs${S.reset} ${S.code}${cleanCmd}${S.reset}\r\n\r\n`);
+                  writeTerm(`    ${S.muted}Sentinel runs${S.reset} ${S.code}${cleanCmd}${S.reset}\r\n`);
+                  writeTerm(`    ${S.muted}Undo with /forget ${learned.id}${S.reset}\r\n\r\n`);
                   lastUnresolvedGoalRef.current = null;
                 }
               }
@@ -1037,7 +1050,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                 }
 
                 // Safely cancel the shell line without killing running foreground processes
-                if (ptyTrackerRef.current.canSafelyInjectCtrlC()) shellRedrawMuteUntil = Date.now() + 400;
+                if (ptyTrackerRef.current.canSafelyInjectCtrlC()) {
+                  shellRedrawMuteUntil = Date.now() + 400;
+                  shellRedrawSeen = false;
+                }
                 await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
 
                 // One request at a time: the agent keeps a single transcript and event listener
@@ -1621,7 +1637,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
 
             <p style={{ fontSize: '13px', lineHeight: '1.55', color: 'rgba(255, 255, 255, 0.75)', margin: '0 0 18px 0' }}>
               {securityModalPlan.plan.requiresPassword
-                ? 'This changes system settings. Enter your login password to allow it once.'
+                ? 'This is a protected action. Enter your login password to allow it once.'
                 : 'Sentinel will run exactly what is shown below. Nothing runs until you approve.'}
             </p>
 
@@ -1640,12 +1656,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
               <div style={{ color: '#f5f5f7', fontSize: '13px', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontWeight: 500 }}>
                 {String(securityModalPlan.plan.parameters?.command || securityModalPlan.plan.parameters?.path || securityModalPlan.plan.parameters?.source || JSON.stringify(securityModalPlan.plan.parameters))}
               </div>
-              {securityModalPlan.plan.explanation && (
+              {(securityModalPlan.plan.parameters?.explanation || securityModalPlan.plan.explanation) && (
                 <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.07)', display: 'flex', gap: '8px', alignItems: 'flex-start', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
                   <span style={{ color: 'rgba(255, 255, 255, 0.4)', flexShrink: 0 }}>Why</span>
                   <span style={{ color: 'rgba(255, 255, 255, 0.78)', lineHeight: '1.45', wordBreak: 'break-word' }}>
-                    {securityModalPlan.plan.explanation}
+                    {securityModalPlan.plan.parameters?.explanation || securityModalPlan.plan.explanation}
                   </span>
+                </div>
+              )}
+              {securityModalPlan.plan.parameters?.explanation && securityModalPlan.plan.explanation && (
+                <div style={{ marginTop: '6px', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.42)', lineHeight: 1.45, fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+                  {securityModalPlan.plan.explanation}
                 </div>
               )}
             </div>
@@ -1653,13 +1674,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
             {securityModalPlan.plan.requiresPassword ? (
               <div style={{ marginBottom: '22px' }}>
                 <label style={{ display: 'block', fontSize: '12px', color: 'rgba(255, 255, 255, 0.85)', marginBottom: '8px', fontWeight: 500 }}>
-                  System Administrator / Sudo Password:
+                  Login password
                 </label>
                 <input
                   type="password"
                   value={authPassword}
                   onChange={(e) => { setAuthPassword(e.target.value); setAuthError(''); }}
-                  placeholder="Enter system credentials..."
+                  placeholder="Password"
                   autoFocus
                   disabled={isVerifying}
                   onKeyDown={(e) => {

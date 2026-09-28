@@ -73,6 +73,19 @@ describe('InstantAnswers', () => {
     }
   });
 
+  it.each([
+    'what changed in the last commit here',
+    'what changed in the last commit',
+    'show me the last commit',
+    'what did the last commit change?',
+    'which files changed in the latest commit in this repo',
+  ])('answers "%s" with git show --stat', (goal) => {
+    const answer = findInstantAnswer(goal, 'macos');
+    expect(answer?.id).toBe('last-commit');
+    expect(isReadOnlyCommandLine(answer!.command).readOnly).toBe(true);
+    expect(findInstantAnswer(goal, 'linux')?.id).toBe('last-commit');
+  });
+
   it('takes macOS screenshots with screencapture', () => {
     expect(findInstantAnswer('take a screenshot', 'macos')?.command).toContain('screencapture -x');
     expect(findInstantAnswer('take a region screenshot', 'macos')?.command).toContain('screencapture -i');

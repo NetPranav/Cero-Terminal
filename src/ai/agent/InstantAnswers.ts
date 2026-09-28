@@ -106,6 +106,14 @@ const RULES: InstantRule[] = [
       : { command: 'uptime -p', explanation: 'Time since last boot' }
   },
   {
+    id: 'last-commit',
+    pattern: /^(?:(?:what|which\s+files?)\s+(?:changed|did\s+(?:i|we)\s+change)\s+in\s+(?:the\s+)?(?:last|latest|previous|most\s+recent)\s+commit|(?:show(?:\s+me)?|what(?:'s|\s+is|\s+was))\s+(?:in\s+)?(?:the\s+)?(?:last|latest|most\s+recent)\s+commit|what\s+did\s+(?:the\s+)?(?:last|latest)\s+commit\s+(?:change|do))(?:\s+(?:here|in\s+this\s+(?:repo|repository|project|folder)))?\s*\??$/i,
+    build: () => ({
+      command: `git --no-pager show --stat --format='%h %s%n%an, %ar' HEAD`,
+      explanation: 'Files and lines changed in the last commit'
+    })
+  },
+  {
     id: 'kernel',
     pattern: /^(?:(?:what(?:'s|\s+is)|show(?:\s+me)?|check)\s+)?(?:my\s+|the\s+)?(?:kernel|linux|darwin)\s+version\s*\??$/i,
     build: () => ({ command: 'uname -srm', explanation: 'Kernel release and architecture' })
