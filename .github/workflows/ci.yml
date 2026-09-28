@@ -1,28 +1,56 @@
-name: Sentinel CI — Test Suite & Lint
+name: Sentinel CI
 
 on:
   push:
-    branches: [ main, windows, linux, shared-core ]
+    branches: [ main, windows, linux, linux-v2-update, shared-core ]
   pull_request:
-    branches: [ main, windows, linux ]
+    branches: [ main, windows, linux, linux-v2-update ]
 
 jobs:
-  test:
-    name: Run Automated Tests (680+ Tests)
+  frontend:
+    name: Tests and production build
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Test Verification Suite
+      - name: Unit and integration tests
         run: npm test
+
+      - name: Type check and bundle
+        run: npm run build
+
+  backend:
+    name: Rust check and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev \
+            libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # tauri::generate_context! embeds frontendDist at compile time, so it must exist.
+      - name: Placeholder frontend bundle
+        run: mkdir -p dist && echo '<!doctype html><title>ci</title>' > dist/index.html
+
+      - name: cargo check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: cargo test
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib

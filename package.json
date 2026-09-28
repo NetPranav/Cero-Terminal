@@ -17,7 +17,8 @@
     "agent": "tsx scripts/agent-cli.ts",
     "cli": "tsx scripts/agent-cli.ts",
     "benchmark": "tsx scripts/benchmark_prompts.ts",
-    "benchmark:domain": "tsx scripts/benchmark_prompts.ts --domain"
+    "benchmark:domain": "tsx scripts/benchmark_prompts.ts --domain",
+    "smoke:engine": "tsx scripts/engine_smoke.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

@@ -9,6 +9,10 @@ const isVitest = Boolean(process.env.VITEST);
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
+  test: {
+    // Never let tests read or write the developer's real ~/.sentinel
+    setupFiles: ['./src/test/isolateHome.ts'],
+  },
   resolve: {
     alias: isVitest ? {} : {
       path: path.resolve(__dirname, "src/utils/pathPolyfill.ts"),
