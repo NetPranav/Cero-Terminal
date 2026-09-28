@@ -802,6 +802,29 @@ export function requiresExecutionPlan(goal: string): boolean {
  * Deliberately conservative: any follow-up verb or multi-step phrasing keeps the model in the loop.
  */
 /**
+ * Figures in `summary` that appear in none of `sources` (question, folder, commands, outputs).
+ * Unit conversions of an observed value (KB/MB/GB, 1000 or 1024 based, within 6%) and the
+ * numbers 0 and 1 are accepted.
+ */
+export function ungroundedNumbers(summary: string, sources: string[]): string[] {
+  const observed = new Set<string>();
+  const values: number[] = [];
+  for (const m of sources.join('\n').match(/\d+(?:\.\d+)?/g) || []) {
+    observed.add(m);
+    values.push(Number(m));
+  }
+  const scaled = (n: number) => values.some(v => [1000, 1024, 1_000_000, 1_048_576, 1e9, 1_073_741_824]
+    .some(f => [v / f, v * f].some(c => c > 0 && Math.abs(c - n) / n < 0.06)));
+  const claimed = [...new Set((summary.match(/\d+(?:[.,]\d+)?/g) || []).map(n => n.replace(/,(?=\d{3}\b)/g, '').replace(',', '.')))];
+  return claimed.filter(n => {
+    const v = Number(n);
+    if (!Number.isFinite(v) || v <= 1) return false;
+    if (observed.has(n) || values.includes(v)) return false;
+    return !scaled(v);
+  });
+}
+
+/**
  * True for requests that ask about the system rather than ask to change it
  * ("what changed in the last commit", "which process uses port 3000").
  */
@@ -2318,6 +2341,7 @@ export class AgentLoop {
     const steps: { tool: string; params: any; result: ToolExecutionResult }[] = [];
     let cdPath: string | undefined;
     let failureRetries = 0;
+    let groundingRetries = 0;
     let refusalInterceptions = 0;
 
     // Build conversation messages
@@ -2575,6 +2599,31 @@ export class AgentLoop {
               return await this.executeFallback(fallback, context);
             }
             summary = "Hey! I'm Sentinel, your AI terminal assistant. I can manage Wi-Fi, Bluetooth, navigate folders, inspect hardware/battery, run tools, and execute terminal commands.";
+          }
+
+          // Grounding: every figure in the answer must come from the question or a command's
+          // output. A small model otherwise "answers" the part it never measured (a line count
+          // of 111 for two files with 5 lines). One correction round, then show the real output.
+          if (steps.length > 0) {
+            const sources = [goal, context.cwd, ...steps.map(st => `${JSON.stringify(st.params ?? {})}\n${JSON.stringify(st.result?.data ?? {})}\n${st.result?.error ?? ''}`)];
+            const invented = ungroundedNumbers(summary, sources);
+            if (invented.length > 0 && groundingRetries < 1) {
+              groundingRetries++;
+              this.emit({ type: 'thinking', message: 'Checking the answer against the command output...' });
+              messages.push({ role: 'assistant', content: JSON.stringify(parsed) });
+              messages.push({
+                role: 'user',
+                content: `Your summary states ${invented.join(', ')}, which does not appear in any command output. Run a command that measures it, or answer only with values shown in <TOOL_OUTPUT>.`
+              });
+              continue;
+            }
+            if (invented.length > 0) {
+              const observed = steps
+                .map(st => (typeof st.result?.data?.stdout === 'string' ? st.result.data.stdout.trim() : ''))
+                .filter(Boolean)
+                .join('\n');
+              if (observed) summary = `Could not verify the full answer. The commands printed:\n\n${observed}`;
+            }
           }
 
           // If the model produced an evasive/meta summary ("The tool has provided...") instead of the actual data,

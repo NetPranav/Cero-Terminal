@@ -1188,3 +1188,36 @@ describe('Questions about a file are answered from the file', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 });
+
+describe('Answers must be grounded in command output', () => {
+  it('finds figures that no command printed', async () => {
+    const { ungroundedNumbers } = await import('./AgentLoop');
+    const out = '{"stdout":"       2\\n","code":0}';
+    expect(ungroundedNumbers('There are 2 JavaScript files with a total of 111 lines.', ['how many js files', out])).toEqual(['111']);
+    expect(ungroundedNumbers('There are 2 files.', ['q', out])).toEqual([]);
+    // 1817224 KB is about 1.7 GB: a unit conversion, not an invention
+    expect(ungroundedNumbers('About 1.7 GB is free.', ['q', '{"stdout":"/dev/disk3s5 239311296 204981792 1817224 100%"}'])).toEqual([]);
+    expect(ungroundedNumbers('Node v26.0.0 at /opt/homebrew/bin/node', ['q', '{"stdout":"v26.0.0\\n/opt/homebrew/bin/node"}'])).toEqual([]);
+  });
+
+  it('sends an invented figure back once, then shows the real output', async () => {
+    const generate = vi.fn()
+      .mockResolvedValueOnce({ content: JSON.stringify({ action: 'execute', command: "find . -name '*.js' | wc -l", explanation: 'Count JS files' }) })
+      .mockResolvedValueOnce({ content: JSON.stringify({ action: 'done', summary: 'There are 2 JavaScript files with 111 lines in total.' }) })
+      .mockResolvedValueOnce({ content: JSON.stringify({ action: 'execute', command: 'cat *.js | wc -l', explanation: 'Count lines' }) })
+      .mockResolvedValueOnce({ content: JSON.stringify({ action: 'done', summary: 'There are 2 JavaScript files with 5 lines in total.' }) });
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    const execute = vi.fn()
+      .mockResolvedValueOnce({ success: true, data: { stdout: '       2\n', code: 0 } })
+      .mockResolvedValueOnce({ success: true, data: { stdout: '       5\n', code: 0 } });
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+
+    const result = await loop.run('how many javascript files are in this folder and how many lines do they have in total', { os: 'macos', cwd: '/tmp/r' });
+    expect(result.summary).toBe('There are 2 JavaScript files with 5 lines in total.');
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+});
