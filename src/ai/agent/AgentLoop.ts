@@ -79,7 +79,7 @@ import { ErrorDiagnosticsEngine } from './ErrorDiagnosticsEngine';
 import { ShadowPtySimulator } from './ShadowPtySimulator';
 import { ShellAstParser } from '../../domain/security/ShellAstParser';
 import { isReadOnlyCommandLine, isClearlyMutating } from '../../domain/security/ReadOnlyCommandPolicy';
-import { findInstantAnswer, InstantAnswer } from './InstantAnswers';
+import { findInstantAnswers, InstantAnswer } from './InstantAnswers';
 import * as fs from 'fs';
 import { SecretRedactor } from '../../domain/security/SecretRedactor';
 import { SystemKnowledgeScanner } from '../../domain/knowledge/SystemKnowledgeScanner';
@@ -1710,12 +1710,21 @@ export class AgentLoop {
     // any provider probe, so "check battery" never waits for a model. A failure (e.g. `ss` not
     // installed) falls through to the model.
     const profileOs = SystemKnowledgeScanner.getInstance().getProfile()?.os;
-    const instant = findInstantAnswer(cleaned || goal, context.os, {
+    const instants = findInstantAnswers(cleaned || goal, context.os, {
       environment: profileOs?.desktopEnvironment,
       session: profileOs?.sessionType
     });
-    if (instant) {
-      const instantResult = await this.runInstantAnswer(instant, context);
+    if (instants) {
+      // Each part of "battery and uptime" answered in turn; any failure hands the whole
+      // request to the model, a decline ends it
+      let instantResult: AgentResult | null = null;
+      for (const instant of instants) {
+        const part = await this.runInstantAnswer(instant, context);
+        if (!part || part.declined) { instantResult = part; break; }
+        instantResult = instantResult
+          ? { ...part, summary: `${instantResult.summary}\n${part.summary}`, steps: [...instantResult.steps, ...part.steps] }
+          : part;
+      }
       if (instantResult) {
         this.conversationHistory.push({ role: 'user', content: goal.trim() });
         this.conversationHistory.push({ role: 'assistant', content: instantResult.summary });

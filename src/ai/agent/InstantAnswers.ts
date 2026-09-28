@@ -179,3 +179,24 @@ function macDesktopAnswer(text: string): InstantAnswer | null {
     explanation: region ? 'Screenshot of a selected region' : 'Screenshot of the screen'
   };
 }
+
+/**
+ * Instant answers for every part of "what's my battery and uptime" / "check disk, memory and
+ * uptime", or null unless each part has one. A single matching request returns one answer.
+ */
+export function findInstantAnswers(goal: string, os: string, desktop?: DesktopInfo): InstantAnswer[] | null {
+  const single = findInstantAnswer(goal, os, desktop);
+  if (single) return [single];
+  const text = (goal || '').trim().replace(/\s+/g, ' ').replace(/\?+$/, '');
+  if (!text || text.length > 120) return null;
+  const m = text.match(/^((?:(?:can\s+you\s+|please\s+)?(?:check|show(?:\s+me)?|tell\s+me|get|what(?:'s|\s+is|\s+are)?)\s+)?(?:the\s+|my\s+)?)(.+)$/i);
+  const prefix = m?.[1] ?? '';
+  const parts = (m?.[2] ?? text).split(/\s*(?:,|&|\band\b|\bplus\b)\s*/i).map(p => p.trim()).filter(Boolean);
+  if (parts.length < 2 || parts.length > 4) return null;
+  const answers = parts.map(p => findInstantAnswer(`${prefix}${p}`, os, desktop) ?? findInstantAnswer(p, os, desktop));
+  if (!answers.every(Boolean)) return null;
+  // "battery and battery" or two phrasings of one thing: answer once
+  const unique = answers.filter((a, i) => answers.findIndex(b => b!.id === a!.id) === i) as InstantAnswer[];
+  return unique;
+}
+

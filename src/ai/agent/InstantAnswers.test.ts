@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findInstantAnswer } from './InstantAnswers';
+import { findInstantAnswer, findInstantAnswers } from './InstantAnswers';
 import { isReadOnlyCommandLine } from '../../domain/security/ReadOnlyCommandPolicy';
 import { ShellAstParser } from '../../domain/security/ShellAstParser';
 
@@ -101,4 +101,13 @@ describe('InstantAnswers', () => {
       expect(verdict.readOnly, `${answer.command}: ${verdict.reason}`).toBe(true);
     }
   });
+
+  it('answers each part of a multi-part question when every part has an instant answer', () => {
+    expect(findInstantAnswers("what's my battery and uptime", 'macos')?.map(a => a.id)).toEqual(['battery', 'uptime']);
+    expect(findInstantAnswers('check disk, memory and uptime', 'linux')?.map(a => a.id)).toEqual(['disk', 'memory', 'uptime']);
+    expect(findInstantAnswers('check battery', 'linux')?.map(a => a.id)).toEqual(['battery']);
+    // One part without an instant answer: the model handles the whole request
+    expect(findInstantAnswers('check battery and install htop', 'linux')).toBeNull();
+  });
 });
+
