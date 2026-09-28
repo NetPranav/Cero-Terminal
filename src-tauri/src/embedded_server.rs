@@ -472,62 +472,61 @@ pub fn get_inference_queue_status(
     })
 }
 
+/// SHA-256 of a file, streamed in-process (no dependency on sha256sum/shasum being installed).
+pub fn sha256_file(path: &std::path::Path) -> std::io::Result<String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect())
+}
+
 #[tauri::command]
-pub fn verify_file_checksum(
-    file_path: String,
-    expected_sha256: String,
-) -> Result<bool, String> {
-    let resolved_path = if file_path.starts_with("~/") {
-        if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
-            file_path.replacen("~", &home, 1)
-        } else {
-            file_path
-        }
-    } else if file_path.starts_with("$HOME/") {
-        if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
-            file_path.replacen("$HOME", &home, 1)
-        } else {
-            file_path
-        }
-    } else {
-        file_path
-    };
-
-    let path = std::path::Path::new(&resolved_path);
-    if !path.exists() || !path.is_file() {
-        return Err(format!("File not found: {}", resolved_path));
+pub async fn verify_file_checksum(file_path: String, expected_sha256: String) -> Result<bool, String> {
+    let resolved = file_path
+        .strip_prefix("$HOME/")
+        .map(|rest| format!("~/{}", rest))
+        .unwrap_or(file_path);
+    let path = crate::process_cmds::expand_tilde(&resolved);
+    if !path.is_file() {
+        return Err(format!("File not found: {}", path.display()));
     }
-
-    let output = Command::new("sha256sum")
-        .arg(&resolved_path)
-        .output()
-        .or_else(|_| {
-            Command::new("shasum")
-                .arg("-a")
-                .arg("256")
-                .arg(&resolved_path)
-                .output()
-        })
-        .map_err(|e| format!("Failed to execute checksum utility: {}", e))?;
-
-    if !output.status.success() {
-        return Err("Checksum calculation command exited with error".to_string());
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let calculated = stdout
-        .split_whitespace()
-        .next()
-        .unwrap_or("")
-        .trim()
-        .to_lowercase();
-
-    Ok(calculated == expected_sha256.trim().to_lowercase())
+    // Hashing a multi-GB model takes seconds; keep it off the async runtime threads.
+    let actual = tokio::task::spawn_blocking(move || sha256_file(&path))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("Failed to hash file: {}", e))?;
+    Ok(actual == expected_sha256.trim().to_lowercase())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sha256_matches_known_vectors() {
+        let dir = std::env::temp_dir().join(format!("sentinel-sha-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let empty = dir.join("empty");
+        let abc = dir.join("abc");
+        std::fs::write(&empty, b"").unwrap();
+        std::fs::write(&abc, b"abc").unwrap();
+        assert_eq!(sha256_file(&empty).unwrap(), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+        assert_eq!(sha256_file(&abc).unwrap(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn lora_adapters_are_never_used_as_base_models() {

@@ -945,6 +945,16 @@ export class EmbeddedEngineManager {
     return false;
   }
 
+  /** Last lines llama-server wrote to ~/.sentinel/logs/llama-server.log (why a start failed). */
+  public async getEngineLogTail(maxLines = 20): Promise<string> {
+    if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') return '';
+    try {
+      return await invoke<string>('get_embedded_llm_log_tail', { maxLines });
+    } catch {
+      return '';
+    }
+  }
+
   /** Install the engine only when no llama-server is available yet. */
   public async ensureEngineInstalled(): Promise<boolean> {
     if (await this.checkEngineExists()) return true;

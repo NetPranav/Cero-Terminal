@@ -2026,6 +2026,10 @@ export class AgentLoop {
         if (await provider.isAvailable()) return provider;
         await new Promise(r => setTimeout(r, 500));
       }
+      const log = await embeddedMgr.getEngineLogTail(8);
+      if (log.trim()) {
+        this.emit({ type: 'error', message: `The local AI engine did not start. Last lines of ~/.sentinel/logs/llama-server.log:\n${log.trim()}` });
+      }
     } catch {
       // engine could not start
     }

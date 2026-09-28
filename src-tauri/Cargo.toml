@@ -40,6 +40,7 @@ tauri-plugin-http = "2.5.9"
 sysinfo = "0.39.6"
 libc = "0.2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+sha2 = "0.10"
 
 [features]
 default = ["custom-protocol"]

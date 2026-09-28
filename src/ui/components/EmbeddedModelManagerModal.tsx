@@ -69,6 +69,16 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
     setStatus(s);
   };
 
+  const [engineLog, setEngineLog] = useState<string>('');
+  useEffect(() => {
+    // When the model is present but the engine is not serving, show why (from llama-server's log)
+    if (isOpen && status?.modelDownloaded && status.engineInstalled && !status.isRunning) {
+      EmbeddedEngineManager.getInstance().getEngineLogTail(12).then(setEngineLog);
+    } else {
+      setEngineLog('');
+    }
+  }, [isOpen, status?.modelDownloaded, status?.engineInstalled, status?.isRunning]);
+
   const handleSelectTier = async (next: EmbeddedModelTier) => {
     if (next === tier || isActionBusy) return;
     EmbeddedEngineManager.setSelectedTier(next);
@@ -560,6 +570,25 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
               <span>RAM: ~{(model.ramRequiredMb / 1024).toFixed(1)} GB</span>
               <span>Hardware Acceleration: Supported</span>
             </div>
+
+            {engineLog && (
+              <pre style={{
+                margin: 0,
+                padding: '8px 10px',
+                maxHeight: '140px',
+                overflow: 'auto',
+                backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '6px',
+                fontSize: '10px',
+                lineHeight: 1.4,
+                color: 'rgba(255, 255, 255, 0.6)',
+                fontFamily: 'ui-monospace, monospace',
+                whiteSpace: 'pre-wrap'
+              }}>
+                {`Engine log (~/.sentinel/logs/llama-server.log):\n${engineLog}`}
+              </pre>
+            )}
 
             {/* Actions for Not Downloaded State */}
             {!status?.modelDownloaded && !isModelDownloading && (
