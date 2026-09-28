@@ -105,4 +105,11 @@ describe('FailureClassifier — Failure Classification Before Retry (0.5.10)', (
       expect(res.recoverable).toBe(true);
     });
   });
+
+  it('classifies a Sentinel execution timeout as a recoverable TIMEOUT with scoping guidance', () => {
+    const res = FailureClassifier.classify('[sentinel] command timed out after 300000 ms and was terminated', 124, 'find / -name foo');
+    expect(res.category).toBe('TIMEOUT');
+    expect(res.recoverable).toBe(true);
+    expect(res.suggestedAction).toContain('Narrow the scope');
+  });
 });

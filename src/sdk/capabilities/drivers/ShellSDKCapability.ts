@@ -16,7 +16,12 @@ export interface ShellDriverInput {
   /** @deprecated Prefer a complete command line in `command`. */
   args?: string[];
   cwd?: string;
+  /** Kill the command (and everything it spawned) after this many ms. */
+  timeoutMs?: number;
 }
+
+/** Default budget for an agent-issued command; long enough for builds, short enough to never hang forever. */
+export const DEFAULT_SHELL_TIMEOUT_MS = 5 * 60 * 1000;
 
 export class ShellSDKCapability extends BaseCapabilityDriver<ShellDriverInput, any> {
   readonly capabilityId = 'shell.execute';
@@ -56,10 +61,11 @@ export class ShellSDKCapability extends BaseCapabilityDriver<ShellDriverInput, a
       const shellBinary = isLinux() ? '/bin/bash' : (isWindows() ? 'powershell.exe' : '/bin/zsh');
       const shellArgs = isWindows() ? ['-Command', commandLine] : ['-c', commandLine];
 
-      const output = await invoke<{ stdout: string; stderr: string; code: number; pid?: number }>('execute_command', {
+      const output = await invoke<{ stdout: string; stderr: string; code: number; pid?: number; timed_out?: boolean }>('execute_command', {
         command: shellBinary,
         args: shellArgs,
-        cwd: input.cwd || _context?.cwd
+        cwd: input.cwd || _context?.cwd,
+        timeoutMs: input.timeoutMs ?? DEFAULT_SHELL_TIMEOUT_MS
       });
 
       if (output.pid) {
@@ -70,7 +76,11 @@ export class ShellSDKCapability extends BaseCapabilityDriver<ShellDriverInput, a
       return {
         success: isSuccess,
         data: { stdout: output.stdout, stderr: output.stderr, code: output.code },
-        error: !isSuccess ? { code: 'NON_ZERO_EXIT', message: `Command exited with status code ${output.code}: ${output.stderr || output.stdout}` } : undefined,
+        error: !isSuccess
+          ? output.timed_out
+            ? { code: 'TIMEOUT', message: `Command timed out and was terminated: ${output.stderr || output.stdout}` }
+            : { code: 'NON_ZERO_EXIT', message: `Command exited with status code ${output.code}: ${output.stderr || output.stdout}` }
+          : undefined,
         commandExecuted: commandLine
       };
     } catch (e: any) {

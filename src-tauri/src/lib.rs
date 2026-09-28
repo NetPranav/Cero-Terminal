@@ -169,6 +169,7 @@ pub fn run() {
             embedded_server::start_embedded_llm,
             embedded_server::stop_embedded_llm,
             embedded_server::get_embedded_llm_status,
+            embedded_server::get_embedded_llm_log_tail,
             embedded_server::acquire_inference_slot,
             embedded_server::release_inference_slot,
             embedded_server::cancel_session_requests,

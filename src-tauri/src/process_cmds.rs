@@ -70,7 +70,21 @@ pub struct CommandOutput {
     pub stdout: String,
     pub stderr: String,
     pub code: i32,
+    /// True when the command exceeded `timeout_ms` and was killed.
+    pub timed_out: bool,
 }
+
+/// Per-stream capture cap. Output beyond this is drained and discarded so a runaway command
+/// (`find /`, `yes`) cannot exhaust memory; callers truncate further for the model anyway.
+const OUTPUT_CAPTURE_LIMIT: usize = 8 * 1024 * 1024;
+
+/// How long to keep reading pipes after the shell itself has exited. A backgrounded child such
+/// as `code . &` inherits stdout and can hold it open for hours; waiting for EOF would block the
+/// caller until that app closes.
+const PIPE_DRAIN_GRACE_MS: u64 = 250;
+
+/// Exit code reported for a command killed by the timeout (same convention as coreutils `timeout`).
+pub const TIMEOUT_EXIT_CODE: i32 = 124;
 
 pub fn expand_tilde(path: &str) -> std::path::PathBuf {
     if path == "~" {
@@ -85,13 +99,8 @@ pub fn expand_tilde(path: &str) -> std::path::PathBuf {
     std::path::PathBuf::from(path)
 }
 
-#[tauri::command]
-pub async fn execute_command(command: String, args: Vec<String>, cwd: Option<String>) -> Result<CommandOutput, String> {
-    let mut process = std::process::Command::new(&command);
-    process.args(&args);
-
-    let target_dir = cwd
-        .filter(|path| !path.trim().is_empty())
+fn resolve_working_dir(cwd: Option<String>) -> Option<std::path::PathBuf> {
+    cwd.filter(|path| !path.trim().is_empty())
         .map(|path| expand_tilde(&path))
         .and_then(|p| if p.is_dir() { Some(p) } else { None })
         .or_else(|| {
@@ -100,21 +109,130 @@ pub async fn execute_command(command: String, args: Vec<String>, cwd: Option<Str
                 .ok()
                 .map(std::path::PathBuf::from)
                 .filter(|p| p.is_dir())
-        });
+        })
+}
 
-    if let Some(directory) = target_dir {
+async fn read_capped<R>(reader: Option<R>, buf: std::sync::Arc<std::sync::Mutex<Vec<u8>>>)
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    use tokio::io::AsyncReadExt;
+    let Some(mut reader) = reader else { return };
+    let mut chunk = [0u8; 8192];
+    loop {
+        match reader.read(&mut chunk).await {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                if let Ok(mut b) = buf.lock() {
+                    let room = OUTPUT_CAPTURE_LIMIT.saturating_sub(b.len());
+                    b.extend_from_slice(&chunk[..n.min(room)]);
+                }
+            }
+        }
+    }
+}
+
+/// Kill the command and everything it started. The child runs in its own process group
+/// (pgid == pid), so `killpg` also reaches grandchildren such as the `find` under `sh -c`.
+async fn kill_process_tree(child: &mut tokio::process::Child, pid: Option<u32>) {
+    #[cfg(unix)]
+    if let Some(pid) = pid {
+        unsafe {
+            libc::killpg(pid as libc::pid_t, libc::SIGKILL);
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = pid;
+    let _ = child.kill().await;
+}
+
+/// Runs a command without a terminal: stdin is closed so prompts fail fast instead of hanging,
+/// output is captured with a size cap, and an optional timeout kills the whole process group.
+pub async fn run_command(
+    command: String,
+    args: Vec<String>,
+    cwd: Option<String>,
+    timeout_ms: Option<u64>,
+) -> Result<CommandOutput, String> {
+    use std::process::Stdio;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    let mut process = tokio::process::Command::new(&command);
+    process
+        .args(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
+    process.process_group(0);
+    if let Some(directory) = resolve_working_dir(cwd) {
         process.current_dir(directory);
     }
 
-    let output = process
-        .output()
+    let mut child = process
+        .spawn()
         .map_err(|e| format!("Failed to execute {}: {}", command, e))?;
+    let pid = child.id();
+
+    let stdout_buf = Arc::new(Mutex::new(Vec::new()));
+    let stderr_buf = Arc::new(Mutex::new(Vec::new()));
+    let mut stdout_task = tokio::spawn(read_capped(child.stdout.take(), stdout_buf.clone()));
+    let mut stderr_task = tokio::spawn(read_capped(child.stderr.take(), stderr_buf.clone()));
+
+    let mut timed_out = false;
+    let status = match timeout_ms.filter(|ms| *ms > 0) {
+        Some(ms) => match tokio::time::timeout(Duration::from_millis(ms), child.wait()).await {
+            Ok(result) => Some(result.map_err(|e| e.to_string())?),
+            Err(_) => {
+                timed_out = true;
+                kill_process_tree(&mut child, pid).await;
+                None
+            }
+        },
+        None => Some(child.wait().await.map_err(|e| e.to_string())?),
+    };
+
+    let _ = tokio::time::timeout(Duration::from_millis(PIPE_DRAIN_GRACE_MS), async {
+        let _ = (&mut stdout_task).await;
+        let _ = (&mut stderr_task).await;
+    })
+    .await;
+
+    let stdout = String::from_utf8_lossy(&stdout_buf.lock().map_err(|e| e.to_string())?).into_owned();
+    let mut stderr = String::from_utf8_lossy(&stderr_buf.lock().map_err(|e| e.to_string())?).into_owned();
+    if timed_out {
+        if !stderr.is_empty() && !stderr.ends_with('\n') {
+            stderr.push('\n');
+        }
+        stderr.push_str(&format!(
+            "[sentinel] command timed out after {} ms and was terminated",
+            timeout_ms.unwrap_or(0)
+        ));
+    }
 
     Ok(CommandOutput {
-        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-        code: output.status.code().unwrap_or(-1),
+        stdout,
+        stderr,
+        code: if timed_out {
+            TIMEOUT_EXIT_CODE
+        } else {
+            status.and_then(|s| s.code()).unwrap_or(-1)
+        },
+        timed_out,
     })
+}
+
+/// `timeout_ms` is optional; omitting it keeps the old unbounded behaviour, which long-running
+/// callers such as the model download rely on.
+#[tauri::command]
+pub async fn execute_command(
+    command: String,
+    args: Vec<String>,
+    cwd: Option<String>,
+    timeout_ms: Option<u64>,
+) -> Result<CommandOutput, String> {
+    run_command(command, args, cwd, timeout_ms).await
 }
 
 #[tauri::command]
@@ -174,5 +292,52 @@ mod tests {
 
         let regular = expand_tilde("/tmp");
         assert_eq!(regular.to_str().unwrap(), "/tmp");
+    }
+
+    fn sh(script: &str) -> (String, Vec<String>) {
+        ("sh".to_string(), vec!["-c".to_string(), script.to_string()])
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn captures_output_and_exit_code() {
+        let (cmd, args) = sh("echo hello; echo oops 1>&2; exit 3");
+        let out = run_command(cmd, args, Some("/tmp".into()), Some(5_000)).await.unwrap();
+        assert_eq!(out.stdout.trim(), "hello");
+        assert_eq!(out.stderr.trim(), "oops");
+        assert_eq!(out.code, 3);
+        assert!(!out.timed_out);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn timeout_kills_the_whole_process_group() {
+        let started = std::time::Instant::now();
+        let (cmd, args) = sh("sleep 30 & sleep 30; wait");
+        let out = run_command(cmd, args, None, Some(300)).await.unwrap();
+        assert!(out.timed_out);
+        assert_eq!(out.code, TIMEOUT_EXIT_CODE);
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn backgrounded_child_holding_stdout_does_not_block() {
+        // `sleep` inherits the stdout pipe; waiting for EOF would take 5 seconds.
+        let started = std::time::Instant::now();
+        let (cmd, args) = sh("sleep 5 & echo launched");
+        let out = run_command(cmd, args, None, None).await.unwrap();
+        assert_eq!(out.stdout.trim(), "launched");
+        assert_eq!(out.code, 0);
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn stdin_is_closed_so_prompts_do_not_hang() {
+        let (cmd, args) = sh("read answer; echo \"got:$answer\"");
+        let out = run_command(cmd, args, None, Some(5_000)).await.unwrap();
+        assert!(!out.timed_out);
+        assert_eq!(out.stdout.trim(), "got:");
     }
 }

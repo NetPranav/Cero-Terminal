@@ -606,13 +606,16 @@ export class ShadowPtySimulator {
 
     // 3. Tauri environment via execute_command IPC
     const timeoutPromise = new Promise<{ stdout: string; stderr: string; code: number }>((_, reject) => {
-      setTimeout(() => reject(new Error(`Shadow execution timeout (${this.branchTimeoutMs}ms exceeded)`)), this.branchTimeoutMs);
+      setTimeout(() => reject(new Error(`Shadow execution timeout (${this.branchTimeoutMs}ms exceeded)`)), this.branchTimeoutMs + 1000);
     });
 
+    // Rust enforces the timeout and kills the process group; the JS race below is only a
+    // backstop in case IPC itself stalls.
     const executionPromise = invoke<{ stdout: string; stderr: string; code: number }>('execute_command', {
       command: shell,
       args: ['-c', commandLine],
-      cwd
+      cwd,
+      timeoutMs: this.branchTimeoutMs
     });
 
     return Promise.race([executionPromise, timeoutPromise]);

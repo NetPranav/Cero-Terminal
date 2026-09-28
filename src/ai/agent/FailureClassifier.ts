@@ -7,6 +7,7 @@
  * - PERMISSION_DENIED: unrecoverable without elevation; skip retry, suggest sudo via consent flow
  * - TRANSIENT: recoverable; retry allowed with backoff or network retry
  * - SYNTAX_ERROR: recoverable; retry with parse error feedback
+ * - TIMEOUT: recoverable; the command was killed for running too long, so retry with a narrower scope
  * - UNKNOWN: general failure; allowed up to retry budget
  */
 
@@ -16,6 +17,7 @@ export type FailureClass =
   | 'PERMISSION_DENIED'
   | 'TRANSIENT'
   | 'SYNTAX_ERROR'
+  | 'TIMEOUT'
   | 'UNKNOWN';
 
 export interface FailureClassification {
@@ -35,6 +37,16 @@ export class FailureClassifier {
   ): FailureClassification {
     const raw = (errorText || '').trim();
     const lower = raw.toLowerCase();
+
+    // 0. Killed by Sentinel's execution timeout (exit 124, same convention as coreutils `timeout`)
+    if (lower.includes('[sentinel] command timed out') || lower.includes('command timed out and was terminated')) {
+      return {
+        category: 'TIMEOUT',
+        recoverable: true,
+        reason: 'The command ran past its time limit and was terminated.',
+        suggestedAction: 'Narrow the scope (search a specific directory instead of /, add -maxdepth, limit with head, add -c/--count to ping) or use a faster tool.'
+      };
+    }
 
     // 1. Missing Binary / Command Not Found
     // Exit code 127 is standard POSIX for "command not found"

@@ -62,8 +62,26 @@ fn get_home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// Directory the in-app installer extracts the full llama.cpp release bundle into. Modern
+/// releases ship `llama-server` next to its shared libraries (libllama, libggml*), so the
+/// binary must be run from inside this directory rather than copied out on its own.
+fn sentinel_engine_dir() -> Option<PathBuf> {
+    get_home_dir().map(|home| home.join(".sentinel").join("engine").join("current"))
+}
+
+fn find_on_path(binary: &str) -> Option<PathBuf> {
+    let path_var = std::env::var_os("PATH")?;
+    std::env::split_paths(&path_var)
+        .map(|dir| dir.join(binary))
+        .find(|p| p.is_file())
+}
+
 fn find_llama_server_binary() -> Option<PathBuf> {
     let mut candidates = Vec::new();
+
+    if let Some(engine_dir) = sentinel_engine_dir() {
+        candidates.push(engine_dir.join("llama-server"));
+    }
 
     if let Some(home) = get_home_dir() {
         candidates.push(home.join(".sentinel").join("bin").join("llama-server"));
@@ -78,13 +96,49 @@ fn find_llama_server_binary() -> Option<PathBuf> {
         }
     }
 
-    // Common Linux and package locations
-    candidates.push(PathBuf::from("/usr/lib/ollama/llama-server"));
+    // Distro packages (Arch `llama.cpp`, Fedora/Ubuntu builds) and Homebrew
     candidates.push(PathBuf::from("/usr/bin/llama-server"));
     candidates.push(PathBuf::from("/usr/local/bin/llama-server"));
     candidates.push(PathBuf::from("/opt/homebrew/bin/llama-server"));
+    if let Some(on_path) = find_on_path("llama-server") {
+        candidates.push(on_path);
+    }
+    candidates.push(PathBuf::from("/usr/lib/ollama/llama-server"));
 
     candidates.into_iter().find(|p| p.exists() && p.is_file())
+}
+
+/// Where llama-server's stderr goes, so a failed start (bad flag, missing library, model load
+/// error) can be diagnosed instead of silently disappearing.
+pub fn llama_server_log_path() -> Option<PathBuf> {
+    get_home_dir().map(|home| home.join(".sentinel").join("logs").join("llama-server.log"))
+}
+
+/// Server flags. Deliberately minimal so they work on both older and current llama.cpp builds:
+/// - no `--flash-attn`: its syntax changed from a bare flag to `on|off|auto` in Aug 2025
+///   (PR #15434); passing `auto` makes older builds exit with "invalid argument", and newer
+///   builds already default to auto.
+/// - no `-t`: llama.cpp picks the physical/performance core count itself, which beats the
+///   logical-core count (hyper-threads slow token generation down).
+/// - `-np 1`: one interactive user, so one slot; newer builds otherwise auto-create several
+///   slots that share (and split) the context.
+/// - `--cache-reuse 256`: reuse cached KV chunks across requests; together with the stable
+///   system-prompt prefix this skips re-processing ~1.8k prompt tokens per request.
+pub fn build_server_args(model: &str, port: u16, gpu_layers: &str, lora: Option<&str>) -> Vec<String> {
+    let mut args = vec![
+        "--host".to_string(), "127.0.0.1".to_string(),
+        "--port".to_string(), port.to_string(),
+        "-m".to_string(), model.to_string(),
+        "-ngl".to_string(), gpu_layers.to_string(),
+        "-c".to_string(), "8192".to_string(),
+        "-np".to_string(), "1".to_string(),
+        "--cache-reuse".to_string(), "256".to_string(),
+    ];
+    if let Some(lora) = lora {
+        args.push("--lora".to_string());
+        args.push(lora.to_string());
+    }
+    args
 }
 
 fn find_model_file(preferred: Option<String>) -> Option<PathBuf> {
@@ -166,13 +220,7 @@ pub fn start_embedded_llm(
         let _ = child.wait();
     }
 
-    let n_threads = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(4)
-        .to_string();
-
     let model_str = model_file.to_string_lossy().into_owned();
-    let port_str = state.port.to_string();
 
     let is_cpu = gpu_layers.map_or(false, |l| l <= 0);
     {
@@ -186,35 +234,31 @@ pub fn start_embedded_llm(
         gpu_layers.unwrap_or(99).to_string()
     };
 
-    let mut args = vec![
-        "--port".to_string(), port_str,
-        "-m".to_string(), model_str.clone(),
-        "-ngl".to_string(), ngl_val,
-        "-t".to_string(), n_threads,
-        "-b".to_string(), "2048".to_string(),
-        "-c".to_string(), "4096".to_string(),
-        "--no-warmup".to_string(),
-    ];
+    let applied_lora: Option<String> = lora_path
+        .as_ref()
+        .filter(|lora| std::path::Path::new(lora.as_str()).exists())
+        .cloned();
+    let args = build_server_args(&model_str, state.port, &ngl_val, applied_lora.as_deref());
 
-    if !is_cpu {
-        args.push("--flash-attn".to_string());
-        args.push("auto".to_string());
-    }
-
-    let mut applied_lora: Option<String> = None;
-    if let Some(ref lora) = lora_path {
-        let p = std::path::Path::new(lora);
-        if p.exists() {
-            args.push("--lora".to_string());
-            args.push(lora.clone());
-            applied_lora = Some(lora.clone());
-        }
-    }
+    let stderr_target = llama_server_log_path()
+        .and_then(|log_path| {
+            if let Some(dir) = log_path.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            std::fs::File::create(&log_path).ok()
+        })
+        .map(Stdio::from)
+        .unwrap_or_else(Stdio::null);
 
     let mut cmd = Command::new(&bin_path);
     cmd.args(&args)
+        .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stderr(stderr_target);
+    // Run from the binary's own directory so bundled shared libraries resolve.
+    if let Some(bin_dir) = bin_path.parent() {
+        cmd.current_dir(bin_dir);
+    }
 
     #[cfg(target_os = "linux")]
     {
@@ -305,6 +349,22 @@ pub fn get_embedded_llm_status(
         is_cpu_fallback: *fb_guard,
         queued_requests: total_queued,
     })
+}
+
+/// Last `max_lines` lines of llama-server's stderr log, for diagnosing a failed start.
+#[tauri::command]
+pub fn get_embedded_llm_log_tail(max_lines: Option<usize>) -> Result<String, String> {
+    let Some(path) = llama_server_log_path() else {
+        return Ok(String::new());
+    };
+    let contents = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return Ok(String::new()),
+    };
+    let lines: Vec<&str> = contents.lines().collect();
+    let keep = max_lines.unwrap_or(40);
+    let start = lines.len().saturating_sub(keep);
+    Ok(lines[start..].join("\n"))
 }
 
 #[tauri::command]
@@ -458,6 +518,23 @@ pub fn verify_file_checksum(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn server_args_work_across_llama_cpp_versions() {
+        let args = build_server_args("/models/m.gguf", 8847, "99", None);
+        let joined = args.join(" ");
+        // `--flash-attn auto` breaks builds older than Aug 2025; -t overrides llama.cpp's core detection
+        assert!(!joined.contains("flash-attn"));
+        assert!(!args.iter().any(|a| a == "-t"));
+        assert!(joined.contains("-np 1"));
+        assert!(joined.contains("-c 8192"));
+        assert!(joined.contains("--cache-reuse 256"));
+        assert!(joined.contains("--port 8847"));
+        assert!(!joined.contains("--lora"));
+
+        let with_lora = build_server_args("/models/m.gguf", 8847, "0", Some("/models/a.gguf"));
+        assert!(with_lora.join(" ").contains("--lora /models/a.gguf"));
+    }
 
     #[test]
     fn test_inference_queue_slot_lifecycle() {
