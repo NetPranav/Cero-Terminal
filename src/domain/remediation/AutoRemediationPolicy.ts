@@ -102,7 +102,9 @@ export class AutoRemediationPolicy {
     if (!vetted) return { action: 'propose', reason: `${suggestion.ruleName} is not on the unattended list` };
     if (suggestion.requiresElevation) return { action: 'propose', reason: 'Needs elevated privileges' };
 
-    const key = `${suggestion.ruleId}@${options.cwd}`;
+    // Rate limits are per concrete fix: the same rule in another repository is a new problem
+    const command = vetted.command(options.cwd, options.output || '');
+    const key = `${suggestion.ruleId}@${command}`;
     const now = this.now();
     const last = this.lastApplied.get(key);
     if (last !== undefined && now - last < AutoRemediationPolicy.REPEAT_WINDOW_MS) {
@@ -113,13 +115,14 @@ export class AutoRemediationPolicy {
       return { action: 'propose', reason: 'Hourly limit for unattended fixes reached' };
     }
 
-    return { action: 'auto', command: vetted.command(options.cwd, options.output || ''), reason: vetted.why };
+    return { action: 'auto', command, reason: vetted.why };
   }
 
   /** Call after an automatic fix actually ran, so rate limits apply. */
-  public recordApplied(suggestion: RemediationSuggestion, cwd: string): void {
+  public recordApplied(suggestion: RemediationSuggestion, cwd: string, command?: string): void {
     const now = this.now();
-    this.lastApplied.set(`${suggestion.ruleId}@${cwd}`, now);
+    const fix = command ?? VETTED_AUTO_FIXES[suggestion.ruleId]?.command(cwd, '') ?? cwd;
+    this.lastApplied.set(`${suggestion.ruleId}@${fix}`, now);
     this.appliedTimes.push(now);
   }
 }

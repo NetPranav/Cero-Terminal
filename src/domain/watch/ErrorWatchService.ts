@@ -45,7 +45,11 @@ const UNMATCHED_INTERVAL_MS = 30_000;
 
 /** Stable key for "the same error": digits, hex ids and paths vary between occurrences */
 function errorKey(line: string): string {
-  return line.toLowerCase().replace(/0x[0-9a-f]+|\d+/g, '#').replace(/\/[^\s:]+/g, '/…').slice(0, 160);
+  // Numbers vary between repeats of one error; the tail of a path says which repo or file it is
+  return line.toLowerCase()
+    .replace(/0x[0-9a-f]+|\d+/g, '#')
+    .replace(/\/[^\s:'"]+/g, p => `…/${p.split('/').filter(Boolean).slice(-3).join('/')}`)
+    .slice(0, 160);
 }
 
 function dirname(p: string): string {
@@ -161,17 +165,31 @@ export class ErrorWatchService {
     const buffer = [...(this.context.get(id) || []), ...lines].slice(-CONTEXT_LINES);
     this.context.set(id, buffer);
 
-    const errorLine = [...lines].reverse().find(l => ERROR_SIGNAL.test(l));
-    if (!errorLine) return;
+    // Each new error is handled on its own (a read can carry several), newest last
+    const errorIndexes = lines.map((l, i) => (ERROR_SIGNAL.test(l) ? i : -1)).filter(i => i >= 0).slice(-5);
+    let previous = -1;
+    for (const index of errorIndexes) {
+      await this.handleError(watch, id, lines, index, previous, buffer);
+      previous = index;
+    }
+  }
 
+  private async handleError(watch: WatchTarget, id: number, lines: string[], index: number, previous: number, buffer: string[]): Promise<void> {
+    const errorLine = lines[index];
     const key = `${id}:${errorKey(errorLine)}`;
     const now = this.now();
     const last = this.reported.get(key);
     if (last !== undefined && now - last < DEDUPE_WINDOW_MS) return;
 
     const context = buffer.join('\n');
+    // Diagnose the error with the few lines around it, never the older buffer: an earlier
+    // error must not be "fixed" again when an unrelated line arrives
     const cwd = watch.kind === 'file' ? dirname(watch.target) : '~';
-    const suggestion = DeterministicRuleOracle.getInstance().diagnose({ command: '', output: context, cwd, os: getPlatform() === 'macos' ? 'mac' : 'linux' });
+    const os = getPlatform() === 'macos' ? 'mac' : 'linux';
+    const oracle = DeterministicRuleOracle.getInstance();
+    const around = lines.slice(Math.max(previous + 1, index - 5), index + 3).join('\n');
+    const suggestion = oracle.diagnose({ command: '', output: errorLine, cwd, os })
+      ?? oracle.diagnose({ command: '', output: around, cwd, os });
 
     if (!suggestion) {
       const lastUnmatched = this.lastUnmatched.get(id) ?? -Infinity;
@@ -183,13 +201,13 @@ export class ErrorWatchService {
       return;
     }
 
-    const decision = this.policy.decide(suggestion, { mode: this.modeProvider(), source: 'rule_oracle', cwd, output: context });
+    const decision = this.policy.decide(suggestion, { mode: this.modeProvider(), source: 'rule_oracle', cwd, output: errorLine });
     if (decision.action === 'ignore') return;
     this.reported.set(key, now);
 
     if (decision.action === 'auto' && decision.command) {
       const result = await this.backend.run(decision.command);
-      this.policy.recordApplied(suggestion, cwd);
+      this.policy.recordApplied(suggestion, cwd, decision.command);
       UndoLog.getInstance().recordAction({ goal: `watch auto-fix: ${suggestion.title}`, command: decision.command, tool: 'shell.execute' });
       this.emit({
         type: 'auto-fixed', watch, errorLine, suggestion, command: decision.command,

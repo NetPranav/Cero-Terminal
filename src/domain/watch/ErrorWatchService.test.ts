@@ -85,3 +85,33 @@ describe('ErrorWatchService', () => {
     expect(service.list()).toEqual([]);
   });
 });
+
+describe('ErrorWatchService diagnoses each new error on its own', () => {
+  it('does not re-apply an old fix when an unrelated error arrives, and proposes the new one', async () => {
+    const { service, run, events } = setup('auto-safe');
+    await service.watchFile('/home/u/logs/app.log');
+
+    await service.handleLines(1, ["fatal: Unable to create '/home/u/a/.git/index.lock': File exists."]);
+    await service.handleLines(1, ["fatal: Unable to create '/home/u/b/.git/index.lock': File exists."]);
+    await service.handleLines(1, ["Error: Cannot find module 'evil-pkg'"]);
+
+    expect(run.mock.calls.map(c => c[0])).toEqual([
+      "! pgrep -x git >/dev/null && rm -f '/home/u/a/.git/index.lock'",
+      "! pgrep -x git >/dev/null && rm -f '/home/u/b/.git/index.lock'",
+    ]);
+    expect(events.map(e => e.type)).toEqual(['auto-fixed', 'auto-fixed', 'proposal']);
+    expect((events[2] as any).suggestion.ruleId).toBe('npm_missing_package');
+  });
+
+  it('handles several errors that arrive in one read', async () => {
+    const { service, run, events } = setup('suggest');
+    await service.watchFile('/home/u/logs/app.log');
+    await service.handleLines(1, [
+      "fatal: Unable to create '/home/u/a/.git/index.lock': File exists.",
+      'some ordinary line',
+      "Error: Cannot find module 'left-pad'",
+    ]);
+    expect(events.map(e => (e as any).suggestion?.ruleId)).toEqual(['git_index_lock', 'npm_missing_package']);
+    expect(run).not.toHaveBeenCalled();
+  });
+});
