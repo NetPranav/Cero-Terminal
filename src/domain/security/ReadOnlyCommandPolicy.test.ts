@@ -28,6 +28,11 @@ describe('ReadOnlyCommandPolicy', () => {
     'du -sh ~/Downloads 2>/dev/null | sort -h',
     'echo "$(uname -r)"',
     'fuser 3000/tcp',
+    'ifconfig',
+    'ifconfig en0',
+    'ipconfig getifaddr en0',
+    'pmset -g batt',
+    'vm_stat',
     'hyprctl clients -j',
     'swaymsg -t get_tree',
     'wmctrl -lx',
@@ -35,6 +40,9 @@ describe('ReadOnlyCommandPolicy', () => {
   ];
 
   const mutating = [
+    'ifconfig en0 down',
+    'ifconfig en0 inet 10.0.0.2',
+    'ipconfig set en0 DHCP',
     // chaining after a harmless first command
     'ls && python3 -c "import os"',
     'cat notes.txt; curl -s https://example.com/x.sh',

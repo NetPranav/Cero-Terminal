@@ -1017,7 +1017,9 @@ describe('Instant answers run before any model call', () => {
     expect(generate).not.toHaveBeenCalled();
     expect(isAvailable).not.toHaveBeenCalled();
     expect(result.metrics?.modelCalls).toBe(0);
-    expect(execute.mock.calls[0][1].command).toContain('--sort=-pcpu');
+    // Structured driver (formatted table) with the shell command as the fallback description
+    expect(execute.mock.calls[0][0]).toBe('system.processes');
+    expect(execute.mock.calls[0][1]).toEqual({ sort: 'cpu', count: 5 });
   });
 
   it('finishes an app launch without a summary call', async () => {
@@ -1080,7 +1082,7 @@ describe('Explaining and exporting what happened', () => {
     await loop.run('which process is using the most cpu', { os: 'linux', cwd: '/home/u' });
     const why = await loop.run('why', { os: 'linux', cwd: '/home/u' });
     expect(why.summary).toContain('answered without the model');
-    expect(why.summary).toContain('--sort=-pcpu');
+    expect(why.summary).toContain('system.processes');
     expect(why.summary).toContain('succeeded');
   });
 

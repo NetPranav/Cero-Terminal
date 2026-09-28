@@ -170,6 +170,12 @@ function subcommandVerdict(name: string, args: string[]): boolean | undefined {
       return args[0] === '-g';
     case 'networksetup':
       return Boolean(args[0] && (args[0].startsWith('-list') || args[0].startsWith('-get')));
+    case 'ifconfig':
+      // Listing: no args, list flags, or a single interface name. "en0 down", "en0 inet ..." change it
+      return positional.length <= 1 && args.filter(a => a.startsWith('-')).every(f => /^-[aludvLmr]+$/.test(f));
+    case 'ipconfig':
+      // macOS: getifaddr/getoption/getsummary/ifcount read state; set/waitall change it
+      return Boolean(args[0] && (/^get/.test(args[0]) || args[0] === 'ifcount'));
     default:
       return undefined;
   }
