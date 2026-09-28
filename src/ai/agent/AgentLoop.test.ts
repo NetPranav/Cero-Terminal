@@ -1065,3 +1065,38 @@ describe('Watch commands', () => {
     AutoRemediationPolicy.setMode('suggest');
   });
 });
+
+describe('Explaining and exporting what happened', () => {
+  it('explains the previous request from its recorded steps', async () => {
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate: vi.fn() }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    (loop as any).toolExecutor = {
+      hasDriver: () => true,
+      execute: vi.fn().mockResolvedValue({ success: true, data: { stdout: '  PID %CPU\n 42 99 cc1plus', code: 0 } })
+    };
+    await loop.run('which process is using the most cpu', { os: 'linux', cwd: '/home/u' });
+    const why = await loop.run('why', { os: 'linux', cwd: '/home/u' });
+    expect(why.summary).toContain('answered without the model');
+    expect(why.summary).toContain('--sort=-pcpu');
+    expect(why.summary).toContain('succeeded');
+  });
+
+  it('exports a redacted Markdown transcript under ~/.sentinel/transcripts', async () => {
+    const fs = await import('node:fs');
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any);
+    (loop as any).transcript.push({
+      goal: 'show my token',
+      at: Date.now(),
+      result: { success: true, summary: 'GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789', steps: [{ tool: 'shell.execute', params: { command: 'echo $GITHUB_TOKEN' }, result: { success: true } }] }
+    });
+    const res = await loop.run('export session', { os: 'linux', cwd: '/home/u' });
+    const file = `${process.env.HOME}/.sentinel/transcripts/${res.summary.match(/session-[\d-]+\.md/)![0]}`;
+    const text = fs.readFileSync(file, 'utf8');
+    expect(text).toContain('## ');
+    expect(text).toContain('`echo $GITHUB_TOKEN` (ok)');
+    expect(text).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz0123456789');
+  });
+});

@@ -1,18 +1,14 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { TerminalView } from "./presentation/TerminalView";
 import { CommandPalette } from "./ui/components/CommandPalette";
 import { StatusBar } from "./ui/components/StatusBar";
 import { ThemeManager } from "./ui/theme/ThemeManager";
-import { AiSettingsPage, SettingsTabId } from "./ui/components/AiSettingsPage";
+import type { SettingsTabId } from "./ui/components/AiSettingsPage";
 import { SessionManager } from "./domain/SessionManager";
-import { InstallerWizard } from "./ui/components/InstallerWizard";
 import { UrlSchemeHandler } from "./domain/integration/UrlSchemeHandler";
 import { SessionPersistenceEngine } from "./domain/session/SessionPersistenceEngine";
-import { WorkflowManagerDrawer } from "./ui/components/WorkflowManagerDrawer";
 import { HistorySearchModal } from "./ui/components/HistorySearchModal";
-import { PluginMarketplaceModal } from "./ui/components/PluginMarketplaceModal";
-import { EmbeddedModelManagerModal } from "./ui/components/EmbeddedModelManagerModal";
 import { KeyboardShortcutsModal } from "./ui/components/KeyboardShortcutsModal";
 import { ZenModeHelpCallout } from "./ui/components/ZenModeHelpCallout";
 import { AuditLogger } from "./domain/security/AuditLogger";
@@ -40,6 +36,14 @@ import {
 } from "lucide-react";
 import { isLinux, getShortcutModifier, formatShortcut } from "./shared/platform";
 import "./App.css";
+
+// Large screens that are only shown on demand load as separate chunks, keeping them out of the
+// startup bundle. They mount when opened.
+const AiSettingsPage = lazy(() => import("./ui/components/AiSettingsPage").then(m => ({ default: m.AiSettingsPage })));
+const InstallerWizard = lazy(() => import("./ui/components/InstallerWizard").then(m => ({ default: m.InstallerWizard })));
+const WorkflowManagerDrawer = lazy(() => import("./ui/components/WorkflowManagerDrawer").then(m => ({ default: m.WorkflowManagerDrawer })));
+const PluginMarketplaceModal = lazy(() => import("./ui/components/PluginMarketplaceModal").then(m => ({ default: m.PluginMarketplaceModal })));
+const EmbeddedModelManagerModal = lazy(() => import("./ui/components/EmbeddedModelManagerModal").then(m => ({ default: m.EmbeddedModelManagerModal })));
 
 type SplitDirection = 'vertical' | 'horizontal';
 
@@ -1195,25 +1199,37 @@ export function App({ initialPath }: AppProps = {}) {
         uiMode={uiMode}
         highlightHelp={showZenCallout}
       />
-      <WorkflowManagerDrawer 
-        isOpen={showWorkflowManager}
-        onClose={() => setShowWorkflowManager(false)}
-        onRunInTerminal={handleRunWorkflowInTerminal}
-      />
+      {showWorkflowManager && (
+        <Suspense fallback={null}>
+          <WorkflowManagerDrawer
+            isOpen={showWorkflowManager}
+            onClose={() => setShowWorkflowManager(false)}
+            onRunInTerminal={handleRunWorkflowInTerminal}
+          />
+        </Suspense>
+      )}
       <HistorySearchModal 
         isOpen={showHistorySearch}
         onClose={() => setShowHistorySearch(false)}
         onSelect={handleHistorySelect}
         currentCwd={currentDisplayPath}
       />
-      <PluginMarketplaceModal 
-        isOpen={showPluginMarketplace}
-        onClose={() => setShowPluginMarketplace(false)}
-      />
-      <EmbeddedModelManagerModal 
-        isOpen={showEmbeddedModal}
-        onClose={() => setShowEmbeddedModal(false)}
-      />
+      {showPluginMarketplace && (
+        <Suspense fallback={null}>
+          <PluginMarketplaceModal
+            isOpen={showPluginMarketplace}
+            onClose={() => setShowPluginMarketplace(false)}
+          />
+        </Suspense>
+      )}
+      {showEmbeddedModal && (
+        <Suspense fallback={null}>
+          <EmbeddedModelManagerModal
+            isOpen={showEmbeddedModal}
+            onClose={() => setShowEmbeddedModal(false)}
+          />
+        </Suspense>
+      )}
       <KeyboardShortcutsModal 
         isOpen={showHelpModal}
         onClose={() => setShowHelpModal(false)}
@@ -1303,6 +1319,7 @@ export function App({ initialPath }: AppProps = {}) {
       />
       {showAiSettings && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: '#090b10' }}>
+          <Suspense fallback={null}>
           <AiSettingsPage 
             onClose={() => setShowAiSettings(false)} 
             initialTab={settingsTab}
@@ -1313,19 +1330,24 @@ export function App({ initialPath }: AppProps = {}) {
               setShowWizard(true);
             }}
           />
+          </Suspense>
         </div>
       )}
-      <InstallerWizard 
-        isOpen={showWizard} 
-        onClose={() => {
-          setShowWizard(false);
-          const currentMode = localStorage.getItem('sentinel_ui_mode') || uiMode;
-          if (currentMode === 'zen' && !localStorage.getItem('sentinel_zen_tip_shown')) {
-            setShowZenCallout(true);
-          }
-        }} 
-        onSelectUiMode={handleToggleUiMode}
-      />
+      {showWizard && (
+        <Suspense fallback={null}>
+          <InstallerWizard
+            isOpen={showWizard}
+            onClose={() => {
+              setShowWizard(false);
+              const currentMode = localStorage.getItem('sentinel_ui_mode') || uiMode;
+              if (currentMode === 'zen' && !localStorage.getItem('sentinel_zen_tip_shown')) {
+                setShowZenCallout(true);
+              }
+            }}
+            onSelectUiMode={handleToggleUiMode}
+          />
+        </Suspense>
+      )}
       <ZenModeHelpCallout 
         isOpen={showZenCallout}
         onDismiss={() => {

@@ -78,6 +78,8 @@ import { ShadowPtySimulator } from './ShadowPtySimulator';
 import { ShellAstParser } from '../../domain/security/ShellAstParser';
 import { isReadOnlyCommandLine } from '../../domain/security/ReadOnlyCommandPolicy';
 import { findInstantAnswer, InstantAnswer } from './InstantAnswers';
+import * as fs from 'fs';
+import { SecretRedactor } from '../../domain/security/SecretRedactor';
 import { SystemKnowledgeScanner } from '../../domain/knowledge/SystemKnowledgeScanner';
 import { ErrorWatchService } from '../../domain/watch/ErrorWatchService';
 import { AutoRemediationPolicy, AutoRemediationMode } from '../../domain/remediation/AutoRemediationPolicy';
@@ -1205,6 +1207,8 @@ export class AgentLoop {
   /** Last requests' timings, newest last (for the latency view and diagnostics). */
   public static readonly recentMetrics: (AgentRunMetrics & { goal: string; at: number })[] = [];
   private runDepth = 0;
+  /** This tab's requests and what happened, for `>why` and `>export session` */
+  private transcript: { goal: string; result: AgentResult; at: number }[] = [];
   private modelCalls = 0;
   private modelMs = 0;
 
@@ -1225,6 +1229,10 @@ export class AgentLoop {
         };
         AgentLoop.recentMetrics.push({ ...result.metrics, goal: goal.slice(0, 80), at: Date.now() });
         if (AgentLoop.recentMetrics.length > 50) AgentLoop.recentMetrics.shift();
+        if (!/^(?:why|explain that|export (?:session|transcript))\b/i.test(goal.trim())) {
+          this.transcript.push({ goal: goal.trim(), result, at: Date.now() });
+          if (this.transcript.length > 200) this.transcript.shift();
+        }
       }
       return result;
     } finally {
@@ -1293,6 +1301,18 @@ export class AgentLoop {
       }
 
       return result;
+    }
+
+    // Decision explanation and transcript export (deterministic, zero AI inference)
+    if (/^(?:why(?:\s+did\s+you\s+do\s+that)?|explain\s+(?:that|what\s+you\s+did)|what\s+did\s+you\s+run)\s*\??$/i.test(goal.trim())) {
+      const summary = this.explainLastRequest();
+      this.emit({ type: 'done', message: summary });
+      return { success: true, summary, steps: [] };
+    }
+    if (/^export\s+(?:this\s+)?(?:session|transcript)$/i.test(goal.trim())) {
+      const summary = this.exportTranscript();
+      this.emit({ type: 'done', message: summary });
+      return { success: true, summary, steps: [] };
     }
 
     // Error watcher commands (deterministic, zero AI inference)
@@ -1986,6 +2006,51 @@ export class AgentLoop {
    * The core LLM agent loop — sends the goal to Ollama, executes tools,
    * feeds results back, and repeats until done.
    */
+  /** Plain account of the previous request: what ran, what came back, and how it was answered. */
+  public explainLastRequest(): string {
+    const last = this.transcript[this.transcript.length - 1];
+    if (!last) return 'Nothing has run in this tab yet.';
+    const { goal, result } = last;
+    const how = !result.metrics || result.metrics.modelCalls === 0
+      ? 'answered without the model (instant answer, learned pattern, workflow or built-in command)'
+      : `used ${result.metrics.modelCalls} model call${result.metrics.modelCalls === 1 ? '' : 's'} (${(result.metrics.modelMs / 1000).toFixed(1)} s of model time)`;
+    const lines = [`For "${goal}" Sentinel ${how}${result.metrics ? `, ${(result.metrics.totalMs / 1000).toFixed(1)} s in total` : ''}.`];
+    result.steps.forEach((step, i) => {
+      const what = step.params?.command ? `\`${step.params.command}\`` : step.tool;
+      const why = step.params?.explanation ? ` (${step.params.explanation})` : '';
+      const code = step.result?.data?.code;
+      const outcome = step.result?.success ? `succeeded${typeof code === 'number' ? `, exit ${code}` : ''}` : `failed: ${String(step.result?.error || step.result?.data?.stderr || 'error').split('\n')[0].slice(0, 160)}`;
+      lines.push(`${i + 1}. ${what}${why} -> ${outcome}`);
+    });
+    if (result.steps.length === 0) lines.push('No commands were run.');
+    lines.push(`Result: ${result.success ? 'success' : 'not completed'}.`);
+    return lines.join('\n');
+  }
+
+  /** Write this tab's transcript as Markdown under ~/.sentinel/transcripts/ and return a notice. */
+  public exportTranscript(): string {
+    if (this.transcript.length === 0) return 'Nothing to export yet.';
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+    const home = typeof process !== 'undefined' && process.env?.HOME ? process.env.HOME : '/tmp';
+    const file = `${home}/.sentinel/transcripts/session-${stamp}.md`;
+    const body = [`# Sentinel session transcript (${new Date().toLocaleString()})`, ''];
+    for (const entry of this.transcript) {
+      body.push(`## ${new Date(entry.at).toLocaleTimeString()} - ${entry.goal}`, '');
+      for (const step of entry.result.steps) {
+        const cmd = step.params?.command || step.tool;
+        body.push(`- \`${cmd}\` ${step.result?.success ? '(ok)' : '(failed)'}`);
+      }
+      body.push('', SecretRedactor.redact(entry.result.summary || ''), '');
+    }
+    try {
+      fs.mkdirSync(`${home}/.sentinel/transcripts`, { recursive: true });
+      fs.writeFileSync(file, body.join('\n'));
+      return `Saved ${this.transcript.length} request${this.transcript.length === 1 ? '' : 's'} to ~/.sentinel/transcripts/session-${stamp}.md (secrets redacted).`;
+    } catch (err: any) {
+      return `Could not write the transcript: ${err?.message || err}`;
+    }
+  }
+
   /** Identifies this loop (one per terminal tab) as the owner of the watches it starts. */
   public readonly ownerId = `loop_${Math.random().toString(36).slice(2, 10)}`;
 

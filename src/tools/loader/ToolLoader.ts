@@ -73,6 +73,20 @@ export interface RawToolBundle {
 
 export class ToolLoader {
   private state: ToolRegistryState;
+  private static sharedState: ToolRegistryState | null = null;
+
+  /**
+   * The tool registry is identical for every terminal tab; load and validate it once instead of
+   * re-indexing all tool bundles per tab.
+   */
+  public static getSharedState(): ToolRegistryState {
+    if (!ToolLoader.sharedState) {
+      const loader = new ToolLoader();
+      loader.loadAll(true);
+      ToolLoader.sharedState = loader.getState();
+    }
+    return ToolLoader.sharedState;
+  }
 
   constructor() {
     this.state = {

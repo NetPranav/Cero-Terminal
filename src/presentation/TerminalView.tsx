@@ -564,10 +564,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
         sessionManager.onOutput(currentSessionId, outputCallback);
 
         // Initialize AI Tool Registry & Agent Loop
-        const toolLoader = new ToolLoader();
-        toolLoader.loadAll();
-        
-        const agentLoop = new AgentLoop(toolLoader.getState());
+        const agentLoop = new AgentLoop(ToolLoader.getSharedState());
         agentLoopRef.current = agentLoop;
 
         // Subscribe to asynchronous ConsentQueue for this tab/session
