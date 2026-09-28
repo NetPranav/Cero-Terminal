@@ -103,11 +103,17 @@ export class ShadowPtySimulator {
     // 3. Prune failing or negative-scoring branches
     const prunedCount = evaluatedCandidates.filter(c => c.pruned).length;
 
-    // 4. Select winner: highest scoring non-pruned candidate
+    // 4. Select winner. Speculation exists to repair a primary command that is broken on
+    // this platform, not to second-guess a working one: a longer-output heuristic or TLDR
+    // variation must never replace a viable primary (e.g. `ps ... | head -n 2` -> `ps aux`).
     const viableCandidates = evaluatedCandidates.filter(c => !c.pruned);
     viableCandidates.sort((a, b) => b.empiricalScore - a.empiricalScore);
 
-    let winner: SimulationOutcome | null = viableCandidates.length > 0 ? viableCandidates[0] : null;
+    const viablePrimary = viableCandidates.find(c => c.candidate.source === 'primary');
+    const viablePlatformFix = viableCandidates.find(c => c.candidate.source === 'platform_optimized');
+    let winner: SimulationOutcome | null = viablePrimary
+      || viablePlatformFix
+      || (viableCandidates.length > 0 ? viableCandidates[0] : null);
 
     // Fallback: If all candidates were pruned, pick the candidate with highest score if syntax was valid
     if (!winner && evaluatedCandidates.length > 0) {
@@ -127,6 +133,16 @@ export class ShadowPtySimulator {
       prunedCount,
       totalDurationMs
     };
+  }
+
+  /**
+   * True when the command has a known platform-specific rewrite worth testing (e.g. GNU flags
+   * on macOS). Callers use this to skip speculation entirely otherwise, so read-only commands
+   * are not executed twice for nothing.
+   */
+  public hasPlatformAlternatives(goal: string, primaryCommand: string, context: { os: string; cwd: string }): boolean {
+    return this.generateHypotheses(goal, primaryCommand, context)
+      .some(h => h.source === 'platform_optimized');
   }
 
   /**

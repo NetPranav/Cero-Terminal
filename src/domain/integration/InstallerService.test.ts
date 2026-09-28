@@ -3,6 +3,19 @@ import { InstallerService } from './InstallerService';
 
 const mockStore: Record<string, string> = {};
 
+// This suite verifies the Linux integration layout, so pin platform detection
+// to Linux regardless of the host the tests run on (CI or a macOS dev box).
+vi.mock('../../shared/platform', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../shared/platform')>();
+  return {
+    ...actual,
+    getPlatform: () => 'linux',
+    isLinux: () => true,
+    isMacOS: () => false,
+    isWindows: () => false,
+  };
+});
+
 vi.mock('@tauri-apps/plugin-fs', () => ({
   writeTextFile: vi.fn(async (filePath: string, contents: string) => {
     mockStore[filePath] = contents;

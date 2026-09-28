@@ -2384,8 +2384,10 @@ export class AgentLoop {
             continue;
           }
 
-          // Phase 4.1 Speculative Shadow-PTY Simulation ("Minority Report for the Shell")
-          if (toolId === 'shell.execute' && params.command) {
+          // Phase 4.1 Speculative Shadow-PTY Simulation: only when a platform-specific rewrite
+          // exists, so a working command is never executed twice or replaced by a guess.
+          if (toolId === 'shell.execute' && params.command
+            && this.shadowSimulator.hasPlatformAlternatives(goal, params.command, { os: context.os, cwd: context.cwd })) {
             try {
               const simReport = await this.shadowSimulator.speculate(goal, params.command, { os: context.os, cwd: context.cwd });
               if (simReport.winner && simReport.winner.candidate.command !== params.command && simReport.winner.empiricalScore > 0) {

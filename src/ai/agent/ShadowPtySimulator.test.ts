@@ -305,5 +305,42 @@ describe('ShadowPtySimulator — Speculative Shadow-PTY Simulation Engine', () =
       );
     });
   });
+
+  describe('Winner selection never replaces a working primary command', () => {
+    it('keeps a viable primary even when a heuristic variation prints more output', async () => {
+      // Heuristic/TLDR variations produce longer output; before the fix they outscored
+      // the model's precise command and silently replaced it.
+      const executor = vi.fn(async (_shell: string, args: string[]) => {
+        const cmd = args[1];
+        if (cmd.startsWith('pgrep')) return { stdout: 'x'.repeat(4000), stderr: '', code: 0 };
+        return { stdout: '1234 12.5 3.1 llama-server', stderr: '', code: 0 };
+      });
+      const sim = new ShadowPtySimulator({ executor });
+      const report = await sim.speculate(
+        'check llama usage',
+        'ps -eo pid,pcpu,pmem,comm --sort=-pcpu | head -n 2',
+        { os: 'linux', cwd: '/tmp' }
+      );
+      expect(report.evaluatedCandidates.length).toBeGreaterThan(1);
+      expect(report.winner?.candidate.source).toBe('primary');
+    });
+
+    it('uses a platform-specific rewrite when the primary fails on this platform', async () => {
+      const executor = vi.fn(async (_shell: string, args: string[]) => {
+        const cmd = args[1];
+        if (cmd.startsWith('fuser')) return { stdout: '', stderr: 'fuser: command not found', code: 127 };
+        return { stdout: 'node 4242 user 23u IPv4 TCP *:3000 (LISTEN)', stderr: '', code: 0 };
+      });
+      const sim = new ShadowPtySimulator({ executor });
+      const report = await sim.speculate('inspect port 3000', 'fuser 3000/tcp', { os: 'mac', cwd: '/tmp' });
+      expect(report.winner?.candidate.source).toBe('platform_optimized');
+    });
+
+    it('reports no platform alternatives for native Linux commands, so speculation is skipped', () => {
+      const sim = new ShadowPtySimulator();
+      expect(sim.hasPlatformAlternatives('top cpu', 'ps -eo pid,pcpu,comm --sort=-pcpu | head -n 2', { os: 'linux', cwd: '/tmp' })).toBe(false);
+      expect(sim.hasPlatformAlternatives('show ip', 'ip addr', { os: 'mac', cwd: '/tmp' })).toBe(true);
+    });
+  });
 });
 
