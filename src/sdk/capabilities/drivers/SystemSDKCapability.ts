@@ -11,6 +11,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { SystemServiceManager, ServiceAction } from '../../../domain/services/SystemServiceManager';
 import { DotfileManager } from '../../../domain/rice/DotfileManager';
 import { AppAliasRegistry } from '../../../domain/capabilities/AppAliasRegistry';
+import { parsePmsetBatt, parseVmStat, parseMacDf, parseBootTime, parseLoadAvg, processDisplayName } from './MacSystemParsers';
 
 export type SystemOperation = 'info' | 'battery' | 'cpu' | 'gpu' | 'ram' | 'storage' | 'processes' | 'temperature' | 'uptime' | 'kill_process' | 'kill' | 'lock' | 'service' | 'dotfile';
 
@@ -42,6 +43,26 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
 
   public async processes(sort: string = 'cpu', count: number = 15): Promise<CapabilityExecutionResult<any>> {
     return this.execute({ operation: 'processes', sort, count });
+  }
+
+  /** False under vitest, where the fixed sample data below stands in for a real system. */
+  private isLive(): boolean {
+    return typeof process === 'undefined' || process.env.NODE_ENV !== 'test';
+  }
+
+  /** stdout of a POSIX sh script, or null when it could not run or printed nothing. */
+  private async sh(script: string): Promise<string | null> {
+    try {
+      const res = await invoke<{ stdout: string }>('execute_command', { command: 'sh', args: ['-c', script] });
+      return res?.stdout && res.stdout.trim() ? res.stdout : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Honest failure: never substitute invented numbers for a reading we could not take. */
+  private unavailable(what: string, hint?: string): CapabilityExecutionResult<any> {
+    return { success: false, error: { code: 'UNAVAILABLE', message: `Could not read ${what} on this system${hint ? ` (${hint})` : ''}.` } };
   }
 
   protected async performExecution(
@@ -235,7 +256,26 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
             } catch {
               // fall through
             }
+          } else if (platform === 'macos') {
+            const out = await this.sh('sw_vers -productName; sw_vers -productVersion; uname -srm; sysctl -n machdep.cpu.brand_string hw.ncpu hw.memsize kern.boottime');
+            const l = out ? out.trim().split('\n') : [];
+            if (l.length >= 6) {
+              return {
+                success: true,
+                data: {
+                  os: `${l[0].trim()} ${l[1].trim()}`,
+                  arch: l[2].trim().split(/\s+/).pop(),
+                  kernel: l[2].trim(),
+                  model: l[3].trim(),
+                  cpus: Number(l[4]) || undefined,
+                  memoryGb: Math.round(Number(l[5]) / 1024 ** 3) || undefined,
+                  uptime: parseBootTime(l[6] || '') ?? undefined
+                },
+                commandExecuted: 'sw_vers && uname -srm && sysctl machdep.cpu.brand_string hw.ncpu hw.memsize kern.boottime'
+              };
+            }
           }
+          return this.unavailable('system information');
         }
         return {
           success: true,
@@ -323,7 +363,11 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
             } catch {
               // fall through
             }
+          } else if (platform === 'macos') {
+            const reading = parsePmsetBatt((await this.sh('pmset -g batt')) || '');
+            if (reading) return { success: true, data: reading, commandExecuted: 'pmset -g batt' };
           }
+          return this.unavailable('the battery state');
         }
         return {
           success: true,
@@ -342,7 +386,7 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
                 args: ['-c', 'lscpu 2>/dev/null || cat /proc/cpuinfo 2>/dev/null']
               }).catch(() => null);
 
-              let model = 'Linux Processor';
+              let model = '';
               let cores = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 8) : 8;
               if (lscpuRes?.stdout) {
                 const modelMatch = lscpuRes.stdout.match(/Model name:\s*(.+)/i);
@@ -356,17 +400,29 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
                 args: ['-c', 'cat /proc/loadavg 2>/dev/null']
               }).catch(() => null);
 
-              const loadAvg = loadAvgRes?.stdout ? loadAvgRes.stdout.trim().split(/\s+/).slice(0, 3).map(parseFloat) : [0.5, 0.4, 0.3];
+              const loadAvg = loadAvgRes?.stdout ? loadAvgRes.stdout.trim().split(/\s+/).slice(0, 3).map(parseFloat) : undefined;
 
               return {
                 success: true,
-                data: { cores, model, loadAverage: loadAvg },
+                data: { cores, ...(model ? { model } : {}), ...(loadAvg ? { loadAverage: loadAvg } : {}) },
                 commandExecuted: 'lscpu && cat /proc/loadavg'
               };
             } catch {
               // fall through
             }
+          } else if (platform === 'macos') {
+            const out = await this.sh('sysctl -n machdep.cpu.brand_string hw.ncpu vm.loadavg');
+            const l = out ? out.trim().split('\n') : [];
+            if (l.length >= 2) {
+              const loadAverage = parseLoadAvg(l[2] || '');
+              return {
+                success: true,
+                data: { model: l[0].trim(), cores: Number(l[1]) || undefined, ...(loadAverage ? { loadAverage } : {}) },
+                commandExecuted: 'sysctl -n machdep.cpu.brand_string hw.ncpu vm.loadavg'
+              };
+            }
           }
+          return this.unavailable('CPU information');
         }
         return {
           success: true,
@@ -376,6 +432,21 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
       }
 
       case 'gpu':
+        if (this.isLive()) {
+          if (this.detectPlatform() === 'macos') {
+            const out = await this.sh('system_profiler SPDisplaysDataType 2>/dev/null');
+            const model = out?.match(/Chipset Model:\s*(.+)/)?.[1]?.trim();
+            if (model) {
+              const cores = Number(out?.match(/Total Number of Cores:\s*(\d+)/)?.[1]) || undefined;
+              return { success: true, data: { model, ...(cores ? { cores } : {}) }, commandExecuted: 'system_profiler SPDisplaysDataType' };
+            }
+          } else if (this.detectPlatform() === 'linux') {
+            const out = await this.sh("lspci 2>/dev/null | grep -Ei 'vga|3d|display'");
+            const models = out ? out.trim().split('\n').map(l => l.replace(/^\S+\s+[^:]+:\s*/, '').trim()).filter(Boolean) : [];
+            if (models.length) return { success: true, data: { model: models.join('; ') }, commandExecuted: 'lspci | grep -Ei "vga|3d|display"' };
+          }
+          return this.unavailable('GPU information');
+        }
         return {
           success: true,
           data: { model: 'Dedicated / Integrated GPU', vramAllocatedMb: 2048, coreUtilization: 14 },
@@ -429,7 +500,13 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
             } catch {
               // fall through
             }
+          } else if (platform === 'macos') {
+            const out = await this.sh('vm_stat; echo @@; sysctl -n hw.memsize; echo @@; sysctl -n vm.swapusage');
+            const [vm = '', memsize = '', swap = ''] = (out || '').split('@@');
+            const reading = parseVmStat(vm, memsize, swap);
+            if (reading) return { success: true, data: reading, commandExecuted: 'vm_stat && sysctl hw.memsize vm.swapusage' };
           }
+          return this.unavailable('memory usage');
         }
         return {
           success: true,
@@ -473,7 +550,11 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
             } catch {
               // fall through
             }
+          } else if (platform === 'macos') {
+            const volumes = parseMacDf((await this.sh('df -Pk -l')) || '');
+            if (volumes.length > 0) return { success: true, data: { volumes }, commandExecuted: 'df -Pk -l' };
           }
+          return this.unavailable('disk usage');
         }
         return {
           success: true,
@@ -509,7 +590,8 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
                 const pid = parseInt(parts[0], 10) || 0;
                 const cpuPercent = parseFloat(parts[1]) || 0;
                 const pmem = parseFloat(parts[2]) || 0;
-                const name = parts.slice(3).join(' ') || 'unknown';
+                const comm = parts.slice(3).join(' ') || 'unknown';
+                const name = isLinux ? comm : processDisplayName(comm);
                 return { pid, name, cpuPercent, ramPercent: pmem };
               });
               return { 
@@ -521,8 +603,9 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
               };
             }
           } catch {
-            // fall through to default diagnostics
+            // reported below
           }
+          return this.unavailable('the process list');
         }
         return {
           success: true,
@@ -554,17 +637,23 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
               }).catch(() => null);
               if (tempRes?.stdout) {
                 const raw = tempRes.stdout.trim();
-                const tempC = !isNaN(Number(raw)) ? parseFloat((parseInt(raw, 10) / 1000).toFixed(1)) : 42.0;
-                return {
-                  success: true,
-                  data: { cpuCoreTempCelsius: tempC, thermalState: 'Nominal' },
-                  commandExecuted: 'cat /sys/class/thermal/thermal_zone0/temp'
-                };
+                if (/^\d+$/.test(raw)) {
+                  return {
+                    success: true,
+                    data: { cpuCoreTempCelsius: parseFloat((parseInt(raw, 10) / 1000).toFixed(1)) },
+                    commandExecuted: 'cat /sys/class/thermal/thermal_zone0/temp'
+                  };
+                }
+                // `sensors` output is already human readable
+                return { success: true, data: { stdout: raw }, commandExecuted: 'sensors' };
               }
             } catch {
               // fall through
             }
           }
+          return platform === 'macos'
+            ? this.unavailable('the CPU temperature', 'macOS only exposes it to administrators: sudo powermetrics --samplers smc -n 1')
+            : this.unavailable('the CPU temperature', 'install lm_sensors for more sensors');
         }
         return {
           success: true,
@@ -591,7 +680,11 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
             } catch {
               // fall through
             }
+          } else if (this.detectPlatform() === 'macos') {
+            const up = parseBootTime((await this.sh('sysctl -n kern.boottime')) || '');
+            if (up) return { success: true, data: { uptimeString: `up ${up}` }, commandExecuted: 'sysctl -n kern.boottime' };
           }
+          return this.unavailable('the uptime');
         }
         return {
           success: true,

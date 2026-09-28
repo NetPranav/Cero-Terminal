@@ -5,7 +5,7 @@ import {
   ChevronRight, 
   FolderGit2, 
   Radio, 
-  HardDrive, 
+  MemoryStick, 
   Cpu, 
   Clock,
   GitBranch,
@@ -39,14 +39,16 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   onOpenHelp,
   onOpenAiSettings,
   uiMode = 'zen',
-  memoryUsage: initialMemory = 3174,
-  cpuUsage: initialCpu = 18,
+  memoryUsage: initialMemory,
+  cpuUsage: initialCpu,
   currentProfile = 'Developer',
   highlightHelp = false
 }) => {
   const displayShell = currentShell || (isLinux() ? 'bash' : 'zsh');
-  const [memoryUsage, setMemoryUsage] = useState(initialMemory);
-  const [cpuUsage, setCpuUsage] = useState(initialCpu);
+  // Unknown until the first real reading; never show placeholder numbers
+  const [memoryUsage, setMemoryUsage] = useState<number | undefined>(initialMemory);
+  const [memoryTotal, setMemoryTotal] = useState<number | undefined>(undefined);
+  const [cpuUsage, setCpuUsage] = useState<number | undefined>(initialCpu);
   const [currentTime, setCurrentTime] = useState(() => 
     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   );
@@ -86,34 +88,37 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   useEffect(() => {
     // Only poll if Tauri is available
     if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
-      const interval = setInterval(async () => {
+      const poll = async () => {
         try {
-          const stats = await invoke<{ memory_used: number, cpu_usage: number }>('get_system_stats');
+          const stats = await invoke<{ memory_used: number, memory_total?: number, cpu_usage: number }>('get_system_stats');
           if (stats) {
             setMemoryUsage(stats.memory_used);
-            setCpuUsage(parseFloat(stats.cpu_usage.toFixed(0)));
+            if (stats.memory_total) setMemoryTotal(stats.memory_total);
+            setCpuUsage(Math.round(stats.cpu_usage));
           }
         } catch (e) {
           // Ignore polling errors
         }
-      }, 2500);
+      };
+      poll();
+      const interval = setInterval(poll, 2500);
       return () => clearInterval(interval);
     }
   }, []);
 
-  // Format memory into GB/GB or MB
-  const formatMemory = (mb: number) => {
-    if (mb >= 1024) {
-      return `${(mb / 1024).toFixed(1)}GB/16GB`;
-    }
-    return `${mb}MB/16GB`;
+  // "7.0 / 8 GB" from megabytes; the total comes from the backend, never assumed
+  const formatMemory = (mb?: number, totalMb?: number) => {
+    if (mb === undefined) return '--';
+    const used = mb >= 1024 ? `${(mb / 1024).toFixed(1)}` : `${mb} MB`;
+    if (!totalMb) return mb >= 1024 ? `${used} GB` : used;
+    return `${used} / ${Math.round(totalMb / 1024)} GB`;
   };
 
   // Parse path into clean clickable breadcrumb steps
   const getBreadcrumbs = () => {
     const clean = currentPath.replace(/\/+/g, '/').trim() || '~';
     const parts = clean === '/' ? ['/'] : clean.split('/').filter(Boolean);
-    return parts.map((part, idx) => {
+    const crumbs = parts.map((part, idx) => {
       let fullPath = parts.slice(0, idx + 1).join('/');
       if (parts[0] === '~' && idx === 0) fullPath = '~';
       else if (parts[0] === '~') fullPath = parts.slice(0, idx + 1).join('/');
@@ -125,9 +130,15 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         isHome: part === '~',
         fullPath, 
         cmd, 
-        isLast: idx === parts.length - 1 
+        isLast: idx === parts.length - 1,
+        isEllipsis: false
       };
     });
+    // Long paths: first segment, an ellipsis carrying the full path, then the last two segments
+    if (crumbs.length <= 4) return crumbs;
+    const hidden = crumbs.slice(1, -2);
+    const ellipsis = { ...hidden[hidden.length - 1], name: '…', isEllipsis: true, isLast: false };
+    return [crumbs[0], ellipsis, ...crumbs.slice(-2)];
   };
 
   return (
@@ -174,7 +185,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               )}
               <button
                 onClick={() => onNavigate && onNavigate(bc.fullPath, bc.cmd)}
-                title={`Click to navigate to ${bc.fullPath}`}
+                title={bc.isEllipsis ? currentPath : `Click to navigate to ${bc.fullPath}`}
                 style={{
                   background: 'transparent',
                   border: 'none',
@@ -188,10 +199,12 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
+                  maxWidth: bc.isLast ? '220px' : '120px',
+                  flexShrink: bc.isLast ? 1 : 0,
                   transition: 'color 0.15s ease'
                 }}
                 onMouseOver={(e) => {
-                  e.currentTarget.style.color = '#38bdf8';
+                  e.currentTarget.style.color = '#ffffff';
                 }}
                 onMouseOut={(e) => {
                   e.currentTarget.style.color = bc.isLast ? '#f8fafc' : 'rgba(255, 255, 255, 0.6)';
@@ -280,15 +293,15 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         {/* CPU usage */}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', opacity: 0.75 }}>
           <Cpu size={11} style={{ opacity: 0.7 }} />
-          <span>{cpuUsage}%</span>
+          <span>{cpuUsage === undefined ? '--' : `${cpuUsage}%`}</span>
         </span>
 
         <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>
 
         {/* RAM usage */}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', opacity: 0.75 }}>
-          <HardDrive size={11} style={{ opacity: 0.7 }} />
-          <span>{formatMemory(memoryUsage)}</span>
+          <MemoryStick size={11} style={{ opacity: 0.7 }} />
+          <span>{formatMemory(memoryUsage, memoryTotal)}</span>
         </span>
 
         <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>

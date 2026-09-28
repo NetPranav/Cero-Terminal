@@ -7,6 +7,7 @@ pub struct SystemState(pub Mutex<System>);
 #[derive(Serialize)]
 pub struct SystemStats {
     pub memory_used: u64,
+    pub memory_total: u64,
     pub cpu_usage: f32,
 }
 
@@ -18,6 +19,7 @@ pub fn get_system_stats(state: tauri::State<'_, SystemState>) -> SystemStats {
     
     SystemStats {
         memory_used: sys.used_memory() / 1048576, // MB
+        memory_total: sys.total_memory() / 1048576, // MB
         cpu_usage: sys.global_cpu_usage(),
     }
 }
