@@ -15,6 +15,8 @@ import {
   CURRENT_WORKFLOW_SCHEMA_VERSION
 } from '../models/WorkflowTypes';
 import { getStarterWorkflowById } from '../templates/StarterWorkflows';
+import { flowToWorkflow } from './FlowImport';
+import { getPlatform } from '../../shared/platform';
 
 export class DiskWorkflowStorage {
   private static instance?: DiskWorkflowStorage;
@@ -194,7 +196,8 @@ export class DiskWorkflowStorage {
     }
 
     if (!rawJson) {
-      return null;
+      // Action-list workflows saved as <name>.flow
+      return this.loadFlowFile(`${name}.flow`);
     }
 
     return this.parseAndMigrate(rawJson, name);
@@ -311,6 +314,31 @@ export class DiskWorkflowStorage {
   /**
    * List all saved workflows.
    */
+  /** A ".flow" action-list file from the workflows folder, as a workflow (see FlowImport). */
+  private async loadFlowFile(file: string): Promise<SavedWorkflowDefinition | null> {
+    const filePath = path.join(this.getWorkflowsDir(), file);
+    let text: string | null = null;
+    try {
+      if (fs && fs.existsSync && fs.existsSync(filePath)) text = fs.readFileSync(filePath, 'utf8');
+    } catch {
+      text = null;
+    }
+    if (!text) {
+      try {
+        const res = await invoke<{ stdout: string; code: number }>('execute_command', { command: 'cat', args: [filePath] });
+        if (res.code === 0 && res.stdout.trim()) text = res.stdout;
+      } catch {
+        return null;
+      }
+    }
+    if (!text) return null;
+    try {
+      return flowToWorkflow(JSON.parse(text), file.replace(/\.flow$/i, ''), getPlatform() === 'linux' ? 'linux' : 'macos');
+    } catch {
+      return null;
+    }
+  }
+
   public async listWorkflows(): Promise<SavedWorkflowDefinition[]> {
     await this.ensureDirExists();
     const dir = this.getWorkflowsDir();
@@ -318,7 +346,7 @@ export class DiskWorkflowStorage {
     let files: string[] = [];
     try {
       if (fs && fs.readdirSync) {
-        files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+        files = fs.readdirSync(dir).filter(f => f.endsWith('.json') || f.endsWith('.flow'));
       }
     } catch {
       // Fallback
@@ -330,7 +358,7 @@ export class DiskWorkflowStorage {
         if (await exists(dir)) {
           const entries = await readDir(dir);
           files = entries
-            .filter(e => e.isFile && (e.name || '').endsWith('.json'))
+            .filter(e => e.isFile && /\.(?:json|flow)$/.test(e.name || ''))
             .map(e => e.name as string);
         }
       } catch {
@@ -342,7 +370,7 @@ export class DiskWorkflowStorage {
       try {
         const res = await invoke<{ stdout: string }>('execute_command', {
           command: 'sh',
-          args: ['-c', `ls -1 ${this.toShellPath(dir)}/*.json 2>/dev/null`]
+          args: ['-c', `ls -1 ${this.toShellPath(dir)} 2>/dev/null | grep -E '\\.(json|flow)$'`]
         });
         if (res.stdout.trim()) {
           files = res.stdout
@@ -357,6 +385,11 @@ export class DiskWorkflowStorage {
 
     const results: SavedWorkflowDefinition[] = [];
     for (const file of files) {
+      if (/\.flow$/i.test(file)) {
+        const flow = await this.loadFlowFile(file);
+        if (flow) results.push(flow);
+        continue;
+      }
       const name = file.replace(/\.json$/i, '');
       const wf = await this.loadWorkflow(name);
       if (wf) {

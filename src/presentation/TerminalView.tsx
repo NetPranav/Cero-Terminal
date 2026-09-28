@@ -6,7 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { SessionManager } from '../domain/SessionManager';
 import { ToolLoader } from '../tools/loader/ToolLoader';
 import { AppAliasRegistry } from '../domain/capabilities/AppAliasRegistry';
-import { AgentLoop, AgentPlan } from '../ai/agent/AgentLoop';
+import { AgentLoop, AgentPlan, AgentResult } from '../ai/agent/AgentLoop';
 import { PromptProgressManager } from '../ai/agent/PromptProgressManager';
 import { DemonstrationLearningEngine, isPlausibleDemonstration } from '../domain/learning/DemonstrationLearningEngine';
 import { EpisodicMemoryEngine } from '../domain/learning/EpisodicMemoryEngine';
@@ -41,6 +41,10 @@ import { SearchAddon } from '@xterm/addon-search';
 import { TerminalSearchBar } from './TerminalSearchBar';
 import { InputLineTracker, stripPrompt, parseCdTarget } from './InputLineTracker';
 import { TerminalWorkspace } from '../domain/terminal/TerminalWorkspace';
+import { claimTerminalRequests, releaseTerminalRequests, TerminalRequest } from './TerminalRequests';
+import { createPortal } from 'react-dom';
+
+type AgentRunner = (context: { os: string; cwd: string; paneId?: string }) => Promise<AgentResult>;
 import { readClipboardText, writeClipboardText, formatTerminalPastePayload } from '../utils/clipboard';
 
 /** Goal text for an auto-heal request: the failing command and diagnosis, not just a title. */
@@ -54,6 +58,8 @@ import '@xterm/xterm/css/xterm.css';
 interface TerminalViewProps {
   /** Layout id of this pane; registers it with the TerminalWorkspace */
   paneId?: string;
+  /** The pane the user last focused; it receives requests from the Workflow Manager and opened files */
+  isFocused?: boolean;
   sessionId?: string;
   onSessionCreated?: (sessionId: string) => void;
   isActive: boolean;
@@ -61,7 +67,7 @@ interface TerminalViewProps {
   onPathChange?: (newPath: string) => void;
 }
 
-export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, sessionId: initialSessionId, onSessionCreated, isActive, currentPath, onPathChange }) => {
+export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, sessionId: initialSessionId, onSessionCreated, isActive, currentPath, onPathChange }) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -222,7 +228,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, sessionId: i
   const consentOpenRef = useRef(false);
   const inputLineRef = useRef<InputLineTracker>(new InputLineTracker());
   const aiBusyRef = useRef(false);
-  const aiQueueRef = useRef<string[]>([]);
+  const aiQueueRef = useRef<Array<{ goal: string; runner?: AgentRunner }>>([]);
+  // Runs a request handed over by the app (Workflow Manager, opened workflow file)
+  const submitRef = useRef<((request: TerminalRequest) => void) | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
+  // The focused pane receives requests from the Workflow Manager and opened workflow files
+  useEffect(() => {
+    if (!paneId || !isFocused || !sessionReady) return;
+    claimTerminalRequests(paneId, (request) => submitRef.current?.(request));
+    return () => releaseTerminalRequests(paneId);
+  }, [paneId, isFocused, sessionReady]);
+
   const lastUnresolvedGoalRef = useRef<{ goal: string; timestamp: number } | null>(null);
 
   const handleExecuteRemediation = async (rem: RemediationPrompt) => {
@@ -736,7 +752,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, sessionId: i
         };
 
         // Runs one AI request and streams its events into the terminal
-        const runAiGoal = async (aiGoal: string) => {
+        const runAiGoal = async (aiGoal: string, runner?: AgentRunner) => {
           // Busy before the first await, so a second Enter is queued rather than run alongside
           aiBusyRef.current = true;
           const cwd = (await syncCwd()) || currentPathRef.current || currentPath || '~';
@@ -817,7 +833,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, sessionId: i
           });
 
           // Run the agent loop
-          agentLoop.run(aiGoal, { os: getPlatform(), cwd, paneId }).then(result => {
+          (runner ? runner({ os: getPlatform(), cwd, paneId }) : agentLoop.run(aiGoal, { os: getPlatform(), cwd, paneId })).then(result => {
             const leftover = renderer.finish();
             if (leftover) writeTerm(leftover);
             PromptProgressManager.getInstance().completePrompt(result.success, result.summary);
@@ -865,9 +881,26 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, sessionId: i
             aiBusyRef.current = false;
             activeRenderer = null;
             const next = aiQueueRef.current.shift();
-            if (next) setTimeout(() => runAiGoal(next), 150);
+            if (next) setTimeout(() => runAiGoal(next.goal, next.runner), 150);
           });
         };
+
+        submitRef.current = (request: TerminalRequest) => {
+          const label = request.kind === 'goal'
+            ? request.goal
+            : `Run workflow "${request.definition.name}"${request.source ? ` from ${request.source.split('/').pop()}` : ''}`;
+          writeTerm(`\r\n  ${S.muted}›${S.reset} ${S.text}${label}${S.reset}`);
+          const runner: AgentRunner | undefined = request.kind === 'workflow'
+            ? (ctx) => agentLoop.runWorkflow(request.definition, {}, ctx)
+            : undefined;
+          if (aiBusyRef.current) {
+            aiQueueRef.current.push({ goal: label, runner });
+            writeTerm(`\r\n  ${S.muted}Queued${S.reset}\r\n`);
+            return;
+          }
+          runAiGoal(request.kind === 'goal' ? request.goal : label, runner);
+        };
+        setSessionReady(true);
 
         term.onData(async (data) => {
           if (!currentSessionId) return;
@@ -1112,7 +1145,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, sessionId: i
 
                 // One request at a time: the agent keeps a single transcript and event listener
                 if (aiBusyRef.current) {
-                  aiQueueRef.current.push(aiGoal);
+                  aiQueueRef.current.push({ goal: aiGoal });
                   const settled = activeRenderer?.finish() ?? '';
                   const newline = !settled && term.buffer.active.cursorX > 0 ? '\r\n' : '';
                   writeTerm(`${settled}${newline}  ${S.muted}Queued: ${aiGoal}${S.reset}\r\n`);
@@ -1624,8 +1657,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, sessionId: i
         </div>
       )}
 
-      {/* Security & Deletion Authorization Overlay Modal */}
-      {securityModalPlan && (
+      {/* Security & Deletion Authorization Overlay Modal: rendered on <body>, above every drawer and pane */}
+      {securityModalPlan && createPortal(
         <div 
           tabIndex={0}
           ref={(el) => {
@@ -1654,7 +1687,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, sessionId: i
             }
           }}
           style={{
-            position: 'absolute',
+            position: 'fixed',
             top: 0,
             left: 0,
             right: 0,
@@ -1699,7 +1732,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, sessionId: i
               </div>
               <div>
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#f8fafc', letterSpacing: '-0.2px' }}>
-                  {securityModalPlan.plan.requiresPassword ? 'Administrator password required' : 'Run this command?'}
+                  {securityModalPlan.plan.requiresPassword
+                    ? 'Administrator password required'
+                    : securityModalPlan.plan.capabilityId === 'workflow.batch' ? 'Run these commands?' : 'Run this command?'}
                 </h3>
                 <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginTop: '2px' }}>
                   Needs your approval · {String(securityModalPlan.plan.riskLevel || 'admin').toLowerCase()} risk
@@ -1723,7 +1758,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, sessionId: i
               fontFamily: 'monospace'
             }}>
               <div style={{ fontSize: '10.5px', letterSpacing: '0.6px', textTransform: 'uppercase', color: 'rgba(255, 255, 255, 0.4)', marginBottom: '6px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
-                {securityModalPlan.plan.capabilityId === 'shell.execute' ? 'Command' : securityModalPlan.plan.capabilityId}
+                {securityModalPlan.plan.capabilityId === 'shell.execute' ? 'Command'
+                  : securityModalPlan.plan.capabilityId === 'terminal.spawn' ? 'Command · keeps running in its own terminal'
+                  : securityModalPlan.plan.capabilityId === 'workflow.batch' ? 'Commands, in order'
+                  : securityModalPlan.plan.capabilityId}
               </div>
               <div style={{ color: '#f5f5f7', fontSize: '13px', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontWeight: 500 }}>
                 {String(securityModalPlan.plan.parameters?.command || securityModalPlan.plan.parameters?.path || securityModalPlan.plan.parameters?.source || JSON.stringify(securityModalPlan.plan.parameters))}
@@ -1845,7 +1883,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, sessionId: i
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

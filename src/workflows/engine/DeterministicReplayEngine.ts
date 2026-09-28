@@ -18,6 +18,15 @@ import { DiskWorkflowStorage } from '../storage/DiskWorkflowStorage';
 import { SecurityEngine, RiskAnalysisResult } from '../../domain/security/SecurityEngine';
 import { UndoLog } from '../../domain/session/UndoLog';
 import { CrossPlatformCommandAdapter } from './CrossPlatformCommandAdapter';
+import { approveBatch, AuthorizationHandler } from '../../domain/security/BatchApproval';
+import { isLongRunningCommand } from '../../domain/terminal/TerminalWorkspace';
+import { parseCdTarget } from '../../presentation/InputLineTracker';
+import { resolveFolder } from './ChainPlanner';
+
+/** `cd` that keeps ~ expandable */
+const cdTo = (target: string) => target === '~' ? 'cd "$HOME"'
+  : target.startsWith('~/') ? `cd "$HOME/${target.slice(2).replace(/(["\\$`])/g, '\\$1')}"`
+  : `cd '${target.replace(/'/g, `'\\''`)}'`;
 
 export interface ReplayOptions {
   sessionId?: string;
@@ -27,8 +36,18 @@ export interface ReplayOptions {
   onStepStart?: (step: WorkflowStepDefinition, index: number, total: number) => void;
   onStepDone?: (step: WorkflowStepDefinition, result: ReplayStepResult) => void;
   onLog?: (message: string) => void;
-  executor?: (cmd: string, cwd?: string) => Promise<{ code: number; stdout: string; stderr: string }>;
+  /** Runs one command; `authorize` is the handler that already covers the approved batch */
+  executor?: (cmd: string, cwd?: string, authorize?: AuthorizationHandler) => Promise<{ code: number; stdout: string; stderr: string }>;
   storage?: DiskWorkflowStorage;
+  /** Folder for steps without their own cwd (the terminal the replay was started from) */
+  cwd?: string;
+  /**
+   * Confirmation handler. When set, every command that needs consent is listed in ONE dialog
+   * before the first step runs; approved commands then run without asking again.
+   */
+  authorizationHandler?: AuthorizationHandler;
+  /** Runs a step that never exits (server, tail -f, ROS node) in its own terminal pane */
+  onLongRunning?: (command: string, cwd: string | undefined, step: WorkflowStepDefinition) => Promise<{ ok: boolean; message: string }>;
 }
 
 export interface ReplayStepResult {
@@ -225,6 +244,29 @@ export class DeterministicReplayEngine {
     const totalSteps = workflow.steps.length;
     const isDryRun = options.dryRun || resolvedParams['DRY_RUN'] === true || resolvedParams['DRYRUN'] === true;
 
+    // One confirmation for the whole workflow, listing every command that changes something
+    let authorize: AuthorizationHandler | undefined = options.authorizationHandler;
+    if (authorize && !isDryRun) {
+      const commands = workflow.steps.map(st => this.substituteParameters(CrossPlatformCommandAdapter.getInstance().resolveStepCommand(st), resolvedParams));
+      const batch = await approveBatch(commands, `Workflow "${workflow.name}" (${totalSteps} steps)`, authorize);
+      if (!batch.approved) {
+        return {
+          workflowName: workflow.name,
+          success: false,
+          durationMs: performance.now() - startTime,
+          stepsExecuted: 0,
+          totalSteps,
+          stepResults: [],
+          environmentValidation: envValidation,
+          error: 'Declined in the confirmation dialog. Nothing was run.'
+        };
+      }
+      authorize = batch.handler;
+    }
+
+    // `cd` steps move the following steps, as they would in a terminal
+    let currentCwd: string | undefined = options.cwd;
+
     for (let i = 0; i < workflow.steps.length; i++) {
       const step = workflow.steps[i];
       const stepStart = performance.now();
@@ -232,7 +274,10 @@ export class DeterministicReplayEngine {
       // Cross-platform command resolution and parameter substitution
       const resolvedCommand = CrossPlatformCommandAdapter.getInstance().resolveStepCommand(step);
       const expandedCommand = this.substituteParameters(resolvedCommand, resolvedParams);
-      const expandedCwd = step.cwd ? this.substituteParameters(step.cwd, resolvedParams) : undefined;
+      const ownCwd = step.cwd ? this.substituteParameters(step.cwd, resolvedParams) : undefined;
+      const expandedCwd = ownCwd ? (currentCwd ? resolveFolder(currentCwd, ownCwd) : ownCwd) : currentCwd;
+      const cdTarget = parseCdTarget(expandedCommand);
+      const isPureCd = cdTarget !== null && !/&&|\|\||;|\|/.test(expandedCommand);
 
       // Categorical Security Analysis
       const securityEngine = new SecurityEngine();
@@ -399,13 +444,37 @@ export class DeterministicReplayEngine {
         };
       }
 
-      // Execute Step
+      // A step that never exits gets its own terminal instead of blocking the replay
+      if (options.onLongRunning && isLongRunningCommand(expandedCommand)) {
+        const pane = await options.onLongRunning(expandedCommand, expandedCwd, step);
+        const paneRes: ReplayStepResult = {
+          stepId: step.id,
+          name: step.name,
+          command: expandedCommand,
+          exitCode: pane.ok ? 0 : 1,
+          stdout: pane.ok ? pane.message : '',
+          stderr: pane.ok ? '' : pane.message,
+          durationMs: performance.now() - stepStart,
+          riskAnalysis,
+          status: pane.ok ? 'completed' : 'failed',
+          error: pane.ok ? undefined : pane.message
+        };
+        stepResults.push(paneRes);
+        options.onStepDone?.(step, paneRes);
+        if (!pane.ok) {
+          return { workflowName: workflow.name, success: false, durationMs: performance.now() - startTime, stepsExecuted: stepResults.length, totalSteps, stepResults, environmentValidation: envValidation, error: pane.message };
+        }
+        continue;
+      }
+
+      // Execute Step (a pure `cd` is checked with pwd so the new folder is exact)
+      const commandToRun = isPureCd ? `${cdTo(cdTarget!)} && pwd` : expandedCommand;
       let execOutput: { code: number; stdout: string; stderr: string };
       try {
         if (options.executor) {
-          execOutput = await options.executor(expandedCommand, expandedCwd);
+          execOutput = await options.executor(commandToRun, expandedCwd, authorize);
         } else {
-          execOutput = await this.defaultExecute(expandedCommand, expandedCwd);
+          execOutput = await this.defaultExecute(commandToRun, expandedCwd, authorize);
         }
       } catch (err: any) {
         execOutput = {
@@ -442,6 +511,11 @@ export class DeterministicReplayEngine {
 
       stepResults.push(stepResult);
       options.onStepDone?.(step, stepResult);
+
+      if (stepPassed && cdTarget !== null) {
+        const printed = isPureCd ? execOutput.stdout.trim().split('\n').pop()?.trim() : '';
+        currentCwd = printed && printed.startsWith('/') ? printed : resolveFolder(currentCwd || expandedCwd || '~', cdTarget);
+      }
 
       if (!stepPassed) {
         options.onLog?.(`[ReplayEngine] Workflow "${workflow.name}" aborted on step ${i + 1} (${step.name}).`);
@@ -517,7 +591,8 @@ export class DeterministicReplayEngine {
 
   private async defaultExecute(
     command: string,
-    cwd?: string
+    cwd?: string,
+    authorize?: AuthorizationHandler
   ): Promise<{ code: number; stdout: string; stderr: string }> {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
       return { code: 0, stdout: `Executed: ${command}`, stderr: '' };
@@ -535,7 +610,7 @@ export class DeterministicReplayEngine {
         'shell.execute',
         { command, cwd, explanation: `Workflow step: ${command}` },
         cwd,
-        plan => ConsentQueue.getInstance().enqueue(plan)
+        authorize ?? (plan => ConsentQueue.getInstance().enqueue(plan))
       );
       return {
         code: res.success ? (res.data?.code ?? 0) : (res.data?.code ?? 1),

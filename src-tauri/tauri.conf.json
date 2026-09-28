@@ -57,6 +57,17 @@
       "appimage": {
         "bundleMediaFramework": false
       }
-    }
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "flow"
+        ],
+        "name": "Sentinel Workflow",
+        "description": "Sentinel Terminal workflow",
+        "role": "Editor",
+        "mimeType": "application/x-sentinel-workflow"
+      }
+    ]
   }
 }

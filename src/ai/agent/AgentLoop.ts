@@ -84,6 +84,7 @@ import { isReadOnlyCommandLine, isClearlyMutating } from '../../domain/security/
 import { findInstantAnswers, InstantAnswer } from './InstantAnswers';
 import { planChain, resolveFolder, ChainPlan } from '../../workflows/engine/ChainPlanner';
 import { approveBatch } from '../../domain/security/BatchApproval';
+import { planRosPipeline, RosPipeline } from '../../domain/ros/RosPipelinePlanner';
 import { TerminalWorkspace, isLongRunningCommand, paneTitleFor } from '../../domain/terminal/TerminalWorkspace';
 import { SecurityEngine } from '../../domain/security/SecurityEngine';
 import { chooseRosDistro, withRosEnvironmentForPane } from '../../domain/ros/RosEnvironment';
@@ -1431,52 +1432,7 @@ export class AgentLoop {
 
       this.emit({ type: 'thinking', message: `Replaying workflow "${name}" deterministically (zero AI inference)...` });
 
-      const replayResult = await replayEngine.replay(name, {
-        sessionId: context.sessionId,
-        parameters: overrides,
-        autoApprove: true,
-        executor: async (cmd: string, cwd?: string) => {
-          const res = await this.toolExecutor.execute(
-            'shell.execute',
-            { command: cmd, cwd: cwd || context.cwd },
-            cwd || context.cwd,
-            this.authorizationHandler
-          );
-          return {
-            code: res.success ? (res.data?.code ?? 0) : 1,
-            stdout: res.data?.stdout || '',
-            stderr: res.data?.stderr || (res.success ? '' : 'Execution failed')
-          };
-        },
-        onStepStart: (step, idx, total) => {
-          this.emit({ type: 'tool_start', message: `Step ${idx + 1}/${total}: ${step.name} (${step.command})` });
-        },
-        onStepDone: (step, res) => {
-          this.emit({
-            type: res.status === 'completed' ? 'tool_done' : 'error',
-            message: `Step ${step.name}: ${res.status}`
-          });
-        }
-      });
-
-      const summary = replayResult.success
-        ? `Deterministic instant execution: Executed ${replayResult.stepsExecuted} steps of workflow "${name}" with zero LLM inference tokens.`
-        : `Workflow execution failed: ${replayResult.error}`;
-
-      this.emit({
-        type: replayResult.success ? 'done' : 'error',
-        message: summary
-      });
-
-      return {
-        success: replayResult.success,
-        summary,
-        steps: replayResult.stepResults.map(r => ({
-          tool: 'shell.execute',
-          params: { command: r.command },
-          result: { success: r.status === 'completed', stdout: r.stdout, stderr: r.stderr }
-        }))
-      };
+      return await this.runWorkflow(name, overrides, context);
     }
 
     // Direct Multi-stage Workflow Execution (when prompt matches DAG decomposer)
@@ -1776,6 +1732,10 @@ export class AgentLoop {
       }
     }
 
+    // ROS 2 pipelines: every node, launch file and topic monitor in its own terminal
+    const rosPlan = planRosPipeline(cleaned || goal);
+    if (rosPlan) return await this.runRosPipeline(goal, rosPlan, context);
+
     // "do this, then that": a planned chain with the folder carried between steps
     const chain = planChain(cleaned || goal, context.os === 'linux' ? 'linux' : 'macos');
     if (chain) return await this.runChain(goal, chain, context);
@@ -1927,52 +1887,7 @@ export class AgentLoop {
 
       this.emit({ type: 'thinking', message: `Replaying workflow "${name}" deterministically (zero AI inference)...` });
 
-      const replayResult = await replayEngine.replay(name, {
-        sessionId: context.sessionId,
-        parameters: overrides,
-        autoApprove: true,
-        executor: async (cmd: string, cwd?: string) => {
-          const res = await this.toolExecutor.execute(
-            'shell.execute',
-            { command: cmd, cwd: cwd || context.cwd },
-            cwd || context.cwd,
-            this.authorizationHandler
-          );
-          return {
-            code: res.success ? (res.data?.code ?? 0) : 1,
-            stdout: res.data?.stdout || '',
-            stderr: res.data?.stderr || (res.success ? '' : 'Execution failed')
-          };
-        },
-        onStepStart: (step, idx, total) => {
-          this.emit({ type: 'tool_start', message: `Step ${idx + 1}/${total}: ${step.name} (${step.command})` });
-        },
-        onStepDone: (step, res) => {
-          this.emit({
-            type: res.status === 'completed' ? 'tool_done' : 'error',
-            message: `Step ${step.name}: ${res.status}`
-          });
-        }
-      });
-
-      const summary = replayResult.success
-        ? `Deterministic instant execution: Executed ${replayResult.stepsExecuted} steps of workflow "${name}" with zero LLM inference tokens.`
-        : `Workflow execution failed: ${replayResult.error}`;
-
-      this.emit({
-        type: replayResult.success ? 'done' : 'error',
-        message: summary
-      });
-
-      return {
-        success: replayResult.success,
-        summary,
-        steps: replayResult.stepResults.map(r => ({
-          tool: 'shell.execute',
-          params: { command: r.command },
-          result: { success: r.status === 'completed', stdout: r.stdout, stderr: r.stderr }
-        }))
-      };
+      return await this.runWorkflow(name, overrides, context);
     }
 
     // Offline / Direct Multi-stage Workflow Execution (when prompt matches DAG decomposer)
@@ -2414,6 +2329,118 @@ export class AgentLoop {
     const summary = `Done: ${total} steps${cwd !== startCwd ? `; now in ${cwd}` : ''}.`;
     this.emit({ type: 'done', message: summary });
     return { success: true, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
+  }
+
+  /**
+   * Replay a saved workflow (by name) or a workflow opened from a file: one confirmation for
+   * every command, steps in the folder of the terminal it was started from, `cd` steps carried
+   * forward, long-running steps in their own panes.
+   */
+  public async runWorkflow(
+    nameOrDefinition: string | SavedWorkflowDefinition,
+    parameters: Record<string, string | number | boolean>,
+    context: AgentRunContext
+  ): Promise<AgentResult> {
+    const name = typeof nameOrDefinition === 'string' ? nameOrDefinition : nameOrDefinition.name;
+    const replayResult = await DeterministicReplayEngine.getInstance().replay(nameOrDefinition, {
+      sessionId: context.sessionId,
+      parameters,
+      autoApprove: true,
+      cwd: context.cwd,
+      authorizationHandler: this.authorizationHandler,
+      executor: async (cmd: string, cwd?: string, authorize?: AgentAuthorizationHandler) => {
+        const res = await this.toolExecutor.execute('shell.execute', { command: cmd, cwd: cwd || context.cwd }, cwd || context.cwd, authorize ?? this.authorizationHandler);
+        return {
+          code: res.success ? (res.data?.code ?? 0) : (res.data?.code ?? 1),
+          stdout: res.data?.stdout || '',
+          stderr: res.data?.stderr || (res.success ? '' : (res.error || 'Execution failed'))
+        };
+      },
+      onLongRunning: async (cmd, cwd) => {
+        const r = await this.runInPane(cmd, `Workflow "${name}"`, { ...context, cwd: cwd || context.cwd }, true);
+        return { ok: r.success, message: r.success ? r.data.stdout : (r.error || 'Could not open a terminal pane.') };
+      },
+      onStepStart: (step, idx, total) => {
+        this.emit({ type: 'tool_start', message: `Step ${idx + 1}/${total}: ${step.name}  (${step.command})` });
+      },
+      onStepDone: (step, res) => {
+        this.emit(res.status === 'completed' || res.status === 'skipped' || res.status === 'skipped_dry_run'
+          ? { type: 'tool_done', message: `✓ ${step.name}`, data: res.stdout ? { stdout: res.stdout } : undefined }
+          : { type: 'tool_done', message: `✗ ${step.name}: ${String(res.error || res.stderr).split('\n')[0]}` });
+      }
+    });
+
+    const summary = replayResult.success
+      ? `Workflow "${name}": ${replayResult.stepsExecuted} step${replayResult.stepsExecuted === 1 ? '' : 's'} done.`
+      : `Workflow "${name}" stopped: ${replayResult.error}`;
+    this.emit({ type: replayResult.success ? 'done' : 'error', message: summary });
+    return {
+      success: replayResult.success,
+      summary,
+      declined: /Declined in the confirmation dialog/.test(replayResult.error || ''),
+      steps: replayResult.stepResults.map(r => ({
+        tool: 'shell.execute',
+        params: { command: r.command },
+        result: { success: r.status === 'completed', data: { stdout: r.stdout, stderr: r.stderr, code: r.exitCode } }
+      }))
+    };
+  }
+
+  /** How long ROS nodes get to come up before the node/topic lists are checked */
+  public static ROS_SETTLE_MS = 4000;
+  /** Gap between starting consecutive panes (a launch file before the nodes that use it) */
+  public static PANE_STAGGER_MS = 700;
+
+  /**
+   * Start a ROS 2 pipeline: check ROS is installed, one confirmation for every process, each
+   * in its own pane, then confirm the graph with `ros2 node list` / `ros2 topic list`.
+   */
+  private async runRosPipeline(goal: string, plan: RosPipeline, context: AgentRunContext): Promise<AgentResult> {
+    const probe = await this.toolExecutor.execute('shell.execute', { command: 'ls -d /opt/ros 2>/dev/null || which ros2', explanation: 'Check for ROS 2' }, context.cwd, this.authorizationHandler);
+    const installed = probe.success && (typeof probe.data?.code !== 'number' || probe.data.code === 0)
+      && typeof probe.data?.stdout === 'string' && probe.data.stdout.trim().length > 0;
+    if (!installed) {
+      const summary = `ROS 2 is not installed on this computer (no /opt/ros and no ros2 command). Install ROS 2 (Jazzy on Ubuntu 24.04, Humble on 22.04), then ask again: ${plan.panes.map(p => `\`${p}\``).join(', ')} would each start in their own terminal.`;
+      this.emit({ type: 'error', message: summary });
+      return { success: false, summary, steps: [{ tool: 'shell.execute', params: { command: 'which ros2' }, result: probe }] };
+    }
+
+    const batch = await approveBatch(plan.panes, `Start ${plan.summary}: ${goal}`, this.authorizationHandler);
+    if (!batch.approved) {
+      const summary = 'Not run: you declined the ROS 2 pipeline. Nothing was started.';
+      this.emit({ type: 'tool_done', message: `✗ ${summary}` });
+      return { success: false, summary, steps: [], declined: true };
+    }
+
+    const steps: AgentResult['steps'] = [];
+    for (let i = 0; i < plan.panes.length; i++) {
+      const command = plan.panes[i];
+      this.emit({ type: 'tool_start', message: `Starting ${command}` });
+      const result = await this.runInPane(command, 'ROS 2 pipeline', context, true);
+      steps.push({ tool: 'terminal.spawn', params: { command }, result });
+      if (!result.success) {
+        const summary = `Could not start \`${command}\`: ${result.error}`;
+        this.emit({ type: 'error', message: summary });
+        return { success: false, summary, steps };
+      }
+      this.emit({ type: 'tool_done', message: `✓ ${result.data.stdout}` });
+      if (i < plan.panes.length - 1 && AgentLoop.PANE_STAGGER_MS > 0) await new Promise(r => setTimeout(r, AgentLoop.PANE_STAGGER_MS));
+    }
+
+    if (AgentLoop.ROS_SETTLE_MS > 0) {
+      this.emit({ type: 'thinking', message: 'Waiting for the nodes to come up...' });
+      await new Promise(r => setTimeout(r, AgentLoop.ROS_SETTLE_MS));
+    }
+    for (const check of plan.checks) {
+      this.emit({ type: 'tool_start', message: check });
+      const result = await this.toolExecutor.execute('shell.execute', { command: check, explanation: 'Check the ROS 2 graph' }, context.cwd, this.authorizationHandler);
+      steps.push({ tool: 'shell.execute', params: { command: check }, result });
+      this.emit({ type: 'tool_done', message: `✓ ${check}`, data: result.data });
+    }
+
+    const summary = `Started ${plan.summary}. Each runs in its own terminal; press Ctrl+C in a pane to stop it.`;
+    this.emit({ type: 'done', message: summary });
+    return { success: true, summary, steps };
   }
 
   /** One model call for one clause of a chain; null unless it yields a real shell command. */

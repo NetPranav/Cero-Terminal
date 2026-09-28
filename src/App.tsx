@@ -36,6 +36,9 @@ import {
 } from "lucide-react";
 import { isLinux, getShortcutModifier, formatShortcut } from "./shared/platform";
 import { TerminalWorkspace, MAX_PANES_PER_TAB } from "./domain/terminal/TerminalWorkspace";
+import { submitTerminalRequest } from "./presentation/TerminalRequests";
+import { parseWorkflowFile, isWorkflowFilePath } from "./workflows/storage/FlowImport";
+import { getPlatform } from "./shared/platform";
 import "./App.css";
 
 // Large screens that are only shown on demand load as separate chunks, keeping them out of the
@@ -145,10 +148,38 @@ export function App({ initialPath }: AppProps = {}) {
     }
   };
 
-  const handleRunWorkflowInTerminal = (command: string) => {
-    if (activeTerminal && activeTerminal.sessionId) {
-      SessionManager.getInstance().write(activeTerminal.sessionId, command + '\n');
+  /** file:///x/y.flow or a plain path -> /x/y.flow */
+  const toLocalPath = (value: string): string => {
+    if (value.startsWith('file://')) {
+      try { return decodeURIComponent(new URL(value).pathname); } catch { return value; }
     }
+    return value;
+  };
+
+  // A workflow file opened with Sentinel (Finder, `open -a`, `sentinel file.flow`) runs in the
+  // focused terminal after the usual confirmation, which lists every command first. It never
+  // runs unseen, even when the file came from someone else.
+  const openWorkflowFiles = async (paths: string[]) => {
+    for (const filePath of paths) {
+      try {
+        const res = await invoke<{ stdout: string; code: number }>('execute_command', { command: 'cat', args: [filePath] });
+        const definition = res.code === 0 ? parseWorkflowFile(res.stdout, filePath, getPlatform() === 'linux' ? 'linux' : 'macos') : null;
+        if (!definition) {
+          console.warn('[Sentinel] Not a workflow file:', filePath);
+          continue;
+        }
+        submitTerminalRequest({ kind: 'workflow', definition, source: filePath });
+      } catch (err) {
+        console.warn('[Sentinel] Could not open workflow file:', filePath, err);
+      }
+    }
+  };
+
+  // Workflow Manager runs go to the focused terminal as an AI request, so progress and the
+  // confirmation dialog are visible (it used to type "run workflow ..." into the shell)
+  const handleRunWorkflowInTerminal = (command: string) => {
+    setShowWorkflowManager(false);
+    submitTerminalRequest({ kind: 'goal', goal: command });
   };
   const [transparency, setTransparency] = useState<number>(0.82);
   const [blurLevel, setBlurLevel] = useState<number>(20);
@@ -309,6 +340,11 @@ export function App({ initialPath }: AppProps = {}) {
     }).then(fn => { unlistenMenu = fn; }).catch(() => {});
 
     listen<string[]>("sentinel-url", (event) => {
+      const workflowFiles = event.payload.map(toLocalPath).filter(isWorkflowFilePath);
+      if (workflowFiles.length > 0) {
+        void openWorkflowFiles(workflowFiles);
+        return;
+      }
       const actions = UrlSchemeHandler.getInstance().parseMany(event.payload);
       for (const action of actions) {
         if (action.type === 'new-tab') {
@@ -329,6 +365,11 @@ export function App({ initialPath }: AppProps = {}) {
 
           const candidateArgs = args.slice(1).filter(arg => arg && !arg.startsWith('-'));
           if (candidateArgs.length === 0) return;
+          const workflowArgs = candidateArgs.map(toLocalPath).filter(isWorkflowFilePath);
+          if (workflowArgs.length > 0) {
+            void openWorkflowFiles(workflowArgs);
+            return;
+          }
 
           const actions = UrlSchemeHandler.getInstance().parseMany(candidateArgs);
           if (actions.length === 0) return;
@@ -804,6 +845,7 @@ export function App({ initialPath }: AppProps = {}) {
             <TerminalView 
               key={node.data.id}
               paneId={node.data.id}
+              isFocused={activePaneId === node.data.id}
               sessionId={node.data.sessionId}
               isActive={isTabActive}
               currentPath={panePaths[node.data.id] || '~'}

@@ -91,7 +91,7 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.summary).toContain('Executed 1 steps of workflow "deploy-service"');
+    expect(result.summary).toContain('Workflow "deploy-service": 1 step done');
     expect(result.steps.length).toBe(1);
 
     // Verify events received thinking and tool events

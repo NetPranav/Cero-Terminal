@@ -250,3 +250,63 @@ describe('DeterministicReplayEngine', () => {
     expect(executedCommands).not.toContain('npm run deploy');
   });
 });
+
+describe('DeterministicReplayEngine — terminal semantics', () => {
+  const wf = (steps: Array<{ command: string; cwd?: string }>) => ({
+    schemaVersion: 1,
+    name: 'chain',
+    createdAt: 0,
+    updatedAt: 0,
+    steps: steps.map((s, i) => ({ id: `s${i + 1}`, name: `step ${i + 1}`, ...s }))
+  });
+
+  it('runs steps in the starting folder and carries cd forward like a terminal', async () => {
+    const { DeterministicReplayEngine } = await import('./DeterministicReplayEngine');
+    const executor = vi.fn(async (cmd: string, cwd?: string) => cmd.endsWith('&& pwd')
+      ? { code: 0, stdout: `${cwd}/proj\n`, stderr: '' }
+      : { code: 0, stdout: '', stderr: '' });
+    const result = await DeterministicReplayEngine.getInstance().replay(wf([
+      { command: 'mkdir -p proj' },
+      { command: 'cd proj' },
+      { command: 'pwd > where.txt' },
+      { command: 'cd sub && make' },
+      { command: 'ls' },
+    ]), { executor, autoApprove: true, cwd: '/tmp/wf' });
+
+    expect(result.success).toBe(true);
+    expect(executor.mock.calls.map(c => [c[0], c[1]])).toEqual([
+      ['mkdir -p proj', '/tmp/wf'],
+      ["cd 'proj' && pwd", '/tmp/wf'],
+      ['pwd > where.txt', '/tmp/wf/proj'],
+      ['cd sub && make', '/tmp/wf/proj'],
+      ['ls', '/tmp/wf/proj/sub'],
+    ]);
+  });
+
+  it('hands long-running steps to a pane instead of blocking', async () => {
+    const { DeterministicReplayEngine } = await import('./DeterministicReplayEngine');
+    const executor = vi.fn(async (_cmd: string, _cwd?: string) => ({ code: 0, stdout: '', stderr: '' }));
+    const onLongRunning = vi.fn(async () => ({ ok: true, message: 'Running in a new pane' }));
+    const result = await DeterministicReplayEngine.getInstance().replay(wf([
+      { command: 'npm run dev' },
+      { command: 'curl -s localhost:5173' },
+    ]), { executor, onLongRunning, autoApprove: true, cwd: '/app' });
+    expect(result.success).toBe(true);
+    expect(onLongRunning).toHaveBeenCalledWith('npm run dev', '/app', expect.anything());
+    expect(executor.mock.calls.map(c => c[0])).toEqual(['curl -s localhost:5173']);
+  });
+
+  it('asks once for all commands, and runs nothing when declined', async () => {
+    const { DeterministicReplayEngine } = await import('./DeterministicReplayEngine');
+    const executor = vi.fn(async () => ({ code: 0, stdout: '', stderr: '' }));
+    const handler = vi.fn().mockResolvedValue(false);
+    const result = await DeterministicReplayEngine.getInstance().replay(wf([
+      { command: 'mkdir -p out' },
+      { command: 'touch out/a.txt' },
+    ]), { executor, autoApprove: true, authorizationHandler: handler, cwd: '/tmp' });
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].parameters.command).toBe('1. mkdir -p out\n2. touch out/a.txt');
+    expect(result.success).toBe(false);
+    expect(executor).not.toHaveBeenCalled();
+  });
+});

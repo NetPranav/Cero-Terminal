@@ -215,6 +215,13 @@ export const WorkflowManagerDrawer: React.FC<WorkflowManagerDrawerProps> = ({
   };
 
   const handleExecuteReplay = async (wf: SavedWorkflowDefinition) => {
+    // Run in the focused terminal: its confirmation dialog and step output are visible there,
+    // and steps start in that terminal's folder
+    if (onRunInTerminal) {
+      const flagStr = Object.entries(replayParams).filter(([, v]) => v !== '').map(([k, v]) => `--${k.toLowerCase()}=${v}`).join(' ');
+      onRunInTerminal(`run workflow ${wf.name} ${flagStr}${isDryRun ? ' --dry-run' : ''}`.trim());
+      return;
+    }
     setIsExecuting(true);
     setReplayResult(null);
     setActiveStepIndex(0);

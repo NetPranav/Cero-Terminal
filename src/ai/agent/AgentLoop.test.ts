@@ -1372,3 +1372,56 @@ describe('Multi-step chains', () => {
     expect(looksLikeShellCommand('list the files')).toBe(false);
   });
 });
+
+describe('ROS 2 pipelines', () => {
+  const setup = (rosInstalled: boolean) => {
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate: vi.fn() }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    const execute = vi.fn(async (_t: string, params: any) => {
+      if (params.command.includes('/opt/ros')) return rosInstalled ? { success: true, data: { stdout: '/opt/ros\n', code: 0 } } : { success: false, data: { stdout: '', code: 1 } };
+      if (params.command === 'ros2 node list') return { success: true, data: { stdout: '/turtlesim\n/teleop_turtle\n', code: 0 } };
+      return { success: true, data: { stdout: '/turtle1/pose\n', code: 0 } };
+    });
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+    return { loop, execute };
+  };
+
+  it('starts every process in its own pane after one confirmation, then checks the graph', async () => {
+    const { AgentLoop: Loop } = await import('./AgentLoop');
+    Loop.ROS_SETTLE_MS = 0;
+    Loop.PANE_STAGGER_MS = 0;
+    const { TerminalWorkspace } = await import('../../domain/terminal/TerminalWorkspace');
+    TerminalWorkspace.resetForTests();
+    const spawner = vi.fn().mockReturnValueOnce('p1').mockReturnValueOnce('p2').mockReturnValueOnce('p3');
+    TerminalWorkspace.getInstance().setSpawner(spawner);
+    const { loop, execute } = setup(true);
+    const handler = vi.fn().mockResolvedValue(true);
+    loop.setAuthorizationHandler(handler);
+
+    const result = await loop.run('run turtlesim, control it with the keyboard and show me the pose', { os: 'linux', cwd: '/home/u/ws', paneId: 'main' });
+
+    expect(result.success).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].parameters.command).toContain('ros2 run turtlesim turtle_teleop_key');
+    expect(spawner.mock.calls.map(c => c[0].title)).toEqual(['turtlesim_node', 'turtle_teleop_key', 'echo /turtle1/pose']);
+    expect(spawner.mock.calls.every(c => c[0].requesterPaneId === 'main')).toBe(true);
+    expect(execute.mock.calls.map(c => c[1].command)).toContain('ros2 node list');
+    expect(result.summary).toContain('3 processes in separate terminals');
+  });
+
+  it('explains when ROS 2 is not installed instead of opening panes that fail', async () => {
+    const { TerminalWorkspace } = await import('../../domain/terminal/TerminalWorkspace');
+    TerminalWorkspace.resetForTests();
+    const spawner = vi.fn();
+    TerminalWorkspace.getInstance().setSpawner(spawner);
+    const { loop } = setup(false);
+    loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
+    const result = await loop.run('run the ros2 talker and listener', { os: 'macos', cwd: '/tmp' });
+    expect(result.success).toBe(false);
+    expect(result.summary).toContain('ROS 2 is not installed');
+    expect(spawner).not.toHaveBeenCalled();
+  });
+});
