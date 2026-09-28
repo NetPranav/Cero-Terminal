@@ -143,10 +143,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
   // the user is typing must not be approved by the Enter that finishes their command.
   const consentShownAtRef = useRef(0);
   const consentStrayKeyAtRef = useRef(0);
+  // The plan the timestamp belongs to: a dialog replaced by the next request starts unarmed
+  const consentPlanRef = useRef<unknown>(null);
   // Keyboard focus goes back to the terminal when the confirmation dialog closes
   useEffect(() => {
     if (securityModalPlan) {
-      if (!consentOpenRef.current) consentShownAtRef.current = Date.now();
       consentOpenRef.current = true;
     } else if (consentOpenRef.current) {
       consentOpenRef.current = false;
@@ -1591,7 +1592,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
       {securityModalPlan && (
         <div 
           tabIndex={0}
-          ref={(el) => { if (el && !securityModalPlan.plan.requiresPassword) el.focus(); }}
+          ref={(el) => {
+            if (!el) return;
+            // Runs at commit, before paint: every new plan starts its own arming delay
+            if (consentPlanRef.current !== securityModalPlan.plan) {
+              consentPlanRef.current = securityModalPlan.plan;
+              consentShownAtRef.current = Date.now();
+            }
+            if (!securityModalPlan.plan.requiresPassword) el.focus();
+          }}
           onKeyDown={(e) => {
             const now = Date.now();
             if (e.key === 'Escape') {
