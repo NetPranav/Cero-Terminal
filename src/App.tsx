@@ -583,7 +583,8 @@ export function App({ initialPath }: AppProps = {}) {
     }
     const term = getActiveTerminalPane(tab.rootPane);
     const rawPath = term ? (panePaths[term.id] || '~') : '~';
-    return formatDisplayPath(rawPath);
+    // Folder name like other terminals; the full path is in the status bar
+    return getFolderBasename(rawPath);
   };
 
   useEffect(() => {

@@ -13,8 +13,7 @@ import { EpisodicMemoryEngine } from '../domain/learning/EpisodicMemoryEngine';
 import { SentinelSerlCoordinator } from '../domain/learning/SentinelSerlCoordinator';
 import { PtyOutputObserver, type RemediationPrompt } from '../domain/observer/PtyOutputObserver';
 import { ErrorWatchService } from '../domain/watch/ErrorWatchService';
-import { formatWatchEvent } from './OutputFormatter';
-import { formatAgentEvent, formatDataOutput } from './OutputFormatter';
+import { formatAgentEvent, formatDataOutput, formatWatchEvent, formatRemediationNotice, AgentEventRenderer, S } from './OutputFormatter';
 
 import { AutocompleteEngine } from '../domain/autocomplete/AutocompleteEngine';
 import { HistoryProvider } from '../domain/autocomplete/HistoryProvider';
@@ -40,6 +39,7 @@ import {
 } from 'lucide-react';
 import { SearchAddon } from '@xterm/addon-search';
 import { TerminalSearchBar } from './TerminalSearchBar';
+import { InputLineTracker, stripPrompt } from './InputLineTracker';
 import { readClipboardText, writeClipboardText, formatTerminalPastePayload } from '../utils/clipboard';
 
 /** Goal text for an auto-heal request: the failing command and diagnosis, not just a title. */
@@ -201,6 +201,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
   const [activeRemediation, setActiveRemediation] = useState<RemediationPrompt | null>(null);
   const agentLoopRef = useRef<AgentLoop | null>(null);
   const ptyTrackerRef = useRef<PtyStateTracker>(new PtyStateTracker());
+  const inputLineRef = useRef<InputLineTracker>(new InputLineTracker());
+  const aiBusyRef = useRef(false);
+  const aiQueueRef = useRef<string[]>([]);
   const lastUnresolvedGoalRef = useRef<{ goal: string; timestamp: number } | null>(null);
 
   const handleExecuteRemediation = async (rem: RemediationPrompt) => {
@@ -211,7 +214,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
       await SessionManager.getInstance().write(activeSessionId, '\x03');
     }
     if (xtermRef.current) {
-      xtermRef.current.write(`\r\n\x1b[1;32m[Sentinel Auto-Heal] Executing: ${rem.actionTitle}...\x1b[0m\r\n`);
+      xtermRef.current.write(`\r\n  ${S.muted}›${S.reset} ${S.soft}Applying fix: ${rem.actionTitle}${S.reset}\r\n`);
     }
     if (rem.tool === 'shell.execute' && rem.params?.command && activeSessionId) {
       await SessionManager.getInstance().write(activeSessionId, `${rem.params.command}\r`);
@@ -515,6 +518,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
     
     // We must define the callback here so we can remove it later
     let outputCallback: ((data: Uint8Array) => void) | null = null;
+    let shellRedrawMuteUntil = 0;
+    let activeRenderer: AgentEventRenderer | null = null;
     let unsubRemediation: (() => void) | null = null;
     let unsubConsent: (() => void) | null = null;
     let unsubWatch: (() => void) | null = null;
@@ -545,9 +550,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
           await sessionManager.resize(currentSessionId, term.rows, term.cols);
         }
 
+        // One decoder in streaming mode: a UTF-8 character can be split across PTY reads
+        const decoder = new TextDecoder();
         outputCallback = (data: Uint8Array) => {
-          const text = new TextDecoder().decode(data);
+          const text = decoder.decode(data, { stream: true });
           ptyTrackerRef.current.feedOutput(text);
+          // Discarding a `>` request line makes the shell print a fresh prompt; hide that redraw so
+          // agent output follows the request directly (the final prompt is printed at the end)
+          if (Date.now() < shellRedrawMuteUntil) return;
           PtyOutputObserver.getInstance().ingest(text, currentPathRef.current);
           writeTerm(text);
         };
@@ -555,9 +565,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
         unsubRemediation = PtyOutputObserver.getInstance().onRemediation((rem) => {
           setActiveRemediation(rem);
           if (rem) {
-            writeTerm(`\r\n\x1b[1;33m[Sentinel Auto-Heal]:\x1b[0m ${rem.cause}\r\n`);
-            writeTerm(`  • \x1b[36mSuggested Fix:\x1b[0m ${rem.actionTitle}\r\n`);
-            writeTerm(`  • \x1b[35mType \x1b[1m>fix\x1b[0m\x1b[35m or press \x1b[1m[Tab]\x1b[0m\x1b[35m to auto-resolve with Sentinel.\x1b[0m\r\n\r\n`);
+            writeTerm(formatRemediationNotice(rem.cause, rem.actionTitle));
           }
         });
 
@@ -612,9 +620,165 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
         const ghostText = new GhostTextRenderer(term);
         ghostText.attach(terminalRef.current!);
 
+        // Keep the sidebar/tab path in sync when a request changes directory
+        const notifyNavigation = (target: string) => {
+          if (!onPathChange) return;
+          const curr = (currentPath || '~').replace(/\/+/g, '/').trim();
+          let next = curr;
+          if (target === '~' || target === '/' || target === '..' || target === 'home' || target === '') {
+            if (target === '~' || target === 'home' || target === '') next = '~';
+            else if (target === '/') next = '/';
+            else if (target === '..') {
+              if (curr !== '~' && curr !== '/') {
+                const parts = curr.split('/').filter(Boolean);
+                parts.pop();
+                next = parts.join('/') || '~';
+              } else {
+                next = '~';
+              }
+            }
+          } else if (target.startsWith('~/') || target.startsWith('/')) {
+            next = target;
+          } else {
+            next = `${curr === '/' ? '' : curr}/${target}`.replace(/\/+/g, '/');
+          }
+          onPathChange(next);
+        };
+
+        // Runs one AI request and streams its events into the terminal
+        const runAiGoal = (aiGoal: string) => {
+          // Initiate live progress tracking in the bottom bar
+          PromptProgressManager.getInstance().startPrompt(aiGoal);
+          const renderer = new AgentEventRenderer(() => term.cols);
+          activeRenderer = renderer;
+
+          // Set up event listener for live output
+          agentLoop.onEvent((event) => {
+            if (event.type === 'thinking') {
+              PromptProgressManager.getInstance().updateStage(event.message || 'Thinking...', 30);
+            } else if (event.type === 'plan') {
+              PromptProgressManager.getInstance().updateStage('Planning...', 50);
+              const enabled = localStorage.getItem('sentinel_hud_plan_enabled') !== 'false';
+              const duration = localStorage.getItem('sentinel_hud_plan_duration') || '8';
+              if (!enabled || duration === 'disabled') {
+                return;
+              }
+              clearPlanDismissTimer();
+              if (event.data) {
+                const plan = event.data as AgentPlan;
+                setLatestPlan(plan);
+                setIsPlanOpen(true);
+                const isAllCompleted = plan.phases && plan.phases.length > 0 && plan.phases.every(p => p.status === 'completed');
+                const hasFailed = plan.phases && plan.phases.some(p => p.status === 'failed');
+                if (hasFailed) {
+                  setPlanExecutionStatus('failed');
+                  planExecutionStatusRef.current = 'failed';
+                  schedulePlanDismiss();
+                } else if (isAllCompleted) {
+                  setPlanExecutionStatus('completed');
+                  planExecutionStatusRef.current = 'completed';
+                  schedulePlanDismiss();
+                } else {
+                  setPlanExecutionStatus('running');
+                  planExecutionStatusRef.current = 'running';
+                }
+              }
+              // Keep execution plan strictly in dropdown overlay; avoid terminal buffer spam
+              return;
+            } else if (event.type === 'tool_start') {
+              const rawMsg = event.message || '';
+              const cleanMsg = rawMsg.replace(/^(Running|Executing|Phase \d+:?)\s*/i, '').trim();
+              PromptProgressManager.getInstance().updateStage(cleanMsg ? `Running: ${cleanMsg.slice(0, 24)}` : 'Executing...', 75);
+            } else if (event.type === 'step_output') {
+              PromptProgressManager.getInstance().updateStage('Executing...', 82);
+            } else if (event.type === 'tool_done') {
+              PromptProgressManager.getInstance().updateStage('Verifying...', 92);
+            } else if (event.type === 'done') {
+              setPlanExecutionStatus('completed');
+              planExecutionStatusRef.current = 'completed';
+              schedulePlanDismiss();
+              PromptProgressManager.getInstance().completePrompt(true, event.message);
+            } else if (event.type === 'error') {
+              setPlanExecutionStatus('failed');
+              planExecutionStatusRef.current = 'failed';
+              schedulePlanDismiss();
+              PromptProgressManager.getInstance().completePrompt(false, event.message);
+            }
+
+            const text = renderer.render(event);
+            if (text) writeTerm(text);
+
+            // Show structured data (file lists, devices, etc.) when available
+            if (event.data && (event.type === 'tool_done' || event.type === 'done')) {
+              const dataOutput = formatDataOutput(event.data, { goal: aiGoal });
+              if (dataOutput && (!text || !text.includes(dataOutput.trim()))) {
+                writeTerm(dataOutput);
+              }
+            }
+          });
+
+          // Run the agent loop
+          aiBusyRef.current = true;
+          agentLoop.run(aiGoal, { os: getPlatform(), cwd: currentPath || '~' }).then(result => {
+            const leftover = renderer.finish();
+            if (leftover) writeTerm(leftover);
+            PromptProgressManager.getInstance().completePrompt(result.success, result.summary);
+            if (!result.success) {
+              lastUnresolvedGoalRef.current = { goal: aiGoal, timestamp: Date.now() };
+              setPlanExecutionStatus('failed');
+              planExecutionStatusRef.current = 'failed';
+              schedulePlanDismiss();
+            } else {
+              lastUnresolvedGoalRef.current = null;
+              setPlanExecutionStatus('completed');
+              planExecutionStatusRef.current = 'completed';
+              schedulePlanDismiss();
+            }
+
+            // Handle clear terminal command
+            if (result.steps.some(s => s.tool === '__clear__')) {
+              term.clear();
+              writeTerm('\x1b[2J\x1b[H');
+              sessionManager.write(currentSessionId!, '\r');
+              return;
+            }
+
+            // Handle directory navigation
+            if (result.cdPath) {
+              notifyNavigation(result.cdPath);
+              const cdCmd = result.cdPath.includes(' ') && !result.cdPath.startsWith('"') && !result.cdPath.startsWith("'") ? `cd "${result.cdPath}"` : `cd ${result.cdPath}`;
+              setTimeout(() => sessionManager.write(currentSessionId!, `${cdCmd}\r`), 50);
+            } else {
+              writeTerm('\r\n');
+              sessionManager.write(currentSessionId!, '\r');
+            }
+          }).catch(err => {
+            const leftover = renderer.finish();
+            if (leftover) writeTerm(leftover);
+            PromptProgressManager.getInstance().completePrompt(false, err?.message || 'Error');
+            lastUnresolvedGoalRef.current = { goal: aiGoal, timestamp: Date.now() };
+            setPlanExecutionStatus('failed');
+            planExecutionStatusRef.current = 'failed';
+            schedulePlanDismiss();
+            writeTerm(`\r\n${formatAgentEvent({ type: 'error', message: err.message || 'Something went wrong' })}\r\n`);
+            sessionManager.write(currentSessionId!, '\r');
+          }).finally(() => {
+            aiBusyRef.current = false;
+            activeRenderer = null;
+            const next = aiQueueRef.current.shift();
+            if (next) setTimeout(() => runAiGoal(next), 150);
+          });
+        };
+
         term.onData(async (data) => {
           if (!currentSessionId) return;
           SentinelSerlCoordinator.getInstance().markActivity();
+
+          // Remember where this input line starts so Enter can read exactly what was typed
+          if (!(data.includes('\r') || data === '\n') && term.buffer.active.type !== 'alternate') {
+            const b = term.buffer.active;
+            inputLineRef.current.noteKeystroke(data, { row: b.baseY + b.cursorY, col: b.cursorX }, ptyTrackerRef.current.isProcessRunning());
+          }
 
           // Handle Tab completion or Right Arrow completion
           if (data === '\t' || data === '\x1b[C') {
@@ -629,7 +793,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
              const activeRem = PtyOutputObserver.getInstance().getActiveRemediation();
              if (activeRem) {
                await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
-               writeTerm(`\r\n\x1b[1;32m[Sentinel Auto-Heal] Executing: ${activeRem.actionTitle}...\x1b[0m\r\n`);
+               writeTerm(`\r\n  ${S.muted}›${S.reset} ${S.soft}Applying fix: ${activeRem.actionTitle}${S.reset}\r\n`);
                PtyOutputObserver.getInstance().clearRemediation();
                if (activeRem.tool === 'shell.execute' && activeRem.params?.command) {
                  await sessionManager.write(currentSessionId!, `${activeRem.params.command}\r`);
@@ -654,33 +818,30 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
             const line = buffer.getLine(lineIndex);
             
             if (line) {
-              let currentLineIndex = lineIndex;
-              let fullText = '';
-              
-              // Read backwards up to 3 lines to handle terminal wrapping and empty cursor lines
-              for (let i = 0; i < 3 && currentLineIndex >= 0; i++) {
-                const l = buffer.getLine(currentLineIndex);
-                if (!l) break;
-                
-                fullText = l.translateToString(false).replace(/\s+$/, '') + fullText;
-                
-                if (fullText.match(/.*[$%#]\s*/)) {
-                  break;
+              // Exact text from where typing started on this line (see InputLineTracker)
+              const anchored = inputLineRef.current.typedText() ?? inputLineRef.current.read(buffer, lineIndex);
+              inputLineRef.current.reset();
+              let commandText: string;
+              if (anchored !== null) {
+                commandText = anchored;
+              } else {
+                // Fallback: read back up to 3 rows (wrapping) and strip the prompt
+                let currentLineIndex = lineIndex;
+                let fullText = '';
+                for (let i = 0; i < 3 && currentLineIndex >= 0; i++) {
+                  const l = buffer.getLine(currentLineIndex);
+                  if (!l) break;
+                  fullText = l.translateToString(false).replace(/\s+$/, '') + fullText;
+                  if (/[$%#❯]\s/.test(fullText)) break;
+                  currentLineIndex--;
                 }
-                currentLineIndex--;
+                commandText = stripPrompt(fullText);
               }
-              
-              // Simple heuristic to strip prompt: look for the last common prompt character
-              const promptMatch = fullText.match(/.*[$%#]\s*/);
-              const commandText = promptMatch ? fullText.substring(promptMatch[0].length) : fullText;
 
               if (commandText.trim()) {
                  historyProvider.addHistory(commandText.trim(), currentPath || '~');
               }
 
-              console.log("[TerminalView] Full text intercepted:", fullText);
-              console.log("[TerminalView] Extracted command:", commandText);
-              
               const cleanCmd = commandText.trim();
 
               // Intercept dangerous / catastrophic destruction commands
@@ -692,29 +853,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                 return;
               }
 
-              const notifyNavigation = (target: string) => {
-                if (!onPathChange) return;
-                const curr = (currentPath || '~').replace(/\/+/g, '/').trim();
-                let next = curr;
-                if (target === '~' || target === '/' || target === '..' || target === 'home' || target === '') {
-                  if (target === '~' || target === 'home' || target === '') next = '~';
-                  else if (target === '/') next = '/';
-                  else if (target === '..') {
-                    if (curr !== '~' && curr !== '/') {
-                      const parts = curr.split('/').filter(Boolean);
-                      parts.pop();
-                      next = parts.join('/') || '~';
-                    } else {
-                      next = '~';
-                    }
-                  }
-                } else if (target.startsWith('~/') || target.startsWith('/')) {
-                  next = target;
-                } else {
-                  next = `${curr === '/' ? '' : curr}/${target}`.replace(/\/+/g, '/');
-                }
-                onPathChange(next);
-              };
 
               if (cleanCmd.startsWith('cd ') || cleanCmd === 'cd') {
                 const target = cleanCmd.replace(/^cd\s*/i, '').replace(/["']/g, '').trim() || '~';
@@ -795,7 +933,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                 await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
                 const rem = PtyOutputObserver.getInstance().getActiveRemediation();
                 if (rem) {
-                  writeTerm(`\r\n\x1b[1;32m[Sentinel Auto-Heal] Executing: ${rem.actionTitle}...\x1b[0m\r\n`);
+                  writeTerm(`\r\n  ${S.muted}›${S.reset} ${S.soft}Applying fix: ${rem.actionTitle}${S.reset}\r\n`);
                   PtyOutputObserver.getInstance().clearRemediation();
                   PromptProgressManager.getInstance().startPrompt(`Auto-Heal: ${rem.actionTitle}`);
                   try {
@@ -805,7 +943,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                     PromptProgressManager.getInstance().completePrompt(false, err?.message);
                   }
                 } else {
-                  writeTerm(`\r\n\x1b[33m[Sentinel Auto-Heal] No active error diagnosed in recent output.\x1b[0m\r\n\r\n`);
+                  writeTerm(`\r\n  ${S.muted}No recent error to fix.${S.reset}\r\n\r\n`);
                 }
                 return;
               }
@@ -838,10 +976,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                   `Human demonstration in ${currentPath || '~'}`
                 ).catch(e => console.warn('[TerminalView] SERL demonstration recording error:', e));
                 if (learned) {
-                  writeTerm(`\r\n\x1b[1;35m[Sentinel Learning Engine] Learned this workflow from your demonstration!\x1b[0m\r\n`);
-                  writeTerm(`  • \x1b[36mTrigger:\x1b[0m "${lastUnresolvedGoalRef.current.goal}"\r\n`);
-                  writeTerm(`  • \x1b[33mCommand:\x1b[0m ${cleanCmd}\r\n`);
-                  writeTerm(`  • \x1b[37mSaved to ~/.sentinel/learned_patterns.json & LoRA training dataset. Next time you ask, Sentinel will know this!\x1b[0m\r\n\r\n`);
+                  writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Learned from your command${S.reset}\r\n`);
+                  writeTerm(`    ${S.muted}when you ask${S.reset}  ${S.soft}${lastUnresolvedGoalRef.current.goal}${S.reset}\r\n`);
+                  writeTerm(`    ${S.muted}Sentinel runs${S.reset} ${S.code}${cleanCmd}${S.reset}\r\n\r\n`);
                   lastUnresolvedGoalRef.current = null;
                 }
               }
@@ -855,7 +992,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                 agentLoop.cancelPendingQuestion();
                 clearPlanDismissTimer();
                 setLatestPlan(null);
-                writeTerm('\r\n\x1b[33m  Workflow cancelled.\x1b[0m\r\n\r\n');
+                writeTerm(`\r\n  ${S.muted}Cancelled.${S.reset}\r\n\r\n`);
                 sessionManager.write(currentSessionId!, '\r');
                 return;
               }
@@ -867,118 +1004,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                 }
 
                 // Safely cancel the shell line without killing running foreground processes
+                if (ptyTrackerRef.current.canSafelyInjectCtrlC()) shellRedrawMuteUntil = Date.now() + 400;
                 await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
 
-                // Initiate live progress tracking in the bottom bar
-                PromptProgressManager.getInstance().startPrompt(aiGoal);
-
-                // Set up event listener for live output
-                agentLoop.onEvent((event) => {
-                  if (event.type === 'thinking') {
-                    PromptProgressManager.getInstance().updateStage(event.message || 'Thinking...', 30);
-                  } else if (event.type === 'plan') {
-                    PromptProgressManager.getInstance().updateStage('Planning...', 50);
-                    const enabled = localStorage.getItem('sentinel_hud_plan_enabled') !== 'false';
-                    const duration = localStorage.getItem('sentinel_hud_plan_duration') || '8';
-                    if (!enabled || duration === 'disabled') {
-                      return;
-                    }
-                    clearPlanDismissTimer();
-                    if (event.data) {
-                      const plan = event.data as AgentPlan;
-                      setLatestPlan(plan);
-                      setIsPlanOpen(true);
-                      const isAllCompleted = plan.phases && plan.phases.length > 0 && plan.phases.every(p => p.status === 'completed');
-                      const hasFailed = plan.phases && plan.phases.some(p => p.status === 'failed');
-                      if (hasFailed) {
-                        setPlanExecutionStatus('failed');
-                        planExecutionStatusRef.current = 'failed';
-                        schedulePlanDismiss();
-                      } else if (isAllCompleted) {
-                        setPlanExecutionStatus('completed');
-                        planExecutionStatusRef.current = 'completed';
-                        schedulePlanDismiss();
-                      } else {
-                        setPlanExecutionStatus('running');
-                        planExecutionStatusRef.current = 'running';
-                      }
-                    }
-                    // Keep execution plan strictly in dropdown overlay; avoid terminal buffer spam
-                    return;
-                  } else if (event.type === 'tool_start') {
-                    const rawMsg = event.message || '';
-                    const cleanMsg = rawMsg.replace(/^(Running|Executing|Phase \d+:?)\s*/i, '').trim();
-                    PromptProgressManager.getInstance().updateStage(cleanMsg ? `Running: ${cleanMsg.slice(0, 24)}` : 'Executing...', 75);
-                  } else if (event.type === 'step_output') {
-                    PromptProgressManager.getInstance().updateStage('Executing...', 82);
-                  } else if (event.type === 'tool_done') {
-                    PromptProgressManager.getInstance().updateStage('Verifying...', 92);
-                  } else if (event.type === 'done') {
-                    setPlanExecutionStatus('completed');
-                    planExecutionStatusRef.current = 'completed';
-                    schedulePlanDismiss();
-                    PromptProgressManager.getInstance().completePrompt(true, event.message);
-                  } else if (event.type === 'error') {
-                    setPlanExecutionStatus('failed');
-                    planExecutionStatusRef.current = 'failed';
-                    schedulePlanDismiss();
-                    PromptProgressManager.getInstance().completePrompt(false, event.message);
-                  }
-
-                  const text = formatAgentEvent(event);
-                  if (text) writeTerm(text);
-
-                  // Show structured data (file lists, devices, etc.) when available
-                  if (event.data && (event.type === 'tool_done' || event.type === 'done')) {
-                    const dataOutput = formatDataOutput(event.data, { goal: aiGoal });
-                    if (dataOutput && (!text || !text.includes(dataOutput.trim()))) {
-                      writeTerm(dataOutput);
-                    }
-                  }
-                });
-
-                // Run the agent loop
-                agentLoop.run(aiGoal, { os: getPlatform(), cwd: currentPath || '~' }).then(result => {
-                  PromptProgressManager.getInstance().completePrompt(result.success, result.summary);
-                  if (!result.success) {
-                    lastUnresolvedGoalRef.current = { goal: aiGoal, timestamp: Date.now() };
-                    setPlanExecutionStatus('failed');
-                    planExecutionStatusRef.current = 'failed';
-                    schedulePlanDismiss();
-                  } else {
-                    lastUnresolvedGoalRef.current = null;
-                    setPlanExecutionStatus('completed');
-                    planExecutionStatusRef.current = 'completed';
-                    schedulePlanDismiss();
-                  }
-
-                  // Handle clear terminal command
-                  if (result.steps.some(s => s.tool === '__clear__')) {
-                    term.clear();
-                    writeTerm('\x1b[2J\x1b[H');
-                    sessionManager.write(currentSessionId!, '\r');
-                    return;
-                  }
-
-                  // Handle directory navigation
-                  if (result.cdPath) {
-                    notifyNavigation(result.cdPath);
-                    const cdCmd = result.cdPath.includes(' ') && !result.cdPath.startsWith('"') && !result.cdPath.startsWith("'") ? `cd "${result.cdPath}"` : `cd ${result.cdPath}`;
-                    setTimeout(() => sessionManager.write(currentSessionId!, `${cdCmd}\r`), 50);
-                  } else {
-                    writeTerm('\r\n');
-                    sessionManager.write(currentSessionId!, '\r');
-                  }
-                }).catch(err => {
-                  PromptProgressManager.getInstance().completePrompt(false, err?.message || 'Error');
-                  lastUnresolvedGoalRef.current = { goal: aiGoal, timestamp: Date.now() };
-                  setPlanExecutionStatus('failed');
-                  planExecutionStatusRef.current = 'failed';
-                  schedulePlanDismiss();
-                  writeTerm(`\r\n\x1b[1;31m  ✗ ${err.message || 'Something went wrong'}\x1b[0m\r\n\r\n`);
-                  sessionManager.write(currentSessionId!, '\r');
-                });
-                
+                // One request at a time: the agent keeps a single transcript and event listener
+                if (aiBusyRef.current) {
+                  aiQueueRef.current.push(aiGoal);
+                  writeTerm(`${activeRenderer?.finish() ?? ''}  ${S.muted}Queued: ${aiGoal}${S.reset}\r\n`);
+                  return;
+                }
+                runAiGoal(aiGoal);
                 return; // Do NOT send the \r to the shell
               } else if (cleanCmd) {
                 // User submitted a command to the shell

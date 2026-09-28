@@ -34,7 +34,8 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
 
   // Phase: Starter Workflows Selection
   const [selectedWorkflows, setSelectedWorkflows] = useState<string[]>(() => getRecommendedStarterWorkflowIds());
-  const [purgeTestStubs, setPurgeTestStubs] = useState<boolean>(true);
+  // Deleting workflow files is opt-in: auto-recorded workflows are the user's own data
+  const [purgeTestStubs, setPurgeTestStubs] = useState<boolean>(false);
   const [existingWorkflowCount, setExistingWorkflowCount] = useState<number>(0);
 
   const installer = InstallerService.getInstance();
@@ -474,7 +475,8 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            // Wraps to fewer columns instead of overflowing narrow windows
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
             gap: '16px'
           }}>
             {/* Box 1: CLI Launcher */}
@@ -488,6 +490,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
               border: '1px solid rgba(255, 255, 255, 0.09)',
               borderRadius: '12px',
               minHeight: '180px',
+              minWidth: 0,
               boxSizing: 'border-box'
             }}>
               <div>
@@ -574,6 +577,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
               border: '1px solid rgba(255, 255, 255, 0.09)',
               borderRadius: '12px',
               minHeight: '180px',
+              minWidth: 0,
               boxSizing: 'border-box'
             }}>
               <div>
@@ -655,6 +659,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
               border: '1px solid rgba(255, 255, 255, 0.09)',
               borderRadius: '12px',
               minHeight: '180px',
+              minWidth: 0,
               boxSizing: 'border-box'
             }}>
               <div>
