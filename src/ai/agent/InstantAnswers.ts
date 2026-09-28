@@ -8,6 +8,8 @@
  * model. Commands target Linux; other platforms go straight to the model.
  */
 
+import { desktopCommands, detectCompositor } from '../../domain/desktop/DesktopCommands';
+
 export interface InstantAnswer {
   id: string;
   /** Shell fallback / description of what runs */
@@ -98,8 +100,29 @@ const LINUX_RULES: InstantRule[] = [
   },
 ];
 
+export interface DesktopInfo {
+  environment?: string;
+  session?: string;
+}
+
+/** Answers that depend on the compositor (window listing, screenshots). */
+function desktopAnswer(text: string, desktop: DesktopInfo | undefined): InstantAnswer | null {
+  const commands = desktopCommands(detectCompositor(desktop?.environment, desktop?.session));
+  if (/^(?:list|show(?:\s+me)?|what\s+are)\s+(?:all\s+)?(?:the\s+|my\s+)?(?:open|active|running)?\s*windows\s*\??$/i.test(text)) {
+    return commands.listWindows
+      ? { id: 'list-windows', command: commands.listWindows, explanation: 'Open windows' }
+      : null;
+  }
+  const shot = text.match(/^(?:take|capture|grab)\s+(?:a\s+)?(region\s+|area\s+|selection\s+|partial\s+)?screenshot(?:\s+of\s+(?:a\s+|the\s+)?(region|area|selection|screen|desktop))?\s*$/i);
+  if (shot) {
+    const region = Boolean(shot[1]) || /region|area|selection/i.test(shot[2] || '');
+    return { id: 'screenshot', command: commands.screenshot(region), explanation: region ? 'Screenshot of a selected region' : 'Screenshot of the screen' };
+  }
+  return null;
+}
+
 /** A deterministic answer for this request, or null when the model should handle it. */
-export function findInstantAnswer(goal: string, os: string): InstantAnswer | null {
+export function findInstantAnswer(goal: string, os: string, desktop?: DesktopInfo): InstantAnswer | null {
   if (os !== 'linux') return null;
   const text = (goal || '').trim().replace(/\s+/g, ' ');
   if (!text || text.length > 80) return null;
@@ -107,5 +130,5 @@ export function findInstantAnswer(goal: string, os: string): InstantAnswer | nul
     const match = text.match(rule.pattern);
     if (match) return { id: rule.id, ...rule.build(match) };
   }
-  return null;
+  return desktopAnswer(text, desktop);
 }

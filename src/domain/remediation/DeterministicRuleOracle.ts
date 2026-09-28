@@ -86,6 +86,7 @@ export class DeterministicRuleOracle {
 
     const currentOs = (context.os || 'mac').toLowerCase();
     const suggestions: RemediationSuggestion[] = [];
+    const priorityOf = new Map<RemediationSuggestion, number>();
 
     for (const rule of this.rules) {
       // Platform isolation check
@@ -104,6 +105,7 @@ export class DeterministicRuleOracle {
           const suggestion = rule.getRemediation(context);
           if (suggestion && suggestion.fixedCommand) {
             suggestions.push(suggestion);
+            priorityOf.set(suggestion, rule.priority);
           }
         }
       } catch (err) {
@@ -111,8 +113,10 @@ export class DeterministicRuleOracle {
       }
     }
 
-    // Sort by priority (lowest number first), then confidence (highest first)
-    return suggestions.sort((a, b) => b.confidence - a.confidence);
+    // Sort by priority (lowest number first), then confidence (highest first), so a specific
+    // rule (e.g. docker socket permission) beats a generic one (any "Permission denied")
+    return suggestions.sort((a, b) =>
+      (priorityOf.get(a)! - priorityOf.get(b)!) || (b.confidence - a.confidence));
   }
 
   // =========================================================================
@@ -1568,6 +1572,129 @@ export class DeterministicRuleOracle {
           confidence: 0.90
         };
       }
+    });
+
+    this.registerLinuxAndRosRules();
+  }
+
+  /** ROS 2 and Linux service rules (Linux only). */
+  private registerLinuxAndRosRules(): void {
+    const rerun = (ctx: RuleContext) => (ctx.command ? ` && ${ctx.command}` : '');
+
+    this.registerRule({
+      id: 'ros_not_sourced',
+      name: 'Source ROS 2 Environment',
+      description: 'ROS 2 tools are only on PATH after sourcing /opt/ros/<distro>/setup.bash',
+      priority: 5,
+      platforms: ['linux'],
+      match: (ctx) => /\b(?:ros2|colcon|rosdep|ament_\w+|rviz2|rqt): command not found/i.test(ctx.output)
+        || /No module named '(?:rclpy|rosidl_\w+|ament_\w+|launch_ros)'/.test(ctx.output),
+      getRemediation: (ctx) => ({
+        ruleId: 'ros_not_sourced',
+        ruleName: 'Source ROS 2 Environment',
+        title: 'Source the ROS 2 environment in this shell',
+        explanation: 'ROS 2 commands and Python modules become available only after sourcing the distro setup script',
+        fixedCommand: `source /opt/ros/$(ls /opt/ros | grep -v rolling | tail -n1)/setup.bash${rerun(ctx)}`,
+        confidence: 0.95
+      })
+    });
+
+    this.registerRule({
+      id: 'ros_package_not_found',
+      name: 'Source ROS 2 Workspace Overlay',
+      description: 'A workspace package is not visible until install/setup.bash is sourced',
+      priority: 10,
+      platforms: ['linux'],
+      match: (ctx) => /Package '([^']+)' not found/.test(ctx.output)
+        || /package '([^']+)' not found, searching: /.test(ctx.output),
+      getRemediation: (ctx) => {
+        const pkg = (ctx.output.match(/[Pp]ackage '([^']+)' not found/) || [])[1] || 'the package';
+        return {
+          ruleId: 'ros_package_not_found',
+          ruleName: 'Source ROS 2 Workspace Overlay',
+          title: `Source the workspace overlay so ${pkg} is found`,
+          explanation: `${pkg} is not on the ROS package path: build the workspace (colcon build) and source install/setup.bash`,
+          fixedCommand: `source install/setup.bash${rerun(ctx)}`,
+          confidence: 0.85
+        };
+      }
+    });
+
+    this.registerRule({
+      id: 'ros_rosdep_not_initialized',
+      name: 'Initialize rosdep',
+      description: 'rosdep needs a one-time init and update',
+      priority: 5,
+      platforms: ['linux'],
+      match: (ctx) => /rosdep installation has not been initialized|rosdep init/i.test(ctx.output)
+        && /ERROR|error/.test(ctx.output),
+      getRemediation: () => ({
+        ruleId: 'ros_rosdep_not_initialized',
+        ruleName: 'Initialize rosdep',
+        title: 'Initialize and update rosdep',
+        explanation: 'rosdep has never been initialized on this machine',
+        fixedCommand: 'sudo rosdep init && rosdep update',
+        confidence: 0.95,
+        requiresElevation: true
+      })
+    });
+
+    this.registerRule({
+      id: 'ros_missing_dependencies',
+      name: 'Install Workspace Dependencies with rosdep',
+      description: 'colcon/CMake cannot find a ROS package that rosdep can install',
+      priority: 15,
+      platforms: ['linux'],
+      match: (ctx) => /Could not find a package configuration file provided by "([^"]+)"/.test(ctx.output)
+        || /Failed to find required .* package: '?([\w_]+)'?/i.test(ctx.output),
+      getRemediation: (ctx) => {
+        const dep = (ctx.output.match(/provided by "([^"]+)"/) || [])[1];
+        return {
+          ruleId: 'ros_missing_dependencies',
+          ruleName: 'Install Workspace Dependencies with rosdep',
+          title: dep ? `Install missing dependency ${dep} with rosdep` : 'Install missing workspace dependencies with rosdep',
+          explanation: 'Run from the workspace root; rosdep resolves package.xml dependencies to system packages',
+          fixedCommand: 'rosdep install --from-paths src --ignore-src -r -y',
+          confidence: 0.85,
+          requiresElevation: true
+        };
+      }
+    });
+
+    this.registerRule({
+      id: 'linux_docker_daemon_not_running',
+      name: 'Start Docker Service',
+      description: 'Start the Docker systemd service when its socket is unreachable',
+      priority: 10,
+      platforms: ['linux'],
+      match: (ctx) => /Cannot connect to the Docker daemon at unix:\/\/.*Is the docker daemon running\?/i.test(ctx.output),
+      getRemediation: (ctx) => ({
+        ruleId: 'linux_docker_daemon_not_running',
+        ruleName: 'Start Docker Service',
+        title: 'Start the Docker service',
+        explanation: 'The docker systemd service is not running',
+        fixedCommand: `sudo systemctl start docker${rerun(ctx)}`,
+        confidence: 0.95,
+        requiresElevation: true
+      })
+    });
+
+    this.registerRule({
+      id: 'linux_docker_socket_permission',
+      name: 'Add User to docker Group',
+      description: 'The user cannot access /var/run/docker.sock',
+      priority: 10,
+      platforms: ['linux'],
+      match: (ctx) => /permission denied while trying to connect to the Docker daemon socket/i.test(ctx.output),
+      getRemediation: () => ({
+        ruleId: 'linux_docker_socket_permission',
+        ruleName: 'Add User to docker Group',
+        title: 'Add your user to the docker group (log out and back in afterwards)',
+        explanation: 'Docker socket access requires membership in the docker group',
+        fixedCommand: 'sudo usermod -aG docker "$USER"',
+        confidence: 0.9,
+        requiresElevation: true
+      })
     });
   }
 }

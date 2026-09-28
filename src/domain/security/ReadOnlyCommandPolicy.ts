@@ -154,6 +154,18 @@ function subcommandVerdict(name: string, args: string[]): boolean | undefined {
     }
     case 'fuser':
       return !hasAnyArg(args, ['-k', '--kill']);
+    case 'hyprctl':
+      return ['clients', 'activewindow', 'activeworkspace', 'workspaces', 'monitors', 'devices', 'version',
+        'getoption', 'layers', 'binds', 'cursorpos', 'systeminfo', 'instances'].includes(lowerPositional[0] || '');
+    case 'swaymsg': {
+      const typeIndex = args.findIndex(a => a === '-t' || a === '--type');
+      return typeIndex >= 0 && (args[typeIndex + 1] || '').startsWith('get_');
+    }
+    case 'wmctrl': {
+      // Listing flags only (-l, -m, -d with -x/-p/-G modifiers); -a/-c/-r/-t/-k act on windows
+      const flags = args.filter(a => a.startsWith('-'));
+      return flags.length > 0 && positional.length === 0 && flags.every(f => /^-[lmdxpG]+$/.test(f));
+    }
     case 'pmset':
       return args[0] === '-g';
     case 'networksetup':

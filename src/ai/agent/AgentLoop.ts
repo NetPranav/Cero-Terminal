@@ -78,6 +78,7 @@ import { ShadowPtySimulator } from './ShadowPtySimulator';
 import { ShellAstParser } from '../../domain/security/ShellAstParser';
 import { isReadOnlyCommandLine } from '../../domain/security/ReadOnlyCommandPolicy';
 import { findInstantAnswer, InstantAnswer } from './InstantAnswers';
+import { SystemKnowledgeScanner } from '../../domain/knowledge/SystemKnowledgeScanner';
 import { ErrorWatchService } from '../../domain/watch/ErrorWatchService';
 import { AutoRemediationPolicy, AutoRemediationMode } from '../../domain/remediation/AutoRemediationPolicy';
 import { WorkflowRecorder } from '../../workflows/engine/WorkflowRecorder';
@@ -1646,7 +1647,11 @@ export class AgentLoop {
     // Instant deterministic answers for the most common inspection questions. They run before
     // any provider probe, so "check battery" never waits for a model. A failure (e.g. `ss` not
     // installed) falls through to the model.
-    const instant = findInstantAnswer(cleaned || goal, context.os);
+    const profileOs = SystemKnowledgeScanner.getInstance().getProfile()?.os;
+    const instant = findInstantAnswer(cleaned || goal, context.os, {
+      environment: profileOs?.desktopEnvironment,
+      session: profileOs?.sessionType
+    });
     if (instant) {
       const instantResult = await this.runInstantAnswer(instant, context);
       if (instantResult) {

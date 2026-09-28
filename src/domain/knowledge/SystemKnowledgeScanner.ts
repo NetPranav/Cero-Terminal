@@ -13,6 +13,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { detectCompositor } from '../desktop/DesktopCommands';
 
 export interface InstalledAppInfo {
   name: string;
@@ -350,6 +351,19 @@ export function parseScanOutput(raw: string, now = Date.now()): SystemProfile {
   };
 }
 
+const WINDOW_CONTROL: Record<string, string> = {
+  hyprland: 'Window control: hyprctl (dispatch focuswindow/movetoworkspace/killactive); screenshots: grim + slurp',
+  sway: 'Window control: swaymsg; screenshots: grim + slurp',
+  x11: 'Window control: wmctrl / xdotool; screenshots: scrot',
+  gnome: 'Window control: no generic CLI on GNOME Wayland; screenshots: gnome-screenshot',
+  kde: 'Window control: no generic CLI on KDE Wayland (use qdbus/kdotool if installed); screenshots: spectacle',
+};
+
+function windowControlHint(p: SystemProfile): string | undefined {
+  const hint = WINDOW_CONTROL[detectCompositor(p.os.desktopEnvironment, p.os.sessionType)];
+  return hint ? `- ${hint}` : undefined;
+}
+
 export class SystemKnowledgeScanner {
   private static instance: SystemKnowledgeScanner;
   private cachedProfile: SystemProfile | null = null;
@@ -448,6 +462,7 @@ export class SystemKnowledgeScanner {
       p.developer.tools && p.developer.tools.length ? `- Tools on PATH: ${p.developer.tools.join(', ')}` : undefined,
       p.ros ? `- ROS 2: ${p.ros.distros.join(', ') || 'none installed'}${p.ros.activeDistro ? ` (active: ${p.ros.activeDistro})` : ''}` : undefined,
       `- Shell: ${p.shells.defaultShell}`,
+      windowControlHint(p),
       apps ? `- Installed apps (${p.apps.totalCount}): ${apps}${p.apps.totalCount > 15 ? ', ...' : ''}` : undefined
     ];
     return lines.filter(Boolean).join('\n');

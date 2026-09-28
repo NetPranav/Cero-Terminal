@@ -28,6 +28,9 @@ describe('ReadOnlyCommandPolicy', () => {
     'du -sh ~/Downloads 2>/dev/null | sort -h',
     'echo "$(uname -r)"',
     'fuser 3000/tcp',
+    'hyprctl clients -j',
+    'swaymsg -t get_tree',
+    'wmctrl -lx',
     'found=0; for b in /sys/class/power_supply/BAT*; do [ -d "$b" ] || continue; found=1; done',
   ];
 
@@ -63,6 +66,9 @@ describe('ReadOnlyCommandPolicy', () => {
     'docker run alpine',
     'npm run deploy',
     'fuser -k 3000/tcp',
+    'hyprctl dispatch killactive',
+    'swaymsg kill',
+    'wmctrl -c :ACTIVE:',
     'pacman -S htop',
     // loops and substitutions hide the real command
     'for f in *.log; do rm $f; done',

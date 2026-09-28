@@ -112,6 +112,7 @@ describe('SystemKnowledgeScanner', () => {
     expect(summary).toContain('Package manager: paru');
     expect(summary).toContain('ROS 2: jazzy');
     expect(summary).toContain('Zen Browser (zen-browser)');
+    expect(summary).toContain('Window control: hyprctl');
     // Free space and IP change between scans; the model should query them live
     expect(summary).not.toContain('192.168.1.42');
     expect(summary).not.toMatch(/GB free/);

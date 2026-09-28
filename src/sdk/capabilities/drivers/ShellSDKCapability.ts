@@ -7,6 +7,8 @@
 import { BaseCapabilityDriver, CapabilityExecutionResult, ExecutionContext, Platform } from '../CapabilitySDK';
 import { invoke } from '@tauri-apps/api/core';
 import { isLinux, isWindows } from '../../../shared/platform';
+import { chooseRosDistro, withRosEnvironment } from '../../../domain/ros/RosEnvironment';
+import { SystemKnowledgeScanner } from '../../../domain/knowledge/SystemKnowledgeScanner';
 
 export interface ShellDriverInput {
   /** A complete shell command line, for example `git status --short`. */
@@ -59,7 +61,9 @@ export class ShellSDKCapability extends BaseCapabilityDriver<ShellDriverInput, a
     try {
       const commandLine = this.toCommandLine(input);
       const shellBinary = isLinux() ? '/bin/bash' : (isWindows() ? 'powershell.exe' : '/bin/zsh');
-      const shellArgs = isWindows() ? ['-Command', commandLine] : ['-c', commandLine];
+      // ros2/colcon/rosdep only exist after sourcing ROS; non-interactive bash never reads ~/.bashrc
+      const runnable = isLinux() ? withRosEnvironment(commandLine, this.rosDistro()) : commandLine;
+      const shellArgs = isWindows() ? ['-Command', runnable] : ['-c', runnable];
 
       const output = await invoke<{ stdout: string; stderr: string; code: number; pid?: number; timed_out?: boolean }>('execute_command', {
         command: shellBinary,
@@ -105,6 +109,11 @@ export class ShellSDKCapability extends BaseCapabilityDriver<ShellDriverInput, a
       }
     }
     return cancelled;
+  }
+
+  private rosDistro(): string | undefined {
+    const ros = SystemKnowledgeScanner.getInstance().getProfile()?.ros;
+    return ros ? chooseRosDistro(ros.distros, ros.activeDistro) : undefined;
   }
 
   private toCommandLine(input: ShellDriverInput): string {
