@@ -166,7 +166,8 @@ export class ExecutionEngine {
         }
         const isSafeAction = risk.level === 'SAFE';
         const isAlwaysAllow = permState === 'AlwaysAllow';
-        const needsAsk = (!isSafeAction && permState === 'AskEveryTime') || policyResult === 'Ask' || (!isAlwaysAllow && (categoryPolicyResult === 'Ask' || risk.requiresConsent)) || risk.level === 'CRITICAL' || risk.level === 'ADMIN' || risk.requiresPassword || capabilityId === 'filesystem.delete' || capabilityId === 'filesystem.trash';
+        const capturesPrivateData = (risk.categories || []).includes('privacy-capture');
+        const needsAsk = (!isSafeAction && permState === 'AskEveryTime') || policyResult === 'Ask' || (!isAlwaysAllow && (categoryPolicyResult === 'Ask' || risk.requiresConsent)) || risk.level === 'CRITICAL' || risk.level === 'ADMIN' || risk.requiresPassword || capturesPrivateData || capabilityId === 'filesystem.delete' || capabilityId === 'filesystem.trash';
         if (needsAsk) {
           const requiresAuth = risk.requiresPassword ?? (risk.level === 'CRITICAL' || risk.level === 'ADMIN');
           const requiresConsent = risk.requiresConsent ?? (risk.level === 'CRITICAL' || risk.level === 'ADMIN');

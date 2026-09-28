@@ -4,6 +4,7 @@ import { isReadOnlyCommandLine } from './ReadOnlyCommandPolicy';
 export type RiskLevel = 'SAFE' | 'SENSITIVE' | 'ADMIN' | 'CRITICAL' | 'UNKNOWN';
 
 export type PolicyCategory =
+  | 'privacy-capture'
   | 'filesystem-read'
   | 'filesystem-write'
   | 'filesystem-delete'
@@ -29,6 +30,7 @@ export interface CategoryPolicy {
 }
 
 export const DEFAULT_CATEGORY_POLICIES: Record<PolicyCategory, CategoryPolicy> = {
+  'privacy-capture': { category: 'privacy-capture', defaultPosture: 'ask', consentRequired: true },
   'filesystem-read': { category: 'filesystem-read', defaultPosture: 'allow', consentRequired: false },
   'filesystem-write': { category: 'filesystem-write', defaultPosture: 'ask', consentRequired: true },
   'filesystem-delete': { category: 'filesystem-delete', defaultPosture: 'ask', consentRequired: true, requiresPassword: true },
@@ -75,6 +77,18 @@ export class SecurityEngine implements ISecurityEngine {
         requiresPassword: false,
         requiresConsent: true,
         categories: ['shell-generic']
+      };
+    }
+
+    // Screen, camera and microphone capture: always asked, whatever the permission profile
+    if (/(?:^|[\s;&|(])(?:screencapture|grim|scrot|spectacle|gnome-screenshot|imagesnap|flameshot)\b|\bimport\s+-window\b|\bffmpeg\b.*\b(?:avfoundation|x11grab|kmsgrab|v4l2|pulse|alsa)\b|\b(?:arecord|rec|parecord)\s/.test(lowerCmd)) {
+      return {
+        score: 70,
+        level: 'SENSITIVE',
+        explanation: 'Captures your screen, camera or microphone. Needs your approval every time.',
+        requiresPassword: false,
+        requiresConsent: true,
+        categories: ['privacy-capture']
       };
     }
 

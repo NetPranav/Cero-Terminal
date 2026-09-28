@@ -139,9 +139,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
     resolve: (approved: boolean) => void;
     requestId?: string;
   } | null>(null);
+  // When the dialog appeared and when the last stray keystroke hit it. A dialog that opens while
+  // the user is typing must not be approved by the Enter that finishes their command.
+  const consentShownAtRef = useRef(0);
+  const consentStrayKeyAtRef = useRef(0);
   // Keyboard focus goes back to the terminal when the confirmation dialog closes
   useEffect(() => {
     if (securityModalPlan) {
+      if (!consentOpenRef.current) consentShownAtRef.current = Date.now();
       consentOpenRef.current = true;
     } else if (consentOpenRef.current) {
       consentOpenRef.current = false;
@@ -757,7 +762,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
               ? renderer.settleForData(event)
               : renderer.render(event);
             if (text) writeTerm(text);
-            if (dataOutput && (!text || !text.includes(dataOutput.trim()))) {
+            // Skip the data only when the message already shows it; compare without color codes
+            // (a short answer such as "2" otherwise matches an escape sequence and disappears)
+            const plain = (v: string) => v.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').trim();
+            if (dataOutput && (!text || !plain(text).includes(plain(dataOutput)))) {
               writeTerm(dataOutput);
             }
           });
@@ -1059,7 +1067,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                 // One request at a time: the agent keeps a single transcript and event listener
                 if (aiBusyRef.current) {
                   aiQueueRef.current.push(aiGoal);
-                  writeTerm(`${activeRenderer?.finish() ?? ''}  ${S.muted}Queued: ${aiGoal}${S.reset}\r\n`);
+                  const settled = activeRenderer?.finish() ?? '';
+                  const newline = !settled && term.buffer.active.cursorX > 0 ? '\r\n' : '';
+                  writeTerm(`${settled}${newline}  ${S.muted}Queued: ${aiGoal}${S.reset}\r\n`);
                   return;
                 }
                 runAiGoal(aiGoal);
@@ -1572,13 +1582,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
           tabIndex={0}
           ref={(el) => { if (el && !securityModalPlan.plan.requiresPassword) el.focus(); }}
           onKeyDown={(e) => {
-            if (e.key === 'Escape' || e.key === 'n' || e.key === 'N') {
+            const now = Date.now();
+            if (e.key === 'Escape') {
               securityModalPlan.resolve(false);
               setSecurityModalPlan(null);
               setAuthPassword('');
-            } else if ((e.key === 'Enter' || e.key === 'y' || e.key === 'Y') && !securityModalPlan.plan.requiresPassword) {
+            } else if (e.key === 'Enter' && !securityModalPlan.plan.requiresPassword) {
+              // Armed only after the dialog was visible for a moment with no typing going on
+              const armed = now - consentShownAtRef.current > 800 && now - consentStrayKeyAtRef.current > 800 && !e.repeat;
+              if (!armed) return;
               securityModalPlan.resolve(true);
               setSecurityModalPlan(null);
+            } else if (e.key.length === 1) {
+              consentStrayKeyAtRef.current = now;
             }
           }}
           style={{
@@ -1664,7 +1680,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                   </span>
                 </div>
               )}
-              {securityModalPlan.plan.parameters?.explanation && securityModalPlan.plan.explanation && (
+              {securityModalPlan.plan.parameters?.explanation && securityModalPlan.plan.explanation
+                && securityModalPlan.plan.parameters.explanation !== securityModalPlan.plan.explanation && (
                 <div style={{ marginTop: '6px', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.42)', lineHeight: 1.45, fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
                   {securityModalPlan.plan.explanation}
                 </div>
