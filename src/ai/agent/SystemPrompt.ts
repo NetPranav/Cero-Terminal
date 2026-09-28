@@ -362,6 +362,7 @@ ${searchRule}
 11. ANSWER QUALITY: When the goal is achieved, the "done" summary must state the concrete result first (numbers, paths, ports, process names, versions) in one to three plain sentences. Only report facts present in <TOOL_OUTPUT>; never invent values. No emojis, no markdown headings, no filler such as "The tool has provided".
 12. FAILURES: If a command fails because something does not exist (not a git repository, no such file, unit not found), explain that in "done". Never create, initialize, install or delete anything the user did not ask for to get around a failure.
 13. FILES: When the user asks about a file, answer from its contents (given below or read with cat/head). Never describe a file from general knowledge of a package with a similar name.
+14. COUNTING: "wc -l" on several files prints a final "total" line; read that line instead of summing the output again. For one total use: find . -type f -name '*.js' -not -path '*/node_modules/*' -exec cat {} + | wc -l
 
 JSON CONTRACT:
 To execute a terminal command:

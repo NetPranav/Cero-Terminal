@@ -30,6 +30,8 @@ describe('ReadOnlyCommandPolicy', () => {
     'fuser 3000/tcp',
     'ifconfig',
     'ifconfig en0',
+    "find . -type f -name '*.js' -exec wc -l {} +",
+    "find src -name '*.ts' -exec grep -l TODO {} +",
     'ipconfig getifaddr en0',
     'pmset -g batt',
     'vm_stat',
@@ -40,6 +42,9 @@ describe('ReadOnlyCommandPolicy', () => {
   ];
 
   const mutating = [
+    "find . -name '*.log' -exec rm {} +",
+    "find . -exec sh -c 'rm $0' {} +",
+    'find . -name x -execdir chmod 777 {} +',
     'ifconfig en0 down',
     'ifconfig en0 inet 10.0.0.2',
     'ipconfig set en0 DHCP',

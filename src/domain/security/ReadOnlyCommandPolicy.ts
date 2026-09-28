@@ -35,6 +35,10 @@ const ALWAYS_READ_ONLY = new Set<string>([
   'nvidia-smi', 'glxinfo', 'vulkaninfo', 'lsb_release', 'fastfetch', 'neofetch',
 ]);
 
+/** Commands that only read the files they are given; safe to run from `find -exec`. */
+const FILE_READERS = new Set(['cat', 'head', 'tail', 'wc', 'grep', 'egrep', 'fgrep', 'rg', 'stat', 'file', 'ls', 'du',
+  'md5sum', 'sha1sum', 'sha256sum', 'sha512sum', 'cksum', 'basename', 'dirname', 'realpath', 'readlink', 'strings', 'nl']);
+
 /** Shell keywords the lightweight parser reports as command names. */
 const PASS_THROUGH_KEYWORDS = new Set(['do', 'then', 'else', 'elif', 'if', 'while', 'until', '!', 'time']);
 const NO_OP_KEYWORDS = new Set(['done', 'fi', 'esac', 'for', 'in', '{', '}']);
@@ -70,8 +74,18 @@ function subcommandVerdict(name: string, args: string[]): boolean | undefined {
       if (sub === 'stash') return positional[1] === 'list' || positional[1] === 'show';
       return false;
     }
-    case 'find':
-      return !hasAnyArg(args, ['-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fprint0', '-fprintf', '-fls']);
+    case 'find': {
+      if (hasAnyArg(args, ['-delete', '-ok', '-okdir', '-fprint', '-fprint0', '-fprintf', '-fls'])) return false;
+      // -exec / -execdir are read-only when what they run only reads files (wc, cat, grep, ...)
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] !== '-exec' && args[i] !== '-execdir') continue;
+        if (!FILE_READERS.has(args[i + 1] || '')) return false;
+        let j = i + 2;
+        while (j < args.length && !['+', ';', '\\;'].includes(args[j])) j++;
+        i = j;
+      }
+      return true;
+    }
     case 'sort':
       return !args.some(a => a === '-o' || a.startsWith('-o') && !a.startsWith('--') || a.startsWith('--output'));
     case 'sed':
