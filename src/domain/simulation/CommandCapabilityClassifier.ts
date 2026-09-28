@@ -9,6 +9,7 @@
  */
 
 import { ShellAstParser } from '../security/ShellAstParser';
+import { isReadOnlyCommandLine } from '../security/ReadOnlyCommandPolicy';
 
 export type SimulationStrategy = 'full_shadow' | 'real_dry_run' | 'ast_only';
 
@@ -20,26 +21,6 @@ export interface CommandCapability {
 }
 
 export class CommandCapabilityClassifier {
-  /**
-   * Provably read-only utilities with zero mutating system side effects when run
-   * without file output redirections.
-   */
-  private static readonly READ_ONLY_BINARIES = new Set<string>([
-    'ls', 'dir', 'vdir',
-    'cat', 'head', 'tail', 'more', 'less',
-    'grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack',
-    'find', 'mdfind', 'locate', 'which', 'whereis', 'type', 'whatis', 'apropos',
-    'ps', 'top', 'htop', 'pgrep', 'uptime', 'vmstat', 'iostat', 'free', 'lscpu', 'lshw', 'lspci', 'lsusb',
-    'df', 'du', 'stat', 'file', 'pwd', 'basename', 'dirname', 'realpath',
-    'uname', 'whoami', 'id', 'groups', 'env', 'printenv',
-    'lsof', 'netstat', 'ss', 'ip', 'ifconfig', 'iwconfig', 'dig', 'nslookup', 'host', 'traceroute', 'ping',
-    'echo', 'printf',
-    'fuser',
-    'man', 'tldr', 'help',
-    'sw_vers', 'networksetup', 'system_profiler',
-    'wc', 'sort', 'uniq', 'cut', 'tr', 'diff', 'colordiff', 'cmp', 'jq', 'yq'
-  ]);
-
   /**
    * Generates a safe dry-run or verification equivalent if the command/tool supports one.
    */
@@ -150,8 +131,9 @@ export class CommandCapabilityClassifier {
     }
 
     // If any command has file write redirection (> or >>), it mutates the disk!
-    const hasWriteRedirection = simpleCmds.some(c => 
-      c.redirects && c.redirects.some(r => r.op === '>' || r.op === '>>' || r.op === '&>' || r.op === '2>')
+    const hasWriteRedirection = simpleCmds.some(c =>
+      c.redirects && c.redirects.some(r =>
+        (r.op === '>' || r.op === '>>' || r.op === '&>' || r.op === '2>') && r.target !== '/dev/null')
     );
     if (hasWriteRedirection) {
       return {
@@ -182,36 +164,9 @@ export class CommandCapabilityClassifier {
       };
     }
 
-    // Check if command is git read-only vs git mutating
-    for (const cmd of simpleCmds) {
-      if (cmd.name === 'git') {
-        const sub = cmd.args[0] || '';
-        const gitReadOnly = ['status', 'log', 'diff', 'branch', 'show', 'tag', 'remote', 'describe', 'rev-parse', 'ls-files'];
-        if (!gitReadOnly.includes(sub)) {
-          return {
-            strategy: 'ast_only',
-            reason: `Git mutating operation (${sub}) without dry-run support, bypassing shadow execution`,
-            isReadOnly: false
-          };
-        }
-      }
-    }
-
-    // Check if ALL commands in pipeline / compound statement are provably read-only
-    const allReadOnly = simpleCmds.every(cmd => {
-      const bin = cmd.name;
-      if (bin === 'git') {
-        const sub = cmd.args[0] || '';
-        return ['status', 'log', 'diff', 'branch', 'show', 'tag', 'remote', 'describe', 'rev-parse', 'ls-files'].includes(sub);
-      }
-      if (bin === 'sed') {
-        // sed without -i is a read-only stream filter
-        return !cmd.args.some(a => a === '-i' || a.startsWith('-i'));
-      }
-      return this.READ_ONLY_BINARIES.has(bin);
-    });
-
-    if (allReadOnly) {
+    // Read-only only when every command in the line is a read-only form (ReadOnlyCommandPolicy)
+    const readOnly = isReadOnlyCommandLine(trimmed);
+    if (readOnly.readOnly) {
       return {
         strategy: 'full_shadow',
         reason: 'All commands in pipeline are provably read-only diagnostics',

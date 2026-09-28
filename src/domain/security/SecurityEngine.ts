@@ -1,4 +1,5 @@
 import { ShellAstParser } from './ShellAstParser';
+import { isReadOnlyCommandLine } from './ReadOnlyCommandPolicy';
 
 export type RiskLevel = 'SAFE' | 'SENSITIVE' | 'ADMIN' | 'CRITICAL' | 'UNKNOWN';
 
@@ -118,7 +119,31 @@ export class SecurityEngine implements ISecurityEngine {
       };
     }
 
-    // 3. Mid-Level System Commands (Process termination, Network/Hardware toggles, Daemons)
+    // 3. Safe read-only commands (checked before the substring rules below, so read-only forms
+    // such as `systemctl is-active docker` or `ps aux | grep kill` do not demand a password). Every command in the line (pipelines, && / ; lists, loop
+    // bodies, $(...) substitutions) must be a read-only form and nothing may be written to a
+    // file; see ReadOnlyCommandPolicy. Judging only the first word let `ls && <anything>`,
+    // `echo x >> ~/.bashrc` and `ip link set wlan0 down` run without consent.
+    const parts = cleanCmd.split(/\s+/);
+    const firstWord = parts[0] || '';
+    const secondWord = parts[1] || '';
+    const isSingleCommand = !/[;&|<>`$()]/.test(cleanCmd);
+    const isDevCheck = isSingleCommand
+      && ['npm', 'pnpm', 'yarn', 'bun', 'cargo', 'go', 'pytest', 'vitest'].includes(firstWord)
+      && ['test', 'check', 'lint', 'audit', 'version', '--version', '-v'].includes(secondWord);
+
+    if (isReadOnlyCommandLine(fullCmd).readOnly || isDevCheck) {
+      return {
+        score: 5,
+        level: 'SAFE',
+        explanation: 'Safe read-only or developer test command.',
+        requiresPassword: false,
+        requiresConsent: false,
+        categories: ['filesystem-read', 'process-inspect']
+      };
+    }
+
+    // 4. Mid-Level System Commands (Process termination, Network/Hardware toggles, Daemons)
     if (cleanCmd.startsWith('kill') || cleanCmd.includes(' kill ') || cleanCmd.startsWith('pkill') || cleanCmd.includes('pkill ') || cleanCmd.startsWith('killall') || cleanCmd.includes('ifconfig') || cleanCmd.includes('systemctl') || cleanCmd.includes('service ') ||
         lowerCmd.startsWith('kill') || lowerCmd.includes(' kill ') || lowerCmd.startsWith('pkill') || lowerCmd.includes('pkill ') || lowerCmd.startsWith('killall') || lowerCmd.includes('ifconfig') || lowerCmd.includes('systemctl') || lowerCmd.includes('service ')) {
       const isKill = cleanCmd.startsWith('kill') || cleanCmd.includes('kill') || cleanCmd.startsWith('pkill') ||
@@ -133,7 +158,7 @@ export class SecurityEngine implements ISecurityEngine {
       };
     }
 
-    // 4. Session & Screen Lock Commands
+    // 5. Session & Screen Lock Commands
     if (cleanCmd.includes('displaysleepnow') || cleanCmd.includes('lockworkstation') || cleanCmd.includes('lock-session') ||
         lowerCmd.includes('displaysleepnow') || lowerCmd.includes('lockworkstation') || lowerCmd.includes('lock-session')) {
       return {
@@ -143,42 +168,6 @@ export class SecurityEngine implements ISecurityEngine {
         requiresPassword: false,
         requiresConsent: true,
         categories: ['system-settings']
-      };
-    }
-
-    // 5. Safe Read-Only Commands
-    const safeCommands = [
-      'ls', 'pwd', 'echo', 'cat', 'whoami', 'date', 'time', 'cal', 'env', 'clear',
-      'uptime', 'uname', 'which', 'head', 'tail', 'grep', 'system_profiler', 'ps',
-      'osascript', 'df', 'du', 'top', 'htop', 'id', 'hostname', 'groups', 'printenv',
-      'mdfind', 'lsof', 'sw_vers', 'file', 'wc', 'sort', 'uniq', 'awk', 'sed', 'cut', 'tr',
-      'free', 'ip', 'ss', 'ping', 'lscpu', 'acpi', 'upower', 'nmcli', 'lsblk',
-      'timedatectl', 'resolvectl', 'sensors', 'hostnamectl', 'inxi', 'lsusb', 'lspci', 'arch',
-      'lsmod', 'getconf', 'iw', 'who', 'last', 'mount', 'swapon', 'dmesg', 'pstree', 'pgrep', 'pidof', 'strings', 'ldd', 'getpcaps'
-    ];
-    const parts = cleanCmd.split(/\s+/);
-    const firstWord = parts[0] || '';
-    const secondWord = parts[1] || '';
-
-    const isSafeFind = firstWord === 'find' && !cleanCmd.includes('-delete') && !cleanCmd.includes('-exec') && !cleanCmd.includes(' rm ');
-    const isSafePmset = firstWord === 'pmset' && secondWord === '-g';
-    const isSafeNetworksetup = firstWord === 'networksetup' && (secondWord?.startsWith('-list') || secondWord?.startsWith('-get'));
-
-    if (
-      safeCommands.includes(firstWord) ||
-      isSafeFind ||
-      isSafePmset ||
-      isSafeNetworksetup ||
-      (firstWord === 'git' && ['status', 'log', 'diff', 'show', 'branch', 'remote'].includes(secondWord)) ||
-      (['npm', 'pnpm', 'yarn', 'bun', 'cargo', 'go', 'pytest', 'vitest'].includes(firstWord) && ['test', 'run', 'check', 'lint', 'audit', 'version', '--version', '-v'].includes(secondWord || ''))
-    ) {
-      return {
-        score: 5,
-        level: 'SAFE',
-        explanation: 'Safe read-only or developer test command.',
-        requiresPassword: false,
-        requiresConsent: false,
-        categories: ['filesystem-read', 'process-inspect']
       };
     }
 

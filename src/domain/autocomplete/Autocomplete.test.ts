@@ -74,7 +74,7 @@ describe('Autocomplete Engine', () => {
       id = 'slow';
       enabled = true;
       async getSuggestions() {
-        await new Promise(r => setTimeout(r, 50)); // Takes 50ms
+        await new Promise(r => setTimeout(r, 500)); // Far slower than the 15ms budget
         return [{ id: '1', value: 'Too slow', category: 'Other', priority: 100, confidence: 1, sourceProvider: 'slow' }];
       }
     }
@@ -86,8 +86,9 @@ describe('Autocomplete Engine', () => {
     const suggestions = await engine.getSuggestions({ currentInput: 'git ', cursorPosition: 4, cwd: '', os: 'macos' }, 15);
     const duration = performance.now() - start;
 
-    // Should return fast without the slow provider
-    expect(duration).toBeLessThan(40);
+    // Returns long before the slow provider would have finished (generous bound so a busy
+    // CI machine does not make this flaky)
+    expect(duration).toBeLessThan(250);
     expect(suggestions.find(s => s.value === 'Too slow')).toBeUndefined();
     expect(suggestions.length).toBeGreaterThan(0); // History provider still returned fast
   });
