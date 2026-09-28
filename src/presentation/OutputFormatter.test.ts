@@ -221,3 +221,10 @@ describe('Long answers wrap under the text', () => {
   });
 });
 
+describe('Battery wording', () => {
+  it('says "until full" while charging and keeps AC in capitals', () => {
+    const out = plain(formatDataOutput({ percentage: 79, status: 'charging', isCharging: true, powerSource: 'AC Power', timeRemaining: '1:52' }));
+    expect(out).toContain('charging · 1:52 until full · on AC power');
+  });
+});
+

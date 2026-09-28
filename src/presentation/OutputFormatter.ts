@@ -334,8 +334,9 @@ function formatBatteryStatus(data: any): string {
   const status = data.status || (data.isCharging ? 'charging' : 'discharging');
   const facts = [
     String(status).toLowerCase(),
-    data.timeRemaining ? `${data.timeRemaining} remaining` : '',
-    data.powerSource ? `on ${String(data.powerSource).replace(/ Power$/, '').toLowerCase()} power` : '',
+    // While charging, pmset's estimate is the time until full
+    data.timeRemaining ? `${data.timeRemaining} ${data.isCharging ? 'until full' : 'remaining'}` : '',
+    data.powerSource ? `on ${/^ac\b/i.test(String(data.powerSource)) ? 'AC' : String(data.powerSource).replace(/ Power$/, '').toLowerCase()} power` : '',
   ].filter(Boolean).join(` ${S.faint}·${S.reset} ${S.soft}`);
   return `\r\n  ${S.muted}${'Battery'.padEnd(10)}${S.reset}${S.bold}${S.text}${pct}%${S.reset}  ${bar(pct, 10, pct <= 10 ? S.err : pct <= 20 ? S.warn : S.soft)}  ${S.soft}${facts}${S.reset}\r\n`;
 }
