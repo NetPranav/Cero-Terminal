@@ -76,7 +76,7 @@ import { DemonstrationLearningEngine } from '../../domain/learning/Demonstration
 import { ErrorDiagnosticsEngine } from './ErrorDiagnosticsEngine';
 import { ShadowPtySimulator } from './ShadowPtySimulator';
 import { ShellAstParser } from '../../domain/security/ShellAstParser';
-import { isReadOnlyCommandLine } from '../../domain/security/ReadOnlyCommandPolicy';
+import { isReadOnlyCommandLine, isClearlyMutating } from '../../domain/security/ReadOnlyCommandPolicy';
 import { findInstantAnswer, InstantAnswer } from './InstantAnswers';
 import * as fs from 'fs';
 import { SecretRedactor } from '../../domain/security/SecretRedactor';
@@ -798,6 +798,19 @@ export function requiresExecutionPlan(goal: string): boolean {
  * second model call only to paraphrase it costs seconds and can misquote the numbers.
  * Deliberately conservative: any follow-up verb or multi-step phrasing keeps the model in the loop.
  */
+/**
+ * True for requests that ask about the system rather than ask to change it
+ * ("what changed in the last commit", "which process uses port 3000").
+ */
+export function isInspectionQuestion(goal: string): boolean {
+  const text = normalizeGoalText(goal).trim().toLowerCase();
+  // "how do I ..." asks for a procedure the user may want carried out
+  if (/^how\s+(?:do|can|should|would)\s+(?:i|we|you)\b|^how\s+to\b/.test(text)) return false;
+  if (!/^(?:what|which|who|where|when|why|how|is|are|does|do|did|show|list|tell|check|find|count|display|print|see|view)\b/.test(text)) return false;
+  // "... and restart it", "... then delete them" add an action to the question
+  return !/\b(?:and|then)\s+(?:then\s+)?(?:install|uninstall|create|delete|remove|kill|fix|set|change|update|upgrade|make|init|initialize|start|stop|restart|enable|disable|add|move|rename|clean|clear|free|write|edit|commit|push|pull|reset|format|mount|unmount|open|launch|close|turn|switch|connect|disconnect|download|deploy|build|run|apply)\b/.test(text);
+}
+
 export function isSingleShotInspection(goal: string, command: string): boolean {
   const normalized = normalizeGoalText(goal).trim().toLowerCase();
   if (!normalized || requiresExecutionPlan(normalized)) return false;
@@ -2638,6 +2651,19 @@ export class AgentLoop {
             }
           }
 
+          // A question never turns into a change: after a failed read-only attempt, a follow-up
+          // that modifies the system (git init, installs, rm) is refused and the failure reported
+          const priorFailure = [...steps].reverse().find(st => !st.result.success
+            || (typeof st.result.data?.code === 'number' && st.result.data.code !== 0));
+          if (priorFailure && toolId === 'shell.execute' && typeof params?.command === 'string'
+            && isInspectionQuestion(goal) && isClearlyMutating(params.command)) {
+            const why = String(priorFailure.result.error || priorFailure.result.data?.stderr || 'it failed').trim().split('\n')[0];
+            const tried = typeof priorFailure.params?.command === 'string' ? priorFailure.params.command : priorFailure.tool;
+            const summary = `Could not answer: \`${tried}\` failed (${why}). Sentinel did not run \`${params.command}\` because it would change your system just to answer a question.`;
+            this.emit({ type: 'error', message: summary });
+            return { success: false, summary, steps, cdPath };
+          }
+
           this.emit({ type: 'tool_start', message: this.getToolDisplayName(toolId, params) });
 
           // Execute the tool
@@ -2699,10 +2725,21 @@ export class AgentLoop {
               content: `${observation}\nWhat's the next step? If the goal is achieved, respond with {"action": "done", "summary": "..."}. In your summary, explicitly state the direct answer, specific ports, numbers, paths, or findings so the user sees the answer immediately.`
             });
           } else {
+            const failedCmd = (params && typeof params.command === 'string') ? params.command : toolId;
+
+            // The user said no: stop here. Asking the model to "recover" from a refusal only
+            // produces a different way of doing what the user just declined.
+            if (result.errorCode === 'USER_CANCELLED') {
+              const summary = `Not run: you declined \`${failedCmd}\`. Nothing was changed.`;
+              this.emit({ type: 'tool_done', message: `✗ ${summary}` });
+              return { success: false, summary, steps, cdPath };
+            }
+
+            // A question never turns into a change: once a read-only attempt has failed, a
+            // follow-up that would modify the system (git init, installs, rm) is not run.
             failureRetries++;
             const errorDetails = result.error || result.data?.stderr || (result.data?.stdout && result.data.stdout.includes('Error') ? result.data.stdout : 'Command returned non-zero exit code');
 
-            const failedCmd = (params && typeof params.command === 'string') ? params.command : toolId;
             const exitCode = (result.data && typeof result.data.code === 'number') ? result.data.code : 1;
             SentinelSerlCoordinator.getInstance().onCommandExecutionFailure(
               goal,

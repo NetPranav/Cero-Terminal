@@ -1102,3 +1102,51 @@ describe('Explaining and exporting what happened', () => {
     expect(text).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz0123456789');
   });
 });
+
+describe('Declined commands and read-only questions', () => {
+  const makeLoop = (steps: Array<{ command: string; explanation: string }>, execute: any) => {
+    const generate = vi.fn();
+    for (const step of steps) {
+      generate.mockResolvedValueOnce({ content: JSON.stringify({ action: 'execute', ...step }) });
+    }
+    generate.mockResolvedValue({ content: JSON.stringify({ action: 'done', summary: 'model summary' }) });
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+    return { loop, generate };
+  };
+
+  it('stops when the user declines a command and does not ask the model to recover', async () => {
+    const execute = vi.fn().mockResolvedValue({ success: false, error: 'Declined in the confirmation dialog.', errorCode: 'USER_CANCELLED' });
+    const { loop, generate } = makeLoop([{ command: 'rm -rf build', explanation: 'Remove the build folder' }], execute);
+    const result = await loop.run('remove the build folder', { os: 'linux', cwd: '/home/u/app' });
+    expect(result.success).toBe(false);
+    expect(result.summary).toContain('you declined `rm -rf build`');
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not run a modifying command after a question failed', async () => {
+    const execute = vi.fn().mockResolvedValue({ success: false, error: 'fatal: not a git repository (or any of the parent directories): .git', data: { code: 128 } });
+    const { loop } = makeLoop([
+      { command: 'git log -1 --stat', explanation: 'Show the last commit' },
+      { command: 'git init && git log -1', explanation: 'Initialize a repository' },
+    ], execute);
+    const result = await loop.run('what changed in the last commit here', { os: 'linux', cwd: '/home/u' });
+    expect(result.success).toBe(false);
+    expect(result.summary).toContain('not a git repository');
+    expect(result.summary).toContain('did not run `git init && git log -1`');
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells questions from requests to change something', async () => {
+    const { isInspectionQuestion } = await import('./AgentLoop');
+    expect(isInspectionQuestion('what changed in the last commit here')).toBe(true);
+    expect(isInspectionQuestion('which process is using port 3000')).toBe(true);
+    expect(isInspectionQuestion('check if docker is running and start it')).toBe(false);
+    expect(isInspectionQuestion('install htop')).toBe(false);
+    expect(isInspectionQuestion('how do I fix my wifi')).toBe(false);
+  });
+});

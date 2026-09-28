@@ -18,6 +18,8 @@ export interface ToolExecutionResult {
   success: boolean;
   data?: any;
   error?: string;
+  /** Machine-readable error code from the execution engine (e.g. USER_CANCELLED) */
+  errorCode?: string;
   commandExecuted?: string;
 }
 
@@ -97,7 +99,8 @@ export class ToolExecutor {
         } else {
           return {
             success: false,
-            error: result.error?.message || String(result.error || 'Tool execution failed')
+            error: result.error?.message || String(result.error || 'Tool execution failed'),
+            errorCode: result.error?.code
           };
         }
       })();

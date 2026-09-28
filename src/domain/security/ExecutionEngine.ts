@@ -187,7 +187,7 @@ export class ExecutionEngine {
           const approved = await this.requestConsent(plan, options, startTime);
           if (!approved) {
             await this.logAudit(capabilityId, input, risk.score, 'Denied', startTime);
-            return this.errorResult('USER_CANCELLED', 'User denied execution or failed security password authentication.', startTime);
+            return this.errorResult('USER_CANCELLED', 'Declined in the confirmation dialog.', startTime);
           }
         }
         const res = await sdkDriver.execute(input, { isDryRun: options.isDryRun, cwd: options.cwd, timeoutMs: options.timeoutMs });
@@ -268,7 +268,7 @@ export class ExecutionEngine {
         const approved = await this.requestConsent(plan, options, startTime);
         if (!approved) {
           await this.logAudit(capabilityId, input, risk.score, 'Denied', startTime);
-          return this.errorResult('USER_CANCELLED', 'User denied execution or failed security password authentication.', startTime);
+          return this.errorResult('USER_CANCELLED', 'Declined in the confirmation dialog.', startTime);
         }
       }
 

@@ -271,3 +271,25 @@ export function isReadOnlyCommandLine(commandLine: string): ReadOnlyVerdict {
   }
   return { readOnly: true, reason: 'every command is read-only' };
 }
+
+/**
+ * Commands that plainly change the system: file removal/creation, package installs, service
+ * control, git history changes, in-place edits and writes through redirection. Used where an
+ * unknown command should still be allowed but a clear modification must not happen.
+ */
+const MUTATING_PATTERNS: RegExp[] = [
+  /(?:^|[;&|(]\s*|\b(?:sudo|doas)\s+)(?:rm|rmdir|mv|mkdir|touch|chmod|chown|ln|dd|truncate|tee|kill|pkill|killall|shutdown|reboot|halt|mkfs(?:\.\w+)?)\b/,
+  /\bgit\s+(?:init|commit|push|pull|reset|checkout|switch|clean|stash|rebase|merge|add|rm|mv|restore|tag|clone|am|apply|cherry-pick|revert)\b/,
+  /\b(?:apt|apt-get|dnf|yum|zypper|brew|npm|pnpm|yarn|pip3?|pipx|cargo|gem|snap|flatpak|port)\s+(?:install|remove|uninstall|purge|upgrade|update|add|reinstall|autoremove)\b/,
+  /\b(?:pacman|paru|yay)\s+-(?:S|R|U)/,
+  /\bsystemctl\s+(?:--user\s+)?(?:start|stop|restart|reload|enable|disable|mask|unmask|kill)\b/,
+  /\bsed\s+(?:-\w*\s+)*-i/,
+  /\bdocker\s+(?:rm|rmi|stop|kill|run|prune|system\s+prune|volume\s+rm|compose\s+(?:up|down))\b/,
+  /(?:^|[^0-9&>])>>?\s*(?!\/dev\/null\b|&)[^\s&|;]/,
+];
+
+export function isClearlyMutating(line: string): boolean {
+  // Quoted text cannot run anything; drop it so "echo 'a > b'" is not a redirect
+  const unquoted = line.replace(/'[^']*'/g, "''").replace(/"(?:\\.|[^"\\])*"/g, '""');
+  return MUTATING_PATTERNS.some(p => p.test(unquoted));
+}

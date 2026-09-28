@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isReadOnlyCommandLine } from './ReadOnlyCommandPolicy';
+import { isReadOnlyCommandLine, isClearlyMutating } from './ReadOnlyCommandPolicy';
 
 describe('ReadOnlyCommandPolicy', () => {
   const readOnly = [
@@ -97,4 +97,17 @@ describe('ReadOnlyCommandPolicy', () => {
     const verdict = isReadOnlyCommandLine(cmd);
     expect(verdict.readOnly, verdict.reason).toBe(false);
   });
+});
+
+describe('isClearlyMutating', () => {
+  it.each([
+    'git init && git log -1', 'rm -rf build', 'sudo pacman -S htop', 'brew install jq', 'npm install left-pad',
+    'systemctl restart nginx', "sed -i 's/a/b/' f", 'echo hi > notes.txt', 'ls >> out.log', 'mkdir -p x',
+    'docker rm -f web', 'cd /tmp && touch a',
+  ])('flags %s', (cmd) => expect(isClearlyMutating(cmd)).toBe(true));
+
+  it.each([
+    'git log -1 --stat', 'badcmd2 --xyz', 'fd frontend ~', 'ls 2>/dev/null', 'cmd 2>&1 | grep x',
+    "echo 'a > b'", 'git show HEAD', 'ps aux | grep node', 'systemctl status nginx', 'rg TODO src',
+  ])('does not flag %s', (cmd) => expect(isClearlyMutating(cmd)).toBe(false));
 });
