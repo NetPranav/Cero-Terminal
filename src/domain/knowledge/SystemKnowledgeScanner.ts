@@ -121,15 +121,15 @@ export const FINGERPRINT_SCRIPT = `for p in /etc/os-release /var/lib/pacman/loca
 export const SCAN_SCRIPT = `
 emit() { printf '@@%s\\n' "$1"; }
 emit os
-cat /etc/os-release 2>/dev/null
+cat /etc/os-release 2>/dev/null || printf 'NAME="%s"\\nPRETTY_NAME="%s %s"\\nID=macos\\n' "$(sw_vers -productName 2>/dev/null)" "$(sw_vers -productName 2>/dev/null)" "$(sw_vers -productVersion 2>/dev/null)"
 printf 'KERNEL=%s\\nARCH=%s\\n' "$(uname -r)" "$(uname -m)"
 printf 'SESSION=%s\\nDESKTOP=%s\\n' "\${XDG_SESSION_TYPE:-}" "\${XDG_CURRENT_DESKTOP:-\${DESKTOP_SESSION:-}}"
 printf 'INIT=%s\\n' "$(cat /proc/1/comm 2>/dev/null)"
 emit cpu
-grep -m1 '^model name' /proc/cpuinfo 2>/dev/null
-printf 'CORES=%s\\n' "$(nproc 2>/dev/null)"
+grep -m1 '^model name' /proc/cpuinfo 2>/dev/null || printf 'model name\\t: %s\\n' "$(sysctl -n machdep.cpu.brand_string 2>/dev/null)"
+printf 'CORES=%s\\n' "$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null)"
 emit mem
-grep -E '^(MemTotal|MemAvailable|SwapTotal):' /proc/meminfo 2>/dev/null
+grep -E '^(MemTotal|MemAvailable|SwapTotal):' /proc/meminfo 2>/dev/null || printf 'MemTotal: %s kB\\n' "$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1024 ))"
 emit gpu
 for v in /sys/class/drm/card[0-9]*/device/vendor; do [ -r "$v" ] && printf 'VENDOR=%s\\n' "$(cat "$v")"; done
 command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits 2>/dev/null | sed 's/^/NVIDIA=/'

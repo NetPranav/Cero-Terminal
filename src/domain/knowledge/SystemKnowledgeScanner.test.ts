@@ -132,4 +132,23 @@ describe('SystemKnowledgeScanner', () => {
     const profile = await scanner.scan(true);
     expect(profile.os.name).toBe('Arch Linux');
   });
+
+  it('reads cores, memory and OS name on macOS (no /proc)', () => {
+    const p = parseScanOutput(`@@os
+NAME="macOS"
+PRETTY_NAME="macOS 26.6.2"
+ID=macos
+KERNEL=25.6.0
+ARCH=arm64
+@@cpu
+model name	: Apple A18 Pro
+CORES=6
+@@mem
+MemTotal: 8388608 kB
+@@end
+`);
+    expect(p.os).toMatchObject({ name: 'macOS 26.6.2', id: 'macos', kernel: '25.6.0' });
+    expect(p.hardware).toMatchObject({ cpuCores: 6, ramTotalGb: 8, cpuArch: 'arm64' });
+  });
 });
+
