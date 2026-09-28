@@ -137,11 +137,11 @@ export class BenchmarkPromptParser {
   };
 
   /**
-   * Parse 450 prompts from roadmap.md table
+   * Parse 450 prompts from docs/benchmark/PROMPTS.md
    */
   public static parseFromRoadmap(roadmapPath: string): BenchmarkPrompt[] {
     if (!fs.existsSync(roadmapPath)) {
-      throw new Error(`roadmap.md not found at ${roadmapPath}`);
+      throw new Error(`benchmark prompt spec not found at ${roadmapPath}`);
     }
 
     const content = fs.readFileSync(roadmapPath, 'utf-8');
@@ -549,7 +549,7 @@ export class BenchmarkRunner {
   }) {}
 
   public async init(): Promise<void> {
-    // Load all prompts from roadmap.md
+    // Load all prompts from docs/benchmark/PROMPTS.md
     const allPrompts = BenchmarkPromptParser.parseFromRoadmap(this.options.roadmapPath);
 
     // Filter prompts
@@ -747,7 +747,7 @@ export class BenchmarkRunner {
 
     const totalDurationSeconds = Math.round((Date.now() - startTime) / 1000);
 
-    const outPath = this.options.outputPath || path.resolve(process.cwd(), 'benchmark_report.json');
+    const outPath = this.options.outputPath || path.resolve(process.cwd(), 'reports', 'benchmark_report.json');
     let finalResults: PromptExecutionResult[] = results;
 
     if (this.options.append && fs.existsSync(outPath)) {
@@ -847,6 +847,7 @@ export class BenchmarkRunner {
     this.printSummaryTable(report);
 
     // Save JSON report to disk
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
     fs.writeFileSync(outPath, JSON.stringify(report, null, 2), 'utf-8');
     console.log(`\n  ${colors.bold}📄 Full JSON Report written to:${colors.reset} ${colors.cyan}${outPath}${colors.reset}`);
 
@@ -948,7 +949,7 @@ async function main() {
   let verbose = false;
   let append = false;
   let outputPath: string | undefined;
-  const roadmapPath = path.resolve(process.cwd(), 'roadmap.md');
+  const roadmapPath = path.resolve(process.cwd(), 'docs', 'benchmark', 'PROMPTS.md');
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -980,7 +981,7 @@ Options:
   --all                    Run the complete 450-prompt suite across all 9 domains
   --headless               Run non-interactively with auto-consent (default: true)
   -v, --verbose            Print detailed failure reasons and commands
-  -o, --output <file>      Path to output JSON report (default: benchmark_report.json)
+  -o, --output <file>      Path to output JSON report (default: reports/benchmark_report.json)
   -h, --help               Show this help message
 `);
       process.exit(0);

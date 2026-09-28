@@ -11,6 +11,12 @@ development host only.
 Status legend: `DONE` = implemented, tested and committed. `PARTIAL` = some of the work is done
 (see notes). `OPEN` = not started. `NEEDS DECISION` = waiting on the project owner.
 
+**Progress (2026-09-28):** all ten phases were worked through on branch `linux-v2-update`. Every
+item marked DONE has unit tests and passed `npm test`, `npm run build`, `cargo check` and
+`cargo test --lib` before its commit. Items that need a real Linux desktop to confirm (CSP at
+runtime, llama.cpp on Linux GPUs, Wayland window control) are called out as such. The remaining
+work is listed under "What is left" at the end.
+
 ---
 
 ## 1. Issue register
@@ -99,6 +105,19 @@ Each issue has an ID that the phases reference.
 | I-41 | The `⚠` glyph in `OutputFormatter.ts` violates the no-emoji policy. | Emoji scan |
 | I-42 | 6 tests failed on non-Linux hosts: platform-dependent installer tests, and a shadow test that exposed I-03. | `npx vitest run` |
 
+### Found while implementing the phases
+
+| ID | Issue | Evidence |
+|---|---|---|
+| I-43 | 459 of 463 offline fast-path entries were anchored regexes for the exact benchmark prompts. 93 only echoed canned "success" text (for example "Screenshot file saved", "Synthetic mouse click dispatched"), 116 fabricated data when the real command failed, and 25 appended canned confirmations. Historical "450/450" benchmark results measured this table, not the model. | `AgentLoop.ts` FAST_PATHS |
+| I-44 | The heuristic fallback (also used when AI is available) matched substrings. "show wifi connections" turned Wi-Fi on, "export" listed ports, "stopping" pinged, "closest" attempted a kill. | `AgentLoop.tryHeuristicFallback` |
+| I-45 | SecurityEngine decided SAFE (no consent) from the first word only: `ls && <anything>`, `echo x >> ~/.bashrc`, `ip link set wlan0 down`, `hostname pwned`, `awk 'BEGIN{system()}'`, `env bash -c` and `npm run <script>` all ran without asking. | `SecurityEngine.analyzeCommand` |
+| I-46 | The system scanner invented values when data was missing (8 GB RAM, 4 cores, a 256 GB ext4 root, a hardcoded app list) and fed them to the model as facts. `awk "{print $1}"` inside double quotes also broke port, service and IP parsing. | `SystemKnowledgeScanner.ts` |
+| I-47 | `npm test` wrote fixtures into the developer's real `~/.sentinel` (fake adapter manifest entries, a "prod-cluster" saved session). | Test runs on the dev machine |
+| I-48 | The rule oracle ranked matches by confidence only, so generic rules (any "Permission denied") beat specific ones. | `DeterministicRuleOracle.getAllMatches` |
+| I-49 | The dream scheduler's power and idle checks used macOS `pmset`/`ioreg`; on Linux every laptop looked like it was on AC, and idle time read as 0. | `DreamStateScheduler.ts` |
+| I-50 | The repository has no LICENSE file although the README declares MIT. | Repository root |
+
 ### Carried over from the v6 roadmap (not implemented in code)
 
 | ID | Item | v6 reference |
@@ -143,8 +162,9 @@ Goal: a test run that means something on any host, and CI that checks everything
 | Task | Issues | Status |
 |---|---|---|
 | Pin platform detection in the Linux-only installer tests | I-42 | DONE (`3e869d3`) |
-| CI runs `npm test`, `npm run build`, `cargo check` and `cargo test --lib` on Ubuntu with the Tauri system libraries | I-39 | OPEN |
-| `scripts/engine_smoke.sh`: an opt-in script for a Linux box that installs the pinned engine, loads a model, and checks grammar acceptance, prompt-cache hits (`timings.cache_n`) and first-token latency | I-16..I-22 | OPEN |
+| CI runs `npm test`, `npm run build`, `cargo check` and `cargo test --lib` on Ubuntu with the Tauri system libraries | I-39 | DONE (`1a433a9`) |
+| `npm run smoke:engine` (`scripts/engine_smoke.ts`): starts a real llama-server with Sentinel's flags, prompt and grammar and checks start-up, grammar acceptance, valid action JSON and prompt-cache reuse. Passed against llama.cpp build 10792 + Qwen2.5-Coder-3B (15.4 s cold prefix, 2.6 s warm) | I-16..I-22 | DONE (`1a433a9`) |
+| Tests run with a throwaway HOME so they never touch the real `~/.sentinel` | I-47 | DONE (`1a433a9`) |
 
 Exit criteria: green CI on push. The smoke script prints PASS or FAIL per check.
 
@@ -159,11 +179,12 @@ Goal: correct commands and professional, grounded answers.
 | Speculation may only repair a failing primary with a platform rewrite | I-03 | DONE (`3e869d3`) |
 | Ollama: `think:false`, `keep_alive`, JSON schema `format`, no fixed thread count | I-04 | DONE (`48dc532`) |
 | Cache-friendly prompt with answer-quality, package-manager and ROS rules | I-12 | DONE (`48dc532`) |
-| Deterministic, grounded summaries for successful read-only commands, without a second LLM call | I-05, I-13 | OPEN |
-| A working embedded engine wins over catalog-score auto-selection. An explicit user choice still wins over everything. | I-06 | OPEN |
-| Add Qwen3-4B-Instruct-2507 Q4_K_M as the "accuracy" tier with a pinned SHA-256. Keep Qwen2.5-Coder-3B as the default and 1.5B as the low-RAM tier. | I-07 | OPEN |
-| Auto-heal sends the failing command and its last output lines, not just a title | I-09 | OPEN |
-| Replace `⚠` with plain text | I-41 | OPEN |
+| Deterministic, grounded summaries for successful read-only commands, without a second LLM call | I-05, I-13 | DONE (`29b8774`) |
+| A working embedded engine wins over catalog-score auto-selection. An explicit user choice still wins over everything. | I-06 | DONE (`29b8774`) |
+| Add Qwen3-4B-Instruct-2507 Q4_K_M as the "accuracy" tier with a pinned SHA-256. Keep Qwen2.5-Coder-3B as the default and 1.5B as the low-RAM tier. | I-07 | DONE (`4531e17`) |
+| Auto-heal sends the failing command and its last output lines, not just a title | I-09 | DONE (`29b8774`) |
+| Replace `⚠` with plain text | I-41 | DONE (`29b8774`) |
+| Remove fabricated fast-path outputs; whole-word matching in the heuristic fallback | I-43, I-44 | DONE (`837ace9`) |
 
 Exit criteria: unit tests cover the single-call path and the auto-heal context. No bias parameter
 is sent to any provider.
@@ -174,12 +195,12 @@ Goal: instant answers for common requests, and one model round-trip for everythi
 
 | Task | Issues | Status |
 |---|---|---|
-| Skip the Ollama intent probe unless an intent endpoint is explicitly configured | I-11 | OPEN |
-| Answer a curated, high-precision set (battery, disk, memory, top CPU/RAM process, listening ports, IP, open a known app) deterministically even when AI is available | I-10 | OPEN |
-| One LLM call for read-only inspection tasks (see Phase 2) | I-13 | OPEN |
-| Cache provider availability for a few seconds and fail fast with guidance instead of about 7 s of blind retries | I-14 | OPEN |
+| Skip the Ollama intent probe unless an intent endpoint is explicitly configured | I-11 | DONE (`837ace9`) |
+| Answer a curated, high-precision set (battery, disk, memory, top CPU/RAM process, listening ports, port owner, IP, uptime, kernel, distro, windows, screenshots) deterministically even when AI is available; app launches finish after one model call | I-10 | DONE (`837ace9`, `2150da7`) |
+| One LLM call for read-only inspection tasks (see Phase 2) | I-13 | DONE (`29b8774`) |
+| Fail fast with guidance instead of about 7 s of blind retries; wait visibly only while a local model loads; bounded Ollama probes | I-14 | DONE (`837ace9`) |
 | No double execution of read-only commands | I-15 | DONE (`3e869d3`) |
-| Record per-request latency (routing, model, execution) for the telemetry view | L-13 | OPEN |
+| Record per-request latency (total, model calls, model time) | L-13 | PARTIAL (`837ace9`): recorded on every result and in `AgentLoop.recentMetrics`; no UI view yet |
 
 Exit criteria: the deterministic set never calls a provider (asserted in tests), and read-only
 LLM tasks make exactly one provider call.
@@ -192,10 +213,10 @@ Goal: Sentinel installs, starts and supervises its own model server.
 |---|---|---|
 | Launch flags that work on old and new llama.cpp: no `--flash-attn`, no `-t`, plus `-np 1`, `-c 8192`, `--cache-reuse 256`, bound to 127.0.0.1 | I-16, I-22 | DONE (`bcc3d07`) |
 | stderr to `~/.sentinel/logs/llama-server.log`, with a log-tail command | I-20 | DONE (`bcc3d07`) |
-| Pin llama.cpp b11227 with GitHub's published SHA-256 digests. Extract the full `.tar.gz` bundle to `~/.sentinel/engine/<build>` and point `current` at it. | I-17, I-18, I-19 | OPEN |
-| Pick the Vulkan build when a Vulkan loader and GPU are present, otherwise the CPU build | I-21 | OPEN |
-| Compute SHA-256 in Rust instead of shelling out to `sha256sum` | I-17 | OPEN |
-| Show the last log lines in the UI when the engine fails to start | I-20 | OPEN |
+| Pin llama.cpp b11227 with GitHub's published SHA-256 digests. Extract the full `.tar.gz` bundle to `~/.sentinel/engine/<build>` and point `current` at it. Installed automatically after a model download (nothing called the installer before). | I-17, I-18, I-19 | DONE (`4531e17`); not yet run end to end on a Linux machine |
+| Pick the Vulkan build when a Vulkan loader and GPU are present, otherwise the CPU build | I-21 | DONE (`4531e17`) |
+| Compute SHA-256 in Rust instead of shelling out to `sha256sum` | I-17 | DONE (`085ea96`) |
+| Show the last log lines in the UI when the engine fails to start | I-20 | DONE (`085ea96`) |
 
 Exit criteria: installer unit tests cover URL/digest selection and the extraction script. The
 Phase 1 smoke script passes on a Linux machine.
@@ -207,9 +228,10 @@ Goal: nothing runs longer, wider or with less consent than the user expects.
 | Task | Issues | Status |
 |---|---|---|
 | Bounded `execute_command`: timeout, process-group kill, closed stdin, output cap, no hang on backgrounded apps | I-23 | DONE (`bcc3d07`) |
-| Workflow drawer replays go through `ToolExecutor` and ConsentQueue; no raw auto-approve | I-24 | OPEN |
-| A restrictive CSP. Narrow the fs scope to `$HOME` and `/tmp`. Narrow HTTP to the configured providers and download hosts. | I-25 | OPEN |
-| An auto-remediation safety policy: only fixed-template rule-oracle fixes that classify SAFE may run unattended. Never run anything derived from watched content by a model. | I-26 | OPEN |
+| Workflow drawer replays go through `ToolExecutor` and ConsentQueue; no raw auto-approve | I-24 | DONE (`776fdae`) |
+| AST-based read-only policy for the SAFE tier (every command in the line must be read-only) | I-45 | DONE (`d67df23`) |
+| A restrictive CSP. Narrow the fs scope to `$HOME` and `/tmp`. Narrow HTTP to the configured providers and download hosts. | I-25 | PARTIAL (`776fdae`): CSP and fs scope done, unused shell grants removed; HTTP scope still open because custom OpenAI-compatible endpoints can be any host. CSP needs a launch check on Linux |
+| An auto-remediation safety policy: only vetted fixed-template fixes may run unattended. Never run anything derived from watched content by a model. | I-26 | DONE (`776fdae`) |
 | Risk-tolerance profile setting (Cautious / Balanced / Trusted) on top of the policy engine | L-10 | OPEN |
 
 ### Phase 6: Low-footprint system knowledge and learning persistence
@@ -218,12 +240,12 @@ Goal: Sentinel knows the machine and learns the user, at near-zero idle cost.
 
 | Task | Issues | Status |
 |---|---|---|
-| Status polling without process spawns: Rust reports model and engine presence via `stat`, polled every 10 s plus on events | I-27 | OPEN |
-| Single batched scan script instead of about 2,000 processes. Enforce the TTL. Rescan only when a cheap fingerprint changes (app directories, package database mtimes, os-release). | I-28 | OPEN |
-| Profile records the ROS distro, GPU vendor and preferred package manager | I-33 | OPEN |
-| PTY observer: diagnose only error-looking output, debounced. Correct OS. No "0 failed" false positives. | I-29 | OPEN |
-| SERL idle work: no model calls while the user is active or on battery | I-30 | OPEN |
-| Rust-backed `~/.sentinel` store (read, write, append) replacing the no-op `fs` polyfill for the learning stores and ProjectFingerprint | I-32 | OPEN |
+| Status polling without process spawns: Rust reports model and engine presence via `stat`, polled every 10 s plus on events | I-27 | DONE (`4ea2391`) |
+| Single batched scan script instead of about 2,000 processes. Enforce the TTL. Rescan only when a cheap fingerprint changes (app directories, package database mtimes, os-release). No invented values. | I-28, I-46 | DONE (`4ea2391`) |
+| Profile records the ROS distro, GPU vendor and preferred package manager | I-33 | DONE (`4ea2391`) |
+| PTY observer: diagnose only error-looking output. Correct OS. No "0 failed" false positives. | I-29 | DONE (`4ea2391`) |
+| SERL idle work: no model calls while the user is active or on battery | I-30, I-49 | DONE (`4ea2391`) |
+| Rust-backed `~/.sentinel` store (read, write, append) replacing the no-op `fs` polyfill for the learning stores and ProjectFingerprint | I-32 | PARTIAL (`4ea2391`): all `~/.sentinel` stores persist and reload; ProjectFingerprint still cannot see project files from the webview, so memory is scoped per directory rather than per project |
 
 ### Phase 7: Continuous error watcher and auto-remediation (new)
 
@@ -232,20 +254,20 @@ and fixes the ones that can be fixed safely with a command.
 
 | Task | Issues | Status |
 |---|---|---|
-| Rust tailer: polling, bounded reads, rotation and truncation handling, UTF-8 safe, many files for little CPU | I-37 | OPEN |
-| Commands: `>watch <path>`, `>watch service <unit>` (journalctl), `>watch list`, `>unwatch <id>` | I-37 | OPEN |
-| Detection through the existing rule oracle, deduplicated and rate-limited | I-37 | OPEN |
-| Remediation obeys the Phase 5 policy: SAFE template fixes run automatically and are logged to UndoLog. Everything else is proposed through consent. | I-26, I-37 | OPEN |
-| Notifications in the terminal and status bar | I-37 | OPEN |
+| Rust tailer: polling, bounded reads, rotation and truncation handling, UTF-8 safe, many files for little CPU | I-37 | DONE (`7120243`) |
+| Commands: `>watch <path>`, `>watch service <unit>` (journalctl), `>watch list`, `>unwatch <id>` | I-37 | DONE (`7120243`) |
+| Detection through the existing rule oracle, deduplicated and rate-limited | I-37 | DONE (`7120243`) |
+| Remediation obeys the Phase 5 policy: SAFE template fixes run automatically and are logged to UndoLog. Everything else is proposed through consent. | I-26, I-37 | DONE (`7120243`) |
+| Notifications in the terminal and status bar | I-37 | PARTIAL (`7120243`): terminal notices in the owning tab; no status-bar indicator yet |
 
 ### Phase 8: Linux, ROS 2 and automation depth
 
 | Task | Issues | Status |
 |---|---|---|
-| ROS environment preamble: source `/opt/ros/<distro>/setup.bash` and the workspace `install/setup.bash` for ros2/colcon/rosdep/ament commands | I-34 | OPEN |
-| ROS 2 remediation rules: unsourced shell, package not found, missing dependencies via rosdep, stale build | I-35 | OPEN |
-| Desktop window controller: list, focus, move to workspace, close (hyprctl, then swaymsg, then wmctrl) | L-01, I-36 | OPEN |
-| Screenshot capability: grim+slurp, then scrot/import | L-03 | OPEN |
+| ROS environment preamble: source `/opt/ros/<distro>/setup.bash` and the workspace `install/setup.bash` for ros2/colcon/rosdep/ament commands; bound streaming commands | I-34 | DONE (`2150da7`) |
+| ROS 2 remediation rules: unsourced shell, package not found, missing dependencies via rosdep, rosdep init; Linux Docker rules; rule ranking fix | I-35, I-48 | DONE (`2150da7`) |
+| Desktop window controller: list, focus, move to workspace, close (hyprctl, swaymsg, wmctrl) | L-01, I-36 | DONE (`2150da7`); needs a check on real Hyprland/Sway/X11 sessions |
+| Screenshot capability: grim+slurp, gnome-screenshot, spectacle, scrot | L-03 | DONE (`2150da7`) |
 | Synthetic input with a `UI_ACTION` consent tier | L-02 | OPEN (after L-01 ships) |
 | Tiling presets and multi-app orchestration | L-04, L-07 | OPEN |
 
@@ -253,18 +275,20 @@ and fixes the ones that can be fixed safely with a command.
 
 | Task | Issues | Status |
 |---|---|---|
-| Remove or quarantine the 252 unreachable files and the 94 tests that only cover them | I-38 | NEEDS DECISION |
-| One shared `ToolLoader` state; stop eager-bundling tool JSON the model never sees; split the bundle | I-08, I-31 | OPEN |
-| `>why` decision explanation from the last run's steps (L-08) and session transcript export (L-09) | L-08, L-09 | OPEN |
+| Remove or quarantine the 251 unreachable files and the 94 tests that only cover them (list in docs/CODEBASE_MAP.md) | I-38 | NEEDS DECISION |
+| Remove the remaining 373 exact-prompt fast-path regexes (benchmark memorisation; they now run real commands but only match one exact sentence each) | I-43 | NEEDS DECISION |
+| One shared `ToolLoader` state; split the bundle | I-08, I-31 | PARTIAL (`59d79a4`): shared registry, five screens lazy-loaded (startup bundle 2.15 MB -> 1.99 MB); tool JSON is still bundled because the loader validates it |
+| `>why` decision explanation from the last run's steps (L-08) and session transcript export (L-09) | L-08, L-09 | DONE (`59d79a4`) |
 
 ### Phase 10: Documentation and release
 
 | Task | Issues | Status |
 |---|---|---|
-| Rewrite README, architecture, codebase map, user guide, AI and troubleshooting docs from the verified state | I-40 | OPEN |
-| One copy of each doc (remove root duplicates) | I-40 | OPEN |
+| Rewrite README, architecture, codebase map, user guide, AI and troubleshooting docs from the verified state | I-40 | PARTIAL: roadmap, codebase map, index and archive done; README, ARCHITECTURE, USER_GUIDE, AI, SECURITY, TROUBLESHOOTING still describe the pre-audit state |
+| One copy of each doc (remove root duplicates) | I-40 | DONE (historical docs in docs/archive/) |
 | Replace fixed test counts and benchmark claims with how to reproduce them | I-40 | OPEN |
 | Release checklist: packaging, smoke matrix (L-06), self-update (L-17) | L-06, L-17 | OPEN |
+| Add a LICENSE file matching the declared license | I-50 | NEEDS DECISION |
 
 ---
 
@@ -272,3 +296,25 @@ and fixes the ones that can be fixed safely with a command.
 
 Rice Studio UI (L-05), sync (L-11), SSH agent mode (L-12), model router (L-15), log drag-in
 (L-16), secrets vault (L-18), dry plan preview (L-14). Each needs Phases 5 to 7 in place first.
+
+---
+
+## 4. What is left
+
+In order of value:
+
+1. **Decisions for the owner:** delete the unreachable code (I-38) and the exact-prompt fast paths
+   (I-43); choose and add a LICENSE (I-50).
+2. **Verify on real Linux desktops:** run `npm run smoke:engine` after installing the engine from
+   the app (CPU and Vulkan builds), launch the packaged app to confirm the CSP, and try window
+   control on Hyprland, Sway and X11.
+3. **Phase 5:** risk-tolerance profiles (L-10); an HTTP scope that still allows custom endpoints.
+4. **Phase 6:** project fingerprinting from the webview (ask Rust for the project root).
+5. **Phase 7:** a status-bar indicator for active watches and pending fixes.
+6. **Phase 8:** synthetic input with a `UI_ACTION` consent tier (L-02); tiling presets and
+   multi-app orchestration (L-04, L-07).
+7. **Phase 9:** a latency view over `AgentLoop.recentMetrics` (L-13); load tool JSON lazily.
+8. **Phase 10:** Docker smoke matrix for Ubuntu, Fedora, Debian and Arch (L-06); self-update (L-17).
+9. **Model training:** the LoRA/DPO/GRPO scripts exist but no adapter has gone through the
+   regression gate; train on real transcripts only after the benchmark is re-baselined (see I-43).
+

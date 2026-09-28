@@ -91,7 +91,7 @@ async function main() {
     }
   }
 
-  const roadmapPath = path.resolve(process.cwd(), 'roadmap.md');
+  const roadmapPath = path.resolve(process.cwd(), 'docs', 'benchmark', 'PROMPTS.md');
   const allPrompts = BenchmarkPromptParser.parseFromRoadmap(roadmapPath);
   let promptsToRun: BenchmarkPrompt[] = allPrompts;
 
@@ -236,11 +236,12 @@ async function main() {
   };
 
   // Write JSON report
-  const jsonPath = path.resolve(process.cwd(), 'cli_test_records.json');
+  const jsonPath = path.resolve(process.cwd(), 'reports', 'cli_test_records.json');
+  fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
   fs.writeFileSync(jsonPath, JSON.stringify(summaryReport, null, 2), 'utf-8');
 
   // Write Markdown summary
-  const mdPath = path.resolve(process.cwd(), 'cli_test_records.md');
+  const mdPath = path.resolve(process.cwd(), 'reports', 'cli_test_records.md');
   let md = `# Sentinel CLI Prompt Execution & Telemetry Report\n\n`;
   md += `> **Generated:** ${summaryReport.timestamp}  \n`;
   md += `> **Platform:** ${summaryReport.platform}  \n`;
