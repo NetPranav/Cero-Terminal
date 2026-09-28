@@ -345,14 +345,26 @@ sandbox. The local engine was Qwen2.5-Coder-3B served by `~/.sentinel/bin/llama-
 | Engine | A killed instance left llama-server (2 GB) running | An orphaned Sentinel server is stopped at the next start |
 | Look | Saturated colors, dim text drawn as black boxes, repeated status lines, "/16GB" RAM, broken breadcrumbs | Grayscale truecolor renderer, in-place status line, real totals, compact path |
 
-**Creative prompts used** (all answered correctly after the fixes unless noted):
-`how much battery is left` · `what's eating my RAM` · `how full is my disk` · `what's my ip` ·
-`what changed in the last commit here` · `explain what math.js does` ·
-`how many javascript files are in this folder and how many lines do they have in total` ·
-`which node version do I have and where is it installed` · `what's my battery and uptime` ·
-`show listening ports` · `delete the build folder` (declined) · `take a screenshot` (declined) ·
-`watch file <log>` then a git lock error and a crafted `Cannot find module 'evil-pkg'` line ·
-`watch mode auto-safe` · `watch list` · `unwatch 1` · `why` · `export session` · `git statsu` then Tab.
+**Prompts and their result on the final build** (re-run after the fixes unless marked):
+
+| Prompt | Result |
+|---|---|
+| `how much battery is left`, `what's eating my RAM`, `how full is my disk`, `what's my ip` | Correct, instant, real data |
+| `what's my battery and uptime`, `check disk, memory and uptime` | Correct, instant (each part answered) |
+| `what changed in the last commit here` | Correct, instant (`git show --stat`) |
+| `explain what math.js does` | Correct, answered from the file |
+| `which node version do I have and where is it installed` | Correct (not re-run after the last changes) |
+| `how many javascript files ... and how many lines ...` | Line total correct (5); the file count was not measured, so the grounding check showed the raw output instead of an unverified figure |
+| `show listening ports` | Correct, compact table |
+| `delete the build folder`, `take a screenshot` | Declined: "Not run", nothing changed, no second attempt, no file written |
+| `create an empty file called hello.txt here` while typing `ls` + Enter | The dialog stayed open through the stray Enters; nothing created until a deliberate choice |
+| `watch file`, `watch mode auto-safe`, two repo lock errors, a crafted `Cannot find module 'evil-pkg'` line | Each lock removed in its own repo only; `evil-pkg` proposed, never installed |
+| `watch list`, `unwatch 1`, `why`, `export session` | Correct |
+| `git statsu` then Tab | Fix `git status` shown after the output and applied |
+
+**Unexplained:** once, right after relaunching the app, the typed `cd ... && clear` line opened three
+split panes and never reached the shell, as if a Command modifier were held. The audit log and the
+shell history show nothing unexpected ran; the cause is not known.
 
 **Still open after this pass:**
 
