@@ -437,6 +437,17 @@ export class AgentEventRenderer {
     return lead + out;
   }
 
+  /**
+   * A finished step whose structured result is printed right after it: clear the status row
+   * and count it as a success without printing a summary line.
+   */
+  public settleForData(event: AgentEventFormatted): string {
+    const lead = this.started ? '' : '\r\n';
+    this.started = true;
+    this.lastWasSuccess = !/^(✗|Warning:)/.test(event.message || '');
+    return lead + this.settle(false);
+  }
+
   /** Clears a status row left on screen when the request ends. */
   public finish(): string {
     return this.settle(false);

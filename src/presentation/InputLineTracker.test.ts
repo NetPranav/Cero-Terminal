@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { InputLineTracker, stripPrompt, type InputBuffer } from './InputLineTracker';
+import { InputLineTracker, stripPrompt, parseCdTarget, type InputBuffer } from './InputLineTracker';
 
 /** Minimal xterm-like buffer: fixed-width rows, wrapped flag per row */
 function bufferOf(rows: Array<{ text: string; wrapped?: boolean }>, cols = 40): InputBuffer {
@@ -125,5 +125,24 @@ describe('InputLineTracker keystroke shadow', () => {
     t.reset();
     type(t, ['>hi']);
     expect(t.typedText()).toBe('>hi');
+  });
+});
+
+describe('parseCdTarget', () => {
+  it.each([
+    ['cd', '~'],
+    ['cd ~/src', '~/src'],
+    ['cd /tmp/sandbox && clear', '/tmp/sandbox'],
+    ['cd src; ls', 'src'],
+    ['cd "My Folder" && ls', 'My Folder'],
+    ["cd 'a b'", 'a b'],
+    ['cd My\\ Folder', 'My Folder'],
+    ['cd ..', '..'],
+  ])('%s -> %s', (cmd, target) => {
+    expect(parseCdTarget(cmd)).toBe(target);
+  });
+
+  it.each(['cd -', 'cd $HOME/x', 'cd `pwd`', 'cd src*', 'cdx foo', 'echo cd foo'])('%s -> unknown', (cmd) => {
+    expect(parseCdTarget(cmd)).toBeNull();
   });
 });

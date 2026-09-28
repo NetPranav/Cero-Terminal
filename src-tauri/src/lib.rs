@@ -38,6 +38,8 @@ pub fn run() {
         .setup(|app| {
             logger::log_info("SETUP", "Initializing core application services");
             request_bluetooth_permission();
+            // A previous instance that crashed or was killed can leave its model server running
+            std::thread::spawn(|| embedded_server::reap_orphaned_server(8847));
 
             use tauri::Manager;
             if let Some(main_win) = app.get_webview_window("main") {
@@ -157,6 +159,7 @@ pub fn run() {
             pty::write_pty,
             pty::resize_pty,
             pty::kill_pty,
+            pty::get_pty_cwd,
             pty::get_default_shell,
             process_cmds::list_processes,
             process_cmds::kill_process,

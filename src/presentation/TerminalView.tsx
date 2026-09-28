@@ -39,7 +39,7 @@ import {
 } from 'lucide-react';
 import { SearchAddon } from '@xterm/addon-search';
 import { TerminalSearchBar } from './TerminalSearchBar';
-import { InputLineTracker, stripPrompt } from './InputLineTracker';
+import { InputLineTracker, stripPrompt, parseCdTarget } from './InputLineTracker';
 import { readClipboardText, writeClipboardText, formatTerminalPastePayload } from '../utils/clipboard';
 
 /** Goal text for an auto-heal request: the failing command and diagnosis, not just a title. */
@@ -139,6 +139,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
     resolve: (approved: boolean) => void;
     requestId?: string;
   } | null>(null);
+  // Keyboard focus goes back to the terminal when the confirmation dialog closes
+  useEffect(() => {
+    if (securityModalPlan) {
+      consentOpenRef.current = true;
+    } else if (consentOpenRef.current) {
+      consentOpenRef.current = false;
+      requestAnimationFrame(() => xtermRef.current?.focus());
+    }
+  }, [securityModalPlan]);
   const [authPassword, setAuthPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -201,6 +210,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
   const [activeRemediation, setActiveRemediation] = useState<RemediationPrompt | null>(null);
   const agentLoopRef = useRef<AgentLoop | null>(null);
   const ptyTrackerRef = useRef<PtyStateTracker>(new PtyStateTracker());
+  const consentOpenRef = useRef(false);
   const inputLineRef = useRef<InputLineTracker>(new InputLineTracker());
   const aiBusyRef = useRef(false);
   const aiQueueRef = useRef<string[]>([]);
@@ -645,8 +655,28 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
           onPathChange(next);
         };
 
+        // The shell's real working directory, read from the OS; keeps the tab, status bar and
+        // agent in the folder the shell is actually in (aliases, pushd, `z`, compound cd lines)
+        const syncCwd = async (): Promise<string | null> => {
+          if (!currentSessionId) return null;
+          try {
+            const cwd = await invoke<string | null>('get_pty_cwd', { sessionId: currentSessionId });
+            if (!cwd) return null;
+            if (cwd !== currentPathRef.current) {
+              currentPathRef.current = cwd;
+              notifyNavigation(cwd);
+            }
+            return cwd;
+          } catch {
+            return null;
+          }
+        };
+
         // Runs one AI request and streams its events into the terminal
-        const runAiGoal = (aiGoal: string) => {
+        const runAiGoal = async (aiGoal: string) => {
+          // Busy before the first await, so a second Enter is queued rather than run alongside
+          aiBusyRef.current = true;
+          const cwd = (await syncCwd()) || currentPathRef.current || currentPath || '~';
           // Initiate live progress tracking in the bottom bar
           PromptProgressManager.getInstance().startPrompt(aiGoal);
           const renderer = new AgentEventRenderer(() => term.cols);
@@ -705,23 +735,27 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
               PromptProgressManager.getInstance().completePrompt(false, event.message);
             }
 
-            const text = renderer.render(event);
+            // Structured results (battery, processes, volumes, ...) carry their own labels, so the
+            // one-line "✓ summary" above them is dropped; raw command output keeps its header line
+            const dataOutput = event.data && (event.type === 'tool_done' || event.type === 'done')
+              ? formatDataOutput(event.data, { goal: aiGoal })
+              : '';
+            const hasStdout = typeof event.data?.stdout === 'string' && event.data.stdout.trim().length > 0;
+            const text = event.type === 'tool_done' && dataOutput && !hasStdout
+              ? renderer.settleForData(event)
+              : renderer.render(event);
             if (text) writeTerm(text);
-
-            // Show structured data (file lists, devices, etc.) when available
-            if (event.data && (event.type === 'tool_done' || event.type === 'done')) {
-              const dataOutput = formatDataOutput(event.data, { goal: aiGoal });
-              if (dataOutput && (!text || !text.includes(dataOutput.trim()))) {
-                writeTerm(dataOutput);
-              }
+            if (dataOutput && (!text || !text.includes(dataOutput.trim()))) {
+              writeTerm(dataOutput);
             }
           });
 
           // Run the agent loop
-          aiBusyRef.current = true;
-          agentLoop.run(aiGoal, { os: getPlatform(), cwd: currentPath || '~' }).then(result => {
+          agentLoop.run(aiGoal, { os: getPlatform(), cwd }).then(result => {
             const leftover = renderer.finish();
             if (leftover) writeTerm(leftover);
+            // Anything the shell prints from here on (new prompt, cd) must be visible
+            shellRedrawMuteUntil = 0;
             PromptProgressManager.getInstance().completePrompt(result.success, result.summary);
             if (!result.success) {
               lastUnresolvedGoalRef.current = { goal: aiGoal, timestamp: Date.now() };
@@ -761,6 +795,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
             planExecutionStatusRef.current = 'failed';
             schedulePlanDismiss();
             writeTerm(`\r\n${formatAgentEvent({ type: 'error', message: err.message || 'Something went wrong' })}\r\n`);
+            shellRedrawMuteUntil = 0;
             sessionManager.write(currentSessionId!, '\r');
           }).finally(() => {
             aiBusyRef.current = false;
@@ -854,10 +889,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
               }
 
 
-              if (cleanCmd.startsWith('cd ') || cleanCmd === 'cd') {
-                const target = cleanCmd.replace(/^cd\s*/i, '').replace(/["']/g, '').trim() || '~';
-                notifyNavigation(target);
-              }
+              const cdTarget = parseCdTarget(cleanCmd);
+              if (cdTarget !== null) notifyNavigation(cdTarget);
 
               // Intercept application mapping slash commands: /app, /apps, /alias, /aliases
               if (cleanCmd.startsWith('/app') || cleanCmd.startsWith('/alias')) {
@@ -1018,6 +1051,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
               } else if (cleanCmd) {
                 // User submitted a command to the shell
                 ptyTrackerRef.current.notifyCommandStarted(cleanCmd);
+                // Pick up directory changes once the shell has run it
+                setTimeout(() => { void syncCwd(); }, 400);
+                setTimeout(() => { void syncCwd(); }, 2000);
               }
             }
           }
@@ -1564,29 +1600,29 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                 width: '42px',
                 height: '42px',
                 borderRadius: '12px',
-                backgroundColor: 'rgba(245, 158, 11, 0.12)',
-                border: '1px solid rgba(245, 158, 11, 0.25)',
+                backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#f59e0b'
+                color: '#e5e7eb'
               }}>
-                <ShieldAlert size={22} />
+                <ShieldAlert size={20} />
               </div>
               <div>
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#f8fafc', letterSpacing: '-0.2px' }}>
-                  System Authorization Required
+                  {securityModalPlan.plan.requiresPassword ? 'Administrator password required' : 'Run this command?'}
                 </h3>
-                <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.55)', display: 'block', marginTop: '2px' }}>
-                  Protected operation requested • {securityModalPlan.plan.riskLevel || 'ADMIN'} Profile
+                <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginTop: '2px' }}>
+                  Needs your approval · {String(securityModalPlan.plan.riskLevel || 'admin').toLowerCase()} risk
                 </span>
               </div>
             </div>
 
             <p style={{ fontSize: '13px', lineHeight: '1.55', color: 'rgba(255, 255, 255, 0.75)', margin: '0 0 18px 0' }}>
               {securityModalPlan.plan.requiresPassword
-                ? 'To ensure system integrity and prevent unauthorized modifications, please verify your system administrator / sudo credentials to execute this capability.'
-                : 'This terminal command requires your explicit confirmation before executing. Review the command and intent below.'}
+                ? 'This changes system settings. Enter your login password to allow it once.'
+                : 'Sentinel will run exactly what is shown below. Nothing runs until you approve.'}
             </p>
 
             <div style={{
@@ -1598,20 +1634,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
               fontSize: '12px',
               fontFamily: 'monospace'
             }}>
-              <div style={{ marginBottom: '6px', display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>Action:</span>
-                <span style={{ color: '#38bdf8', fontWeight: 600 }}>{securityModalPlan.plan.capabilityId}</span>
+              <div style={{ fontSize: '10.5px', letterSpacing: '0.6px', textTransform: 'uppercase', color: 'rgba(255, 255, 255, 0.4)', marginBottom: '6px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+                {securityModalPlan.plan.capabilityId === 'shell.execute' ? 'Command' : securityModalPlan.plan.capabilityId}
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                <span style={{ color: 'rgba(255, 255, 255, 0.5)', flexShrink: 0 }}>Target:</span>
-                <span style={{ color: '#e2e8f0', wordBreak: 'break-all', textAlign: 'right', fontWeight: 500 }}>
-                  {String(securityModalPlan.plan.parameters?.path || securityModalPlan.plan.parameters?.source || securityModalPlan.plan.parameters?.command || JSON.stringify(securityModalPlan.plan.parameters))}
-                </span>
+              <div style={{ color: '#f5f5f7', fontSize: '13px', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontWeight: 500 }}>
+                {String(securityModalPlan.plan.parameters?.command || securityModalPlan.plan.parameters?.path || securityModalPlan.plan.parameters?.source || JSON.stringify(securityModalPlan.plan.parameters))}
               </div>
               {securityModalPlan.plan.explanation && (
-                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.07)', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                  <span style={{ color: '#a78bfa', flexShrink: 0, fontWeight: 600 }}>Intent:</span>
-                  <span style={{ color: '#f1f5f9', lineHeight: '1.45', wordBreak: 'break-word' }}>
+                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.07)', display: 'flex', gap: '8px', alignItems: 'flex-start', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.4)', flexShrink: 0 }}>Why</span>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.78)', lineHeight: '1.45', wordBreak: 'break-word' }}>
                     {securityModalPlan.plan.explanation}
                   </span>
                 </div>
@@ -1643,7 +1675,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                     width: '100%',
                     padding: '10px 14px',
                     borderRadius: '8px',
-                    border: authError ? '1px solid rgba(239, 68, 68, 0.6)' : '1px solid rgba(255, 255, 255, 0.15)',
+                    border: authError ? '1px solid rgba(229, 115, 115, 0.6)' : '1px solid rgba(255, 255, 255, 0.15)',
                     backgroundColor: 'rgba(8, 9, 13, 0.75)',
                     color: '#fff',
                     fontSize: '13px',
@@ -1653,8 +1685,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                   }}
                 />
                 {authError && (
-                  <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <AlertCircle size={14} style={{ color: '#ef4444', flexShrink: 0 }} />
+                  <div style={{ color: '#e57373', fontSize: '12px', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertCircle size={14} style={{ color: '#e57373', flexShrink: 0 }} />
                     <span>{authError}</span>
                   </div>
                 )}
@@ -1685,7 +1717,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                 }}
               >
                 <X size={13} />
-                <span>Cancel</span> <span style={{ opacity: 0.6, fontSize: '11px', marginLeft: '4px' }}>[Esc]</span>
+                <span>Cancel</span> <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '4px' }}>Esc</span>
               </button>
               <button
                 disabled={isVerifying}
@@ -1701,12 +1733,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                   padding: '9px 18px',
                   borderRadius: '8px',
                   border: 'none',
-                  background: isVerifying ? 'rgba(255, 255, 255, 0.2)' : '#f59e0b',
-                  color: isVerifying ? '#ffffff' : '#000000',
+                  background: isVerifying ? 'rgba(255, 255, 255, 0.2)' : '#f5f5f7',
+                  color: isVerifying ? '#ffffff' : '#0b0c10',
                   fontSize: '13px',
                   cursor: isVerifying ? 'wait' : 'pointer',
                   fontWeight: 600,
-                  boxShadow: isVerifying ? 'none' : '0 2px 10px rgba(245, 158, 11, 0.3)',
+                  boxShadow: 'none',
                   transition: 'all 0.2s ease',
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -1714,8 +1746,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                 }}
               >
                 <Check size={14} />
-                <span>{isVerifying ? 'Authenticating...' : securityModalPlan.plan.requiresPassword ? 'Authorize' : 'Approve & Execute'}</span>
-                {!isVerifying && <span style={{ opacity: 0.75, fontSize: '11px', background: 'rgba(0,0,0,0.18)', padding: '1px 5px', borderRadius: '4px' }}>↵ Enter</span>}
+                <span>{isVerifying ? 'Checking...' : securityModalPlan.plan.requiresPassword ? 'Authorize' : 'Run'}</span>
+                {!isVerifying && <span style={{ opacity: 0.55, fontSize: '11px', background: 'rgba(0,0,0,0.08)', padding: '1px 5px', borderRadius: '4px' }}>↵</span>}
               </button>
             </div>
           </div>

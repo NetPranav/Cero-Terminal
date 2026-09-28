@@ -652,3 +652,55 @@ mod tests {
         assert_eq!(queue.len(), 0);
     }
 }
+
+/// A llama-server left on Sentinel's port by an instance that did not exit cleanly (macOS has
+/// no parent-death signal, so a crash or `kill` leaves it holding ~2 GB of RAM). Only a process
+/// that is a llama-server started from ~/.sentinel is stopped; anything else is left alone.
+#[cfg(unix)]
+pub fn reap_orphaned_server(port: u16) {
+    let Ok(out) = Command::new("lsof")
+        .args(["-nP", &format!("-iTCP:{}", port), "-sTCP:LISTEN", "-t"])
+        .output()
+    else {
+        return;
+    };
+    let own_pid = std::process::id();
+    for pid in String::from_utf8_lossy(&out.stdout).split_whitespace().filter_map(|p| p.parse::<u32>().ok()) {
+        if pid == own_pid {
+            continue;
+        }
+        let Ok(ps) = Command::new("ps").args(["-o", "command=", "-p", &pid.to_string()]).output() else {
+            continue;
+        };
+        let command = String::from_utf8_lossy(&ps.stdout);
+        if is_orphaned_sentinel_server(&command) {
+            crate::logger::log_info("LLM", &format!("Stopping orphaned llama-server (pid: {}) on port {}", pid, port));
+            unsafe {
+                libc::kill(pid as libc::pid_t, libc::SIGTERM);
+            }
+        }
+    }
+}
+
+#[cfg(not(unix))]
+pub fn reap_orphaned_server(_port: u16) {}
+
+/// True for the command line of a llama-server launched from Sentinel's own directories.
+pub fn is_orphaned_sentinel_server(command: &str) -> bool {
+    let first = command.split_whitespace().next().unwrap_or("");
+    first.ends_with("/llama-server") && first.contains("/.sentinel/")
+}
+
+#[cfg(test)]
+mod reap_tests {
+    use super::is_orphaned_sentinel_server;
+
+    #[test]
+    fn only_sentinel_llama_servers_are_reaped() {
+        assert!(is_orphaned_sentinel_server("/Users/u/.sentinel/bin/llama-server --host 127.0.0.1 --port 8847"));
+        assert!(is_orphaned_sentinel_server("/home/u/.sentinel/engine/current/llama-server -m x"));
+        assert!(!is_orphaned_sentinel_server("/usr/local/bin/llama-server --port 8847"));
+        assert!(!is_orphaned_sentinel_server("/Users/u/.sentinel/bin/python -m http.server 8847"));
+        assert!(!is_orphaned_sentinel_server(""));
+    }
+}

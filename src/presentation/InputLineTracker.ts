@@ -117,3 +117,17 @@ export class InputLineTracker {
     return text.replace(/\s+$/, '');
   }
 }
+
+/**
+ * Directory a `cd` at the start of a command line changes to, for path tracking.
+ * Stops at the first shell operator (`cd src && make` -> "src"). Returns null when the
+ * target cannot be known without the shell (`cd -`, variables, substitutions, globs).
+ */
+export function parseCdTarget(command: string): string | null {
+  const m = command.trim().match(/^cd(?:\s+(?:"([^"]*)"|'([^']*)'|((?:\\.|[^\s;&|<>])+)))?\s*(?:$|&&|\|\||;|\|)/);
+  if (!m) return null;
+  const target = m[1] ?? m[2] ?? (m[3] !== undefined ? m[3].replace(/\\(.)/g, '$1') : undefined);
+  if (target === undefined || target === '') return '~';
+  if (target === '-' || /[$`*?]/.test(target)) return null;
+  return target;
+}

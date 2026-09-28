@@ -15,6 +15,8 @@ pub struct PtyOutputEvent {
 pub struct PtySession {
     master: Box<dyn portable_pty::MasterPty + Send>,
     writer: Box<dyn std::io::Write + Send>,
+    /// Shell process id, used to read its working directory
+    pid: Option<u32>,
 }
 
 pub struct PtyState {
@@ -198,6 +200,7 @@ pub fn spawn_pty(
     };
     
     drop(pair.slave);
+    let shell_pid = _child.process_id();
     
     let session_id = Uuid::new_v4().to_string();
     let session_id_clone = session_id.clone();
@@ -228,6 +231,7 @@ pub fn spawn_pty(
     state.sessions.lock().unwrap().insert(session_id.clone(), PtySession {
         master: pair.master,
         writer,
+        pid: shell_pid,
     });
 
     Ok(session_id)
@@ -308,3 +312,60 @@ pub fn get_default_shell() -> String {
         });
 }
 
+
+/// Current working directory of the session's shell, read from the OS (not guessed from
+/// typed `cd` commands, which miss aliases, `pushd`, `z` and compound lines).
+#[tauri::command]
+pub fn get_pty_cwd(state: State<'_, PtyState>, session_id: String) -> Result<Option<String>, String> {
+    let pid = {
+        let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+        sessions.get(&session_id).and_then(|s| s.pid)
+    };
+    Ok(pid.and_then(process_cwd))
+}
+
+#[cfg(target_os = "linux")]
+pub fn process_cwd(pid: u32) -> Option<String> {
+    std::fs::read_link(format!("/proc/{}/cwd", pid))
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+#[cfg(target_os = "macos")]
+pub fn process_cwd(pid: u32) -> Option<String> {
+    let mut info: libc::proc_vnodepathinfo = unsafe { std::mem::zeroed() };
+    let size = std::mem::size_of::<libc::proc_vnodepathinfo>() as libc::c_int;
+    let ret = unsafe {
+        libc::proc_pidinfo(
+            pid as libc::c_int,
+            libc::PROC_PIDVNODEPATHINFO,
+            0,
+            &mut info as *mut _ as *mut libc::c_void,
+            size,
+        )
+    };
+    if ret != size {
+        return None;
+    }
+    let path = unsafe { std::ffi::CStr::from_ptr(info.pvi_cdir.vip_path.as_ptr() as *const libc::c_char) };
+    let cwd = path.to_string_lossy().into_owned();
+    if cwd.is_empty() { None } else { Some(cwd) }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+pub fn process_cwd(_pid: u32) -> Option<String> {
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::process_cwd;
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn reads_own_working_directory() {
+        let expected = std::env::current_dir().unwrap().canonicalize().unwrap();
+        let cwd = process_cwd(std::process::id()).expect("cwd of this process");
+        assert_eq!(std::path::Path::new(&cwd).canonicalize().unwrap(), expected);
+    }
+}
