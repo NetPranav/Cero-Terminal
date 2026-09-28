@@ -440,3 +440,14 @@ To push the current branch and set the remote as upstream, use
     });
   });
 });
+
+describe('git subcommand typos', () => {
+  it('fixes "git statsu" to "git status", keeping the other arguments', () => {
+    const oracle = DeterministicRuleOracle.getInstance();
+    const output = "git: 'statsu' is not a git command. See 'git --help'.\n\nThe most similar command is\n\tstatus";
+    expect(oracle.diagnose({ command: 'git statsu', output, exitCode: 1 })?.fixedCommand).toBe('git status');
+    expect(oracle.diagnose({ command: 'git -C repo statsu -s', output, exitCode: 1 })?.fixedCommand).toBe('git -C repo status -s');
+    expect(oracle.diagnose({ command: '', output, exitCode: 1 })?.fixedCommand).toBe('git status');
+    expect(oracle.diagnose({ command: 'git statsu', output, exitCode: 1 })?.explanation).toBe("'statsu' is not a command; did you mean 'status'?");
+  });
+});

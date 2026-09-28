@@ -585,14 +585,26 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
           // Discarding a `>` request line makes the shell print a fresh prompt; hide that redraw so
           // agent output follows the request directly (the final prompt is printed at the end)
           if (Date.now() < shellRedrawMuteUntil) { shellRedrawSeen = true; return; }
-          PtyOutputObserver.getInstance().ingest(text, currentPathRef.current);
           writeTerm(text);
+          PtyOutputObserver.getInstance().ingest(text, currentPathRef.current);
+        };
+
+        // A notice that arrives while the shell sits at an empty prompt goes above a fresh prompt
+        // (otherwise the next keystrokes would echo after the notice, away from the prompt)
+        const writeNotice = (text: string) => {
+          const atEmptyPrompt = ptyTrackerRef.current.isIdleAtPrompt() && !inputLineRef.current.hasAnchor() && !aiBusyRef.current;
+          if (atEmptyPrompt && currentSessionId) {
+            writeTerm(`\r\x1b[2K${text.replace(/^(\r\n)+/, '')}`);
+            sessionManager.write(currentSessionId, '\r');
+          } else {
+            writeTerm(text);
+          }
         };
 
         unsubRemediation = PtyOutputObserver.getInstance().onRemediation((rem) => {
           setActiveRemediation(rem);
           if (rem) {
-            writeTerm(formatRemediationNotice(rem.cause, rem.actionTitle));
+            writeNotice(formatRemediationNotice(rem.cause, rem.actionTitle));
           }
         });
 
@@ -629,7 +641,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
         // Error watcher notices for watches started from this tab
         unsubWatch = ErrorWatchService.getInstance().onEvent((event) => {
           if (event.watch.owner && event.watch.owner !== agentLoop.ownerId) return;
-          writeTerm(formatWatchEvent(event));
+          writeNotice(formatWatchEvent(event));
         });
 
         // Initialize Autocomplete with History, Demonstration, and Workspace Context providers
@@ -1504,12 +1516,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
           top: '16px',
           right: '20px',
           maxWidth: '420px',
-          backgroundColor: 'rgba(15, 23, 42, 0.92)',
+          backgroundColor: 'rgba(20, 21, 26, 0.94)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
-          border: '1px solid rgba(245, 158, 11, 0.4)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
           borderRadius: '12px',
-          boxShadow: '0 12px 32px rgba(0, 0, 0, 0.65), 0 0 12px rgba(245, 158, 11, 0.15)',
+          boxShadow: '0 12px 32px rgba(0, 0, 0, 0.6)',
           padding: '14px 16px',
           zIndex: 8000,
           color: '#f8fafc',
@@ -1520,9 +1532,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Wrench size={14} color="#f59e0b" />
-              <span style={{ fontSize: '12px', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Sentinel Auto-Heal
+              <Wrench size={13} color="rgba(255, 255, 255, 0.7)" />
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.88)' }}>
+                Suggested fix
               </span>
             </div>
             <button
@@ -1544,18 +1556,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
               <X size={14} />
             </button>
           </div>
-          <div style={{ fontSize: '12px', color: '#e2e8f0', lineHeight: 1.4 }}>
+          <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)', lineHeight: 1.45 }}>
             {activeRemediation.cause}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2px', gap: '8px' }}>
-            <span style={{ fontSize: '11px', color: '#38bdf8', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={activeRemediation.params?.command || activeRemediation.actionTitle}>
-              Fix: {activeRemediation.params?.command || activeRemediation.actionTitle}
+            <span style={{ fontSize: '11.5px', color: '#e5e7eb', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={activeRemediation.params?.command || activeRemediation.actionTitle}>
+              {activeRemediation.params?.command || activeRemediation.actionTitle}
             </span>
             <button
               onClick={() => handleExecuteRemediation(activeRemediation)}
               style={{
-                background: '#f59e0b',
-                color: '#000',
+                background: '#f5f5f7',
+                color: '#0b0c10',
                 border: 'none',
                 borderRadius: '6px',
                 padding: '6px 12px',
@@ -1565,12 +1577,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                flexShrink: 0,
-                boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)'
+                flexShrink: 0
               }}
             >
               <Play size={11} fill="currentColor" />
-              <span>Auto-Fix</span> <span style={{ opacity: 0.8, fontSize: '10px', background: 'rgba(0,0,0,0.18)', padding: '1px 4px', borderRadius: '3px' }}>Tab</span>
+              <span>Apply</span> <span style={{ opacity: 0.55, fontSize: '10px', background: 'rgba(0,0,0,0.08)', padding: '1px 4px', borderRadius: '3px' }}>Tab</span>
             </button>
           </div>
         </div>

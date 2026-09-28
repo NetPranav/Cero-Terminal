@@ -1337,15 +1337,25 @@ export class DeterministicRuleOracle {
         const suggestion = match ? match[1].trim() : '';
         if (!suggestion) return null;
 
-        const parts = ctx.command.split(/\s+/);
-        parts[0] = suggestion;
-        const fixed = parts.join(' ');
+        // git's hint names a subcommand ("git statsu" -> "status"); zsh's names the command
+        const gitTypo = ctx.output.match(/git: '([^']+)' is not a git command/i)?.[1];
+        const parts = ctx.command.trim().split(/\s+/).filter(Boolean);
+        let original: string;
+        let fixed: string;
+        if (gitTypo) {
+          original = gitTypo;
+          const at = parts[0] === 'git' ? parts.indexOf(gitTypo) : -1;
+          fixed = at > 0 ? ['git', ...parts.slice(1, at), suggestion, ...parts.slice(at + 1)].join(' ') : `git ${suggestion}`;
+        } else {
+          original = parts[0] || '';
+          fixed = [suggestion, ...parts.slice(1)].join(' ');
+        }
 
         return {
           ruleId: 'zsh_command_not_found_did_you_mean',
           ruleName: 'Command Suggestion Match',
-          title: `Run suggested command "${suggestion}"`,
-          explanation: `Shell suggests replacing '${parts[0]}' with '${suggestion}'`,
+          title: `Run "${fixed}"`,
+          explanation: `'${original}' is not a command; did you mean '${suggestion}'?`,
           fixedCommand: fixed,
           confidence: 0.94,
           autoExecutable: true
