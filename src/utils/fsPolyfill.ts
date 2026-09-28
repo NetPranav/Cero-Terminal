@@ -1,62 +1,127 @@
 /**
- * fsPolyfill.ts — Browser-Safe Filesystem Polyfill for Tauri Webview
- * 
- * Provides safe, non-throwing stubs for Node's 'fs' module when running in browser context.
+ * fsPolyfill.ts — synchronous `fs` for the Tauri webview, backed by ~/.sentinel.
+ *
+ * Several learning stores (knowledge deficits, DPO pairs, steering vectors, dream records, the
+ * model manifest) were written against Node's synchronous fs. In the webview `fs` used to be a
+ * no-op, so none of them ever persisted or reloaded. Now:
+ * - hydrateSentinelStore() loads the small .json/.jsonl files under ~/.sentinel once at startup;
+ * - reads of any path containing "/.sentinel/" are served from that cache;
+ * - writes and appends update the cache and are persisted by Rust commands confined to
+ *   ~/.sentinel.
+ * Paths outside ~/.sentinel behave as before (absent / no-op).
  */
 
-export function existsSync(): boolean {
+type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+
+const cache = new Map<string, string>();
+let invokeFn: Invoke | null = null;
+
+/** "/home/u/.sentinel/learning/x.jsonl" (or "/tmp/.sentinel/...") -> "learning/x.jsonl" */
+export function sentinelRelativePath(filePath: unknown): string | null {
+  if (typeof filePath !== 'string') return null;
+  const normalized = filePath.replace(/\\/g, '/');
+  const marker = '/.sentinel/';
+  const idx = normalized.indexOf(marker);
+  if (idx === -1) return null;
+  const rel = normalized.slice(idx + marker.length).replace(/^\/+/, '');
+  return rel && !rel.split('/').includes('..') ? rel : null;
+}
+
+function persist(command: string, args: Record<string, unknown>): void {
+  invokeFn?.(command, args).catch(err => console.warn(`[fsPolyfill] ${command} failed:`, err));
+}
+
+/** Load ~/.sentinel state into the cache. Safe to call outside Tauri (it simply does nothing). */
+export async function hydrateSentinelStore(invoke?: Invoke): Promise<number> {
+  try {
+    invokeFn = invoke ?? (await import('@tauri-apps/api/core')).invoke;
+    const snapshot = await invokeFn<{ home: string; files: Record<string, string> }>('sentinel_store_snapshot');
+    for (const [rel, content] of Object.entries(snapshot.files || {})) cache.set(rel, content);
+    return cache.size;
+  } catch {
+    return 0;
+  }
+}
+
+/** Test helper */
+export function __resetSentinelStore(): void {
+  cache.clear();
+  invokeFn = null;
+}
+
+export function existsSync(filePath?: unknown): boolean {
+  const rel = sentinelRelativePath(filePath);
+  if (rel === null) return false;
+  if (cache.has(rel)) return true;
+  const prefix = `${rel.replace(/\/+$/, '')}/`;
+  for (const key of cache.keys()) if (key.startsWith(prefix)) return true;
   return false;
 }
 
-export function readFileSync(): string {
-  return '';
+export function readFileSync(filePath?: unknown): string {
+  const rel = sentinelRelativePath(filePath);
+  return rel === null ? '' : (cache.get(rel) ?? '');
 }
 
-export function writeFileSync(): void {
-  // No-op in browser context; persistent storage delegates to Tauri IPC
+export function writeFileSync(filePath?: unknown, data?: unknown): void {
+  const rel = sentinelRelativePath(filePath);
+  if (rel === null) return;
+  const contents = typeof data === 'string' ? data : String(data ?? '');
+  cache.set(rel, contents);
+  persist('sentinel_store_write', { relativePath: rel, contents });
 }
 
-export function appendFileSync(): void {
-  // No-op in browser context
+export function appendFileSync(filePath?: unknown, data?: unknown): void {
+  const rel = sentinelRelativePath(filePath);
+  if (rel === null) return;
+  const contents = typeof data === 'string' ? data : String(data ?? '');
+  cache.set(rel, (cache.get(rel) ?? '') + contents);
+  persist('sentinel_store_append', { relativePath: rel, contents });
 }
 
-export function unlinkSync(): void {
-  // No-op in browser context
+export function unlinkSync(filePath?: unknown): void {
+  const rel = sentinelRelativePath(filePath);
+  if (rel === null) return;
+  cache.delete(rel);
+  persist('sentinel_store_remove', { relativePath: rel });
 }
 
 export function rmdirSync(): void {
-  // No-op in browser context
+  // Directories are implicit in the store
 }
 
-export function copyFileSync(): void {
-  // No-op in browser context
+export function copyFileSync(from?: unknown, to?: unknown): void {
+  const src = sentinelRelativePath(from);
+  if (src !== null && cache.has(src)) writeFileSync(to, cache.get(src));
 }
 
 export function mkdirSync(): void {
-  // No-op in browser context
+  // Parents are created on write
 }
 
-export function readdirSync(): string[] {
-  return [];
+export function readdirSync(dirPath?: unknown): string[] {
+  const rel = sentinelRelativePath(typeof dirPath === 'string' ? `${dirPath.replace(/\/+$/, '')}/` : dirPath);
+  const prefix = rel === null ? null : (rel ? `${rel.replace(/\/+$/, '')}/` : '');
+  if (prefix === null) return [];
+  const names = new Set<string>();
+  for (const key of cache.keys()) {
+    if (key.startsWith(prefix)) names.add(key.slice(prefix.length).split('/')[0]);
+  }
+  return [...names];
 }
 
-export function statSync(): { isFile: () => boolean; isDirectory: () => boolean; size: number } {
-  return {
-    isFile: () => false,
-    isDirectory: () => false,
-    size: 0,
-  };
+export function statSync(filePath?: unknown): { isFile: () => boolean; isDirectory: () => boolean; size: number } {
+  const rel = sentinelRelativePath(filePath);
+  const isFile = rel !== null && cache.has(rel);
+  const isDirectory = !isFile && existsSync(filePath);
+  return { isFile: () => isFile, isDirectory: () => isDirectory, size: isFile ? cache.get(rel!)!.length : 0 };
 }
 
 export const promises = {
-  readFile: async (): Promise<string> => '',
-  writeFile: async (): Promise<void> => {},
-  readdir: async (): Promise<string[]> => [],
-  stat: async (): Promise<{ isFile: () => boolean; isDirectory: () => boolean; size: number }> => ({
-    isFile: () => false,
-    isDirectory: () => false,
-    size: 0,
-  }),
+  readFile: async (filePath?: unknown): Promise<string> => readFileSync(filePath),
+  writeFile: async (filePath?: unknown, data?: unknown): Promise<void> => writeFileSync(filePath, data),
+  readdir: async (dirPath?: unknown): Promise<string[]> => readdirSync(dirPath),
+  stat: async (filePath?: unknown) => statSync(filePath),
   access: async (): Promise<void> => {},
 };
 

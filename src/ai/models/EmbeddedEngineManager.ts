@@ -260,6 +260,8 @@ export class EmbeddedEngineManager {
     }
 
     try {
+      // One IPC call; Rust answers model/engine presence with stat() instead of the two shell
+      // processes this used to spawn on every status-bar poll.
       const res = await invoke<{
         is_running: boolean;
         pid?: number;
@@ -268,10 +270,12 @@ export class EmbeddedEngineManager {
         port: number;
         is_cpu_fallback?: boolean;
         queued_requests?: number;
-      }>('get_embedded_llm_status');
+        model_downloaded?: boolean;
+        engine_installed?: boolean;
+      }>('get_embedded_llm_status', { modelFileName: EmbeddedEngineManager.RECOMMENDED_MODEL.fileName });
 
-      const modelExists = await this.checkModelExists();
-      const engineExists = await this.checkEngineExists();
+      const modelExists = res.model_downloaded ?? await this.checkModelExists();
+      const engineExists = res.engine_installed ?? await this.checkEngineExists();
 
       return {
         isRunning: res.is_running,
@@ -320,8 +324,21 @@ export class EmbeddedEngineManager {
   /**
    * Check if the recommended Qwen 2.5 3B GGUF file exists in ~/.sentinel/models/
    */
+  /** Model/engine presence from Rust (stat, no subprocess); undefined when unavailable. */
+  private async nativePresence(): Promise<{ model_downloaded?: boolean; engine_installed?: boolean } | undefined> {
+    try {
+      return await invoke<{ model_downloaded?: boolean; engine_installed?: boolean }>('get_embedded_llm_status', {
+        modelFileName: EmbeddedEngineManager.RECOMMENDED_MODEL.fileName
+      });
+    } catch {
+      return undefined;
+    }
+  }
+
   public async checkModelExists(): Promise<boolean> {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') return true;
+    const native = await this.nativePresence();
+    if (typeof native?.model_downloaded === 'boolean') return native.model_downloaded;
     try {
       const checkCmd = `test -f "$HOME/.sentinel/models/${EmbeddedEngineManager.RECOMMENDED_MODEL.fileName}" && echo "exists"`;
       const res = await invoke<{ stdout: string }>('execute_command', {
@@ -339,6 +356,8 @@ export class EmbeddedEngineManager {
    */
   public async checkEngineExists(): Promise<boolean> {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') return true;
+    const native = await this.nativePresence();
+    if (typeof native?.engine_installed === 'boolean') return native.engine_installed;
     try {
       const checkCmd = `test -x "$HOME/.sentinel/engine/current/llama-server" || test -x "$HOME/.sentinel/bin/llama-server" || command -v llama-server >/dev/null 2>&1 || test -x "/usr/lib/ollama/llama-server"`;
       const res = await invoke<{ code: number }>('execute_command', {

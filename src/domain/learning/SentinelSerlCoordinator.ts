@@ -18,6 +18,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { ShadowPtySimulator } from '../../ai/agent/ShadowPtySimulator';
+import { PowerState, readPowerState } from './PowerState';
 import { KnowledgeDeficitLogger, KnowledgeDeficitRecord } from './KnowledgeDeficitLogger';
 import { ReflexionEngine, ReflexionResult } from './ReflexionEngine';
 import { DpoDatasetEngine, DpoPair } from './DpoDatasetEngine';
@@ -107,6 +108,8 @@ export interface SentinelSerlCoordinatorOptions {
   toolTestCasesPath?: string;
   /** Replay buffer configuration */
   replayBufferConfig?: ReplayBufferConfig;
+  /** Power source probe (defaults to sysfs/pmset via readPowerState) */
+  powerChecker?: () => Promise<PowerState>;
 }
 
 export class SentinelSerlCoordinator {
@@ -130,9 +133,17 @@ export class SentinelSerlCoordinator {
   private isStarted: boolean = false;
   private idleMonitorTimer?: NodeJS.Timeout;
   private lastActivityTimestamp: number = Date.now();
+  private lastReflexionAt = 0;
+  private powerChecker: () => Promise<PowerState>;
+
+  /** Background reflexion waits for real idleness, not a 15 s pause between keystrokes */
+  public static readonly REFLEXION_MIN_IDLE_SECONDS = 120;
+  /** At most one background reflexion pass per window */
+  public static readonly REFLEXION_INTERVAL_MS = 10 * 60_000;
 
   constructor(options?: SentinelSerlCoordinatorOptions) {
-    this.shadowSimulator = options?.shadowSimulator || ShadowPtySimulator.getInstance();
+    // Background work must not compile or download: no real dry-runs (cargo check, pip --dry-run)
+    this.shadowSimulator = options?.shadowSimulator || new ShadowPtySimulator({ allowDryRuns: false });
     this.deficitLogger = options?.deficitLogger || KnowledgeDeficitLogger.getInstance();
     this.dpoEngine = options?.dpoEngine || DpoDatasetEngine.getInstance();
     this.steeringManager = options?.steeringManager || ActivationSteeringManager.getInstance();
@@ -142,6 +153,15 @@ export class SentinelSerlCoordinator {
     this.ruleOracle = options?.ruleOracle || DeterministicRuleOracle.getInstance();
     this.manifestManager = options?.manifestManager || ModelManifestManager.getInstance();
     this.commandExecutor = options?.commandExecutor;
+    this.powerChecker = options?.powerChecker || (async () => {
+      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
+        return { onAcPower: true, batteryLevelPercent: 100 };
+      }
+      return readPowerState(async (cmd) => {
+        const { invoke } = await import('@tauri-apps/api/core');
+        return invoke<{ stdout: string }>('execute_command', { command: 'sh', args: ['-c', cmd], timeoutMs: 5000 });
+      });
+    });
 
     // Resolve tool test cases path
     const cwd = typeof process !== 'undefined' && typeof process.cwd === 'function' ? process.cwd() : '.';
@@ -162,6 +182,9 @@ export class SentinelSerlCoordinator {
       shadowSimulator: this.shadowSimulator,
       dpoEngine: this.dpoEngine,
       deficitLogger: this.deficitLogger,
+      // Portable replacements for the macOS-only pmset/ioreg probes
+      powerChecker: () => this.powerChecker(),
+      idleChecker: async () => Math.round((Date.now() - this.lastActivityTimestamp) / 1000),
     });
   }
 
@@ -184,8 +207,8 @@ export class SentinelSerlCoordinator {
     this.isStarted = true;
     this.lastActivityTimestamp = Date.now();
 
-    // Start background reflexion worker for idle periods
-    this.reflexionEngine.startIdleWorker();
+    // Background reflexion is scheduled only from onTerminalIdle (idle, AC power, rate-limited);
+    // the engine's own fixed 30 s timer ran regardless of activity.
 
     // Start periodic background monitor for idle state & dream transitions
     this.idleMonitorTimer = setInterval(() => {
@@ -336,10 +359,15 @@ export class SentinelSerlCoordinator {
    * - >1200s (20 mins): DreamStateScheduler checks power and initiates self-play.
    */
   public async onTerminalIdle(idleSeconds: number): Promise<void> {
-    // Phase 4.3: Idle Reflexion Worker
-    if (idleSeconds >= 15 && idleSeconds < 1200) {
+    // Phase 4.3: Idle Reflexion Worker. Only when the user has really stepped away, the
+    // machine is on AC power, no model request is in flight, and not more than once per window.
+    const reflexionDue = Date.now() - this.lastReflexionAt >= SentinelSerlCoordinator.REFLEXION_INTERVAL_MS;
+    if (idleSeconds >= SentinelSerlCoordinator.REFLEXION_MIN_IDLE_SECONDS && idleSeconds < 1200 && reflexionDue) {
       const unresolved = this.deficitLogger.getUnresolvedDeficits();
-      if (unresolved.length > 0) {
+      const inferenceBusy = this.embeddedEngine.getInferenceQueueStatus().queuedCount > 0
+        || Boolean(this.embeddedEngine.getInferenceQueueStatus().activeRequest);
+      if (unresolved.length > 0 && !inferenceBusy && (await this.powerChecker()).onAcPower) {
+        this.lastReflexionAt = Date.now();
         await this.reflexionEngine.reflectOnDeficit(unresolved[0]);
         // Sync newly resolved deficits into DPO dataset
         this.dpoEngine.syncWithDeficitLogger(this.deficitLogger);

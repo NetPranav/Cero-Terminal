@@ -187,8 +187,12 @@ describe('SentinelSerlCoordinator — End-to-End Orchestrator', () => {
         };
       });
 
-      // Trigger idle event (e.g. 25s)
+      // A short pause between keystrokes is not idleness
       await coordinator.onTerminalIdle(25);
+      expect(reflexionEngine.reflectOnDeficit).not.toHaveBeenCalled();
+
+      // Two and a half minutes idle on AC power
+      await coordinator.onTerminalIdle(150);
 
       expect(reflexionEngine.reflectOnDeficit).toHaveBeenCalled();
       const pairs = dpoEngine.getAllPairs();
@@ -307,6 +311,29 @@ describe('SentinelSerlCoordinator — End-to-End Orchestrator', () => {
       expect(res.grammar).toBeDefined();
       expect(res.grammar).toContain('root ::=');
       expect(res.logitBias).toBeDefined();
+    });
+  });
+
+  describe('4b. Background work budget', () => {
+    const buildCoordinator = (onAcPower: boolean) => new SentinelSerlCoordinator({
+      shadowSimulator, deficitLogger, reflexionEngine, dpoEngine, steeringManager, dreamScheduler, embeddedEngine, episodicMemory,
+      powerChecker: async () => ({ onAcPower, batteryLevelPercent: onAcPower ? 100 : 40 }),
+    });
+
+    it('does not reflect on battery power', async () => {
+      deficitLogger.logDeficit({ goal: 'check battery', category: 'EXECUTION_ERROR' as any, attemptedCommand: 'acpi', stderr: 'acpi: command not found', context: { os: 'linux', cwd: '/tmp' } });
+      const spy = vi.spyOn(reflexionEngine, 'reflectOnDeficit');
+      await buildCoordinator(false).onTerminalIdle(300);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('reflects at most once per window', async () => {
+      deficitLogger.logDeficit({ goal: 'check battery', category: 'EXECUTION_ERROR' as any, attemptedCommand: 'acpi', stderr: 'acpi: command not found', context: { os: 'linux', cwd: '/tmp' } });
+      const spy = vi.spyOn(reflexionEngine, 'reflectOnDeficit').mockResolvedValue({ deficitId: 'x', success: false, originalGoal: '', candidateAttempts: [], durationMs: 1 } as any);
+      const coordinatorOnAc = buildCoordinator(true);
+      await coordinatorOnAc.onTerminalIdle(300);
+      await coordinatorOnAc.onTerminalIdle(330);
+      expect(spy).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -277,6 +277,108 @@ pub fn check_path_exists(path: String) -> bool {
     std::path::Path::new(&path).exists()
 }
 
+/// ~/.sentinel, where every learning store lives.
+fn sentinel_dir() -> Option<std::path::PathBuf> {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok()
+        .map(|home| std::path::PathBuf::from(home).join(".sentinel"))
+}
+
+/// Resolve a path relative to ~/.sentinel, refusing anything that escapes it.
+fn resolve_in_sentinel(relative: &str) -> Result<std::path::PathBuf, String> {
+    let rel = std::path::Path::new(relative);
+    if rel.is_absolute() || rel.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err(format!("Path must stay inside ~/.sentinel: {}", relative));
+    }
+    Ok(sentinel_dir().ok_or("HOME is not set")?.join(rel))
+}
+
+#[derive(Serialize)]
+pub struct SentinelStoreSnapshot {
+    pub home: String,
+    /// Relative path under ~/.sentinel -> file contents
+    pub files: std::collections::HashMap<String, String>,
+}
+
+/// Directories holding binaries or logs rather than state (models/ is walked: only its small
+/// .json files such as manifest.json are picked up; .gguf weights never match)
+const SNAPSHOT_SKIP_DIRS: [&str; 4] = ["bin", "engine", "logs", "flow_icons"];
+const SNAPSHOT_MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
+const SNAPSHOT_MAX_TOTAL_BYTES: u64 = 32 * 1024 * 1024;
+
+/// Contents of the small .json/.jsonl state files under ~/.sentinel, loaded once at startup so
+/// the webview's synchronous `fs` shim can serve the learning stores.
+#[tauri::command]
+pub fn sentinel_store_snapshot() -> Result<SentinelStoreSnapshot, String> {
+    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).map_err(|e| e.to_string())?;
+    let root = std::path::PathBuf::from(&home).join(".sentinel");
+    let mut files = std::collections::HashMap::new();
+    let mut total: u64 = 0;
+    let mut stack = vec![root.clone()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(meta) = entry.metadata() else { continue };
+            let rel = path.strip_prefix(&root).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+            if meta.is_dir() {
+                if dir == root && SNAPSHOT_SKIP_DIRS.contains(&rel.as_str()) {
+                    continue;
+                }
+                stack.push(path);
+            } else if meta.is_file()
+                && (rel.ends_with(".json") || rel.ends_with(".jsonl"))
+                && meta.len() <= SNAPSHOT_MAX_FILE_BYTES
+                && total + meta.len() <= SNAPSHOT_MAX_TOTAL_BYTES
+            {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    total += meta.len();
+                    files.insert(rel, content);
+                }
+            }
+        }
+    }
+    Ok(SentinelStoreSnapshot { home, files })
+}
+
+/// Append to a file under ~/.sentinel (creating it and its parents).
+#[tauri::command]
+pub fn sentinel_store_append(relative_path: String, contents: String) -> Result<(), String> {
+    use std::io::Write;
+    let path = resolve_in_sentinel(&relative_path)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|e| format!("Failed to open {}: {}", path.display(), e))?;
+    file.write_all(contents.as_bytes()).map_err(|e| e.to_string())
+}
+
+/// Replace a file under ~/.sentinel (creating it and its parents).
+#[tauri::command]
+pub fn sentinel_store_write(relative_path: String, contents: String) -> Result<(), String> {
+    let path = resolve_in_sentinel(&relative_path)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, contents).map_err(|e| format!("Failed to write {}: {}", path.display(), e))
+}
+
+/// Delete a file under ~/.sentinel; missing files are not an error.
+#[tauri::command]
+pub fn sentinel_store_remove(relative_path: String) -> Result<(), String> {
+    let path = resolve_in_sentinel(&relative_path)?;
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -296,6 +398,14 @@ mod tests {
 
     fn sh(script: &str) -> (String, Vec<String>) {
         ("sh".to_string(), vec!["-c".to_string(), script.to_string()])
+    }
+
+    #[test]
+    fn sentinel_store_paths_cannot_escape() {
+        assert!(resolve_in_sentinel("learning/deficits.jsonl").is_ok());
+        assert!(resolve_in_sentinel("../.ssh/authorized_keys").is_err());
+        assert!(resolve_in_sentinel("/etc/passwd").is_err());
+        assert!(resolve_in_sentinel("learning/../../x").is_err());
     }
 
     #[cfg(unix)]

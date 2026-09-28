@@ -7,8 +7,30 @@
  * inline remediation without requiring user prompt copy-pasting.
  */
 
-import { DiagnosticResult, ErrorDiagnosticsEngine } from '../../ai/agent/ErrorDiagnosticsEngine';
+import { ErrorDiagnosticsEngine } from '../../ai/agent/ErrorDiagnosticsEngine';
 import { SentinelSerlCoordinator } from '../learning/SentinelSerlCoordinator';
+import { getPlatform } from '../../shared/platform';
+
+/**
+ * Cheap gate in front of the rule oracle. Most terminal output (build progress, logs, redraws)
+ * contains no error at all, and running ~60 rules over the last 40 lines for every chunk was the
+ * observer's main cost.
+ */
+export const ERROR_SIGNAL = new RegExp([
+  'error', '\\berr\\b', 'err!', 'fatal', 'fail', 'exception', 'traceback', 'panic', 'denied', 'not found', 'no such',
+  'refused', 'in use', 'eaddrinuse', 'eacces', 'unable to', 'cannot', "can't", 'could not', 'timed out', 'segmentation',
+  'abort', 'conflict', 'rejected', 'hint:', 'already exists', 'lock', 'upstream', 'fast-forward', 'fetch first',
+  'nothing to commit', 'not staged', 'would be overwritten', 'ignored by', 'did you', 'similar command', 'missing',
+  'externally.managed', 'no crate', 'requires admin', 'overwrite', 'is a directory', 'does not exist', 'illegal',
+  'not permitted', 'superuser', 'not running', 'not a tty', 'damaged', 'servname', 'invalid', 'bad flag',
+  'no changes', 'another git process', 'err_'
+].join('|'), 'i');
+
+/** "failed" that is not a zero count ("0 failed", "failed: 0") */
+function reportsFailure(text: string): boolean {
+  if (/error:|fatal:|command not found|traceback|panicked at/i.test(text)) return true;
+  return /\bfailed\b/i.test(text) && !/\b0\s+failed\b|\bfailed:?\s+0\b/i.test(text);
+}
 
 export interface RemediationPrompt {
   id: string;
@@ -31,6 +53,8 @@ export class PtyOutputObserver {
   private activeRemediation: RemediationPrompt | null = null;
   private listeners: ((remediation: RemediationPrompt | null) => void)[] = [];
   private isSuspended: boolean = false;
+  /** Last command reported to SERL, so one failing command is logged once, not once per chunk */
+  private lastReportedFailure = '';
 
   public static getInstance(): PtyOutputObserver {
     if (!PtyOutputObserver.instance) {
@@ -92,6 +116,10 @@ export class PtyOutputObserver {
       }
     }
 
+    if (!ERROR_SIGNAL.test(cleanChunk)) {
+      return null;
+    }
+
     const fullRecent = this.recentOutputBuffer.join('\n');
     const diag = ErrorDiagnosticsEngine.diagnose(fullRecent, undefined, undefined, cwd, detectedCommand);
 
@@ -112,14 +140,15 @@ export class PtyOutputObserver {
       this.activeRemediation = remediation;
       this.notify(remediation);
       return remediation;
-    } else if (detectedCommand && (cleanChunk.includes('error:') || cleanChunk.includes('command not found') || cleanChunk.includes('fatal:') || cleanChunk.includes('failed'))) {
+    } else if (detectedCommand && reportsFailure(cleanChunk) && detectedCommand !== this.lastReportedFailure) {
+      this.lastReportedFailure = detectedCommand;
       try {
         SentinelSerlCoordinator.getInstance().onCommandExecutionFailure(
           `Shell command: ${detectedCommand}`,
           detectedCommand,
           1,
           cleanChunk,
-          { cwd, os: 'macos' }
+          { cwd, os: getPlatform() }
         );
       } catch {
         // Non-blocking background deficit logging

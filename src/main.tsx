@@ -3,9 +3,17 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { DiagnosticLogger } from "./infrastructure/logging/DiagnosticLogger";
 import { UrlSchemeHandler } from "./domain/integration/UrlSchemeHandler";
+import { hydrateSentinelStore } from "./utils/fsPolyfill";
 
 async function bootstrap() {
   DiagnosticLogger.init().catch(() => {});
+
+  // Load ~/.sentinel learning state before any store is constructed, so synchronous reads in the
+  // stores see it. Bounded so a slow disk can never hold up the first paint.
+  await Promise.race([
+    hydrateSentinelStore(),
+    new Promise(resolve => setTimeout(resolve, 1500)),
+  ]);
 
   let initialPath: string | undefined;
   try {

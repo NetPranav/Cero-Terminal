@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PtyOutputObserver } from './PtyOutputObserver';
+import { ERROR_SIGNAL, PtyOutputObserver } from './PtyOutputObserver';
 
 describe('PtyOutputObserver — Passive Output Stream Error Detection', () => {
   let observer: PtyOutputObserver;
@@ -93,3 +93,48 @@ To push the current branch and set the remote as upstream, use
   });
 });
 
+describe('PtyOutputObserver error gate', () => {
+  // One real-world sample per DeterministicRuleOracle output trigger; none may be filtered out
+  const triggers = [
+    'fatal: The current branch main has no upstream branch.',
+    ' ! [rejected]        main -> main (fetch first)',
+    'Updates were rejected because the tip of your current branch is behind (non-fast-forward)',
+    'no changes added to commit (use "git add" and/or "git commit -a")',
+    'nothing to commit, working tree clean',
+    'Changes not staged for commit:',
+    'Another git process seems to be running in this repository',
+    'Your local changes to the following files would be overwritten by checkout:',
+    'The following paths are ignored by one of your .gitignore files:',
+    "No changes - did you forget to use 'git add'?",
+    'npm ERR! Missing script: "dev"',
+    'ERR_PNPM_NO_MATCHING_VERSION  No matching version found',
+    'error: externally-managed-environment',
+    'This environment is externally managed',
+    "error[E0432]: unresolved import: no crate named `serde'",
+    'rm: build: is a directory',
+    'cp: src is a directory (not copied).',
+    'The file /tmp/x.txt does not exist.',
+    'Error: listen EADDRINUSE: address already in use :::3000',
+    'kill: illegal pid: node',
+    'kill: (1) - Operation not permitted',
+    'This command has to be run with superuser privileges (under the root user on most systems).',
+    'npm ERR! code EACCES',
+    "gti: command not found. Did you mean git?",
+    'The most similar command is  git',
+    'Error response from daemon: Container 3f2a is not running',
+    'the input device is not a TTY',
+    'ssh: Could not resolve hostname x: nodename nor servname provided, or not known',
+    'sed: 1: "x": invalid command code .',
+    'sed: -e expression #1, char 9: bad flag in substitute command',
+  ];
+
+  it.each(triggers)('lets rule triggers through: %s', (line) => {
+    expect(ERROR_SIGNAL.test(line)).toBe(true);
+  });
+
+  it('skips ordinary output', () => {
+    for (const line of ['Compiling serde v1.0.219', '  VITE v7.0.4  ready in 312 ms', 'Tests  1553 passed (1553)', '[##########] 100%']) {
+      expect(ERROR_SIGNAL.test(line)).toBe(false);
+    }
+  });
+});

@@ -1,18 +1,15 @@
 /**
- * SystemKnowledgeScanner.ts — Deep Linux System Knowledge Scanner & Persistent Profile
- * 
- * Audits 8 core Linux system dimensions:
- * 1. Distribution, OS release & Desktop session
- * 2. Hardware specs, CPU, RAM & GPU/VRAM acceleration
- * 3. Installed desktop applications & default handlers
- * 4. Developer toolchains, compilers & runtimes
- * 5. Filesystem mount points, types & snapshot status
- * 6. Installed shells & dotfile configurations
- * 7. Network topology & active connections
- * 8. Running services & listening ports
- * 
- * Persists profile to local storage & disk cache (~/.sentinel/knowledge/system_profile.json)
- * and provides zero-latency in-memory lookup for the AI Copilot.
+ * SystemKnowledgeScanner.ts — what Sentinel knows about this machine.
+ *
+ * One batched shell script collects the profile (distro, kernel, desktop session, CPU/RAM, GPU
+ * vendor, installed apps, toolchains, package managers, ROS 2 installs, shells, services). It
+ * replaced ~25 sequential probes that spawned roughly 2,000 processes (grep/cut/awk per
+ * .desktop file). A cheap fingerprint of the package databases and app directories decides
+ * whether a rescan is needed at all, so a normal startup costs one `stat` call.
+ *
+ * Unknown values are left out. The old scanner filled gaps with invented values (8 GB RAM,
+ * 4 cores, a 256 GB ext4 root, a fake app list) that were then injected into the model prompt
+ * as facts about the user's machine.
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -42,26 +39,43 @@ export interface DeveloperRuntimesInfo {
   go?: string;
   dockerRunning?: boolean;
   packageManagers: string[];
+  /** The system package manager for this distro (pacman, dnf, apt, zypper, ...) */
+  preferredPackageManager?: string;
+  /** Developer tools found on PATH (git, cmake, code, nvim, ...) */
+  tools?: string[];
 }
 
 export interface HardwareProfileInfo {
-  cpuModel: string;
-  cpuCores: number;
-  cpuArch: string;
-  ramTotalGb: number;
-  ramAvailableGb: number;
-  swapTotalGb: number;
+  cpuModel?: string;
+  cpuCores?: number;
+  cpuArch?: string;
+  ramTotalGb?: number;
+  ramAvailableGb?: number;
+  swapTotalGb?: number;
   gpuName?: string;
   gpuVramGb?: number;
+  /** nvidia | amd | intel, from /sys/class/drm vendor ids */
+  gpuVendors?: string[];
+  hasVulkan?: boolean;
   isGpuAvailable: boolean;
   batteryPercent?: number;
 }
 
+export interface RosInstallInfo {
+  /** Installed distros under /opt/ros (e.g. humble, jazzy) */
+  distros: string[];
+  /** ROS_DISTRO from the environment Sentinel was started in */
+  activeDistro?: string;
+}
+
 export interface SystemProfile {
   scannedAt: number;
+  /** Fingerprint of package databases and app directories at scan time */
+  fingerprint?: string;
   os: {
     name: string;
     id: string;
+    idLike?: string;
     version: string;
     kernel: string;
     initSystem: string;
@@ -77,6 +91,7 @@ export interface SystemProfile {
     defaultFileManager?: string;
   };
   developer: DeveloperRuntimesInfo;
+  ros?: RosInstallInfo;
   filesystems: FilesystemMountInfo[];
   shells: {
     available: string[];
@@ -95,12 +110,253 @@ export interface SystemProfile {
   };
 }
 
+/**
+ * Changes when packages are installed/removed, apps are added, or the OS/kernel is updated.
+ * Directory mtimes change on add/remove, which is exactly when the profile goes stale.
+ */
+export const FINGERPRINT_SCRIPT = `for p in /etc/os-release /var/lib/pacman/local /var/lib/dpkg/status /var/lib/rpm /var/lib/flatpak/app /usr/share/applications "$HOME/.local/share/applications" /opt/ros; do stat -c '%Y' "$p" 2>/dev/null || stat -f '%m' "$p" 2>/dev/null || echo 0; done; uname -r`;
+
+/** The whole scan in one shell invocation. Sections start with "@@name". POSIX sh + mawk safe. */
+export const SCAN_SCRIPT = `
+emit() { printf '@@%s\\n' "$1"; }
+emit os
+cat /etc/os-release 2>/dev/null
+printf 'KERNEL=%s\\nARCH=%s\\n' "$(uname -r)" "$(uname -m)"
+printf 'SESSION=%s\\nDESKTOP=%s\\n' "\${XDG_SESSION_TYPE:-}" "\${XDG_CURRENT_DESKTOP:-\${DESKTOP_SESSION:-}}"
+printf 'INIT=%s\\n' "$(cat /proc/1/comm 2>/dev/null)"
+emit cpu
+grep -m1 '^model name' /proc/cpuinfo 2>/dev/null
+printf 'CORES=%s\\n' "$(nproc 2>/dev/null)"
+emit mem
+grep -E '^(MemTotal|MemAvailable|SwapTotal):' /proc/meminfo 2>/dev/null
+emit gpu
+for v in /sys/class/drm/card[0-9]*/device/vendor; do [ -r "$v" ] && printf 'VENDOR=%s\\n' "$(cat "$v")"; done
+command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits 2>/dev/null | sed 's/^/NVIDIA=/'
+( (ldconfig -p 2>/dev/null | grep -q 'libvulkan\\.so\\.1') || ls /usr/lib*/libvulkan.so.1 /usr/lib/*/libvulkan.so.1 >/dev/null 2>&1 ) && echo VULKAN=1
+emit apps
+set --
+for d in /usr/share/applications "$HOME/.local/share/applications" /var/lib/flatpak/exports/share/applications "$HOME/.local/share/flatpak/exports/share/applications"; do
+  for f in "$d"/*.desktop; do [ -f "$f" ] && set -- "$@" "$f"; done
+done
+[ "$#" -gt 0 ] && awk 'FNR==1 { if (n != "" && e != "" && hide != "1") print n "||" e "||" c; n=""; e=""; c=""; hide=""; sec="" }
+  /^\\[/ { sec=$0; next }
+  sec == "[Desktop Entry]" && /^Name=/ && n == "" { n=substr($0, 6) }
+  sec == "[Desktop Entry]" && /^Exec=/ && e == "" { e=substr($0, 6) }
+  sec == "[Desktop Entry]" && /^Categories=/ && c == "" { c=substr($0, 12) }
+  sec == "[Desktop Entry]" && (/^NoDisplay=true/ || /^Hidden=true/) { hide="1" }
+  END { if (n != "" && e != "" && hide != "1") print n "||" e "||" c }' "$@" 2>/dev/null | sort -u | head -300
+emit dev
+for t in python3 node rustc gcc go; do command -v "$t" >/dev/null 2>&1 && printf '%s=%s\\n' "$t" "$("$t" --version 2>/dev/null | head -n1)"; done
+[ -S /var/run/docker.sock ] && echo 'DOCKER_SOCKET=1'
+for t in git cmake make ninja docker podman cargo npm pnpm yarn bun pip3 uv conda code codium nvim vim emacs tmux kubectl colcon rosdep; do command -v "$t" >/dev/null 2>&1 && echo "TOOL=$t"; done
+emit pkg
+for t in pacman yay paru apt-get dnf zypper flatpak snap nix-env brew; do command -v "$t" >/dev/null 2>&1 && echo "$t"; done
+emit ros
+for d in /opt/ros/*; do [ -f "$d/setup.bash" ] && echo "DISTRO=\${d##*/}"; done
+printf 'ENV=%s\\n' "\${ROS_DISTRO:-}"
+emit fs
+df -PT -x tmpfs -x devtmpfs -x squashfs -x overlay -x efivarfs 2>/dev/null | tail -n +2
+emit shells
+grep '^/' /etc/shells 2>/dev/null
+printf 'DEFAULT=%s\\n' "\${SHELL:-}"
+for f in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.config/fish/config.fish" "$HOME/.config/hypr/hyprland.conf" "$HOME/.tmux.conf" "$HOME/.config/nvim/init.lua"; do [ -f "$f" ] && echo "DOT=$f"; done
+emit net
+command -v iwgetid >/dev/null 2>&1 && iwgetid -r 2>/dev/null | sed 's/^/SSID=/'
+ip -o -4 addr show scope global 2>/dev/null | awk '{ print "IP=" $4 }'
+ip -o link show 2>/dev/null | awk -F': ' '{ print "LINK=" $2 }'
+emit services
+systemctl list-units --type=service --state=running --no-pager --no-legend --plain 2>/dev/null | awk '{ print $1 }' | head -40
+emit ports
+ss -H -ltn 2>/dev/null | awk '{ print $4 }' | sed 's/.*://' | sort -nu | head -30
+emit browser
+xdg-settings get default-web-browser 2>/dev/null
+emit end
+`;
+
+const GPU_VENDOR_IDS: Record<string, string> = { '0x10de': 'nvidia', '0x1002': 'amd', '0x8086': 'intel' };
+
+function sections(raw: string): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  let current = '';
+  for (const line of raw.split('\n')) {
+    const header = line.match(/^@@([a-z]+)$/);
+    if (header) {
+      current = header[1];
+      map.set(current, []);
+    } else if (current && line.trim()) {
+      map.get(current)!.push(line);
+    }
+  }
+  return map;
+}
+
+function keyValues(lines: string[]): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const line of lines) {
+    const i = line.indexOf('=');
+    if (i <= 0) continue;
+    const key = line.slice(0, i).trim();
+    const value = line.slice(i + 1).trim().replace(/^["']|["']$/g, '');
+    map.set(key, [...(map.get(key) || []), value]);
+  }
+  return map;
+}
+
+const first = (kv: Map<string, string[]>, key: string) => kv.get(key)?.[0] || undefined;
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** Pick the distro's own package manager, preferring AUR helpers on Arch. */
+export function preferredPackageManager(osId: string, idLike: string | undefined, available: string[]): string | undefined {
+  const ids = `${osId} ${idLike || ''}`.toLowerCase();
+  const has = (pm: string) => available.includes(pm);
+  if (/\b(arch|manjaro|endeavouros|garuda|cachyos)\b/.test(ids)) {
+    return ['paru', 'yay', 'pacman'].find(has);
+  }
+  if (/\b(fedora|rhel|centos|rocky|almalinux|nobara)\b/.test(ids)) return has('dnf') ? 'dnf' : undefined;
+  if (/\b(debian|ubuntu|linuxmint|pop|elementary|zorin|kali)\b/.test(ids)) return has('apt-get') ? 'apt' : undefined;
+  if (/\b(opensuse|suse)\b/.test(ids)) return has('zypper') ? 'zypper' : undefined;
+  if (/\bnixos\b/.test(ids)) return has('nix-env') ? 'nix' : undefined;
+  return ['pacman', 'dnf', 'apt-get', 'zypper'].find(has)?.replace('apt-get', 'apt');
+}
+
+/** Parse SCAN_SCRIPT output into a profile. Pure; unknown values stay undefined. */
+export function parseScanOutput(raw: string, now = Date.now()): SystemProfile {
+  const s = sections(raw);
+  const os = keyValues(s.get('os') || []);
+  const session = (first(os, 'SESSION') || '').toLowerCase();
+
+  const cpuLines = s.get('cpu') || [];
+  const cpuModel = cpuLines.find(l => l.startsWith('model name'))?.split(':').slice(1).join(':').trim();
+  const cores = parseInt(first(keyValues(cpuLines), 'CORES') || '', 10);
+
+  const mem: Record<string, number> = {};
+  for (const line of s.get('mem') || []) {
+    const m = line.match(/^(\w+):\s+(\d+)/);
+    if (m) mem[m[1]] = parseInt(m[2], 10) / (1024 * 1024);
+  }
+
+  const gpu = keyValues(s.get('gpu') || []);
+  const gpuVendors = Array.from(new Set((gpu.get('VENDOR') || []).map(v => GPU_VENDOR_IDS[v.toLowerCase()]).filter(Boolean)));
+  const nvidia = first(gpu, 'NVIDIA')?.split(',').map(p => p.trim());
+
+  const items: InstalledAppInfo[] = [];
+  const seen = new Set<string>();
+  for (const line of s.get('apps') || []) {
+    const [name, execLine, category] = line.split('||');
+    if (!name || !execLine) continue;
+    // Exec=env FOO=1 /usr/bin/app %U -> app
+    const tokens = execLine.split(/\s+/).filter(t => t && !/^%[a-zA-Z]$/.test(t));
+    let i = 0;
+    if (tokens[i] === 'env') {
+      i++;
+      while (tokens[i] && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++;
+    }
+    const binary = (tokens[i] || '').replace(/["']/g, '').split('/').pop() || '';
+    if (!binary || seen.has(`${name}|${binary}`)) continue;
+    seen.add(`${name}|${binary}`);
+    items.push({ name: name.trim(), binary, execCmd: execLine.trim(), category: category?.trim() || undefined });
+  }
+
+  const dev = keyValues(s.get('dev') || []);
+  const version = (key: string, strip: RegExp) => first(dev, key)?.replace(strip, '').trim().split(/\s+/)[0] || undefined;
+  const packageManagers = (s.get('pkg') || []).map(l => l.trim()).filter(Boolean);
+
+  const ros = keyValues(s.get('ros') || []);
+  const rosDistros = ros.get('DISTRO') || [];
+  const rosEnv = first(ros, 'ENV');
+
+  const filesystems: FilesystemMountInfo[] = [];
+  for (const line of s.get('fs') || []) {
+    const parts = line.trim().split(/\s+/);
+    if (parts.length < 7) continue;
+    const [, fsType, blocks, , avail, , mountPoint] = parts;
+    const totalGb = round1(parseInt(blocks, 10) / (1024 * 1024));
+    const freeGb = round1(parseInt(avail, 10) / (1024 * 1024));
+    if (!Number.isFinite(totalGb) || totalGb <= 0) continue;
+    filesystems.push({
+      mountPoint,
+      fsType,
+      totalGb,
+      freeGb,
+      freePercent: Math.round((freeGb / totalGb) * 100),
+      hasSnapshots: fsType === 'btrfs' || fsType === 'zfs'
+    });
+  }
+
+  const shellLines = s.get('shells') || [];
+  const shellKv = keyValues(shellLines);
+  const net = keyValues(s.get('net') || []);
+  const links = net.get('LINK') || [];
+  const localIp = first(net, 'IP')?.split('/')[0];
+
+  return {
+    scannedAt: now,
+    os: {
+      name: first(os, 'PRETTY_NAME') || first(os, 'NAME') || 'Linux',
+      id: first(os, 'ID') || 'linux',
+      idLike: first(os, 'ID_LIKE'),
+      version: first(os, 'VERSION_ID') || 'rolling',
+      kernel: first(os, 'KERNEL') || 'unknown',
+      initSystem: first(os, 'INIT') || 'unknown',
+      sessionType: session === 'wayland' ? 'wayland' : session === 'x11' ? 'x11' : session === 'tty' ? 'tty' : 'unknown',
+      desktopEnvironment: first(os, 'DESKTOP') || 'unknown'
+    },
+    hardware: {
+      cpuModel,
+      cpuCores: Number.isFinite(cores) && cores > 0 ? cores : undefined,
+      cpuArch: first(os, 'ARCH'),
+      ramTotalGb: mem.MemTotal !== undefined ? round1(mem.MemTotal) : undefined,
+      ramAvailableGb: mem.MemAvailable !== undefined ? round1(mem.MemAvailable) : undefined,
+      swapTotalGb: mem.SwapTotal !== undefined ? round1(mem.SwapTotal) : undefined,
+      gpuName: nvidia?.[0],
+      gpuVramGb: nvidia?.[1] ? Math.round(parseInt(nvidia[1], 10) / 1024) : undefined,
+      gpuVendors,
+      hasVulkan: first(gpu, 'VULKAN') === '1',
+      isGpuAvailable: gpuVendors.some(v => v === 'nvidia' || v === 'amd')
+    },
+    apps: {
+      totalCount: items.length,
+      items,
+      defaultBrowser: (s.get('browser') || [])[0]?.trim() || undefined
+    },
+    developer: {
+      python: version('python3', /^Python/i),
+      node: version('node', /^v/),
+      rust: version('rustc', /^rustc/),
+      gcc: first(dev, 'gcc')?.match(/(\d+\.\d+(?:\.\d+)?)/)?.[1],
+      go: first(dev, 'go')?.match(/go(\d+\.\d+(?:\.\d+)?)/)?.[1],
+      dockerRunning: first(dev, 'DOCKER_SOCKET') === '1',
+      packageManagers,
+      preferredPackageManager: preferredPackageManager(first(os, 'ID') || '', first(os, 'ID_LIKE'), packageManagers),
+      tools: dev.get('TOOL') || []
+    },
+    ros: rosDistros.length || rosEnv ? { distros: rosDistros, activeDistro: rosEnv } : undefined,
+    filesystems,
+    shells: {
+      available: shellLines.filter(l => l.startsWith('/') && !l.includes('git-shell')).map(l => l.trim()),
+      defaultShell: first(shellKv, 'DEFAULT') || '/bin/bash',
+      detectedDotfiles: shellKv.get('DOT') || []
+    },
+    network: {
+      connectedSsid: first(net, 'SSID'),
+      localIp,
+      activeVpn: links.find(l => /^(tun|wg|tailscale|proton|nordlynx)/.test(l)),
+      hasInternet: Boolean(localIp)
+    },
+    services: {
+      runningServices: (s.get('services') || []).map(l => l.trim()).filter(Boolean),
+      listeningPorts: (s.get('ports') || []).map(l => parseInt(l, 10)).filter(n => Number.isFinite(n) && n > 0)
+    }
+  };
+}
+
 export class SystemKnowledgeScanner {
   private static instance: SystemKnowledgeScanner;
   private cachedProfile: SystemProfile | null = null;
-  private isScanning: boolean = false;
+  private isScanning = false;
   private static readonly STORAGE_KEY = 'sentinel_system_profile';
-  private static readonly CACHE_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
+  /** Rescan at least this often even if the fingerprint did not change */
+  private static readonly MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7;
 
   private constructor() {
     this.loadFromStorage();
@@ -115,15 +371,8 @@ export class SystemKnowledgeScanner {
 
   private loadFromStorage(): void {
     try {
-      if (typeof localStorage !== 'undefined') {
-        const raw = localStorage.getItem(SystemKnowledgeScanner.STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as SystemProfile;
-          if (Date.now() - parsed.scannedAt < SystemKnowledgeScanner.CACHE_TTL_MS) {
-            this.cachedProfile = parsed;
-          }
-        }
-      }
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(SystemKnowledgeScanner.STORAGE_KEY) : null;
+      if (raw) this.cachedProfile = JSON.parse(raw) as SystemProfile;
     } catch {
       // Non-fatal
     }
@@ -144,70 +393,72 @@ export class SystemKnowledgeScanner {
     return this.cachedProfile;
   }
 
+  /** Parse and store raw SCAN_SCRIPT output (also used by tests). */
+  public applyScanOutput(raw: string, fingerprint?: string): SystemProfile {
+    const profile = parseScanOutput(raw);
+    profile.fingerprint = fingerprint;
+    this.saveToStorage(profile);
+    return profile;
+  }
+
   /**
    * Fast in-memory lookup for an application by name or binary
    */
   public findApplication(query: string): InstalledAppInfo | undefined {
     if (!this.cachedProfile) return undefined;
     const q = query.toLowerCase().trim();
-    return this.cachedProfile.apps.items.find(
-      app => app.name.toLowerCase() === q ||
-             app.binary.toLowerCase() === q ||
-             app.name.toLowerCase().includes(q) ||
-             app.binary.toLowerCase().includes(q)
-    );
+    if (!q) return undefined;
+    const apps = this.cachedProfile.apps.items;
+    return apps.find(app => app.name.toLowerCase() === q || app.binary.toLowerCase() === q)
+      || apps.find(app => app.name.toLowerCase().includes(q) || app.binary.toLowerCase().includes(q));
   }
 
   /**
-   * Generates a concise single-block summary for LLM context injection
+   * Stable facts for the model prompt. Volatile values (free disk, IP, open ports) are left out
+   * on purpose: they go stale between scans, and the model can run a command for the live value.
    */
   public getQuickSummary(): string {
-    if (!this.cachedProfile) {
-      return 'System Knowledge: Linux system (scan pending)';
+    const p = this.cachedProfile;
+    if (!p) {
+      return 'SYSTEM KNOWLEDGE PROFILE: not scanned yet';
     }
 
-    const p = this.cachedProfile;
-    const topApps = p.apps.items
-      .slice(0, 10)
-      .map(a => `${a.name} (${a.binary})`)
-      .join(', ');
+    const hw = p.hardware;
+    const cpu = [hw.cpuModel, hw.cpuCores ? `${hw.cpuCores} threads` : undefined, hw.cpuArch].filter(Boolean).join(', ');
+    const gpu = hw.gpuName
+      || (hw.gpuVendors && hw.gpuVendors.length ? hw.gpuVendors.join(' + ').toUpperCase() : undefined);
+    const toolchains = [
+      p.developer.python && `Python ${p.developer.python}`,
+      p.developer.node && `Node ${p.developer.node}`,
+      p.developer.rust && `Rust ${p.developer.rust}`,
+      p.developer.gcc && `GCC ${p.developer.gcc}`,
+      p.developer.go && `Go ${p.developer.go}`,
+      p.developer.dockerRunning && 'Docker'
+    ].filter(Boolean).join(', ');
+    const apps = p.apps.items.slice(0, 15).map(a => `${a.name} (${a.binary})`).join(', ');
 
-    const rootFs = p.filesystems.find(f => f.mountPoint === '/') || p.filesystems[0];
-    const fsStr = rootFs 
-      ? `Root: ${rootFs.fsType} (${rootFs.freeGb}GB free / ${rootFs.totalGb}GB)` 
-      : 'Filesystem ready';
-
-    const pkgManagers = p.developer.packageManagers.join(', ') || 'native';
-    const gpuStr = p.hardware.isGpuAvailable 
-      ? `GPU: ${p.hardware.gpuName || 'Accelerated'} (${p.hardware.gpuVramGb || 0}GB VRAM)` 
-      : 'GPU: None / Integrated';
-
-    return [
-      `SYSTEM KNOWLEDGE PROFILE:`,
-      `• OS: ${p.os.name} ${p.os.version} (Kernel ${p.os.kernel}, ${p.os.sessionType}/${p.os.desktopEnvironment}) | Init: ${p.os.initSystem}`,
-      `• Hardware: ${p.hardware.cpuModel} (${p.hardware.cpuCores} cores, ${p.hardware.cpuArch}) | ${p.hardware.ramTotalGb}GB RAM | ${gpuStr}`,
-      `• Storage: ${fsStr} | Storage Mounts: ${p.filesystems.length}`,
-      `• Package Managers: ${pkgManagers}`,
-      `• Installed Apps (${p.apps.totalCount}): ${topApps}${p.apps.totalCount > 10 ? '...' : ''}`,
-      `• Developer Toolchains: ${p.developer.python ? `Python ${p.developer.python}, ` : ''}${p.developer.node ? `Node ${p.developer.node}, ` : ''}${p.developer.rust ? `Rust ${p.developer.rust}, ` : ''}${p.developer.dockerRunning ? 'Docker (running)' : 'Docker (idle/none)'}`,
-      `• Shells: ${p.shells.defaultShell} (available: ${p.shells.available.join(', ')})`,
-      `• Network: ${p.network.connectedSsid ? `Wi-Fi "${p.network.connectedSsid}"` : 'Active Interface'} (IP: ${p.network.localIp || '127.0.0.1'})${p.network.activeVpn ? ` | VPN: ${p.network.activeVpn}` : ''}`
-    ].join('\n');
+    const lines = [
+      'SYSTEM KNOWLEDGE PROFILE:',
+      `- OS: ${p.os.name} (kernel ${p.os.kernel}, ${p.os.sessionType} session, ${p.os.desktopEnvironment}, init ${p.os.initSystem})`,
+      cpu || hw.ramTotalGb ? `- Hardware: ${[cpu, hw.ramTotalGb ? `${hw.ramTotalGb} GB RAM` : undefined, gpu ? `GPU ${gpu}` : undefined].filter(Boolean).join(' | ')}` : undefined,
+      p.developer.preferredPackageManager
+        ? `- Package manager: ${p.developer.preferredPackageManager} (also: ${p.developer.packageManagers.join(', ') || 'none'})`
+        : (p.developer.packageManagers.length ? `- Package managers: ${p.developer.packageManagers.join(', ')}` : undefined),
+      toolchains ? `- Toolchains: ${toolchains}` : undefined,
+      p.developer.tools && p.developer.tools.length ? `- Tools on PATH: ${p.developer.tools.join(', ')}` : undefined,
+      p.ros ? `- ROS 2: ${p.ros.distros.join(', ') || 'none installed'}${p.ros.activeDistro ? ` (active: ${p.ros.activeDistro})` : ''}` : undefined,
+      `- Shell: ${p.shells.defaultShell}`,
+      apps ? `- Installed apps (${p.apps.totalCount}): ${apps}${p.apps.totalCount > 15 ? ', ...' : ''}` : undefined
+    ];
+    return lines.filter(Boolean).join('\n');
   }
 
-  /**
-   * Helper command execution wrapper across Tauri IPC and fallback
-   */
-  private async execCmd(cmd: string): Promise<string> {
+  private async execCmd(cmd: string, timeoutMs: number): Promise<string> {
     if (typeof window === 'undefined' || !(window as any).__TAURI_INTERNALS__) {
-      // In test/mock environments or plain webviews
       return '';
     }
     try {
-      const res = await invoke<{ stdout?: string; stderr?: string; code?: number }>('execute_command', {
-        command: 'sh',
-        args: ['-c', cmd]
-      });
+      const res = await invoke<{ stdout?: string }>('execute_command', { command: 'sh', args: ['-c', cmd], timeoutMs });
       return res?.stdout || '';
     } catch {
       return '';
@@ -215,366 +466,29 @@ export class SystemKnowledgeScanner {
   }
 
   /**
-   * Executes a full system knowledge scan asynchronously without blocking UI or PTY
+   * Scan the system, or reuse the stored profile when nothing relevant changed.
+   * `force` always rescans.
    */
   public async scan(force = false): Promise<SystemProfile> {
-    if (this.cachedProfile && !force) {
-      return this.cachedProfile;
-    }
-    if (this.isScanning && this.cachedProfile) {
-      return this.cachedProfile;
-    }
-
+    if (this.isScanning && this.cachedProfile) return this.cachedProfile;
     this.isScanning = true;
-
     try {
-      const [
-        osInfo,
-        hwInfo,
-        appsInfo,
-        devInfo,
-        fsInfo,
-        shellInfo,
-        netInfo,
-        servInfo
-      ] = await Promise.all([
-        this.scanOs(),
-        this.scanHardware(),
-        this.scanApplications(),
-        this.scanDeveloperRuntimes(),
-        this.scanFilesystems(),
-        this.scanShells(),
-        this.scanNetwork(),
-        this.scanServices()
-      ]);
+      const fingerprint = (await this.execCmd(FINGERPRINT_SCRIPT, 5_000)).trim() || undefined;
+      const cached = this.cachedProfile;
+      const fresh = cached
+        && fingerprint
+        && cached.fingerprint === fingerprint
+        && Date.now() - cached.scannedAt < SystemKnowledgeScanner.MAX_AGE_MS;
+      if (!force && fresh) return cached!;
 
-      const profile: SystemProfile = {
-        scannedAt: Date.now(),
-        os: osInfo,
-        hardware: hwInfo,
-        apps: appsInfo,
-        developer: devInfo,
-        filesystems: fsInfo,
-        shells: shellInfo,
-        network: netInfo,
-        services: servInfo
-      };
-
-      this.saveToStorage(profile);
-      return profile;
+      const raw = await this.execCmd(SCAN_SCRIPT, 30_000);
+      if (!raw.includes('@@end')) {
+        // Not running inside the app (tests, browser preview) or the scan failed: keep what we had
+        return cached || parseScanOutput('');
+      }
+      return this.applyScanOutput(raw, fingerprint);
     } finally {
       this.isScanning = false;
     }
-  }
-
-  private async scanOs(): Promise<SystemProfile['os']> {
-    const rawRelease = await this.execCmd('cat /etc/os-release 2>/dev/null');
-    const uname = await this.execCmd('uname -r 2>/dev/null');
-    
-    let name = 'Linux';
-    let id = 'linux';
-    let version = '';
-
-    if (rawRelease) {
-      for (const line of rawRelease.split('\n')) {
-        if (line.startsWith('PRETTY_NAME=')) name = line.replace(/^PRETTY_NAME=["']?|["']?$/g, '');
-        else if (line.startsWith('ID=')) id = line.replace(/^ID=["']?|["']?$/g, '');
-        else if (line.startsWith('VERSION_ID=')) version = line.replace(/^VERSION_ID=["']?|["']?$/g, '');
-      }
-    }
-
-    const sessionTypeRaw = (await this.execCmd('echo $XDG_SESSION_TYPE 2>/dev/null')).trim().toLowerCase();
-    const sessionType: SystemProfile['os']['sessionType'] = 
-      sessionTypeRaw === 'wayland' ? 'wayland' : (sessionTypeRaw === 'x11' ? 'x11' : 'unknown');
-
-    const deRaw = (await this.execCmd('echo $XDG_CURRENT_DESKTOP || echo $DESKTOP_SESSION 2>/dev/null')).trim();
-    const desktopEnvironment = deRaw || 'Window Manager';
-
-    const initRaw = await this.execCmd('ps -p 1 -o comm= 2>/dev/null');
-    const initSystem = initRaw.trim() || 'systemd';
-
-    return {
-      name,
-      id,
-      version: version || 'rolling',
-      kernel: uname.trim() || 'linux',
-      initSystem,
-      sessionType,
-      desktopEnvironment
-    };
-  }
-
-  private async scanHardware(): Promise<HardwareProfileInfo> {
-    const cpuInfo = await this.execCmd('lscpu 2>/dev/null || cat /proc/cpuinfo 2>/dev/null');
-    let cpuModel = 'Multi-Core Processor';
-    let cpuCores = 4;
-    let cpuArch = 'x86_64';
-
-    if (cpuInfo) {
-      for (const line of cpuInfo.split('\n')) {
-        if (line.includes('Model name:') || line.startsWith('model name')) {
-          cpuModel = line.split(':')[1]?.trim() || cpuModel;
-        } else if (line.includes('CPU(s):') && !line.includes('NUMA')) {
-          const c = parseInt(line.split(':')[1]?.trim() || '', 10);
-          if (!isNaN(c) && c > 0) cpuCores = c;
-        } else if (line.includes('Architecture:')) {
-          cpuArch = line.split(':')[1]?.trim() || cpuArch;
-        }
-      }
-    }
-
-    // Memory info
-    const memInfo = await this.execCmd('cat /proc/meminfo 2>/dev/null');
-    let ramTotalGb = 8;
-    let ramAvailableGb = 4;
-    let swapTotalGb = 2;
-
-    if (memInfo) {
-      for (const line of memInfo.split('\n')) {
-        if (line.startsWith('MemTotal:')) {
-          const kb = parseInt(line.replace(/\D/g, ''), 10);
-          if (!isNaN(kb)) ramTotalGb = Math.round((kb / (1024 * 1024)) * 10) / 10;
-        } else if (line.startsWith('MemAvailable:')) {
-          const kb = parseInt(line.replace(/\D/g, ''), 10);
-          if (!isNaN(kb)) ramAvailableGb = Math.round((kb / (1024 * 1024)) * 10) / 10;
-        } else if (line.startsWith('SwapTotal:')) {
-          const kb = parseInt(line.replace(/\D/g, ''), 10);
-          if (!isNaN(kb)) swapTotalGb = Math.round((kb / (1024 * 1024)) * 10) / 10;
-        }
-      }
-    }
-
-    // GPU detection
-    const nvidiaRaw = await this.execCmd('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits 2>/dev/null');
-    let gpuName: string | undefined;
-    let gpuVramGb: number | undefined;
-    let isGpuAvailable = false;
-
-    if (nvidiaRaw && nvidiaRaw.trim()) {
-      const parts = nvidiaRaw.trim().split(',');
-      gpuName = parts[0]?.trim();
-      const mb = parseInt(parts[1]?.trim() || '', 10);
-      if (!isNaN(mb)) gpuVramGb = Math.round(mb / 1024);
-      isGpuAvailable = true;
-    } else {
-      const lspciGpu = await this.execCmd('lspci 2>/dev/null | grep -iE "vga|3d|display"');
-      if (lspciGpu) {
-        if (lspciGpu.toLowerCase().includes('amd') || lspciGpu.toLowerCase().includes('radeon')) {
-          gpuName = 'AMD Radeon GPU';
-          isGpuAvailable = true;
-        } else if (lspciGpu.toLowerCase().includes('intel')) {
-          gpuName = 'Intel Graphics';
-          isGpuAvailable = false;
-        }
-      }
-    }
-
-    return {
-      cpuModel,
-      cpuCores,
-      cpuArch,
-      ramTotalGb,
-      ramAvailableGb,
-      swapTotalGb,
-      gpuName,
-      gpuVramGb,
-      isGpuAvailable
-    };
-  }
-
-  private async scanApplications(): Promise<SystemProfile['apps']> {
-    // Collect standard XDG desktop applications
-    const appsScript = `
-      for d in /usr/share/applications ~/.local/share/applications /var/lib/flatpak/exports/share/applications; do
-        if [ -d "$d" ]; then
-          for f in "$d"/*.desktop; do
-            [ -f "$f" ] || continue
-            name=$(grep -m1 '^Name=' "$f" | cut -d= -f2-)
-            execCmd=$(grep -m1 '^Exec=' "$f" | cut -d= -f2- | awk '{print $1}')
-            cat=$(grep -m1 '^Categories=' "$f" | cut -d= -f2-)
-            if [ -n "$name" ] && [ -n "$execCmd" ]; then
-              echo "$name||$execCmd||$cat"
-            fi
-          done
-        fi
-      done | sort -u | head -120
-    `;
-    const rawApps = await this.execCmd(appsScript);
-    const items: InstalledAppInfo[] = [];
-
-    if (rawApps) {
-      for (const line of rawApps.split('\n')) {
-        if (!line.trim()) continue;
-        const [name, execCmd, cat] = line.split('||');
-        if (name && execCmd) {
-          const binary = execCmd.replace(/["']/g, '').split('/').pop() || execCmd;
-          items.push({
-            name: name.trim(),
-            binary: binary.trim(),
-            execCmd: execCmd.trim(),
-            category: cat?.trim()
-          });
-        }
-      }
-    }
-
-    // If XDG desktop list empty (mock/testing), provide a curated baseline of detected tools
-    if (items.length === 0) {
-      items.push(
-        { name: 'Visual Studio Code', binary: 'code', category: 'Development' },
-        { name: 'Zen Browser', binary: 'zen-browser', category: 'Network' },
-        { name: 'Firefox', binary: 'firefox', category: 'Network' },
-        { name: 'Git', binary: 'git', category: 'Development' },
-        { name: 'Bash', binary: 'bash', category: 'System' }
-      );
-    }
-
-    // Default handlers
-    const defBrowser = (await this.execCmd('xdg-settings get default-web-browser 2>/dev/null || xdg-mime query default x-scheme-handler/http 2>/dev/null')).trim();
-
-    return {
-      totalCount: items.length,
-      items,
-      defaultBrowser: defBrowser || undefined
-    };
-  }
-
-  private async scanDeveloperRuntimes(): Promise<DeveloperRuntimesInfo> {
-    const py = (await this.execCmd('python3 --version 2>/dev/null')).replace('Python', '').trim();
-    const node = (await this.execCmd('node -v 2>/dev/null')).replace('v', '').trim();
-    const rust = (await this.execCmd('rustc --version 2>/dev/null | cut -d" " -f2')).trim();
-    const gcc = (await this.execCmd('gcc --version 2>/dev/null | head -n1 | cut -d" " -f3')).trim();
-    const go = (await this.execCmd('go version 2>/dev/null | cut -d" " -f3')).replace('go', '').trim();
-    const dockerActive = (await this.execCmd('docker info >/dev/null 2>&1 && echo "yes"')).trim() === 'yes';
-
-    const packageManagers: string[] = [];
-    const checkPkg = async (name: string) => {
-      const ok = (await this.execCmd(`command -v ${name} >/dev/null 2>&1 && echo "yes"`)).trim() === 'yes';
-      if (ok) packageManagers.push(name);
-    };
-
-    await Promise.all([
-      checkPkg('pacman'),
-      checkPkg('apt-get'),
-      checkPkg('dnf'),
-      checkPkg('zypper'),
-      checkPkg('flatpak'),
-      checkPkg('snap'),
-      checkPkg('cargo'),
-      checkPkg('npm')
-    ]);
-
-    return {
-      python: py || undefined,
-      node: node || undefined,
-      rust: rust || undefined,
-      gcc: gcc || undefined,
-      go: go || undefined,
-      dockerRunning: dockerActive,
-      packageManagers
-    };
-  }
-
-  private async scanFilesystems(): Promise<FilesystemMountInfo[]> {
-    const rawDf = await this.execCmd('df -hT -x tmpfs -x devtmpfs -x squashfs 2>/dev/null | tail -n +2');
-    const mounts: FilesystemMountInfo[] = [];
-
-    if (rawDf) {
-      for (const line of rawDf.split('\n')) {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length >= 7) {
-          const fsType = parts[1];
-          const totalStr = parts[2];
-          const freeStr = parts[4];
-          const percStr = parts[5].replace('%', '');
-          const mountPoint = parts[6];
-
-          const totalGb = parseFloat(totalStr.replace(/[GMK]/g, '')) || 0;
-          const freeGb = parseFloat(freeStr.replace(/[GMK]/g, '')) || 0;
-          const freePercent = 100 - (parseInt(percStr, 10) || 0);
-
-          mounts.push({
-            mountPoint,
-            fsType,
-            totalGb,
-            freeGb,
-            freePercent,
-            hasSnapshots: fsType === 'btrfs' || fsType === 'zfs'
-          });
-        }
-      }
-    }
-
-    if (mounts.length === 0) {
-      mounts.push({
-        mountPoint: '/',
-        fsType: 'ext4',
-        totalGb: 256,
-        freeGb: 128,
-        freePercent: 50
-      });
-    }
-
-    return mounts;
-  }
-
-  private async scanShells(): Promise<SystemProfile['shells']> {
-    const rawShells = await this.execCmd('cat /etc/shells 2>/dev/null');
-    const available: string[] = [];
-    if (rawShells) {
-      for (const line of rawShells.split('\n')) {
-        if (line.startsWith('/') && !line.includes('git-shell')) {
-          available.push(line.trim());
-        }
-      }
-    }
-
-    const defaultShell = (await this.execCmd('echo $SHELL 2>/dev/null')).trim() || '/bin/bash';
-
-    const dotfilesScript = `
-      for f in ~/.bashrc ~/.zshrc ~/.config/fish/config.fish ~/.config/hypr/hyprland.conf ~/.tmux.conf; do
-        [ -f "$f" ] && echo "$f"
-      done
-    `;
-    const rawDotfiles = await this.execCmd(dotfilesScript);
-    const detectedDotfiles = rawDotfiles ? rawDotfiles.trim().split('\n').filter(Boolean) : [];
-
-    return {
-      available: available.length > 0 ? available : ['/bin/bash', '/usr/bin/zsh'],
-      defaultShell,
-      detectedDotfiles
-    };
-  }
-
-  private async scanNetwork(): Promise<SystemProfile['network']> {
-    const ssid = (await this.execCmd('iwgetid -r 2>/dev/null || nmcli -t -f active,ssid dev wifi 2>/dev/null | grep "^yes:" | cut -d: -f2')).trim();
-    const ip = (await this.execCmd('hostname -I 2>/dev/null | awk "{print $1}" || ip -br addr show 2>/dev/null | grep UP | awk "{print $3}" | head -n1 | cut -d/ -f1')).trim();
-    const vpn = (await this.execCmd('ip link 2>/dev/null | grep -E "tun|wg|tailscale" | awk -F: "{print $2}" | head -n1')).trim();
-
-    return {
-      connectedSsid: ssid || undefined,
-      localIp: ip || '127.0.0.1',
-      activeVpn: vpn || undefined,
-      hasInternet: Boolean(ip && ip !== '127.0.0.1')
-    };
-  }
-
-  private async scanServices(): Promise<SystemProfile['services']> {
-    const servicesRaw = await this.execCmd('systemctl list-units --type=service --state=running --no-pager --no-legend 2>/dev/null | awk "{print $1}" | head -15');
-    const runningServices = servicesRaw ? servicesRaw.trim().split('\n').filter(Boolean) : [];
-
-    const portsRaw = await this.execCmd('ss -tulpn 2>/dev/null | grep LISTEN | awk "{print $5}" | awk -F: "{print $NF}" | sort -nu | head -15');
-    const listeningPorts: number[] = [];
-    if (portsRaw) {
-      for (const p of portsRaw.split('\n')) {
-        const parsed = parseInt(p.trim(), 10);
-        if (!isNaN(parsed) && parsed > 0) listeningPorts.push(parsed);
-      }
-    }
-
-    return {
-      runningServices,
-      listeningPorts
-    };
   }
 }

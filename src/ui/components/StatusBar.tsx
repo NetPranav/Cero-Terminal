@@ -64,7 +64,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     };
 
     fetchAiStatus();
-    const interval = setInterval(fetchAiStatus, 2500);
+    // Status changes are also pushed via 'sentinel:ai-status-changed'; the poll is a slow backstop
+    const interval = setInterval(fetchAiStatus, 10_000);
     const handleStatusChanged = () => fetchAiStatus();
     window.addEventListener('sentinel:ai-status-changed', handleStatusChanged);
 

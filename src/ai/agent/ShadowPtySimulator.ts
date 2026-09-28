@@ -60,6 +60,8 @@ export interface ShadowSimulatorOptions {
   cwd?: string;
   os?: string;
   executor?: (cmd: string, args: string[], cwd?: string) => Promise<{ stdout: string; stderr: string; code: number }>;
+  /** Allow real dry-run transforms (cargo build -> cargo check, pip install --dry-run). Default true. */
+  allowDryRuns?: boolean;
 }
 
 export class ShadowPtySimulator {
@@ -79,7 +81,11 @@ export class ShadowPtySimulator {
     this.maxCandidates = options.maxCandidates ?? 3;
     this.branchTimeoutMs = options.branchTimeoutMs ?? 1500;
     this.customExecutor = options.executor;
+    this.allowDryRuns = options.allowDryRuns ?? true;
   }
+
+  /** When false, mutating commands are only syntax-checked (no cargo check, make -n, pip --dry-run) */
+  private allowDryRuns: boolean;
 
   /**
    * Main entry point: Speculatively simulates candidates for a given command/goal
@@ -389,8 +395,9 @@ export class ShadowPtySimulator {
   public toSafePredicate(command: string, risk: RiskLevel): { predicate: string; isTransformed: boolean } {
     const trimmed = command.trim();
 
-    // Check dry-run capable tools (Phase 0.5, Item 5)
-    const dryRun = CommandCapabilityClassifier.getDryRunCommand(trimmed);
+    // Check dry-run capable tools (Phase 0.5, Item 5). Background simulators skip these: a
+    // "dry run" such as cargo check or pip --dry-run still compiles or downloads.
+    const dryRun = this.allowDryRuns ? CommandCapabilityClassifier.getDryRunCommand(trimmed) : null;
     if (dryRun && dryRun !== trimmed) {
       return { predicate: dryRun, isTransformed: true };
     }

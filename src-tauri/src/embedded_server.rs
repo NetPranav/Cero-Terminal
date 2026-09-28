@@ -53,6 +53,10 @@ pub struct EmbeddedLlmStatus {
     pub port: u16,
     pub is_cpu_fallback: bool,
     pub queued_requests: usize,
+    /// Whether ~/.sentinel/models/<model_file_name> exists (checked with a stat, no subprocess)
+    pub model_downloaded: bool,
+    /// Whether any llama-server binary can be found
+    pub engine_installed: bool,
 }
 
 fn get_home_dir() -> Option<PathBuf> {
@@ -322,7 +326,19 @@ pub fn stop_embedded_llm(state: tauri::State<'_, EmbeddedLlmState>) -> Result<bo
 #[tauri::command]
 pub fn get_embedded_llm_status(
     state: tauri::State<'_, EmbeddedLlmState>,
+    model_file_name: Option<String>,
 ) -> Result<EmbeddedLlmStatus, String> {
+    let model_downloaded = match (model_file_name, get_home_dir()) {
+        // Only a bare file name is accepted, never a path
+        (Some(name), Some(home)) if !name.contains('/') && !name.contains('\\') => home
+            .join(".sentinel")
+            .join("models")
+            .join(name)
+            .is_file(),
+        _ => false,
+    };
+    let engine_installed = find_llama_server_binary().is_some();
+
     let mut proc_guard = state.process.lock().map_err(|e| e.to_string())?;
     let model_guard = state.active_model.lock().map_err(|e| e.to_string())?;
     let lora_guard = state.active_lora.lock().map_err(|e| e.to_string())?;
@@ -358,6 +374,8 @@ pub fn get_embedded_llm_status(
         port: state.port,
         is_cpu_fallback: *fb_guard,
         queued_requests: total_queued,
+        model_downloaded,
+        engine_installed,
     })
 }
 
