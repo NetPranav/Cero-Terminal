@@ -382,3 +382,18 @@ function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}GB`;
 }
+
+/** Terminal notice for an error-watcher event (CRLF line endings for xterm). */
+export function formatWatchEvent(event: import('../domain/watch/ErrorWatchService').WatchEvent): string {
+  const where = event.watch.kind === 'file' ? event.watch.target.split('/').pop() : event.watch.target;
+  const head = `\r\n${C.dim}[watch #${event.watch.id} ${where}]${C.reset} `;
+  const line = event.errorLine.length > 200 ? `${event.errorLine.slice(0, 200)}...` : event.errorLine;
+  switch (event.type) {
+    case 'auto-fixed':
+      return `${head}${C.yellow}${line}${C.reset}\r\n  ${event.exitCode === 0 ? C.green : C.red}${event.exitCode === 0 ? '✓ Fixed automatically' : '✗ Automatic fix failed'}: ${event.suggestion.title}${C.reset} ${C.dim}(${event.command})${C.reset}\r\n`;
+    case 'proposal':
+      return `${head}${C.yellow}${line}${C.reset}\r\n  Fix available: ${event.suggestion.title} ${C.dim}(${event.suggestion.fixedCommand})${C.reset}\r\n  ${C.dim}Type >watch fix to run it.${C.reset}\r\n`;
+    case 'error':
+      return `${head}${C.yellow}${line}${C.reset}\r\n  ${C.dim}Type >watch fix to have Sentinel diagnose it.${C.reset}\r\n`;
+  }
+}

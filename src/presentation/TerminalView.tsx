@@ -12,6 +12,8 @@ import { DemonstrationLearningEngine } from '../domain/learning/DemonstrationLea
 import { EpisodicMemoryEngine } from '../domain/learning/EpisodicMemoryEngine';
 import { SentinelSerlCoordinator } from '../domain/learning/SentinelSerlCoordinator';
 import { PtyOutputObserver, type RemediationPrompt } from '../domain/observer/PtyOutputObserver';
+import { ErrorWatchService } from '../domain/watch/ErrorWatchService';
+import { formatWatchEvent } from './OutputFormatter';
 import { formatAgentEvent, formatDataOutput } from './OutputFormatter';
 
 import { AutocompleteEngine } from '../domain/autocomplete/AutocompleteEngine';
@@ -515,6 +517,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
     let outputCallback: ((data: Uint8Array) => void) | null = null;
     let unsubRemediation: (() => void) | null = null;
     let unsubConsent: (() => void) | null = null;
+    let unsubWatch: (() => void) | null = null;
 
     const initSession = async () => {
       try {
@@ -589,6 +592,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
 
         agentLoop.setAuthorizationHandler((plan: any) => {
           return ConsentQueue.getInstance().enqueue(plan, currentSessionId);
+        });
+
+        // Error watcher notices for watches started from this tab
+        unsubWatch = ErrorWatchService.getInstance().onEvent((event) => {
+          if (event.watch.owner && event.watch.owner !== agentLoop.ownerId) return;
+          writeTerm(formatWatchEvent(event));
         });
 
         // Initialize Autocomplete with History, Demonstration, and Workspace Context providers
@@ -1061,6 +1070,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
       unsubRemediation?.();
       unsubscribeTheme();
       unsubConsent?.();
+      unsubWatch?.();
       ConsentQueue.getInstance().clearQueue(currentSessionId);
       window.removeEventListener('sentinel:toggle-search', handleToggleSearch);
       searchAddon.dispose();

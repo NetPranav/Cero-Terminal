@@ -1,6 +1,7 @@
 mod pty;
 mod process_cmds;
 mod embedded_server;
+mod watcher;
 pub mod logger;
 
 #[cfg(target_os = "macos")]
@@ -143,6 +144,7 @@ pub fn run() {
         .manage(pty::PtyState::default())
         .manage(process_cmds::SystemState(std::sync::Mutex::new(sysinfo::System::new())))
         .manage(embedded_server::EmbeddedLlmState::default())
+        .manage(watcher::WatchState::default())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
@@ -170,6 +172,10 @@ pub fn run() {
             process_cmds::sentinel_store_append,
             process_cmds::sentinel_store_write,
             process_cmds::sentinel_store_remove,
+            watcher::watch_file_start,
+            watcher::watch_service_start,
+            watcher::watch_stop,
+            watcher::watch_list,
             embedded_server::start_embedded_llm,
             embedded_server::stop_embedded_llm,
             embedded_server::get_embedded_llm_status,

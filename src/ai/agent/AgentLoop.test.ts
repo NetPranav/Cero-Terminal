@@ -1028,3 +1028,40 @@ describe('Instant answers run before any model call', () => {
     expect(isAppLaunchRequest('open vs code', 'code --version')).toBe(false);
   });
 });
+
+describe('Watch commands', () => {
+  const makeLoop = () => {
+    const generate = vi.fn();
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    return { loop, generate };
+  };
+
+  it('starts file and service watches without a model call, tagged with this tab', async () => {
+    const { ErrorWatchService } = await import('../../domain/watch/ErrorWatchService');
+    const watcher = ErrorWatchService.getInstance();
+    const fileSpy = vi.spyOn(watcher, 'watchFile').mockResolvedValue({ id: 7, kind: 'file', target: '/home/u/app/build.log' });
+    const serviceSpy = vi.spyOn(watcher, 'watchService').mockResolvedValue({ id: 8, kind: 'service', target: 'nginx.service' });
+    const { loop, generate } = makeLoop();
+
+    const fileResult = await loop.run('watch build.log', { os: 'linux', cwd: '/home/u/app' });
+    expect(fileSpy).toHaveBeenCalledWith('/home/u/app/build.log', loop.ownerId);
+    expect(fileResult.summary).toContain('watch #7');
+
+    await loop.run('watch service nginx.service', { os: 'linux', cwd: '/home/u' });
+    expect(serviceSpy).toHaveBeenCalledWith('nginx.service', false, loop.ownerId);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('sets the remediation mode', async () => {
+    const { AutoRemediationPolicy } = await import('../../domain/remediation/AutoRemediationPolicy');
+    const { loop } = makeLoop();
+    const res = await loop.run('watch mode auto', { os: 'linux', cwd: '/home/u' });
+    expect(res.summary).toContain('auto-safe');
+    expect(AutoRemediationPolicy.getMode()).toBe('auto-safe');
+    AutoRemediationPolicy.setMode('suggest');
+  });
+});

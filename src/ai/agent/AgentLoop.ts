@@ -78,6 +78,8 @@ import { ShadowPtySimulator } from './ShadowPtySimulator';
 import { ShellAstParser } from '../../domain/security/ShellAstParser';
 import { isReadOnlyCommandLine } from '../../domain/security/ReadOnlyCommandPolicy';
 import { findInstantAnswer, InstantAnswer } from './InstantAnswers';
+import { ErrorWatchService } from '../../domain/watch/ErrorWatchService';
+import { AutoRemediationPolicy, AutoRemediationMode } from '../../domain/remediation/AutoRemediationPolicy';
 import { WorkflowRecorder } from '../../workflows/engine/WorkflowRecorder';
 import { DeterministicReplayEngine } from '../../workflows/engine/DeterministicReplayEngine';
 import { MultistagePromptDecomposer } from '../../workflows/engine/MultistagePromptDecomposer';
@@ -1292,6 +1294,10 @@ export class AgentLoop {
       return result;
     }
 
+    // Error watcher commands (deterministic, zero AI inference)
+    const watchResult = await this.handleWatchCommand(goal, context);
+    if (watchResult) return watchResult;
+
     // Generic Workflow Save Directive (Deterministic, zero AI inference)
     const saveRequest = MultistagePromptDecomposer.getInstance().parseScopedWorkflowSave(goal);
     if (saveRequest) {
@@ -1975,6 +1981,90 @@ export class AgentLoop {
    * The core LLM agent loop — sends the goal to Ollama, executes tools,
    * feeds results back, and repeats until done.
    */
+  /** Identifies this loop (one per terminal tab) as the owner of the watches it starts. */
+  public readonly ownerId = `loop_${Math.random().toString(36).slice(2, 10)}`;
+
+  /**
+   * `>watch <file>`, `>watch service <unit>`, `>watch list`, `>unwatch <id|file|all>`,
+   * `>watch mode auto-safe|suggest|off`, `>watch fix`. Returns null for anything else.
+   */
+  private async handleWatchCommand(goal: string, context: AgentRunContext): Promise<AgentResult | null> {
+    const text = goal.trim();
+    const done = (summary: string, success = true): AgentResult => {
+      this.emit({ type: success ? 'done' : 'error', message: summary });
+      return { success, summary, steps: [] };
+    };
+    const watcher = ErrorWatchService.getInstance();
+
+    let m = text.match(/^watch\s+(user\s+)?(?:service|unit)\s+([A-Za-z0-9@._:-]+)$/i);
+    if (m) {
+      try {
+        const w = await watcher.watchService(m[2], Boolean(m[1]), this.ownerId);
+        return done(`Watching ${m[1] ? 'user ' : ''}service ${w.target} (watch #${w.id}). Errors will show up here; mode: ${AutoRemediationPolicy.getMode()}.`);
+      } catch (err: any) {
+        return done(`Could not watch service ${m[2]}: ${err?.message || err}`, false);
+      }
+    }
+
+    m = text.match(/^watch\s+(?:file\s+|log\s+)?((?:~|\.{1,2})?\/\S+|[\w.-]+\.(?:log|txt|out|err|jsonl?))$/i);
+    if (m) {
+      const raw = m[1];
+      const base = context.cwd && context.cwd !== '~' ? context.cwd : '~';
+      const path = raw.startsWith('/') || raw.startsWith('~') ? raw : `${base.replace(/\/+$/, '')}/${raw.replace(/^\.\//, '')}`;
+      try {
+        const w = await watcher.watchFile(path, this.ownerId);
+        return done(`Watching ${w.target} (watch #${w.id}). New errors will show up here; mode: ${AutoRemediationPolicy.getMode()}.`);
+      } catch (err: any) {
+        return done(`Could not watch ${path}: ${err?.message || err}`, false);
+      }
+    }
+
+    if (/^(?:watch\s+list|watches|list\s+watches|what\s+are\s+you\s+watching)\??$/i.test(text)) {
+      const list = watcher.list();
+      return done(list.length
+        ? `Active watches:\n${list.map(w => `  #${w.id}  ${w.kind.padEnd(7)} ${w.target}`).join('\n')}\nMode: ${AutoRemediationPolicy.getMode()}`
+        : 'Nothing is being watched. Start with ">watch <log file>" or ">watch service <unit>".');
+    }
+
+    m = text.match(/^(?:unwatch|stop\s+watching)\s+(.+)$/i);
+    if (m) {
+      const stopped = await watcher.unwatch(m[1].trim().replace(/^#/, ''));
+      return done(stopped.length ? `Stopped watching ${stopped.map(w => w.target).join(', ')}.` : `No watch matches "${m[1].trim()}".`, stopped.length > 0);
+    }
+
+    m = text.match(/^watch\s+mode\s+(auto|auto-safe|suggest|off)$/i);
+    if (m) {
+      const mode = (m[1].toLowerCase() === 'auto' ? 'auto-safe' : m[1].toLowerCase()) as AutoRemediationMode;
+      AutoRemediationPolicy.setMode(mode);
+      const meaning = mode === 'auto-safe'
+        ? 'vetted, local fixes run automatically; everything else is proposed'
+        : mode === 'suggest' ? 'fixes are proposed; nothing runs without you' : 'errors are not reported';
+      return done(`Watch mode set to ${mode}: ${meaning}.`);
+    }
+
+    if (/^watch\s+(?:fix|apply)$/i.test(text)) {
+      const proposal = watcher.takeLatestProposal();
+      if (proposal) {
+        const params = { command: proposal.suggestion.fixedCommand, explanation: proposal.suggestion.title };
+        this.emit({ type: 'tool_start', message: proposal.suggestion.title });
+        const res = await this.toolExecutor.execute('shell.execute', params, context.cwd, this.authorizationHandler);
+        const out = res.data?.stdout || res.data?.stderr || res.error || '';
+        this.emit({ type: 'tool_done', message: res.success ? `✓ ${proposal.suggestion.title}` : `✗ ${res.error || 'Fix failed'}`, data: res.data });
+        return { ...done(res.success ? 'Fix applied.' : 'The fix did not succeed.', res.success), steps: [{ tool: 'shell.execute', params, result: res }], summary: out || (res.success ? 'Fix applied.' : 'Fix failed') };
+      }
+      const lastError = watcher.takeLatestError();
+      if (lastError) {
+        return this.runRequest(
+          `fix this error from ${lastError.watch.kind} ${lastError.watch.target}: ${lastError.errorLine}`,
+          { ...context, attachedContext: lastError.context }
+        );
+      }
+      return done('No watched error is waiting for a fix.');
+    }
+
+    return null;
+  }
+
   /** Run an instant answer; null when the command failed so the caller can fall back to the model. */
   private async runInstantAnswer(answer: InstantAnswer, context: AgentRunContext): Promise<AgentResult | null> {
     const tool = answer.tool && this.toolExecutor.hasDriver(answer.tool) ? answer.tool : 'shell.execute';

@@ -48,7 +48,10 @@ export class AutoRemediationPolicy {
 
   constructor(private readonly now: () => number = () => Date.now()) {}
 
+  private static currentMode: AutoRemediationMode | null = null;
+
   public static getMode(): AutoRemediationMode {
+    if (AutoRemediationPolicy.currentMode) return AutoRemediationPolicy.currentMode;
     try {
       const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(AutoRemediationPolicy.STORAGE_KEY) : null;
       if (saved === 'off' || saved === 'suggest' || saved === 'auto-safe') return saved;
@@ -59,6 +62,7 @@ export class AutoRemediationPolicy {
   }
 
   public static setMode(mode: AutoRemediationMode): void {
+    AutoRemediationPolicy.currentMode = mode;
     try {
       localStorage.setItem(AutoRemediationPolicy.STORAGE_KEY, mode);
     } catch {
