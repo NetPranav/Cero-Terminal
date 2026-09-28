@@ -45,7 +45,9 @@ export async function approveBatch(
     riskLevel: highest.risk.level as RiskLevel,
     riskScore: highest.risk.score,
     permissionsRequired: ['ShellExecution'],
-    explanation: `${needing.length} command${needing.length === 1 ? '' : 's'} in this plan change your system. Approving runs exactly these, in order.`,
+    explanation: needing.length === 1
+      ? '1 command in this plan changes your system. Approving runs exactly this one.'
+      : `${needing.length} commands in this plan change your system. Approving runs exactly these, in order.`,
     requiresPassword: needing.some(({ risk }) => risk.requiresPassword),
     requiresConsent: true
   } as unknown as ExecutionPreviewPlan;

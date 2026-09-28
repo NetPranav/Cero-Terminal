@@ -309,7 +309,7 @@ const SNAPSHOT_SKIP_DIRS: [&str; 4] = ["bin", "engine", "logs", "flow_icons"];
 const SNAPSHOT_MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
 const SNAPSHOT_MAX_TOTAL_BYTES: u64 = 32 * 1024 * 1024;
 
-/// Contents of the small .json/.jsonl state files under ~/.sentinel, loaded once at startup so
+/// Contents of the small .json/.jsonl state files (and .flow workflows) under ~/.sentinel, loaded once at startup so
 /// the webview's synchronous `fs` shim can serve the learning stores.
 #[tauri::command]
 pub fn sentinel_store_snapshot() -> Result<SentinelStoreSnapshot, String> {
@@ -330,7 +330,7 @@ pub fn sentinel_store_snapshot() -> Result<SentinelStoreSnapshot, String> {
                 }
                 stack.push(path);
             } else if meta.is_file()
-                && (rel.ends_with(".json") || rel.ends_with(".jsonl"))
+                && (rel.ends_with(".json") || rel.ends_with(".jsonl") || rel.ends_with(".flow"))
                 && meta.len() <= SNAPSHOT_MAX_FILE_BYTES
                 && total + meta.len() <= SNAPSHOT_MAX_TOTAL_BYTES
             {

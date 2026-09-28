@@ -615,7 +615,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           pendingTimer = setTimeout(() => {
             const request = workspace.takePendingCommand(paneId);
             if (!request || !currentSessionId) return;
-            writeTerm(`  ${S.muted}› Opened by Sentinel to run: ${request.command}${S.reset}\r\n`);
             workspace.update(paneId, { busy: true, runningCommand: request.command });
             ptyTrackerRef.current.notifyCommandStarted(request.command);
             sessionManager.write(currentSessionId, `${request.command}\r`);
@@ -1734,7 +1733,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#f8fafc', letterSpacing: '-0.2px' }}>
                   {securityModalPlan.plan.requiresPassword
                     ? 'Administrator password required'
-                    : securityModalPlan.plan.capabilityId === 'workflow.batch' ? 'Run these commands?' : 'Run this command?'}
+                    : securityModalPlan.plan.capabilityId === 'workflow.batch' && String(securityModalPlan.plan.parameters?.command || '').includes('\n') ? 'Run these commands?' : 'Run this command?'}
                 </h3>
                 <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginTop: '2px' }}>
                   Needs your approval · {String(securityModalPlan.plan.riskLevel || 'admin').toLowerCase()} risk
