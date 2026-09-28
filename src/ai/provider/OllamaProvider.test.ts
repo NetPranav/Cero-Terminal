@@ -43,4 +43,27 @@ describe('OllamaProvider', () => {
       provider.generate('slow prompt', 'qwen3:4b', { timeoutMs: 50 })
     ).rejects.toThrow(/Model inference timed out after/);
   });
+
+  it('disables thinking, keeps the model resident and sends the action schema on chat requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ message: { content: '{"action":"done","summary":"ok"}' } })
+    });
+    global.fetch = fetchMock;
+    const schema = { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] };
+
+    await provider.generate('', 'qwen3:4b', {
+      messages: [{ role: 'user', content: 'check disk' }],
+      format: 'json',
+      grammarJsonSchema: schema
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(url).toBe('http://localhost:11434/api/chat');
+    expect(body.think).toBe(false);
+    expect(body.keep_alive).toBe(OllamaProvider.KEEP_ALIVE);
+    expect(body.format).toEqual(schema);
+    expect(body.options.num_thread).toBeUndefined();
+  });
 });

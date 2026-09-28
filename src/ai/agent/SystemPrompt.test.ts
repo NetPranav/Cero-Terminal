@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { buildSystemPrompt, ToolSpec } from './SystemPrompt';
+import { describe, it, expect, vi } from 'vitest';
+import { buildSystemPrompt, buildStaticPromptPrefix, ToolSpec } from './SystemPrompt';
 
 describe('SystemPrompt — Shell-Native Autonomous Copilot Prompt', () => {
   const mockTools: ToolSpec[] = [
@@ -29,5 +29,30 @@ describe('SystemPrompt — Shell-Native Autonomous Copilot Prompt', () => {
     expect(prompt).toContain('networksetup');
     expect(prompt).toContain('lsof');
     expect(prompt).toContain('pmset');
+  });
+
+  it('keeps a byte-identical static prefix across requests so the KV/prompt cache is reused', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-28T10:00:00Z'));
+      const a = buildSystemPrompt([], { os: 'linux', cwd: '/home/u/a' }, 'check disk');
+      vi.setSystemTime(new Date('2026-09-28T17:31:45Z'));
+      const b = buildSystemPrompt([], { os: 'linux', cwd: '/home/u/b' }, 'list ports');
+      const prefix = buildStaticPromptPrefix('linux');
+      expect(a.startsWith(prefix)).toBe(true);
+      expect(b.startsWith(prefix)).toBe(true);
+      // Nothing request-specific may leak into the cached prefix
+      expect(prefix).not.toContain('/home/u/');
+      expect(prefix).not.toContain('2026');
+      expect(a.slice(prefix.length)).toContain('Working Directory: /home/u/a');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('asks for concrete, grounded, emoji-free summaries', () => {
+    const prefix = buildStaticPromptPrefix('linux');
+    expect(prefix).toContain('ANSWER QUALITY');
+    expect(prefix).toContain('Only report facts present in <TOOL_OUTPUT>');
   });
 });

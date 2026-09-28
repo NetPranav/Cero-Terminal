@@ -24,7 +24,6 @@ import { buildToolSpecs, buildSystemPrompt, ToolSpec } from './SystemPrompt';
 import { ToolRegistryState } from '../../tools/loader/ToolLoader';
 import { ExecutionPreviewPlan } from '../../domain/security/ExecutionEngine';
 import { EmbeddedEngineManager } from '../models/EmbeddedEngineManager';
-import { ActivationSteeringManager } from '../models/ActivationSteeringManager';
 import { SentinelSerlCoordinator } from '../../domain/learning/SentinelSerlCoordinator';
 import { TldrKnowledgeEngine } from '../../domain/knowledge/TldrKnowledgeEngine';
 import { GbnfGrammarManager } from '../models/GbnfGrammarManager';
@@ -2180,20 +2179,15 @@ export class AgentLoop {
           ...messages
         ];
 
-        // Call LLM — with Tier 4.6 Activation Steering logit bias and Tier 5.3 GBNF Grammar Decoding
-        const logitBias = ActivationSteeringManager.getInstance().generateLogitBias({
-          tokenizerType: 'qwen',
-          refusalPenalty: -100.0,
-          actionBoost: 3.5,
-        });
-
+        // Call LLM with GBNF grammar decoding. No logit bias: biasing individual tokens bans
+        // ordinary words the answer may need, and the grammar already constrains structure.
         const response = await provider.generate(fullPrompt, modelId, {
           temperature: 0.05,
-          maxTokens: 1024,
+          maxTokens: 512,
           format: 'json',
           messages: chatMessages,
-          logitBias,
           grammar: GbnfGrammarManager.getGrammar('SENTINEL_ACTION'),
+          grammarJsonSchema: GbnfGrammarManager.SENTINEL_ACTION_JSON_SCHEMA,
           sessionId: context.sessionId || 'default-session',
           requestId: `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
         });

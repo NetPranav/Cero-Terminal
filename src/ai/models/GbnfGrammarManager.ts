@@ -32,6 +32,22 @@ string ::= "\\"" ([^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\bfnrt] | "u" [0-9a-fA
 ws ::= [ \\t\\n\\r]*`;
 
   /**
+   * JSON Schema equivalent of SENTINEL_ACTION for backends that take a schema instead of GBNF
+   * (Ollama `format`, OpenAI-compatible `response_format`). Kept flat because every backend's
+   * schema-to-grammar converter supports enum/required, not all support anyOf/const.
+   */
+  public static readonly SENTINEL_ACTION_JSON_SCHEMA: Record<string, any> = {
+    type: 'object',
+    properties: {
+      action: { type: 'string', enum: ['execute', 'done'] },
+      command: { type: 'string' },
+      explanation: { type: 'string' },
+      summary: { type: 'string' }
+    },
+    required: ['action']
+  };
+
+  /**
    * SENTINEL_PLANNER GBNF:
    * Strictly enforces:
    *   {"decision": "plan" | "clarify", "summary": "<string>", "steps": ["<step1>", ...], "question": "<opt>"}

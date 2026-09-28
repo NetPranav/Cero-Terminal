@@ -10,6 +10,9 @@ export class OllamaProvider implements ModelProvider {
   readonly providerId = 'ollama';
   readonly providerName = 'Ollama Local Runtime';
 
+  /** How long Ollama keeps the model resident after a request. */
+  public static readonly KEEP_ALIVE = '30m';
+
   constructor(public baseUrl: string = 'http://localhost:11434') {}
 
   public async isAvailable(): Promise<boolean> {
@@ -93,32 +96,36 @@ export class OllamaProvider implements ModelProvider {
 
     const isChat = Array.isArray(options?.messages) && options.messages.length > 0;
     const endpoint = isChat ? `${this.baseUrl}/api/chat` : `${this.baseUrl}/api/generate`;
+    // A JSON schema constrains decoding like a grammar does; plain 'json' only guarantees valid JSON.
+    const format = options?.grammarJsonSchema
+      ?? (options?.format === 'json' ? 'json' : options?.format);
+    const sampling = {
+      temperature: options?.temperature ?? 0.1,
+      top_p: options?.topP ?? 0.9,
+      num_predict: options?.maxTokens ?? 1024,
+      stop: options?.stopSequences
+    };
+    // think:false keeps reasoning models (qwen3, deepseek-r1) from spending seconds to minutes
+    // on hidden chain-of-thought per command; keep_alive avoids a model reload after 5 idle
+    // minutes (Ollama's default), which otherwise shows up as a slow "first" request.
     const payload = isChat
       ? {
           model: modelId,
           messages: options!.messages,
+          format,
           stream: false,
-          options: {
-            temperature: options?.temperature ?? 0.1,
-            top_p: options?.topP ?? 0.9,
-            num_predict: options?.maxTokens ?? 1024,
-            num_thread: 8,
-            stop: options?.stopSequences
-          }
+          think: false,
+          keep_alive: OllamaProvider.KEEP_ALIVE,
+          options: sampling
         }
       : {
           model: modelId,
           prompt,
-          format: options?.format === 'json' ? 'json' : options?.format,
+          format,
           stream: false,
           think: false,
-          options: {
-            temperature: options?.temperature ?? 0.1,
-            top_p: options?.topP ?? 0.9,
-            num_predict: options?.maxTokens ?? 1024,
-            num_thread: 8,
-            stop: options?.stopSequences
-          }
+          keep_alive: OllamaProvider.KEEP_ALIVE,
+          options: sampling
         };
 
     let response: Response;

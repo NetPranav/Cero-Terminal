@@ -216,7 +216,9 @@ export class EmbeddedProvider implements ModelProvider {
           top_p: options?.topP ?? 0.9,
           stream: false,
           // Optimizations for speed
-          repeat_penalty: 1.1,
+          // 1.0 = off. A repeat penalty corrupts JSON and shell syntax, which legitimately repeat
+          // quotes, dashes and braces.
+          repeat_penalty: 1.0,
           top_k: 20,
           cache_prompt: true,
           ...(options?.logitBias ? { logit_bias: options.logitBias } : {}),

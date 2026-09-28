@@ -90,22 +90,28 @@ export class ActivationSteeringManager {
   };
 
   /**
-   * Pre-identified token IDs for refusal suppression and action boosting.
-   * Based on Qwen2.5 and Llama token vocabularies.
+   * Token IDs for refusal suppression and action boosting.
+   *
+   * The Qwen IDs below were verified against the Qwen2.5 tokenizer.json vocabulary. The
+   * previous table was not: it mapped e.g. 24128 ("Music"), 7134 ("Book") and 8013 ("-(") as
+   * refusal tokens and boosted "the"/" form"/" File"/"view", which corrupted generated commands.
+   * The Llama/generic tables remain unverified placeholders.
+   *
+   * These biases are NOT applied to the agent's action generation: several refusal tokens
+   * (" an", " model", " language") are ordinary words a correct summary needs. Refusals are
+   * handled by the GBNF grammar plus AgentLoop's refusal interception instead.
    */
   public static readonly REFUSAL_TOKEN_IDS = {
     qwen: [
-      1428,   // "As"
-      458,    // " an"
-      9552,   // " AI"
-      24128,  // " apologize"
-      34421,  // " apologies"
-      8013,   // " cannot"
-      7134,   // " unable"
-      14924,  // " unfortunately"
-      6997,   // " sorry"
-      4233,   // " language"
-      1903,   // " model"
+      2121,   // "As"
+      15235,  // " AI"
+      36879,  // " apologize"
+      72173,  // " apologies"
+      4157,   // " cannot"
+      11889,  // " unable"
+      25822,  // " unfortunately"
+      18656,  // " Unfortunately"
+      14589,  // " sorry"
     ],
     llama: [
       1724,   // "As"
@@ -128,10 +134,10 @@ export class ActivationSteeringManager {
   public static readonly ACTION_BOOST_TOKEN_IDS = {
     qwen: [
       90,     // "{"
-      1352,   // "\"action\""
-      1782,   // "\"command\""
-      2887,   // "\"execute\""
-      1050,   // "\"args\""
+      4913,   // "{\""
+      1311,   // "action"
+      5631,   // "command"
+      10257,  // "execute"
     ],
     llama: [
       94,     // "{"
