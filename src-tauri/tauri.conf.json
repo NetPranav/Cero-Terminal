@@ -30,12 +30,16 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.png",
+      "icons/icon.icns",
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
     "shortDescription": "Autonomous AI-Native Linux Terminal Copilot",
     "longDescription": "High-performance AI-native Linux terminal emulator with embedded llama-server, multi-stage workflow macros, and native system diagnostics.",
     "copyright": "2026 Sentinel Terminal Contributors",
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
     "linux": {
       "deb": {
         "depends": [
