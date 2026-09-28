@@ -18,6 +18,7 @@
  * and to direct shell passthrough if Ollama is unavailable.
  */
 
+import type { ModelProvider } from '../provider/Provider';
 import { ModelManager } from '../management/ModelManager';
 import { ToolExecutor, ToolExecutionResult } from './ToolExecutor';
 import { buildToolSpecs, buildSystemPrompt, ToolSpec } from './SystemPrompt';
@@ -56,6 +57,15 @@ export interface AgentResult {
   steps: { tool: string; params: any; result: ToolExecutionResult }[];
   cdPath?: string; // If any step navigated to a directory, capture it
   awaitingInput?: boolean;
+  /** Where the time went for this request */
+  metrics?: AgentRunMetrics;
+}
+
+export interface AgentRunMetrics {
+  totalMs: number;
+  /** Number of model round-trips (0 for instant answers, learned patterns and replays) */
+  modelCalls: number;
+  modelMs: number;
 }
 
 import { AdaptivePlanEngine, AgentPlan, PlanPhase, PhaseStatus } from './AdaptivePlanEngine';
@@ -67,6 +77,7 @@ import { ErrorDiagnosticsEngine } from './ErrorDiagnosticsEngine';
 import { ShadowPtySimulator } from './ShadowPtySimulator';
 import { ShellAstParser } from '../../domain/security/ShellAstParser';
 import { isReadOnlyCommandLine } from '../../domain/security/ReadOnlyCommandPolicy';
+import { findInstantAnswer, InstantAnswer } from './InstantAnswers';
 import { WorkflowRecorder } from '../../workflows/engine/WorkflowRecorder';
 import { DeterministicReplayEngine } from '../../workflows/engine/DeterministicReplayEngine';
 import { MultistagePromptDecomposer } from '../../workflows/engine/MultistagePromptDecomposer';
@@ -103,18 +114,12 @@ const FAST_PATHS: {
   shouldHandle?: (goal: string) => boolean;
 }[] = [
   // Domain 7: Desktop Applications & UI Automation (7.1 to 7.50)
-  { pattern: /^open\s+visual\s+studio\s+code\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "which code 2>/dev/null || which codium 2>/dev/null || echo '/usr/bin/code (Resolves application binary: code)'", explanation: 'Open visual studio code' }) },
-  { pattern: /^open\s+google\s+chrome\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "which google-chrome-stable 2>/dev/null || which google-chrome 2>/dev/null || which chromium 2>/dev/null || which brave 2>/dev/null || which firefox 2>/dev/null || echo '/usr/bin/google-chrome (Resolves web browser binary: google-chrome)'", explanation: 'Open google chrome' }) },
-  { pattern: /^open\s+terminal\s+settings\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Internal UI event emitted: Settings drawer opened'", explanation: 'Open terminal settings' }) },
-  { pattern: /^search\s+google\s+for\s+tauri\s+linux\s+guide\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Launches xdg-open with encoded URL: https://www.google.com/search?q=tauri+linux+guide'", explanation: 'Search google for tauri linux guide' }) },
-  { pattern: /^navigate\s+to\s+github\.com\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Valid URL opened in default browser: https://github.com'", explanation: 'Navigate to github.com' }) },
-  { pattern: /^list\s+active\s+desktop\s+windows\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl clients -j 2>/dev/null || echo '[{\"title\": \"Sentinel Terminal\", \"class\": \"sentinel\", \"workspace\": {\"id\": 1, \"name\": \"1\"}}]'", explanation: 'List active desktop windows' }) },
-  { pattern: /^focus\s+window\s+firefox\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({window = \"firefox\"})' >/dev/null 2>&1 || hyprctl dispatch focuswindow firefox >/dev/null 2>&1 || true) && echo 'ok (Dispatches focus event for window firefox)'", explanation: 'Focus window firefox' }) },
-  { pattern: /^move\s+current\s+window\s+to\s+workspace\s+2\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.move({workspace = \"2\"})' >/dev/null 2>&1 || hyprctl dispatch movetoworkspace 2 >/dev/null 2>&1 || true) && echo 'ok (Dispatches workspace change: moved to workspace 2)'", explanation: 'Move current window to workspace 2' }) },
-  { pattern: /^take\s+desktop\s+screenshot\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Screenshot file saved confirmation: Created ~/screenshot.png (Creates PNG image on disk)'", explanation: 'Take desktop screenshot' }) },
-  { pattern: /^toggle\s+window\s+floating\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.float()' >/dev/null 2>&1 || hyprctl dispatch togglefloating >/dev/null 2>&1 || true) && echo 'ok (Dispatches floating toggle)'", explanation: 'Toggle window floating' }) },
-  { pattern: /^lock\s+screen\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Screen lock confirmation: Dispatches lock command via loginctl lock-session'", explanation: 'Lock screen' }) },
-  { pattern: /^close\s+active\s+window\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Window closed confirmation: Dispatches killactive command'", explanation: 'Close active window' }) },
+  { pattern: /^open\s+visual\s+studio\s+code\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "which code 2>/dev/null || which codium 2>/dev/null", explanation: 'Open visual studio code' }) },
+  { pattern: /^open\s+google\s+chrome\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "which google-chrome-stable 2>/dev/null || which google-chrome 2>/dev/null || which chromium 2>/dev/null || which brave 2>/dev/null || which firefox 2>/dev/null", explanation: 'Open google chrome' }) },
+  { pattern: /^list\s+active\s+desktop\s+windows\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl clients -j 2>/dev/null", explanation: 'List active desktop windows' }) },
+  { pattern: /^focus\s+window\s+firefox\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({window = \"firefox\"})' >/dev/null 2>&1 || hyprctl dispatch focuswindow firefox >/dev/null 2>&1 || true)", explanation: 'Focus window firefox' }) },
+  { pattern: /^move\s+current\s+window\s+to\s+workspace\s+2\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.move({workspace = \"2\"})' >/dev/null 2>&1 || hyprctl dispatch movetoworkspace 2 >/dev/null 2>&1 || true)", explanation: 'Move current window to workspace 2' }) },
+  { pattern: /^toggle\s+window\s+floating\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.float()' >/dev/null 2>&1 || hyprctl dispatch togglefloating >/dev/null 2>&1 || true)", explanation: 'Toggle window floating' }) },
   {
     pattern: /^open\s+([a-zA-Z0-9_\-\s]+?)\s+and\s+(.+?)\s+(?:folder\s+|directory\s+)?in\s+([a-zA-Z0-9_\-]+)(?:\s+(?:in|on)\s+(\d+)(?:st|nd|rd|th)?\s+workspace)?\s*$/i,
     tool: 'shell.execute',
@@ -149,148 +154,76 @@ const FAST_PATHS: {
       };
     }
   },
-  { pattern: /^open\s+file\s+manager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Default GUI file browser launches: Launches xdg-open on directory'", explanation: 'Open file manager' }) },
-  { pattern: /^open\s+text\s+editor\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Default GUI text editor launches: Opens default text application'", explanation: 'Open text editor' }) },
-  { pattern: /^open\s+spotify\s+music\s+player\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Spotify client launch confirmation: Background spawn confirmation'", explanation: 'Open spotify music player' }) },
-  { pattern: /^open\s+discord\s+client\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Discord client launch confirmation: Background spawn confirmation'", explanation: 'Open discord client' }) },
-  { pattern: /^check\s+default\s+web\s+browser\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-settings get default-web-browser 2>/dev/null || echo 'firefox.desktop'", explanation: 'Check default web browser' }) },
-  { pattern: /^check\s+default\s+file\s+manager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-mime query default inode/directory 2>/dev/null || echo 'org.gnome.Nautilus.desktop'", explanation: 'Check default file manager' }) },
-  { pattern: /^check\s+default\s+pdf\s+reader\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-mime query default application/pdf 2>/dev/null || echo 'org.gnome.Evince.desktop'", explanation: 'Check default pdf reader' }) },
-  { pattern: /^check\s+current\s+hyprland\s+workspace\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl activeworkspace -j 2>/dev/null || echo '{\"id\": 1, \"name\": \"1\"}'", explanation: 'Check current hyprland workspace' }) },
-  { pattern: /^switch\s+to\s+workspace\s+1\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({workspace = \"1\"})' >/dev/null 2>&1 || hyprctl dispatch workspace 1 >/dev/null 2>&1 || true) && echo 'ok (Switched workspace confirmation: Dispatches workspace 1)'", explanation: 'Switch to workspace 1' }) },
-  { pattern: /^switch\s+to\s+workspace\s+3\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({workspace = \"3\"})' >/dev/null 2>&1 || hyprctl dispatch workspace 3 >/dev/null 2>&1 || true) && echo 'ok (Switched workspace confirmation: Dispatches workspace 3)'", explanation: 'Switch to workspace 3' }) },
-  { pattern: /^switch\s+to\s+workspace\s+5\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({workspace = \"5\"})' >/dev/null 2>&1 || hyprctl dispatch workspace 5 >/dev/null 2>&1 || true) && echo 'ok (Switched workspace confirmation: Dispatches workspace 5)'", explanation: 'Switch to workspace 5' }) },
-  { pattern: /^move\s+active\s+window\s+to\s+workspace\s+1\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.move({workspace = \"1\"})' >/dev/null 2>&1 || hyprctl dispatch movetoworkspace 1 >/dev/null 2>&1 || true) && echo 'ok (Moved window confirmation: Dispatches move to 1)'", explanation: 'Move active window to workspace 1' }) },
-  { pattern: /^move\s+active\s+window\s+to\s+workspace\s+4\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.move({workspace = \"4\"})' >/dev/null 2>&1 || hyprctl dispatch movetoworkspace 4 >/dev/null 2>&1 || true) && echo 'ok (Moved window confirmation: Dispatches move to 4)'", explanation: 'Move active window to workspace 4' }) },
-  { pattern: /^toggle\s+window\s+fullscreen\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.fullscreen()' >/dev/null 2>&1 || hyprctl dispatch fullscreen >/dev/null 2>&1 || true) && echo 'ok (Toggled fullscreen confirmation: Dispatches fullscreen)'", explanation: 'Toggle window fullscreen' }) },
-  { pattern: /^toggle\s+window\s+pin\s+state\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.pin()' >/dev/null 2>&1 || hyprctl dispatch pin >/dev/null 2>&1 || true) && echo 'ok (Toggled pinned on all workspaces: Dispatches pin)'", explanation: 'Toggle window pin state' }) },
-  { pattern: /^swap\s+active\s+window\s+with\s+master\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.layout({action = \"swapwithmaster\"})' >/dev/null 2>&1 || hyprctl dispatch layoutmsg swapwithmaster >/dev/null 2>&1 || true) && echo 'ok (Swapped window position: Dispatches layoutmsg)'", explanation: 'Swap active window with master' }) },
-  { pattern: /^take\s+screenshot\s+of\s+active\s+window\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Window screenshot saved: Cropped window image created at ~/window.png'", explanation: 'Take screenshot of active window' }) },
-  { pattern: /^take\s+interactive\s+region\s+screenshot\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Selected region screenshot saved: Invokes slurp region selector and grim at ~/region.png'", explanation: 'Take interactive region screenshot' }) },
-  { pattern: /^record\s+5\s+second\s+desktop\s+gif\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Screen recording file saved: MP4 or GIF video generated at ~/demo.mp4'", explanation: 'Record 5 second desktop gif' }) },
-  { pattern: /^check\s+screen\s+resolution\s+and\s+scale\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl monitors -j 2>/dev/null | jq -r '.[0] | \"\\(.width)x\\(.height)@\\(.refreshRate)Hz scale \\(.scale)\"' 2>/dev/null || echo '1920x1080@60Hz scale 1.0'", explanation: 'Check screen resolution and scale' }) },
+  { pattern: /^check\s+default\s+web\s+browser\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-settings get default-web-browser 2>/dev/null", explanation: 'Check default web browser' }) },
+  { pattern: /^check\s+default\s+file\s+manager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-mime query default inode/directory 2>/dev/null", explanation: 'Check default file manager' }) },
+  { pattern: /^check\s+default\s+pdf\s+reader\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-mime query default application/pdf 2>/dev/null", explanation: 'Check default pdf reader' }) },
+  { pattern: /^check\s+current\s+hyprland\s+workspace\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl activeworkspace -j 2>/dev/null", explanation: 'Check current hyprland workspace' }) },
+  { pattern: /^switch\s+to\s+workspace\s+1\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({workspace = \"1\"})' >/dev/null 2>&1 || hyprctl dispatch workspace 1 >/dev/null 2>&1 || true)", explanation: 'Switch to workspace 1' }) },
+  { pattern: /^switch\s+to\s+workspace\s+3\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({workspace = \"3\"})' >/dev/null 2>&1 || hyprctl dispatch workspace 3 >/dev/null 2>&1 || true)", explanation: 'Switch to workspace 3' }) },
+  { pattern: /^switch\s+to\s+workspace\s+5\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({workspace = \"5\"})' >/dev/null 2>&1 || hyprctl dispatch workspace 5 >/dev/null 2>&1 || true)", explanation: 'Switch to workspace 5' }) },
+  { pattern: /^move\s+active\s+window\s+to\s+workspace\s+1\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.move({workspace = \"1\"})' >/dev/null 2>&1 || hyprctl dispatch movetoworkspace 1 >/dev/null 2>&1 || true)", explanation: 'Move active window to workspace 1' }) },
+  { pattern: /^move\s+active\s+window\s+to\s+workspace\s+4\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.move({workspace = \"4\"})' >/dev/null 2>&1 || hyprctl dispatch movetoworkspace 4 >/dev/null 2>&1 || true)", explanation: 'Move active window to workspace 4' }) },
+  { pattern: /^toggle\s+window\s+fullscreen\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.fullscreen()' >/dev/null 2>&1 || hyprctl dispatch fullscreen >/dev/null 2>&1 || true)", explanation: 'Toggle window fullscreen' }) },
+  { pattern: /^toggle\s+window\s+pin\s+state\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.pin()' >/dev/null 2>&1 || hyprctl dispatch pin >/dev/null 2>&1 || true)", explanation: 'Toggle window pin state' }) },
+  { pattern: /^swap\s+active\s+window\s+with\s+master\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.layout({action = \"swapwithmaster\"})' >/dev/null 2>&1 || hyprctl dispatch layoutmsg swapwithmaster >/dev/null 2>&1 || true)", explanation: 'Swap active window with master' }) },
+  { pattern: /^check\s+screen\s+resolution\s+and\s+scale\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl monitors -j 2>/dev/null | jq -r '.[0] | \"\\(.width)x\\(.height)@\\(.refreshRate)Hz scale \\(.scale)\"' 2>/dev/null", explanation: 'Check screen resolution and scale' }) },
   { pattern: /^increase\s+system\s+volume\s+by\s+5%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "pamixer -i 5 2>/dev/null; echo 'Volume increased confirmation: Audio level stepped up by 5%'", explanation: 'Increase system volume by 5%' }) },
   { pattern: /^decrease\s+system\s+volume\s+by\s+5%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "pamixer -d 5 2>/dev/null; echo 'Volume decreased confirmation: Audio level stepped down by 5%'", explanation: 'Decrease system volume by 5%' }) },
   { pattern: /^mute\s+system\s+audio\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "pamixer -t 2>/dev/null; echo 'Audio muted toggle confirmation: Mute toggle state updated'", explanation: 'Mute system audio' }) },
   { pattern: /^check\s+current\s+system\s+volume\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "VOL=$(pamixer --get-volume 2>/dev/null || wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{print int($2*100)}' || echo '65'); [ -z \"$VOL\" ] || [ \"$VOL\" = \"0\" ] && VOL=65; echo \"${VOL}%\"", explanation: 'Check current system volume' }) },
-  { pattern: /^increase\s+screen\s+brightness\s+by\s+10%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl set +10% 2>/dev/null || light -A 10 2>/dev/null || echo 'Backlight increased confirmation: Brightness stepped up by 10%'", explanation: 'Increase screen brightness by 10%' }) },
-  { pattern: /^decrease\s+screen\s+brightness\s+by\s+10%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl set 10%- 2>/dev/null || light -U 10 2>/dev/null || echo 'Backlight decreased confirmation: Brightness stepped down by 10%'", explanation: 'Decrease screen brightness by 10%' }) },
-  { pattern: /^check\s+current\s+screen\s+brightness\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl get 2>/dev/null || light -G 2>/dev/null || echo '180'", explanation: 'Check current screen brightness' }) },
-  { pattern: /^send\s+desktop\s+notification\s+test\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Desktop notification banner displayed: Notification daemon receives alert'", explanation: 'Send desktop notification test' }) },
-  { pattern: /^send\s+urgent\s+desktop\s+notification\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Critical alert banner displayed: Urgent notification dispatched'", explanation: 'Send urgent desktop notification' }) },
-  { pattern: /^type\s+text\s+hello\s+world\s+synthetically\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Synthetic keystrokes typed: Dispatches keyboard events for hello world'", explanation: 'Type text hello world synthetically' }) },
-  { pattern: /^send\s+synthetic\s+key\s+combo\s+ctrl\s+shift\s+t\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Key combo dispatched: Shortcut event sent to active window (ctrl+shift+t)'", explanation: 'Send synthetic key combo ctrl shift t' }) },
-  { pattern: /^send\s+synthetic\s+key\s+combo\s+alt\s+tab\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Window switcher shortcut dispatched: Window focus cycle event (alt+Tab)'", explanation: 'Send synthetic key combo alt tab' }) },
-  { pattern: /^click\s+mouse\s+at\s+coordinates\s+500\s+300\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Synthetic mouse click dispatched: Cursor positioned and clicked at (500, 300)'", explanation: 'Click mouse at coordinates 500 300' }) },
-  { pattern: /^show\s+clipboard\s+text\s+contents\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "printf 'Sentinel AI Clipboard Buffer Content' | (wl-copy 2>/dev/null || xclip -selection clipboard 2>/dev/null || true); wl-paste 2>/dev/null || xclip -o 2>/dev/null || echo 'Sentinel AI Clipboard Buffer Content'", explanation: 'Show clipboard text contents' }) },
-  { pattern: /^copy\s+text\s+test\s+to\s+clipboard\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Clipboard updated confirmation: Copies string into primary clipboard'", explanation: 'Copy text test to clipboard' }) },
-  { pattern: /^turn\s+off\s+display\s+monitors\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Displays turned off / sleep state: DPMS power saving mode active (hyprctl dispatch dpms off)'", explanation: 'Turn off display monitors' }) },
-  { pattern: /^turn\s+on\s+display\s+monitors\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Displays awakened: DPMS power restored (hyprctl dispatch dpms on)'", explanation: 'Turn on display monitors' }) },
-  { pattern: /^check\s+installed\s+desktop\s+applications\s+list\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find /usr/share/applications -name '*.desktop' 2>/dev/null | head -10 || echo '/usr/share/applications/firefox.desktop'", explanation: 'Check installed desktop applications list' }) },
+  { pattern: /^increase\s+screen\s+brightness\s+by\s+10%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl set +10% 2>/dev/null || light -A 10 2>/dev/null", explanation: 'Increase screen brightness by 10%' }) },
+  { pattern: /^decrease\s+screen\s+brightness\s+by\s+10%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl set 10%- 2>/dev/null || light -U 10 2>/dev/null", explanation: 'Decrease screen brightness by 10%' }) },
+  { pattern: /^check\s+current\s+screen\s+brightness\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl get 2>/dev/null || light -G 2>/dev/null", explanation: 'Check current screen brightness' }) },
+  { pattern: /^show\s+clipboard\s+text\s+contents\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "printf 'Sentinel AI Clipboard Buffer Content' | (wl-copy 2>/dev/null || xclip -selection clipboard 2>/dev/null || true); wl-paste 2>/dev/null || xclip -o 2>/dev/null", explanation: 'Show clipboard text contents' }) },
+  { pattern: /^check\s+installed\s+desktop\s+applications\s+list\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find /usr/share/applications -name '*.desktop' 2>/dev/null | head -10", explanation: 'Check installed desktop applications list' }) },
 
   // Domain 8: Linux Dotfiles & Rice Management (Hyprland / Waybar) (8.1 to 8.50)
-  { pattern: /^show\s+(?:my\s+)?hyprland\s+autostart\s+apps\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -E 'exec-once|exec\\s*=' ~/.config/hypr/hyprland.conf 2>/dev/null || echo 'exec-once = waybar & exec-once = fcitx5'", explanation: 'Show hyprland autostart apps' }) },
-  { pattern: /^enable\s+autostart\s+for\s+waybar\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'exec-once = waybar verified in config: Config updated or confirmed present'", explanation: 'Enable autostart for waybar' }) },
-  { pattern: /^disable\s+autostart\s+for\s+waybar\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Commented out in hyprland.conf: # exec-once = waybar (Prepended with # comment)'", explanation: 'Disable autostart for waybar' }) },
-  { pattern: /^check\s+(?:my\s+)?waybar\s+config(?:\s+file)?\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/waybar/config 2>/dev/null || cat ~/.config/waybar/config.jsonc 2>/dev/null || echo '{\"layer\": \"top\", \"modules-left\": [\"hyprland/workspaces\"], \"modules-right\": [\"pulseaudio\", \"clock\"]}'", explanation: 'Check waybar config file' }) },
+  { pattern: /^show\s+(?:my\s+)?hyprland\s+autostart\s+apps\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -E 'exec-once|exec\\s*=' ~/.config/hypr/hyprland.conf 2>/dev/null", explanation: 'Show hyprland autostart apps' }) },
+  { pattern: /^check\s+(?:my\s+)?waybar\s+config(?:\s+file)?\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/waybar/config 2>/dev/null || cat ~/.config/waybar/config.jsonc 2>/dev/null", explanation: 'Check waybar config file' }) },
   { pattern: /^check\s+kitty\s+terminal\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/kitty/kitty.conf 2>/dev/null || echo -e 'font_family JetBrains Mono\\nfont_size 11.0\\nwindow_padding_width 4\\nbackground_opacity 0.9'", explanation: 'Check kitty terminal config' }) },
   { pattern: /^backup\s+(?:my\s+)?dotfiles\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "touch ~/.config_backup.tar.gz; echo 'Backup archive creation confirmation: Tarball generated in user home (~/.config_backup.tar.gz)'", explanation: 'Backup dotfiles' }) },
-  { pattern: /^reload\s+hyprland\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl reload 2>/dev/null || echo 'Hyprland reload confirmation: Reload exit code 0'", explanation: 'Reload hyprland config' }) },
-  { pattern: /^check\s+active\s+hyprland\s+monitors\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl monitors -j 2>/dev/null || echo '[{\"id\": 0, \"name\": \"eDP-1\", \"width\": 1920, \"height\": 1080, \"refreshRate\": 60.0}]'", explanation: 'Check active hyprland monitors' }) },
-  { pattern: /^switch\s+terminal\s+color\s+theme\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Terminal color scheme updates: Emits theme change event (catppuccin-mocha)'", explanation: 'Switch terminal color theme' }) },
-  { pattern: /^show\s+rofi\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/rofi/config.rasi 2>/dev/null || echo 'configuration { modi: \"drun,run\"; font: \"JetBrains Mono 11\"; show-icons: true; }'", explanation: 'Show rofi configuration' }) },
-  { pattern: /^check\s+hyprland\s+window\s+border\s+color\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -i 'col.active_border' ~/.config/hypr/hyprland.conf 2>/dev/null || echo 'col.active_border = rgba(33ccffee) rgba(00ff99ee) 45deg'", explanation: 'Check hyprland window border color' }) },
-  { pattern: /^set\s+hyprland\s+active\s+border\s+color\s+to\s+purple\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Border color updated confirmation: Config modified and reloaded to purple (rgba(bb9af7ff) rgba(7aa2f7ff) 45deg)'", explanation: 'Set hyprland active border color to purple' }) },
+  { pattern: /^reload\s+hyprland\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl reload 2>/dev/null", explanation: 'Reload hyprland config' }) },
+  { pattern: /^check\s+active\s+hyprland\s+monitors\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl monitors -j 2>/dev/null", explanation: 'Check active hyprland monitors' }) },
+  { pattern: /^show\s+rofi\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/rofi/config.rasi 2>/dev/null", explanation: 'Show rofi configuration' }) },
+  { pattern: /^check\s+hyprland\s+window\s+border\s+color\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -i 'col.active_border' ~/.config/hypr/hyprland.conf 2>/dev/null", explanation: 'Check hyprland window border color' }) },
   { pattern: /^check\s+hyprland\s+gap\s+sizes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -E 'gaps_in|gaps_out' ~/.config/hypr/hyprland.conf 2>/dev/null || echo -e 'gaps_in = 5\\ngaps_out = 10'", explanation: 'Check hyprland gap sizes' }) },
-  { pattern: /^set\s+hyprland\s+inner\s+gaps\s+to\s+8\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Inner gap updated confirmation: Gaps set to 8px (hyprctl reload)'", explanation: 'Set hyprland inner gaps to 8' }) },
-  { pattern: /^set\s+hyprland\s+outer\s+gaps\s+to\s+14\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Outer gap updated confirmation: Gaps set to 14px (hyprctl reload)'", explanation: 'Set hyprland outer gaps to 14' }) },
-  { pattern: /^check\s+hyprland\s+window\s+rounding\s+radius\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'rounding' ~/.config/hypr/hyprland.conf 2>/dev/null || echo 'rounding = 10'", explanation: 'Check hyprland window rounding radius' }) },
+  { pattern: /^check\s+hyprland\s+window\s+rounding\s+radius\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'rounding' ~/.config/hypr/hyprland.conf 2>/dev/null", explanation: 'Check hyprland window rounding radius' }) },
   { pattern: /^check\s+hyprland\s+blur\s+settings\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -A 5 'blur {' ~/.config/hypr/hyprland.conf 2>/dev/null || echo -e 'blur {\\n    enabled = true\\n    size = 3\\n    passes = 1\\n}'", explanation: 'Check hyprland blur settings' }) },
-  { pattern: /^toggle\s+hyprland\s+window\s+blur\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Blur state toggled: Blur enabled/disabled boolean updated (hyprctl reload)'", explanation: 'Toggle hyprland window blur' }) },
   { pattern: /^check\s+alacritty\s+terminal\s+font\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/alacritty/alacritty.toml 2>/dev/null || cat ~/.config/alacritty/alacritty.yml 2>/dev/null || echo -e '[font.normal]\\nfamily = \"JetBrains Mono\"\\nsize = 11.0'", explanation: 'Check alacritty terminal font configuration' }) },
-  { pattern: /^check\s+kitty\s+terminal\s+font\s+size\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'font_size' ~/.config/kitty/kitty.conf 2>/dev/null || echo 'font_size 11.0'", explanation: 'Check kitty terminal font size' }) },
-  { pattern: /^check\s+kitty\s+background\s+opacity\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'background_opacity' ~/.config/kitty/kitty.conf 2>/dev/null || echo 'background_opacity 0.85'", explanation: 'Check kitty background opacity' }) },
-  { pattern: /^set\s+kitty\s+background\s+opacity\s+to\s+0\.85\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Opacity updated confirmation: Opacity set to 0.85 in ~/.config/kitty/kitty.conf'", explanation: 'Set kitty background opacity to 0.85' }) },
-  { pattern: /^check\s+tmux\s+prefix\s+keybinding\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -i 'prefix' ~/.tmux.conf 2>/dev/null || echo 'Prefix: Ctrl-b (Default tmux prefix)'", explanation: 'Check tmux prefix keybinding' }) },
+  { pattern: /^check\s+kitty\s+terminal\s+font\s+size\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'font_size' ~/.config/kitty/kitty.conf 2>/dev/null", explanation: 'Check kitty terminal font size' }) },
+  { pattern: /^check\s+kitty\s+background\s+opacity\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'background_opacity' ~/.config/kitty/kitty.conf 2>/dev/null", explanation: 'Check kitty background opacity' }) },
+  { pattern: /^check\s+tmux\s+prefix\s+keybinding\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -i 'prefix' ~/.tmux.conf 2>/dev/null", explanation: 'Check tmux prefix keybinding' }) },
   { pattern: /^check\s+neovim\s+init\s+lua\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(cat ~/.config/nvim/init.lua 2>/dev/null | head -15); [ -n \"$OUT\" ] && echo \"$OUT\" || echo -e 'vim.opt.number = true\\nvim.opt.relativenumber = true\\nvim.opt.tabstop = 4'", explanation: 'Check neovim init lua config' }) },
   { pattern: /^check\s+neovim\s+installed\s+plugins\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ls -1 ~/.local/share/nvim/lazy 2>/dev/null || ls -1 ~/.local/share/nvim/site/pack/packer/start 2>/dev/null || echo -e 'telescope.nvim\\nnvim-treesitter\\ncatppuccin'", explanation: 'Check neovim installed plugins' }) },
   { pattern: /^check\s+fish\s+shell\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/fish/config.fish 2>/dev/null || echo -e '# Fish default config\\nset -g fish_greeting \"\"\\nfish_vi_key_bindings'", explanation: 'Check fish shell config' }) },
   { pattern: /^check\s+bashrc\s+aliases\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(grep '^alias ' ~/.bashrc 2>/dev/null | head -10); [ -n \"$OUT\" ] && echo \"$OUT\" || echo -e \"alias ll='ls -alF'\\nalias la='ls -A'\\nalias l='ls -CF'\"", explanation: 'Check bashrc aliases' }) },
   { pattern: /^add\s+shell\s+alias\s+gs\s+for\s+git\s+status\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo \"alias gs='git status' added confirmation: Appended to ~/.bashrc\"", explanation: 'Add shell alias gs for git status' }) },
-  { pattern: /^check\s+current\s+desktop\s+wallpaper\s+path\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/hypr/hyprpaper.conf 2>/dev/null || swww query 2>/dev/null || echo '~/Pictures/wallpapers/neon_tokyo.png'", explanation: 'Check current desktop wallpaper path' }) },
-  { pattern: /^set\s+desktop\s+wallpaper\s+with\s+hyprpaper\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Wallpaper updated confirmation: Dispatches wallpaper change (~/wallpaper.jpg)'", explanation: 'Set desktop wallpaper with hyprpaper' }) },
+  { pattern: /^check\s+current\s+desktop\s+wallpaper\s+path\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/hypr/hyprpaper.conf 2>/dev/null || swww query 2>/dev/null", explanation: 'Check current desktop wallpaper path' }) },
   { pattern: /^check\s+waybar\s+active\s+modules\s+list\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'modules-' ~/.config/waybar/config 2>/dev/null || grep 'modules-' ~/.config/waybar/config.jsonc 2>/dev/null || echo -e '\"modules-left\": [\"hyprland/workspaces\", \"hyprland/window\"],\\n\"modules-right\": [\"pulseaudio\", \"network\", \"cpu\", \"memory\", \"clock\"]'", explanation: 'Check waybar active modules list' }) },
-  { pattern: /^restart\s+waybar\s+panel\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Waybar reloaded confirmation: Kills and respawns panel'", explanation: 'Restart waybar panel' }) },
   { pattern: /^check\s+dunst\s+notification\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(cat ~/.config/dunst/dunstrc 2>/dev/null | head -15); [ -n \"$OUT\" ] && echo \"$OUT\" || echo -e '[global]\\n    geometry = \"300x5-30+20\"\\n    transparency = 10\\n    font = \"JetBrains Mono 10\"'", explanation: 'Check dunst notification config' }) },
   { pattern: /^check\s+mako\s+notification\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/mako/config 2>/dev/null || echo -e '# Mako config\\ndefault-timeout=5000\\nborder-radius=8\\nfont=JetBrains Mono 10'", explanation: 'Check mako notification config' }) },
-  { pattern: /^check\s+rofi\s+launcher\s+theme\s+name\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -i '@theme' ~/.config/rofi/config.rasi 2>/dev/null || echo '@theme \"rounded-nord-dark\"'", explanation: 'Check rofi launcher theme name' }) },
+  { pattern: /^check\s+rofi\s+launcher\s+theme\s+name\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -i '@theme' ~/.config/rofi/config.rasi 2>/dev/null", explanation: 'Check rofi launcher theme name' }) },
   { pattern: /^check\s+starship\s+prompt\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(cat ~/.config/starship.toml 2>/dev/null | head -15); [ -n \"$OUT\" ] && echo \"$OUT\" || echo -e '[character]\\nsuccess_symbol = \"[➜](bold green)\"\\nerror_symbol = \"[✗](bold red)\"'", explanation: 'Check starship prompt config' }) },
-  { pattern: /^check\s+fastfetch\s+or\s+neofetch\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/fastfetch/config.jsonc 2>/dev/null || echo '{\"$schema\": \"https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json\", \"modules\": [\"title\", \"os\", \"kernel\", \"uptime\", \"packages\"]}'", explanation: 'Check fastfetch or neofetch config' }) },
+  { pattern: /^check\s+fastfetch\s+or\s+neofetch\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/fastfetch/config.jsonc 2>/dev/null", explanation: 'Check fastfetch or neofetch config' }) },
   { pattern: /^list\s+all\s+files\s+in\s+(?:~?\/?\.config\s+directory|~?\/?\.config)\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ls -1 ~/.config | head -15 || echo -e 'hypr\\nwaybar\\nkitty\\nfastfetch\\nrofi'", explanation: 'List all files in ~/.config directory' }) },
-  { pattern: /^git\s+init\s+in\s+~?\/?\.config\s+to\s+track\s+dotfiles\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Dotfiles git repo initialized: Git repository initialized in config (~/.config)'", explanation: 'Git init in ~/.config to track dotfiles' }) },
   { pattern: /^check\s+dotfiles\s+git\s+tracking\s+status\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git -C ~/.config status --short 2>/dev/null || echo -e '?? hypr/\\n?? waybar/'", explanation: 'Check dotfiles git tracking status' }) },
   { pattern: /^check\s+swaylock\s+screen\s+lock\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/swaylock/config 2>/dev/null || echo -e 'ring-color=bb9af7\\ninside-color=1a1b26\\nkey-hl-color=7aa2f7'", explanation: 'Check swaylock screen lock config' }) },
   { pattern: /^check\s+wlogout\s+power\s+menu\s+layout\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/wlogout/layout 2>/dev/null || echo -e '{\"label\": \"lock\", \"action\": \"swaylock\"}\\n{\"label\": \"logout\", \"action\": \"hyprctl dispatch exit\"}\\n{\"label\": \"shutdown\", \"action\": \"systemctl poweroff\"}\\n{\"label\": \"reboot\", \"action\": \"systemctl reboot\"}'", explanation: 'Check wlogout power menu layout' }) },
   { pattern: /^check\s+zshrc\s+theme\s+and\s+plugins\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -E 'ZSH_THEME|plugins=' ~/.zshrc 2>/dev/null || echo -e 'ZSH_THEME=\"robbyrussell\"\\nplugins=(git sudo zsh-autosuggestions)'", explanation: 'Check zshrc theme and plugins' }) },
-  { pattern: /^check\s+gtk\s+theme\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'gtk-theme-name' ~/.config/gtk-3.0/settings.ini 2>/dev/null || gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null || echo 'gtk-theme-name = Adwaita-dark'", explanation: 'Check gtk theme configuration' }) },
-  { pattern: /^check\s+icon\s+theme\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'gtk-icon-theme-name' ~/.config/gtk-3.0/settings.ini 2>/dev/null || gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null || echo 'gtk-icon-theme-name = Papirus'", explanation: 'Check icon theme configuration' }) },
+  { pattern: /^check\s+gtk\s+theme\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'gtk-theme-name' ~/.config/gtk-3.0/settings.ini 2>/dev/null || gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null", explanation: 'Check gtk theme configuration' }) },
+  { pattern: /^check\s+icon\s+theme\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'gtk-icon-theme-name' ~/.config/gtk-3.0/settings.ini 2>/dev/null || gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null", explanation: 'Check icon theme configuration' }) },
   { pattern: /^check\s+cursor\s+theme\s+and\s+size\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'gtk-cursor' ~/.config/gtk-3.0/settings.ini 2>/dev/null || echo -e 'gtk-cursor-theme-name = Bibata-Modern-Classic\\ngtk-cursor-theme-size = 24'", explanation: 'Check cursor theme and size' }) },
   { pattern: /^check\s+hyprland\s+animations\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -A 5 'animations {' ~/.config/hypr/hyprland.conf 2>/dev/null || echo -e 'animations {\\n    enabled = true\\n    bezier = myBezier, 0.05, 0.9, 0.1, 1.05\\n}'", explanation: 'Check hyprland animations configuration' }) },
-  { pattern: /^toggle\s+hyprland\s+animations\s+on\s+or\s+off\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Animations toggled confirmation: Animation enabled boolean updated (hyprctl reload)'", explanation: 'Toggle hyprland animations on or off' }) },
-  { pattern: /^restore\s+dotfiles\s+from\s+latest\s+backup\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Dotfiles restored confirmation: Extracts archive into home (~/)'", explanation: 'Restore dotfiles from latest backup' }) },
-  { pattern: /^create\s+clean\s+git\s+branch\s+in\s+dotfiles\s+repo\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'New rice branch created: Git branch created in ~/.config (clean-rice)'", explanation: 'Create clean git branch in dotfiles repo' }) },
 
   // Domain 9: Multi-Stage Composite Workflows (9.1 to 9.50)
-  { pattern: /^clean\s+project:\s*remove\s+node_modules.*verify\s+tests\s+pass\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'Phase 1: rm -rf node_modules package-lock.json\\nPhase 2: npm install\\nPhase 3: npm test\\nPass confirmation: Multi-phase checklist executed sequentially'", explanation: 'Clean project composite workflow' }) },
-  { pattern: /^git\s+sync:\s*stash\s+changes.*show\s+status\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'Phase 1: git stash\\nPhase 2: git pull origin linux\\nPhase 3: git stash pop\\nPhase 4: git status\\nClean multi-step git sync pipeline with conflict detection: All 4 steps complete with clean status'", explanation: 'Git sync composite pipeline' }) },
-  { pattern: /^docker\s+clean:\s*stop\s+all\s+containers.*remaining\s+images\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'Phase 1: docker stop\\nPhase 2: docker volume prune -f\\nPhase 3: docker images\\nContainer stop status, reclaimed space report: Sequential docker cleanup execution'", explanation: 'Docker cleanup pipeline' }) },
-  { pattern: /^prepare\s+release:\s*check\s+clean\s+git\s+status.*build\s+production\s+bundle\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'Phase 1: git status --porcelain\\nPhase 2: npm run lint\\nPhase 3: npm test\\nPhase 4: npm run build\\nZero errors across all 4 gate stages: Multi-phase release verification gate confirming zero errors before build'", explanation: 'Prepare release verification gate' }) },
-  { pattern: /^system\s+health\s+audit:\s*check\s+cpu,\s*memory,\s*disk.*battery\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'CPU: AMD Ryzen (Healthy)\\nMemory: 32GB (Usage 24%)\\nDisk: / (Usage 35%)\\nServices: 0 failed\\nBattery: 98% discharging\\nUnified executive health card summarizing all 5 hardware metrics: Aggregated hardware report card'", explanation: 'System health audit' }) },
-  { pattern: /^save\s+workflow\s+release-gate\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"release-gate\", \"steps\": [\"git status\", \"npm run lint\", \"npm test\", \"npm run build\"]}' > ~/.sentinel/workflows/release-gate.json && echo 'Workflow file written to disk: Saved pipeline 9.4 as release-gate.json in ~/.sentinel/workflows/'", explanation: 'Save workflow release-gate' }) },
-  { pattern: /^run\s+workflow\s+release-gate\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Deterministic instant execution: Executes pipeline 9.4 with zero LLM inference tokens'", explanation: 'Run workflow release-gate' }) },
-  { pattern: /^dev\s+environment\s+boot:\s*check\s+port\s+3000.*open\s+browser\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'Stage 1: Port 3000 check (free)\\nStage 2: Port release\\nStage 3: npm run dev\\nStage 4: browser.navigate (http://localhost:3000)\\nPort cleared and server launched: Development server boot orchestration'", explanation: 'Dev environment boot' }) },
-  { pattern: /^backup\s+database\s+and\s+prune\s+old\s+archives.*7\s+days\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Backup created with timestamp and old archives pruned: Backup file verified and prune complete'", explanation: 'Backup database and prune old archives' }) },
-  { pattern: /^audit\s+listening\s+ports\s+and\s+terminate\s+unauthorized\s+processes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'Audit: ss -tulpn\\nAction: Filter unauthorized ports\\nRemediation: Terminate matching PIDs\\nPort audit and process termination: Security compliance audit report'", explanation: 'Audit listening ports' }) },
-  { pattern: /^full\s+project\s+rebuild:\s*clean\s+build\s+artifacts.*package\s+tauri\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. rm -rf dist target/debug\\n2. cargo check\\n3. npm run build\\n4. cargo tauri build --debug\\nFull stack compilation successful: Build pipeline with duration per stage'", explanation: 'Full project rebuild' }) },
-  { pattern: /^git\s+branch\s+release\s+prep:\s*fetch\s+upstream.*tag\s+v?2\.1\.0\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. git fetch origin\\n2. git rebase origin/main\\n3. npm test\\n4. git tag v2.1.0\\nGit release gate verification: Rebase clean and tag created'", explanation: 'Git branch release prep' }) },
-  { pattern: /^quick\s+deploy\s+check:\s*verify\s+port\s+8080.*inspect\s+journal\s+errors\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. curl -I localhost:8080 (HTTP 200 OK)\\n2. free -h (Memory: 8.2GB free)\\n3. journalctl -p 3 -n 10 (Zero system errors)\\nProduction sanity check report: Health status across 3 vectors'", explanation: 'Quick deploy check' }) },
-  { pattern: /^diagnose\s+network\s+failure:\s*check\s+default\s+gateway.*test\s+wan\s+ping\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. Gateway ping: OK\\n2. DNS lookup google.com: OK\\n3. WAN ping 1.1.1.1: OK\\nRoot cause network diagnosis: Pinpoints failure layer (LAN, DNS, WAN)'", explanation: 'Diagnose network failure' }) },
-  { pattern: /^benchmark\s+cpu\s+performance:\s*record\s+idle\s+temp.*record\s+peak\s+temp\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'Idle temp: 42°C\\nStress test: 5s at 100% load\\nPeak temp: 68°C\\nDelta temperature and throttling report: Pre and post benchmark stats'", explanation: 'Benchmark CPU performance' }) },
-  { pattern: /^clean\s+disk\s+space:\s*clear\s+pacman\s+cache.*vacuum\s+journal\s+logs.*100mb\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. sudo pacman -Sc (Cleaned)\\n2. npm cache clean --force (Reclaimed)\\n3. journalctl --vacuum-size=100M (Reduced)\\nReclaimed disk space report: Reclaims storage across package managers'", explanation: 'Clean disk space' }) },
-  { pattern: /^save\s+workflow\s+dev-boot\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"dev-boot\"}' > ~/.sentinel/workflows/dev-boot.json && echo 'Workflow JSON persisted: Persists dev-boot pipeline to ~/.sentinel/workflows/dev-boot.json'", explanation: 'Save workflow dev-boot' }) },
-  { pattern: /^run\s+workflow\s+dev-boot\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Instant replay execution: Executes dev-boot with parameter overrides'", explanation: 'Run workflow dev-boot' }) },
-  { pattern: /^security\s+audit:\s*check\s+listening\s+ports.*failed\s+logins\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. Ports: ss -tulpn verified\\n2. Root processes: ps -u root verified\\n3. Failed logins: 0 failed SSH logins\\nSecurity posture summary: Port, privilege, and auth report'", explanation: 'Security audit' }) },
-  { pattern: /^automated\s+bug\s+triage:\s*check\s+git\s+diff.*capture\s+failed\s+test\s+logs\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. git diff HEAD~1: inspected\\n2. npm test: executed\\n3. stack traces: analyzed\\nAutomated regression report: Pinpoints failing assertions'", explanation: 'Automated bug triage' }) },
-  { pattern: /^archive\s+project\s+logs:\s*compress\s+logs.*move\s+to\s+\/backups\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'Logs compressed: logs.tar.gz\\nSHA256: 7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069\\nArchive confirmation with SHA256 integrity: Archive file created with checksum'", explanation: 'Archive project logs' }) },
-  { pattern: /^setup\s+new\s+git\s+feature\s+branch:\s*checkout\s+main.*run\s+npm\s+test\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. git checkout main\\n2. git pull\\n3. git checkout -b feat-auth\\n4. npm test (passed)\\nBranch bootstrap confirmation: Switched to new branch with passing tests'", explanation: 'Setup new git feature branch' }) },
-  { pattern: /^rust\s+dependency\s+upgrade:\s*run\s+cargo\s+update.*run\s+cargo\s+test\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. cargo update: complete\\n2. cargo check: pass\\n3. cargo test: pass\\nRust crate update and verification: Crates updated and tests green'", explanation: 'Rust dependency upgrade' }) },
-  { pattern: /^node\s+dependency\s+upgrade:\s*run\s+npm\s+update.*run\s+npm\s+test\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. npm update: complete\\n2. npm audit: 0 vulnerabilities\\n3. npm test: pass\\nNode package update and regression check: Packages updated with audit report'", explanation: 'Node dependency upgrade' }) },
-  { pattern: /^full\s+desktop\s+environment\s+reset:\s*restart\s+hyprland.*restart\s+pipewire\s+audio\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. hyprctl reload\\n2. killall waybar && waybar &\\n3. systemctl --user restart pipewire\\nDesktop session restart confirmation: Window manager, bar, audio restored'", explanation: 'Full desktop environment reset' }) },
-  { pattern: /^save\s+workflow\s+desktop-reset\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"desktop-reset\"}' > ~/.sentinel/workflows/desktop-reset.json && echo 'Workflow file written to disk: Saves desktop reset pipeline to ~/.sentinel/workflows/desktop-reset.json'", explanation: 'Save workflow desktop-reset' }) },
-  { pattern: /^run\s+workflow\s+desktop-reset\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Deterministic instant execution: Executes desktop-reset pipeline instantly'", explanation: 'Run workflow desktop-reset' }) },
-  { pattern: /^docker\s+development\s+stack\s+launch:\s*start\s+postgres.*run\s+migration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. postgres & redis started\\n2. healthcheck: healthy\\n3. migrations: applied\\nContainer services healthy and database migrated: All dependent services active'", explanation: 'Docker dev stack launch' }) },
-  { pattern: /^docker\s+development\s+stack\s+teardown:\s*stop\s+containers.*remove\s+networks\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. docker compose down\\n2. pg_dump completed\\n3. network pruned\\nTeardown confirmation with backup created: Clean shutdown confirmation'", explanation: 'Docker dev stack teardown' }) },
-  { pattern: /^save\s+workflow\s+db-sync\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"db-sync\"}' > ~/.sentinel/workflows/db-sync.json && echo 'Workflow JSON persisted: Persists database sync pipeline'", explanation: 'Save workflow db-sync' }) },
-  { pattern: /^run\s+workflow\s+db-sync\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Zero token instant execution: Executes db-sync with zero latency'", explanation: 'Run workflow db-sync' }) },
-  { pattern: /^diagnose\s+high\s+memory\s+usage:\s*find\s+top\s+memory\s+process.*check\s+swap\s+usage\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'Top process: node (PID 1234, 4.2%)\\nSlab Memory: 412 MB\\nSwap: 0 MB used / 8192 MB\\nMemory pressure diagnosis report: Identifies top offender and swap status'", explanation: 'Diagnose high memory usage' }) },
-  { pattern: /^diagnose\s+high\s+cpu\s+usage:\s*find\s+top\s+cpu\s+process.*inspect\s+process\s+io\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'Top CPU process: cargo (PID 5678, 12.4%)\\nThreads: 16\\nIO: 1.2 MB/s read, 4.8 MB/s write\\nCPU contention root cause report: Identifies offending threads'", explanation: 'Diagnose high cpu usage' }) },
-  { pattern: /^prepare\s+github\s+pull\s+request:\s*format\s+code.*show\s+diff\s+summary\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. Format: clean\\n2. Linter: 0 errors\\n3. Tests: passed\\n4. Diff: 12 files changed\\nPR verification checklist: Formatting and tests verified clean'", explanation: 'Prepare github pull request' }) },
-  { pattern: /^monitor\s+build\s+and\s+notify:\s*run\s+npm\s+run\s+build.*send\s+desktop\s+notification\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Build execution with desktop notification alert: Dispatches desktop notification (Build Complete)'", explanation: 'Monitor build and notify' }) },
-  { pattern: /^save\s+workflow\s+pr-prep\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"pr-prep\"}' > ~/.sentinel/workflows/pr-prep.json && echo 'Workflow JSON persisted: Persists PR preparation workflow'", explanation: 'Save workflow pr-prep' }) },
-  { pattern: /^run\s+workflow\s+pr-prep\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Deterministic instant execution: Executes PR prep pipeline instantly'", explanation: 'Run workflow pr-prep' }) },
-  { pattern: /^check\s+git\s+conflict\s+markers\s+across\s+all\s+files\s+in\s+repository\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git diff --check 2>/dev/null || echo 'Clean if zero merge conflicts remain: No merge conflict markers found'", explanation: 'Check git conflict markers' }) },
-  { pattern: /^clean\s+git\s+merged\s+local\s+branches:\s*list\s+merged\s+branches.*delete\s+stale\s+refs\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Pruned stale branch list: Removes merged feature branches'", explanation: 'Clean git merged local branches' }) },
-  { pattern: /^wipe\s+node\s+cache\s+and\s+rebuild:\s*rm\s+-rf\s+\.next.*npm\s+run\s+build\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Clean production bundle generated: Rebuilds from fresh state'", explanation: 'Wipe node cache and rebuild' }) },
-  { pattern: /^save\s+workflow\s+clean-rebuild\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"clean-rebuild\"}' > ~/.sentinel/workflows/clean-rebuild.json && echo 'Workflow JSON persisted: Persists clean rebuild workflow'", explanation: 'Save workflow clean-rebuild' }) },
-  { pattern: /^run\s+workflow\s+clean-rebuild\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Deterministic instant execution: Executes clean-rebuild workflow'", explanation: 'Run workflow clean-rebuild' }) },
-  { pattern: /^inspect\s+system\s+boot\s+log\s+for\s+acpi\s+or\s+battery\s+errors:.*journalctl\s+-b.*summarize\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'ACPI log events: ACPI battery status online, zero fatal exceptions\\nACPI power management log diagnosis: Extracts hardware battery events'", explanation: 'Inspect system boot log for acpi' }) },
-  { pattern: /^check\s+for\s+listening\s+port\s+collisions:\s*check\s+ports\s+3000.*report\s+status\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'Port 3000: free\\nPort 5173: free\\nPort 8080: free\\nPort 8000: free\\nMulti-port occupancy report: Shows status of all 4 common dev ports'", explanation: 'Check for listening port collisions' }) },
-  { pattern: /^verify\s+local\s+ai\s+engine\s+readiness:\s*check\s+port\s+11435.*test\s+model\s+availability\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e 'Embedded Engine (Port 11435): Available\\nOllama Engine (Port 11434): Available\\nAI engine health status report: Reports embedded and Ollama readiness'", explanation: 'Verify local ai engine readiness' }) },
-  { pattern: /^save\s+workflow\s+ai-healthcheck\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"ai-healthcheck\"}' > ~/.sentinel/workflows/ai-healthcheck.json && echo 'Workflow JSON persisted: Persists AI healthcheck pipeline'", explanation: 'Save workflow ai-healthcheck' }) },
-  { pattern: /^run\s+workflow\s+ai-healthcheck\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Zero token instant execution: Executes AI healthcheck instantly'", explanation: 'Run workflow ai-healthcheck' }) },
-  { pattern: /^verify\s+git\s+tag\s+and\s+commit\s+signatures:.*check\s+GPG\s+signature.*latest\s+tag\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'GPG signature verification report: Valid signature or unsigned warning (Verified)'", explanation: 'Verify git tag and commit signatures' }) },
-  { pattern: /^create\s+timestamped\s+project\s+tarball\s+backup\s+excluding\s+git\s+and\s+node_modules\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Compressed tarball creation confirmation: Creates timestamped archive in home (~/project_backup_20260913_153000.tar.gz)'", explanation: 'Create timestamped project tarball backup' }) },
-  { pattern: /^execute\s+full\s+sentinel\s+self-test:\s*run\s+vitest.*check\s+tsc\s+build\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo -e '1. vitest: 100% pass\\n2. cargo check: ok\\n3. npm run build: ok\\nTriple verification pass confirmation across unit, rust, and bundle layers: All 3 verification gates exit 0'", explanation: 'Execute full sentinel self-test' }) },
+  { pattern: /^save\s+workflow\s+release-gate\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"release-gate\", \"steps\": [\"git status\", \"npm run lint\", \"npm test\", \"npm run build\"]}' > ~/.sentinel/workflows/release-gate.json", explanation: 'Save workflow release-gate' }) },
+  { pattern: /^save\s+workflow\s+dev-boot\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"dev-boot\"}' > ~/.sentinel/workflows/dev-boot.json", explanation: 'Save workflow dev-boot' }) },
+  { pattern: /^save\s+workflow\s+desktop-reset\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"desktop-reset\"}' > ~/.sentinel/workflows/desktop-reset.json", explanation: 'Save workflow desktop-reset' }) },
+  { pattern: /^save\s+workflow\s+db-sync\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"db-sync\"}' > ~/.sentinel/workflows/db-sync.json", explanation: 'Save workflow db-sync' }) },
+  { pattern: /^save\s+workflow\s+pr-prep\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"pr-prep\"}' > ~/.sentinel/workflows/pr-prep.json", explanation: 'Save workflow pr-prep' }) },
+  { pattern: /^check\s+git\s+conflict\s+markers\s+across\s+all\s+files\s+in\s+repository\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git diff --check 2>/dev/null", explanation: 'Check git conflict markers' }) },
+  { pattern: /^save\s+workflow\s+clean-rebuild\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"clean-rebuild\"}' > ~/.sentinel/workflows/clean-rebuild.json", explanation: 'Save workflow clean-rebuild' }) },
+  { pattern: /^save\s+workflow\s+ai-healthcheck\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"ai-healthcheck\"}' > ~/.sentinel/workflows/ai-healthcheck.json", explanation: 'Save workflow ai-healthcheck' }) },
 
   // Web browser navigation & URL shortcuts (with optional target browser)
   {
@@ -409,7 +342,7 @@ const FAST_PATHS: {
   { pattern: /^list\s+all\s+pci\s+hardware\s+devices\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'lspci', explanation: 'List all PCI hardware devices' }) },
   { pattern: /^list\s+all\s+connected\s+usb\s+devices\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'lsusb', explanation: 'List all connected USB devices' }) },
   { pattern: /^check\s+dedicated\s+gpu\s+info\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "lspci | grep -iE 'vga|3d|display'", explanation: 'Check dedicated GPU info' }) },
-  { pattern: /^check\s+gpu\s+memory\s+vram\s+usage\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "nvidia-smi 2>/dev/null || lspci -v -s $(lspci | grep -iE 'vga|display' | head -1 | cut -d' ' -f1) 2>/dev/null || echo 'VRAM: Shared System Memory'", explanation: 'Check GPU memory VRAM usage' }) },
+  { pattern: /^check\s+gpu\s+memory\s+vram\s+usage\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "nvidia-smi 2>/dev/null || lspci -v -s $(lspci | grep -iE 'vga|display' | head -1 | cut -d' ' -f1) 2>/dev/null", explanation: 'Check GPU memory VRAM usage' }) },
   { pattern: /^check\s+cpu\s+frequency\s+per\s+core\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'cpu MHz' /proc/cpuinfo || lscpu | grep MHz", explanation: 'Check CPU frequency per core' }) },
   { pattern: /^check\s+cpu\s+governor\s+mode\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo "powersave"', explanation: 'Check CPU governor mode' }) },
   { pattern: /^check\s+cpu\s+vulnerabilities\s+and\s+mitigations\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'tail -n +1 /sys/devices/system/cpu/vulnerabilities/* 2>/dev/null | head -30', explanation: 'Check CPU vulnerabilities and mitigations' }) },
@@ -442,18 +375,18 @@ const FAST_PATHS: {
   { pattern: /^show\s+process\s+tree\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'pstree 2>/dev/null || ps axjf | head -30', explanation: 'Show process tree' }) },
   { pattern: /^count\s+total\s+running\s+processes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'ps -e | wc -l', explanation: 'Count total running processes' }) },
   { pattern: /^find\s+pid\s+of\s+hyprland\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'pidof Hyprland 2>/dev/null || pgrep -x Hyprland 2>/dev/null || pgrep -i hyprland 2>/dev/null || echo "Hyprland PID: Not currently running"', explanation: 'Find PID of Hyprland' }) },
-  { pattern: /^list\s+zombie\s+processes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ps -eo pid,stat,comm | grep -w 'Z' || echo 'No zombie processes found'", explanation: 'List zombie processes' }) },
+  { pattern: /^list\s+zombie\s+processes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ps -eo pid,stat,comm | grep -w 'Z'", explanation: 'List zombie processes' }) },
   { pattern: /^check\s+threads\s+count\s+of\s+process\s+(\d+)\s*$/i, tool: 'shell.execute', paramsFn: (m) => ({ command: `cat /proc/${m[1]}/status | grep -i Threads`, explanation: `Check threads count of process ${m[1]}` }) },
   { pattern: /^find\s+processes\s+consuming\s+more\s+than\s+5%\s+cpu\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ps -eo pid,pcpu,comm --sort=-pcpu | awk '$2 > 5.0' | head -15", explanation: 'Find processes consuming > 5% CPU' }) },
-  { pattern: /^find\s+processes\s+using\s+more\s+than\s+500mb\s+ram\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ps -eo pid,rss,comm --sort=-rss | awk '$2 > 512000' | head -15 || echo 'No processes using > 500MB RAM'", explanation: 'Find processes using > 500MB RAM' }) },
+  { pattern: /^find\s+processes\s+using\s+more\s+than\s+500mb\s+ram\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ps -eo pid,rss,comm --sort=-rss | awk '$2 > 512000' | head -15", explanation: 'Find processes using > 500MB RAM' }) },
   { pattern: /^show\s+all\s+processes\s+owned\s+by\s+root\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'ps -u root -o pid,comm | head -15', explanation: 'Show processes owned by root' }) },
   { pattern: /^show\s+all\s+processes\s+owned\s+by\s+current\s+user\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'ps -u $USER -o pid,comm | head -15', explanation: 'Show processes owned by current user' }) },
   { pattern: /^check\s+nice\s+priority\s+of\s+process\s+(\d+)\s*$/i, tool: 'shell.execute', paramsFn: (m) => ({ command: `ps -o pid,nice,comm -p ${m[1]}`, explanation: `Check nice priority of process ${m[1]}` }) },
   { pattern: /^renice\s+process\s+(\d+)\s+to\s+priority\s+(-?\d+)\s*$/i, tool: 'shell.execute', paramsFn: (m) => ({ command: `renice ${m[2]} -p ${m[1]} 2>/dev/null || echo "Renice: Process ${m[1]} adjusted"`, explanation: `Renice process ${m[1]} to priority ${m[2]}` }) },
   { pattern: /^find\s+process\s+with\s+highest\s+io\s+activity\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: '(which iotop >/dev/null 2>&1 && iotop -b -n 1 2>/dev/null | head -5) || ps -eo pid,comm --sort=-pcpu | head -5', explanation: 'Find process with highest IO activity' }) },
   { pattern: /^show\s+memory\s+usage\s+of\s+current\s+shell\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'ps -o pid,rss,vsz,comm -p $$', explanation: 'Show memory usage of current shell' }) },
-  { pattern: /^list\s+suspended\s+processes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ps -eo pid,stat,comm | grep -w 'T' || echo 'No suspended processes'", explanation: 'List suspended processes' }) },
-  { pattern: /^find\s+processes\s+in\s+uninterruptible\s+sleep\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ps -eo pid,stat,comm | grep -w 'D' || echo 'No processes in uninterruptible sleep (D state)'", explanation: 'Find processes in uninterruptible sleep' }) },
+  { pattern: /^list\s+suspended\s+processes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ps -eo pid,stat,comm | grep -w 'T'", explanation: 'List suspended processes' }) },
+  { pattern: /^find\s+processes\s+in\s+uninterruptible\s+sleep\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ps -eo pid,stat,comm | grep -w 'D'", explanation: 'Find processes in uninterruptible sleep' }) },
   { pattern: /^kill\s+all\s+instances\s+of\s+chrome\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'pgrep -i chrome >/dev/null && { pkill -9 -i chrome 2>/dev/null && echo "Terminated running Chrome instances"; } || echo "No chrome instances running"', explanation: 'Kill all instances of Chrome' }) },
   { pattern: /^kill\s+all\s+python\s+scripts\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'PIDS=$(pgrep -x python3 2>/dev/null | while read p; do if ! grep -qa \'quickshell\' /proc/$p/cmdline 2>/dev/null; then echo $p; fi; done); if [ -n "$PIDS" ]; then kill -9 $PIDS 2>/dev/null && echo "Terminated Python scripts ($PIDS)"; else echo "No python scripts running"; fi', explanation: 'Kill all Python scripts' }) },
   { pattern: /^find\s+pid\s+of\s+listening\s+process\s+on\s+port\s+(\d+)\s*$/i, tool: 'shell.execute', paramsFn: (m) => ({ command: `lsof -ti :${m[1]} 2>/dev/null || ss -tulpn | grep :${m[1]} || echo "Port ${m[1]} is free"`, explanation: `Find PID on port ${m[1]}` }) },
@@ -476,7 +409,7 @@ const FAST_PATHS: {
   { pattern: /^kill\s+process\s+immediately\s+with\s+sigkill\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'sleep 60 & PID=$!; kill -9 $PID 2>/dev/null && echo "SIGKILL sent to PID $PID (process killed)"', explanation: 'Send SIGKILL to process' }) },
   { pattern: /^send\s+sigstop\s+pause\s+signal\s+to\s+process\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'sleep 60 & PID=$!; kill -STOP $PID 2>/dev/null && echo "SIGSTOP pause dispatched to PID $PID"; kill -9 $PID 2>/dev/null', explanation: 'Send SIGSTOP to process' }) },
   { pattern: /^send\s+sigcont\s+resume\s+signal\s+to\s+process\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'sleep 60 & PID=$!; kill -STOP $PID 2>/dev/null; kill -CONT $PID 2>/dev/null && echo "SIGCONT resume dispatched to PID $PID"; kill -9 $PID 2>/dev/null', explanation: 'Send SIGCONT to process' }) },
-  { pattern: /^show\s+top\s+3\s+processes\s+consuming\s+disk\s+space\s+in\s+\/tmp\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "lsof +D /tmp 2>/dev/null | awk '{print $1, $2}' | sort -u | head -4 || echo 'No active file handles in /tmp'", explanation: 'Show top processes in /tmp' }) },
+  { pattern: /^show\s+top\s+3\s+processes\s+consuming\s+disk\s+space\s+in\s+\/tmp\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "lsof +D /tmp 2>/dev/null | awk '{print $1, $2}' | sort -u | head -4", explanation: 'Show top processes in /tmp' }) },
 
   // Domain 3: Network Diagnostics, Ports & Connections (3.1 to 3.50)
   { pattern: /^tell\s+me\s+all\s+running\s+ports\s*$/i, tool: 'network.ports', paramsFn: () => ({}) },
@@ -531,33 +464,33 @@ const FAST_PATHS: {
   { pattern: /^enable\s+ipv6\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'echo "net.ipv6.conf.all.disable_ipv6 = 0 (IPv6 enabled confirmation. Security consent required)"', explanation: 'Enable IPv6' }) },
 
   // Domain 4: Filesystem, Directory Navigation & File Search (4.1 to 4.50)
-  { pattern: /^find\s+all\s+python\s+files\s+in\s+this\s+directory\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -maxdepth 3 -name '*.py' 2>/dev/null || echo './scripts/generate_roadmap.py'", explanation: 'Find all python files in this directory' }) },
+  { pattern: /^find\s+all\s+python\s+files\s+in\s+this\s+directory\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -maxdepth 3 -name '*.py' 2>/dev/null", explanation: 'Find all python files in this directory' }) },
   { pattern: /^find\s+all\s+typescript\s+files\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find src -name '*.ts' -not -path '*/node_modules/*' | head -15", explanation: 'Find all typescript files' }) },
   { pattern: /^find\s+files\s+named\s+package\.json\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -name 'package.json' -not -path '*/node_modules/*'", explanation: 'Find files named package.json' }) },
-  { pattern: /^search\s+for\s+frontend\s+in\s+folders\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -type d -iname '*frontend*' -not -path '*/node_modules/*' 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\" || echo './src/ui'", explanation: 'Search for frontend in folders' }) },
+  { pattern: /^search\s+for\s+frontend\s+in\s+folders\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -type d -iname '*frontend*' -not -path '*/node_modules/*' 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Search for frontend in folders' }) },
   { pattern: /^list\s+files\s+in\s+current\s+directory\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ls -la | head -15", explanation: 'List files in current directory' }) },
   { pattern: /^show\s+hidden\s+files\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ls -ld .*", explanation: 'Show hidden files' }) },
   { pattern: /^navigate\s+to\s+home\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo \"Changed directory to $HOME (Current working directory updates to /home/$(whoami))\"", explanation: 'Navigate to home' }) },
   { pattern: /^go\s+back\s+one\s+directory\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo \"Changed directory to $(dirname \"$PWD\") (PWD moves up one level)\"", explanation: 'Go back one directory' }) },
-  { pattern: /^find\s+files\s+larger\s+than\s+100MB\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -type f -size +100M -not -path '*/.git/*' 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'No files exceeding 100 megabytes found'", explanation: 'Find files larger than 100MB' }) },
-  { pattern: /^search\s+text\s+['"]?OllamaProvider['"]?\s+in\s+src\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -rn 'OllamaProvider' src/ 2>/dev/null || echo 'src/ai/providers/OllamaProvider.ts:1:export class OllamaProvider'", explanation: 'Search text OllamaProvider in src' }) },
+  { pattern: /^find\s+files\s+larger\s+than\s+100MB\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -type f -size +100M -not -path '*/.git/*' 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Find files larger than 100MB' }) },
+  { pattern: /^search\s+text\s+['"]?OllamaProvider['"]?\s+in\s+src\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -rn 'OllamaProvider' src/ 2>/dev/null", explanation: 'Search text OllamaProvider in src' }) },
   { pattern: /^count\s+lines\s+of\s+code\s+in\s+src\s+directory\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find src -name '*.ts' | xargs wc -l | tail -1", explanation: 'Count lines of code in src directory' }) },
   { pattern: /^show\s+top\s+5\s+largest\s+files\s+in\s+this\s+folder\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "du -ah . 2>/dev/null | sort -rh | head -5", explanation: 'Show top 5 largest files in this folder' }) },
-  { pattern: /^check\s+if\s+file\s+README\.md\s+exists\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "test -f README.md && echo 'Exists: true (README.md exists on disk)' || echo 'Exists: false'", explanation: 'Check if file README.md exists' }) },
-  { pattern: /^create\s+temporary\s+test\s+folder\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ./tmp_test && echo 'Folder created on disk: ./tmp_test'", explanation: 'Create temporary test folder' }) },
-  { pattern: /^delete\s+temporary\s+test\s+folder\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "rm -rf ./tmp_test && echo 'Folder removed cleanly: ./tmp_test'", explanation: 'Delete temporary test folder' }) },
+  { pattern: /^check\s+if\s+file\s+README\.md\s+exists\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "test -f README.md", explanation: 'Check if file README.md exists' }) },
+  { pattern: /^create\s+temporary\s+test\s+folder\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ./tmp_test", explanation: 'Create temporary test folder' }) },
+  { pattern: /^delete\s+temporary\s+test\s+folder\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "rm -rf ./tmp_test", explanation: 'Delete temporary test folder' }) },
   { pattern: /^find\s+all\s+rust\s+source\s+files\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find src-tauri -name '*.rs'", explanation: 'Find all rust source files' }) },
   { pattern: /^find\s+all\s+markdown\s+files\s+in\s+workspace\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -maxdepth 2 -name '*.md'", explanation: 'Find all markdown files in workspace' }) },
   { pattern: /^find\s+all\s+json\s+configuration\s+files\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -maxdepth 2 -name '*.json' -not -path '*/node_modules/*'", explanation: 'Find all json configuration files' }) },
-  { pattern: /^find\s+all\s+shell\s+scripts\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -maxdepth 3 -name '*.sh' 2>/dev/null || echo './scripts/build.sh'", explanation: 'Find all shell scripts' }) },
-  { pattern: /^find\s+empty\s+directories\s+in\s+project\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -type d -empty -not -path '*/.git*' 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'No empty directories with zero children found'", explanation: 'Find empty directories in project' }) },
-  { pattern: /^find\s+empty\s+files\s+in\s+current\s+directory\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -maxdepth 2 -type f -empty 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'No empty files with size 0 found'", explanation: 'Find empty files in current directory' }) },
+  { pattern: /^find\s+all\s+shell\s+scripts\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -maxdepth 3 -name '*.sh' 2>/dev/null", explanation: 'Find all shell scripts' }) },
+  { pattern: /^find\s+empty\s+directories\s+in\s+project\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -type d -empty -not -path '*/.git*' 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Find empty directories in project' }) },
+  { pattern: /^find\s+empty\s+files\s+in\s+current\s+directory\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -maxdepth 2 -type f -empty 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Find empty files in current directory' }) },
   { pattern: /^find\s+files\s+modified\s+in\s+last\s+24\s+hours\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -maxdepth 2 -type f -mtime -1 -not -path '*/.git*' | head -10", explanation: 'Find files modified in last 24 hours' }) },
-  { pattern: /^find\s+files\s+modified\s+in\s+last\s+60\s+minutes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -maxdepth 2 -type f -mmin -60 -not -path '*/.git*' 2>/dev/null | head -10); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'High recency files modified within 1 hour: None'", explanation: 'Find files modified in last 60 minutes' }) },
-  { pattern: /^find\s+files\s+created\s+today\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -maxdepth 2 -type f -daystart -mtime 0 -not -path '*/.git*' 2>/dev/null | head -10); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'Files created today: None'", explanation: 'Find files created today' }) },
-  { pattern: /^find\s+files\s+older\s+than\s+30\s+days\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -maxdepth 2 -type f -mtime +30 -not -path '*/.git*' 2>/dev/null | head -10); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'Historical files older than 30 days: None'", explanation: 'Find files older than 30 days' }) },
-  { pattern: /^search\s+case-insensitive\s+text\s+['"]?todo['"]?\s+in\s+codebase\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -rnI 'TODO' src/ | head -10 || echo 'src/ai/agent/AgentLoop.ts:1: // TODO: verified'", explanation: 'Search case-insensitive text todo in codebase' }) },
-  { pattern: /^search\s+text\s+['"]?FIXME['"]?\s+across\s+project\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -rnI 'FIXME' src/ 2>/dev/null || echo 'src/ai/agent/AgentLoop.ts:1: // FIXME: None found'", explanation: 'Search text FIXME across project' }) },
+  { pattern: /^find\s+files\s+modified\s+in\s+last\s+60\s+minutes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -maxdepth 2 -type f -mmin -60 -not -path '*/.git*' 2>/dev/null | head -10); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Find files modified in last 60 minutes' }) },
+  { pattern: /^find\s+files\s+created\s+today\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -maxdepth 2 -type f -daystart -mtime 0 -not -path '*/.git*' 2>/dev/null | head -10); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Find files created today' }) },
+  { pattern: /^find\s+files\s+older\s+than\s+30\s+days\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -maxdepth 2 -type f -mtime +30 -not -path '*/.git*' 2>/dev/null | head -10); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Find files older than 30 days' }) },
+  { pattern: /^search\s+case-insensitive\s+text\s+['"]?todo['"]?\s+in\s+codebase\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -rnI 'TODO' src/ | head -10", explanation: 'Search case-insensitive text todo in codebase' }) },
+  { pattern: /^search\s+text\s+['"]?FIXME['"]?\s+across\s+project\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -rnI 'FIXME' src/ 2>/dev/null", explanation: 'Search text FIXME across project' }) },
   { pattern: /^count\s+total\s+files\s+in\s+current\s+directory\s+tree\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -type f -not -path '*/.git/*' | wc -l", explanation: 'Count total files in current directory tree' }) },
   { pattern: /^count\s+total\s+folders\s+in\s+current\s+directory\s+tree\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -type d -not -path '*/.git/*' | wc -l", explanation: 'Count total folders in current directory tree' }) },
   { pattern: /^show\s+disk\s+usage\s+of\s+all\s+subdirectories\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "du -h --max-depth=1 . 2>/dev/null | head -10", explanation: 'Show disk usage of all subdirectories' }) },
@@ -566,124 +499,109 @@ const FAST_PATHS: {
   { pattern: /^check\s+last\s+modification\s+timestamp\s+of\s+tsconfig\.json\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "stat -c '%y' tsconfig.json 2>/dev/null || stat tsconfig.json", explanation: 'Check last modification timestamp of tsconfig.json' }) },
   { pattern: /^check\s+file\s+size\s+of\s+package-lock\.json\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "du -h package-lock.json | cut -f1", explanation: 'Check file size of package-lock.json' }) },
   { pattern: /^find\s+duplicate\s+files\s+by\s+filename\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -type f -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/target/*' -printf '%f\\n' 2>/dev/null | sort | uniq -d | head -5", explanation: 'Find duplicate files by filename' }) },
-  { pattern: /^find\s+broken\s+symlinks\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -xtype l 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'Clean: No broken dangling symlinks found'", explanation: 'Find broken symlinks' }) },
-  { pattern: /^find\s+all\s+symbolic\s+links\s+in\s+directory\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -type l 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'No symbolic links found in directory'", explanation: 'Find all symbolic links in directory' }) },
-  { pattern: /^create\s+a\s+symbolic\s+link\s+test_link\s+to\s+README\.md\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ln -sf README.md test_link && echo 'Symlink created on disk: test_link -> README.md'", explanation: 'Create a symbolic link test_link to README.md' }) },
-  { pattern: /^remove\s+symbolic\s+link\s+test_link\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "rm -f test_link && echo 'Link removed cleanly: test_link'", explanation: 'Remove symbolic link test_link' }) },
+  { pattern: /^find\s+broken\s+symlinks\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -xtype l 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Find broken symlinks' }) },
+  { pattern: /^find\s+all\s+symbolic\s+links\s+in\s+directory\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -type l 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Find all symbolic links in directory' }) },
+  { pattern: /^create\s+a\s+symbolic\s+link\s+test_link\s+to\s+README\.md\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ln -sf README.md test_link", explanation: 'Create a symbolic link test_link to README.md' }) },
+  { pattern: /^remove\s+symbolic\s+link\s+test_link\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "rm -f test_link", explanation: 'Remove symbolic link test_link' }) },
   { pattern: /^show\s+first\s+15\s+lines\s+of\s+package\.json\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "head -15 package.json", explanation: 'Show first 15 lines of package.json' }) },
   { pattern: /^show\s+last\s+10\s+lines\s+of\s+Cargo\.toml\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "tail -10 src-tauri/Cargo.toml", explanation: 'Show last 10 lines of Cargo.toml' }) },
   { pattern: /^display\s+line\s+count\s+word\s+count\s+byte\s+count\s+of\s+README\.md\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "wc README.md", explanation: 'Display line count word count byte count of README.md' }) },
   { pattern: /^search\s+for\s+executable\s+files\s+in\s+workspace\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -type f -executable -not -path '*/.git*' -not -path '*/node_modules/*' | head -10", explanation: 'Search for executable files in workspace' }) },
-  { pattern: /^find\s+read-only\s+files\s+in\s+project\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -type f -not -writable -not -path '*/.git*' 2>/dev/null | head -10); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'Clean: All files writable (no read-only files found)'", explanation: 'Find read-only files in project' }) },
-  { pattern: /^find\s+files\s+owned\s+by\s+user\s+root\s+in\s+home\s+directory\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find ~ -maxdepth 2 -user root 2>/dev/null | head -5 || echo 'No root-owned files in home directory'", explanation: 'Find files owned by user root in home directory' }) },
-  { pattern: /^search\s+for\s+files\s+with\s+\.bak\s+extension\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -name '*.bak' 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'No files with .bak extension found'", explanation: 'Search for files with .bak extension' }) },
-  { pattern: /^delete\s+all\s+\.tmp\s+temporary\s+files\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -maxdepth 2 -name '*.tmp' -delete 2>/dev/null && echo 'Removes matching temp files: Deleted all .tmp files'", explanation: 'Delete all .tmp temporary files' }) },
-  { pattern: /^compare\s+difference\s+between\s+package\.json\s+and\s+tsconfig\.json\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "diff -u package.json tsconfig.json | head -10 || echo '--- package.json\n+++ tsconfig.json\n@@ -1,5 +1,5 @@'", explanation: 'Compare difference between package.json and tsconfig.json' }) },
+  { pattern: /^find\s+read-only\s+files\s+in\s+project\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -type f -not -writable -not -path '*/.git*' 2>/dev/null | head -10); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Find read-only files in project' }) },
+  { pattern: /^find\s+files\s+owned\s+by\s+user\s+root\s+in\s+home\s+directory\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find ~ -maxdepth 2 -user root 2>/dev/null | head -5", explanation: 'Find files owned by user root in home directory' }) },
+  { pattern: /^search\s+for\s+files\s+with\s+\.bak\s+extension\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(find . -name '*.bak' 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Search for files with .bak extension' }) },
+  { pattern: /^delete\s+all\s+\.tmp\s+temporary\s+files\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find . -maxdepth 2 -name '*.tmp' -delete 2>/dev/null", explanation: 'Delete all .tmp temporary files' }) },
+  { pattern: /^compare\s+difference\s+between\s+package\.json\s+and\s+tsconfig\.json\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "diff -u package.json tsconfig.json | head -10", explanation: 'Compare difference between package.json and tsconfig.json' }) },
   { pattern: /^calculate\s+sha256\s+checksum\s+of\s+package\.json\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "sha256sum package.json", explanation: 'Calculate sha256 checksum of package.json' }) },
   { pattern: /^check\s+file\s+mime\s+type\s+of\s+index\.html\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "file --mime-type index.html", explanation: 'Check file mime type of index.html' }) },
 
   // Domain 5: Git & Developer Lifecycle Workflows (5.1 to 5.50)
-  { pattern: /^check\s+git\s+status\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git status --short 2>/dev/null || echo '## linux...origin/linux'", explanation: 'Check git status' }) },
+  { pattern: /^check\s+git\s+status\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git status --short 2>/dev/null", explanation: 'Check git status' }) },
   { pattern: /^check\s+git\s+branches\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git branch -a", explanation: 'Check git branches' }) },
   { pattern: /^recent\s+git\s+commits\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git log --oneline -5", explanation: 'Recent git commits' }) },
-  { pattern: /^show\s+git\s+diff\s+summary\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(git diff --stat 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\" || echo ' 1 file changed, 10 insertions(+) (Working tree stat summary)'", explanation: 'Show git diff summary' }) },
+  { pattern: /^show\s+git\s+diff\s+summary\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(git diff --stat 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Show git diff summary' }) },
   { pattern: /^who\s+committed\s+last\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git log -1 --format='%an <%ae> - %s'", explanation: 'Who committed last' }) },
   { pattern: /^show\s+git\s+remotes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git remote -v", explanation: 'Show git remotes' }) },
-  { pattern: /^check\s+git\s+stash\s+list\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(git stash list 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'No stashes currently saved in stash stack'", explanation: 'Check git stash list' }) },
+  { pattern: /^check\s+git\s+stash\s+list\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(git stash list 2>/dev/null); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Check git stash list' }) },
   { pattern: /^create\s+new\s+git\s+branch\s+feature-test\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git branch feature-test 2>/dev/null || true; echo 'Switched to new branch: Branch feature-test created confirmation'", explanation: 'Create new git branch feature-test' }) },
-  { pattern: /^switch\s+back\s+to\s+branch\s+linux\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Switched branch confirmation: Active branch is linux'", explanation: 'Switch back to branch linux' }) },
   { pattern: /^delete\s+test\s+branch\s+feature-test\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git branch -D feature-test 2>/dev/null || true; echo 'Branch deleted confirmation: Branch removed from local refs'", explanation: 'Delete test branch feature-test' }) },
-  { pattern: /^show\s+unpushed\s+commits\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git log @{u}..HEAD --oneline 2>/dev/null || echo '0 commits ahead of upstream (Up-to-date with origin)'", explanation: 'Show unpushed commits' }) },
-  { pattern: /^run\s+unit\s+tests\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Test Files 156 passed (156)\nTests 992 passed (992)\nReports test pass/fail counts: All tests green'", explanation: 'Run unit tests' }) },
-  { pattern: /^run\s+linter\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "npm run lint 2>/dev/null || echo '0 errors, 0 warnings (Executes project linter: Clean status)'", explanation: 'Run linter' }) },
+  { pattern: /^show\s+unpushed\s+commits\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git log @{u}..HEAD --oneline 2>/dev/null", explanation: 'Show unpushed commits' }) },
+  { pattern: /^run\s+linter\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "npm run lint 2>/dev/null", explanation: 'Run linter' }) },
   { pattern: /^check\s+node\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "node -v", explanation: 'Check node version' }) },
-  { pattern: /^check\s+npm\s+dependencies\s+outdated\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "npm outdated 2>/dev/null || echo 'All dependencies up to date (Clean dependency table)'", explanation: 'Check npm dependencies outdated' }) },
+  { pattern: /^check\s+npm\s+dependencies\s+outdated\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "npm outdated 2>/dev/null", explanation: 'Check npm dependencies outdated' }) },
   { pattern: /^show\s+git\s+commit\s+log\s+for\s+last\s+24\s+hours\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(git log --since='24 hours ago' --oneline | head -5); if [ -n \"$OUT\" ]; then echo \"$OUT\"; else git log --oneline -3; fi", explanation: 'Show git commit log for last 24 hours' }) },
   { pattern: /^show\s+full\s+git\s+commit\s+details\s+for\s+HEAD\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git show HEAD --stat", explanation: 'Show full git commit details for HEAD' }) },
   { pattern: /^show\s+list\s+of\s+contributors\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git shortlog -sn --all | head -5", explanation: 'Show list of contributors' }) },
   { pattern: /^check\s+git\s+current\s+commit\s+hash\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git rev-parse --short HEAD", explanation: 'Check git current commit hash' }) },
   { pattern: /^check\s+git\s+repository\s+root\s+directory\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git rev-parse --show-toplevel", explanation: 'Check git repository root directory' }) },
-  { pattern: /^check\s+if\s+working\s+directory\s+is\s+clean\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git diff-index --quiet HEAD -- 2>/dev/null && echo 'Clean: Working tree is clean' || echo 'Dirty: Working tree has modifications'", explanation: 'Check if working directory is clean' }) },
-  { pattern: /^show\s+list\s+of\s+untracked\s+files\s+in\s+git\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(git ls-files --others --exclude-standard | head -5); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'No untracked files in working tree'", explanation: 'Show list of untracked files in git' }) },
-  { pattern: /^show\s+list\s+of\s+ignored\s+files\s+in\s+git\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(git ls-files --ignored --exclude-standard -o 2>/dev/null | head -5); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'node_modules/\ndist/\ntarget/\n(Ignored paths list)'", explanation: 'Show list of ignored files in git' }) },
-  { pattern: /^check\s+git\s+tag\s+list\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(git tag -l); [ -n \"$OUT\" ] && echo \"$OUT\" || echo 'No release tags found in local git repository'", explanation: 'Check git tag list' }) },
+  { pattern: /^check\s+if\s+working\s+directory\s+is\s+clean\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git diff-index --quiet HEAD -- 2>/dev/null", explanation: 'Check if working directory is clean' }) },
+  { pattern: /^show\s+list\s+of\s+untracked\s+files\s+in\s+git\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(git ls-files --others --exclude-standard | head -5); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Show list of untracked files in git' }) },
+  { pattern: /^show\s+list\s+of\s+ignored\s+files\s+in\s+git\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(git ls-files --ignored --exclude-standard -o 2>/dev/null | head -5); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Show list of ignored files in git' }) },
+  { pattern: /^check\s+git\s+tag\s+list\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(git tag -l); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Check git tag list' }) },
   { pattern: /^create\s+annotated\s+git\s+tag\s+v2\.1\.0-test\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git tag -a v2.1.0-test -m 'Test release' 2>/dev/null || true; echo 'Tag created confirmation: Tag exists in git refs (v2.1.0-test)'", explanation: 'Create annotated git tag v2.1.0-test' }) },
   { pattern: /^delete\s+git\s+tag\s+v2\.1\.0-test\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git tag -d v2.1.0-test 2>/dev/null || true; echo 'Tag deleted confirmation: Tag removed from refs (v2.1.0-test)'", explanation: 'Delete git tag v2.1.0-test' }) },
   { pattern: /^show\s+git\s+config\s+user\s+name\s+and\s+email\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo \"$(git config user.name || echo 'Pranav') <$(git config user.email || echo 'overxpowered@users.noreply.github.com')>\"", explanation: 'Show git config user name and email' }) },
   { pattern: /^show\s+git\s+blame\s+for\s+package\.json\s+line\s+1-10\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git blame -L 1,10 package.json", explanation: 'Show git blame for package.json line 1-10' }) },
   { pattern: /^show\s+git\s+log\s+graph\s+visualization\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git log --graph --oneline --decorate -5", explanation: 'Show git log graph visualization' }) },
   { pattern: /^show\s+files\s+changed\s+in\s+last\s+commit\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git diff-tree --no-commit-id --name-only -r HEAD", explanation: 'Show files changed in last commit' }) },
-  { pattern: /^stash\s+current\s+uncommitted\s+changes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Saved working directory and index state: Stash created confirmation (Working tree stashed)'", explanation: 'Stash current uncommitted changes' }) },
-  { pattern: /^pop\s+most\s+recent\s+git\s+stash\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Dropped refs/stash@{0}: Stash restored confirmation (Working tree restored)'", explanation: 'Pop most recent git stash' }) },
-  { pattern: /^discard\s+working\s+changes\s+in\s+specific\s+file\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'File restored confirmation: Reverts uncommitted changes in specified file'", explanation: 'Discard working changes in specific file' }) },
   { pattern: /^check\s+npm\s+package\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "npm pkg get version", explanation: 'Check npm package version' }) },
   { pattern: /^check\s+npm\s+scripts\s+available\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "npm pkg get scripts", explanation: 'Check npm scripts available' }) },
-  { pattern: /^check\s+installed\s+rust\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "rustc --version 2>/dev/null || echo 'rustc 1.85.0 (Arch Linux)'", explanation: 'Check installed rust version' }) },
-  { pattern: /^check\s+cargo\s+package\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep '^version' src-tauri/Cargo.toml | head -1 || echo 'version = \"2.0.0\"'", explanation: 'Check cargo package version' }) },
-  { pattern: /^run\s+cargo\s+check\s+in\s+backend\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo '    Finished dev [unoptimized + debuginfo] target(s) in 0.42s'", explanation: 'Run cargo check in backend' }) },
-  { pattern: /^check\s+tauri\s+cli\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "npx tauri --version 2>/dev/null || echo 'tauri-cli 2.0.0'", explanation: 'Check tauri cli version' }) },
+  { pattern: /^check\s+installed\s+rust\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "rustc --version 2>/dev/null", explanation: 'Check installed rust version' }) },
+  { pattern: /^check\s+cargo\s+package\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep '^version' src-tauri/Cargo.toml | head -1", explanation: 'Check cargo package version' }) },
+  { pattern: /^check\s+tauri\s+cli\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "npx tauri --version 2>/dev/null", explanation: 'Check tauri cli version' }) },
   { pattern: /^check\s+vite\s+build\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "head -15 vite.config.ts", explanation: 'Check vite build configuration' }) },
-  { pattern: /^audit\s+npm\s+security\s+vulnerabilities\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'found 0 vulnerabilities (Audit vulnerability overview: Clean security report)'", explanation: 'Audit npm security vulnerabilities' }) },
-  { pattern: /^check\s+pnpm\s+or\s+yarn\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "yarn -v 2>/dev/null || pnpm -v 2>/dev/null || echo 'npm primary (yarn/pnpm alternative package manager)'", explanation: 'Check pnpm or yarn version' }) },
-  { pattern: /^clean\s+npm\s+cache\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'npm cache clean confirmation: NPM cache purge completed'", explanation: 'Clean npm cache' }) },
-  { pattern: /^check\s+global\s+npm\s+packages\s+installed\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "npm list -g --depth=0 2>/dev/null || echo '/usr/lib/node_modules (Global packages list)'", explanation: 'Check global npm packages installed' }) },
-  { pattern: /^check\s+installed\s+python\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "python3 --version 2>/dev/null || echo 'Python 3.12.3'", explanation: 'Check installed python version' }) },
-  { pattern: /^check\s+pip\s+packages\s+installed\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "pip list 2>/dev/null | head -10 || python3 -m pip list 2>/dev/null | head -10 || echo 'Package    Version\n---------- -------\nwheel      0.43.0\npip        24.0'", explanation: 'Check pip packages installed' }) },
-  { pattern: /^check\s+installed\s+gcc\s+compiler\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "gcc --version 2>/dev/null | head -1 || echo 'gcc (GCC) 14.2.1 20240910'", explanation: 'Check installed gcc compiler version' }) },
-  { pattern: /^check\s+installed\s+gdb\s+debugger\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "gdb --version 2>/dev/null | head -1 || echo 'GNU gdb (GDB) 15.1'", explanation: 'Check installed gdb debugger version' }) },
-  { pattern: /^check\s+make\s+tool\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "make --version 2>/dev/null | head -1 || echo 'GNU Make 4.4.1'", explanation: 'Check make tool version' }) },
-  { pattern: /^check\s+docker\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "docker --version 2>/dev/null || echo 'Docker version 27.2.0, build 3ab4256'", explanation: 'Check docker version' }) },
+  { pattern: /^check\s+pnpm\s+or\s+yarn\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "yarn -v 2>/dev/null || pnpm -v 2>/dev/null", explanation: 'Check pnpm or yarn version' }) },
+  { pattern: /^check\s+global\s+npm\s+packages\s+installed\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "npm list -g --depth=0 2>/dev/null", explanation: 'Check global npm packages installed' }) },
+  { pattern: /^check\s+installed\s+python\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "python3 --version 2>/dev/null", explanation: 'Check installed python version' }) },
+  { pattern: /^check\s+pip\s+packages\s+installed\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "pip list 2>/dev/null | head -10 || python3 -m pip list 2>/dev/null | head -10", explanation: 'Check pip packages installed' }) },
+  { pattern: /^check\s+installed\s+gcc\s+compiler\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "gcc --version 2>/dev/null | head -1", explanation: 'Check installed gcc compiler version' }) },
+  { pattern: /^check\s+installed\s+gdb\s+debugger\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "gdb --version 2>/dev/null | head -1", explanation: 'Check installed gdb debugger version' }) },
+  { pattern: /^check\s+make\s+tool\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "make --version 2>/dev/null | head -1", explanation: 'Check make tool version' }) },
+  { pattern: /^check\s+docker\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "docker --version 2>/dev/null", explanation: 'Check docker version' }) },
 
   // Domain 6: Linux Daemons & Systemd Services (6.1 to 6.50)
-  { pattern: /^check\s+status\s+of\s+bluetooth\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status bluetooth 2>/dev/null || echo '● bluetooth.service - Bluetooth service\n   Loaded: loaded\n   Active: active (running)'", explanation: 'Check status of bluetooth service' }) },
-  { pattern: /^check\s+status\s+of\s+NetworkManager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status NetworkManager 2>/dev/null || echo '● NetworkManager.service - Network Manager\n   Loaded: loaded\n   Active: active (running)'", explanation: 'Check status of NetworkManager' }) },
-  { pattern: /^is\s+docker\s+daemon\s+running\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl is-active docker 2>/dev/null || echo 'inactive'", explanation: 'Is docker daemon running' }) },
-  { pattern: /^list\s+failed\s+systemd\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --failed 2>/dev/null || echo '0 loaded units listed.'", explanation: 'List failed systemd services' }) },
-  { pattern: /^list\s+active\s+user\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user list-units --type=service --state=active 2>/dev/null | head -10 || echo 'pipewire.service loaded active running'", explanation: 'List active user services' }) },
-  { pattern: /^restart\s+NetworkManager\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'NetworkManager service restart confirmation: Security engine prompts for consent'", explanation: 'Restart NetworkManager service' }) },
-  { pattern: /^check\s+systemd\s+journal\s+errors\s+for\s+today\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl -p 3 -xb 2>/dev/null | head -10 || echo '-- Logs begin at Mon 2026-09-01 --\nSep 13 08:00:00 kernel: ACPI Error (Filters by priority 3)'", explanation: 'Check systemd journal errors for today' }) },
-  { pattern: /^check\s+ssh\s+service\s+status\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status sshd 2>/dev/null || systemctl status ssh 2>/dev/null || echo '● sshd.service - OpenSSH Daemon\n   Active: inactive (dead)'", explanation: 'Check ssh service status' }) },
-  { pattern: /^check\s+cron\s+or\s+timer\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-timers 2>/dev/null | head -10 || echo 'NEXT                         LEFT          LAST PASSED UNIT ACTIVATES'", explanation: 'Check cron or timer services' }) },
-  { pattern: /^reload\s+systemd\s+daemon\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'systemd daemon reload confirmation: Security verification required'", explanation: 'Reload systemd daemon' }) },
-  { pattern: /^check\s+status\s+of\s+systemd-resolved\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status systemd-resolved 2>/dev/null || echo '● systemd-resolved.service - Network Name Resolution\n   Active: active (running)'", explanation: 'Check status of systemd-resolved' }) },
-  { pattern: /^check\s+status\s+of\s+systemd-timesyncd\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status systemd-timesyncd 2>/dev/null || echo '● systemd-timesyncd.service - Network Time Synchronization\n   Active: active (running)'", explanation: 'Check status of systemd-timesyncd' }) },
-  { pattern: /^check\s+status\s+of\s+cron\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status cron 2>/dev/null || systemctl status crond 2>/dev/null || echo '● crond.service - Periodic Command Scheduler\n   Active: active (running)'", explanation: 'Check status of cron service' }) },
-  { pattern: /^check\s+status\s+of\s+udisks2\s+storage\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status udisks2 2>/dev/null || echo '● udisks2.service - Storage Daemon\n   Active: active (running)'", explanation: 'Check status of udisks2 storage service' }) },
-  { pattern: /^check\s+status\s+of\s+dbus\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status dbus 2>/dev/null || echo '● dbus.service - D-Bus System Message Bus\n   Active: active (running)'", explanation: 'Check status of dbus service' }) },
-  { pattern: /^check\s+status\s+of\s+polkit\s+authorization\s+daemon\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status polkit 2>/dev/null || echo '● polkit.service - Authorization Manager\n   Active: active (running)'", explanation: 'Check status of polkit authorization daemon' }) },
-  { pattern: /^check\s+status\s+of\s+cups\s+print\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status cups 2>/dev/null || echo 'CUPS inactive (Cups service state: inactive)'", explanation: 'Check status of cups print service' }) },
-  { pattern: /^check\s+status\s+of\s+avahi-daemon\s+mdns\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status avahi-daemon 2>/dev/null || echo 'Avahi inactive (Avahi service state: inactive)'", explanation: 'Check status of avahi-daemon mdns service' }) },
-  { pattern: /^check\s+status\s+of\s+firewalld\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status firewalld 2>/dev/null || echo 'firewalld inactive (Firewalld state: inactive)'", explanation: 'Check status of firewalld service' }) },
-  { pattern: /^check\s+status\s+of\s+tailscale\s+vpn\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status tailscaled 2>/dev/null || echo 'Tailscale not installed (Tailscale state: inactive)'", explanation: 'Check status of tailscale vpn service' }) },
-  { pattern: /^check\s+status\s+of\s+pipewire\s+audio\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user status pipewire 2>/dev/null || echo '● pipewire.service - PipeWire Multimedia Service\n   Active: active (running)'", explanation: 'Check status of pipewire audio service' }) },
-  { pattern: /^check\s+status\s+of\s+wireplumber\s+session\s+manager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user status wireplumber 2>/dev/null || echo '● wireplumber.service - Multimedia Service Session Manager\n   Active: active (running)'", explanation: 'Check status of wireplumber session manager' }) },
-  { pattern: /^check\s+status\s+of\s+pulseaudio\s+daemon\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user status pulseaudio 2>/dev/null || echo 'PulseAudio inactive (User pulse state: PipeWire active)'", explanation: 'Check status of pulseaudio daemon' }) },
-  { pattern: /^list\s+all\s+running\s+systemd\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=service --state=running 2>/dev/null | head -10 || echo 'UNIT LOAD ACTIVE SUB DESCRIPTION'", explanation: 'List all running systemd services' }) },
-  { pattern: /^list\s+all\s+enabled\s+systemd\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-unit-files --type=service --state=enabled 2>/dev/null | head -10 || echo 'NetworkManager.service enabled'", explanation: 'List all enabled systemd services' }) },
-  { pattern: /^list\s+all\s+disabled\s+systemd\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-unit-files --type=service --state=disabled 2>/dev/null | head -10 || echo 'sshd.service disabled'", explanation: 'List all disabled systemd services' }) },
-  { pattern: /^check\s+boot\s+performance\s+blame\s+with\s+systemd-analyze\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemd-analyze blame 2>/dev/null | head -5 || echo '1.240s NetworkManager.service\n850ms systemd-resolved.service'", explanation: 'Check boot performance blame with systemd-analyze' }) },
-  { pattern: /^check\s+total\s+system\s+boot\s+time\s+breakdown\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemd-analyze 2>/dev/null || echo 'Startup finished in 1.842s (kernel) + 2.115s (userspace) = 3.957s'", explanation: 'Check total system boot time breakdown' }) },
-  { pattern: /^check\s+critical\s+chain\s+boot\s+bottleneck\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemd-analyze critical-chain 2>/dev/null | head -5 || echo 'graphical.target @3.950s\n└─multi-user.target @3.950s'", explanation: 'Check critical chain boot bottleneck' }) },
-  { pattern: /^tail\s+last\s+20\s+lines\s+of\s+system\s+log\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl -n 20 --no-pager 2>/dev/null || echo 'Sep 13 09:00:00 archlinux systemd[1]: Started User Manager for UID 1000.'", explanation: 'Tail last 20 lines of system log' }) },
-  { pattern: /^tail\s+logs\s+for\s+NetworkManager\s+unit\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl -u NetworkManager -n 10 --no-pager 2>/dev/null || echo 'NetworkManager[900]: <info> [1726218000] manager: startup complete'", explanation: 'Tail logs for NetworkManager unit' }) },
-  { pattern: /^tail\s+logs\s+for\s+bluetooth\s+unit\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl -u bluetooth -n 10 --no-pager 2>/dev/null || echo 'bluetoothd[850]: Bluetooth daemon 5.78'", explanation: 'Tail logs for bluetooth unit' }) },
-  { pattern: /^show\s+kernel\s+ring\s+buffer\s+dmesg\s+errors\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(dmesg --level=err,warn 2>/dev/null | head -10); [ -n \"$OUT\" ] && echo \"$OUT\" || echo '[    0.124500] ACPI Warning: Dmesg error timestamps [kernel ring buffer warnings]'", explanation: 'Show kernel ring buffer dmesg errors' }) },
-  { pattern: /^check\s+systemd\s+default\s+target\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl get-default 2>/dev/null || echo 'graphical.target'", explanation: 'Check systemd default target' }) },
-  { pattern: /^check\s+if\s+system\s+is\s+degraded\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl is-system-running 2>/dev/null || echo 'running'", explanation: 'Check if system is degraded' }) },
-  { pattern: /^show\s+active\s+systemd\s+slices\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=slice 2>/dev/null | head -5 || echo 'system.slice loaded active active System Slice'", explanation: 'Show active systemd slices' }) },
-  { pattern: /^check\s+status\s+of\s+user\s+systemd\s+manager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user is-system-running 2>/dev/null || echo 'running'", explanation: 'Check status of user systemd manager' }) },
-  { pattern: /^mask\s+a\s+service\s+to\s+prevent\s+execution\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Service masked confirmation: Created symlink /etc/systemd/system/test.service → /dev/null (Security consent required)'", explanation: 'Mask a service to prevent execution' }) },
-  { pattern: /^unmask\s+a\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Service unmasked confirmation: Removed /etc/systemd/system/test.service (Security consent required)'", explanation: 'Unmask a service' }) },
-  { pattern: /^show\s+dependencies\s+of\s+graphical\.target\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-dependencies graphical.target 2>/dev/null | head -10 || echo 'graphical.target\n● ├─multi-user.target'", explanation: 'Show dependencies of graphical.target' }) },
-  { pattern: /^check\s+environment\s+variables\s+of\s+systemd\s+user\s+session\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user show-environment 2>/dev/null | head -5 || echo 'HOME=/home/overxpowered\nSHELL=/bin/bash'", explanation: 'Check environment variables of systemd user session' }) },
+  { pattern: /^check\s+status\s+of\s+bluetooth\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status bluetooth 2>/dev/null", explanation: 'Check status of bluetooth service' }) },
+  { pattern: /^check\s+status\s+of\s+NetworkManager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status NetworkManager 2>/dev/null", explanation: 'Check status of NetworkManager' }) },
+  { pattern: /^is\s+docker\s+daemon\s+running\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl is-active docker 2>/dev/null", explanation: 'Is docker daemon running' }) },
+  { pattern: /^list\s+failed\s+systemd\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --failed 2>/dev/null", explanation: 'List failed systemd services' }) },
+  { pattern: /^list\s+active\s+user\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user list-units --type=service --state=active 2>/dev/null | head -10", explanation: 'List active user services' }) },
+  { pattern: /^check\s+systemd\s+journal\s+errors\s+for\s+today\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl -p 3 -xb 2>/dev/null | head -10", explanation: 'Check systemd journal errors for today' }) },
+  { pattern: /^check\s+ssh\s+service\s+status\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status sshd 2>/dev/null || systemctl status ssh 2>/dev/null", explanation: 'Check ssh service status' }) },
+  { pattern: /^check\s+cron\s+or\s+timer\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-timers 2>/dev/null | head -10", explanation: 'Check cron or timer services' }) },
+  { pattern: /^check\s+status\s+of\s+systemd-resolved\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status systemd-resolved 2>/dev/null", explanation: 'Check status of systemd-resolved' }) },
+  { pattern: /^check\s+status\s+of\s+systemd-timesyncd\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status systemd-timesyncd 2>/dev/null", explanation: 'Check status of systemd-timesyncd' }) },
+  { pattern: /^check\s+status\s+of\s+cron\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status cron 2>/dev/null || systemctl status crond 2>/dev/null", explanation: 'Check status of cron service' }) },
+  { pattern: /^check\s+status\s+of\s+udisks2\s+storage\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status udisks2 2>/dev/null", explanation: 'Check status of udisks2 storage service' }) },
+  { pattern: /^check\s+status\s+of\s+dbus\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status dbus 2>/dev/null", explanation: 'Check status of dbus service' }) },
+  { pattern: /^check\s+status\s+of\s+polkit\s+authorization\s+daemon\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status polkit 2>/dev/null", explanation: 'Check status of polkit authorization daemon' }) },
+  { pattern: /^check\s+status\s+of\s+cups\s+print\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status cups 2>/dev/null", explanation: 'Check status of cups print service' }) },
+  { pattern: /^check\s+status\s+of\s+avahi-daemon\s+mdns\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status avahi-daemon 2>/dev/null", explanation: 'Check status of avahi-daemon mdns service' }) },
+  { pattern: /^check\s+status\s+of\s+firewalld\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status firewalld 2>/dev/null", explanation: 'Check status of firewalld service' }) },
+  { pattern: /^check\s+status\s+of\s+tailscale\s+vpn\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status tailscaled 2>/dev/null", explanation: 'Check status of tailscale vpn service' }) },
+  { pattern: /^check\s+status\s+of\s+pipewire\s+audio\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user status pipewire 2>/dev/null", explanation: 'Check status of pipewire audio service' }) },
+  { pattern: /^check\s+status\s+of\s+wireplumber\s+session\s+manager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user status wireplumber 2>/dev/null", explanation: 'Check status of wireplumber session manager' }) },
+  { pattern: /^check\s+status\s+of\s+pulseaudio\s+daemon\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user status pulseaudio 2>/dev/null", explanation: 'Check status of pulseaudio daemon' }) },
+  { pattern: /^list\s+all\s+running\s+systemd\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=service --state=running 2>/dev/null | head -10", explanation: 'List all running systemd services' }) },
+  { pattern: /^list\s+all\s+enabled\s+systemd\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-unit-files --type=service --state=enabled 2>/dev/null | head -10", explanation: 'List all enabled systemd services' }) },
+  { pattern: /^list\s+all\s+disabled\s+systemd\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-unit-files --type=service --state=disabled 2>/dev/null | head -10", explanation: 'List all disabled systemd services' }) },
+  { pattern: /^check\s+boot\s+performance\s+blame\s+with\s+systemd-analyze\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemd-analyze blame 2>/dev/null | head -5", explanation: 'Check boot performance blame with systemd-analyze' }) },
+  { pattern: /^check\s+total\s+system\s+boot\s+time\s+breakdown\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemd-analyze 2>/dev/null", explanation: 'Check total system boot time breakdown' }) },
+  { pattern: /^check\s+critical\s+chain\s+boot\s+bottleneck\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemd-analyze critical-chain 2>/dev/null | head -5", explanation: 'Check critical chain boot bottleneck' }) },
+  { pattern: /^tail\s+last\s+20\s+lines\s+of\s+system\s+log\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl -n 20 --no-pager 2>/dev/null", explanation: 'Tail last 20 lines of system log' }) },
+  { pattern: /^tail\s+logs\s+for\s+NetworkManager\s+unit\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl -u NetworkManager -n 10 --no-pager 2>/dev/null", explanation: 'Tail logs for NetworkManager unit' }) },
+  { pattern: /^tail\s+logs\s+for\s+bluetooth\s+unit\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl -u bluetooth -n 10 --no-pager 2>/dev/null", explanation: 'Tail logs for bluetooth unit' }) },
+  { pattern: /^show\s+kernel\s+ring\s+buffer\s+dmesg\s+errors\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(dmesg --level=err,warn 2>/dev/null | head -10); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Show kernel ring buffer dmesg errors' }) },
+  { pattern: /^check\s+systemd\s+default\s+target\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl get-default 2>/dev/null", explanation: 'Check systemd default target' }) },
+  { pattern: /^check\s+if\s+system\s+is\s+degraded\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl is-system-running 2>/dev/null", explanation: 'Check if system is degraded' }) },
+  { pattern: /^show\s+active\s+systemd\s+slices\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=slice 2>/dev/null | head -5", explanation: 'Show active systemd slices' }) },
+  { pattern: /^check\s+status\s+of\s+user\s+systemd\s+manager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user is-system-running 2>/dev/null", explanation: 'Check status of user systemd manager' }) },
+  { pattern: /^show\s+dependencies\s+of\s+graphical\.target\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-dependencies graphical.target 2>/dev/null | head -10", explanation: 'Show dependencies of graphical.target' }) },
+  { pattern: /^check\s+environment\s+variables\s+of\s+systemd\s+user\s+session\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user show-environment 2>/dev/null | head -5", explanation: 'Check environment variables of systemd user session' }) },
   { pattern: /^import\s+DISPLAY\s+variable\s+into\s+systemd\s+user\s+session\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user import-environment DISPLAY WAYLAND_DISPLAY 2>/dev/null || true; echo 'Environment imported confirmation: Clean exit code 0'", explanation: 'Import DISPLAY variable into systemd user session' }) },
-  { pattern: /^check\s+systemd\s+log\s+disk\s+space\s+usage\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl --disk-usage 2>/dev/null || echo 'Archived and active journals take up 128.0M in the file system.'", explanation: 'Check systemd log disk space usage' }) },
-  { pattern: /^vacuum\s+systemd\s+journal\s+logs\s+older\s+than\s+7\s+days\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Reclaimed journal storage confirmation: Reclaimed 45.2M disk space older than 7 days (Security consent required)'", explanation: 'Vacuum systemd journal logs older than 7 days' }) },
-  { pattern: /^vacuum\s+systemd\s+journal\s+logs\s+to\s+under\s+100MB\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Reclaimed space confirmation: Reduced archive size to under 100MB (Security consent required)'", explanation: 'Vacuum systemd journal logs to under 100MB' }) },
-  { pattern: /^check\s+active\s+systemd\s+mount\s+units\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=mount 2>/dev/null | head -5 || echo 'dev-hugepages.mount loaded active mounted'", explanation: 'Check active systemd mount units' }) },
-  { pattern: /^check\s+active\s+systemd\s+automount\s+units\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=automount 2>/dev/null || echo 'proc-sys-fs-binfmt_misc.automount loaded active running'", explanation: 'Check active systemd automount units' }) },
-  { pattern: /^check\s+systemd\s+socket\s+units\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=socket 2>/dev/null | head -5 || echo 'dbus.socket loaded active running D-Bus System Message Bus Socket'", explanation: 'Check systemd socket units' }) },
-  { pattern: /^kill\s+a\s+frozen\s+systemd\s+unit\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo 'Signal dispatched confirmation: SIGKILL sent to test.service (Security consent required)'", explanation: 'Kill a frozen systemd unit' }) },
+  { pattern: /^check\s+systemd\s+log\s+disk\s+space\s+usage\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl --disk-usage 2>/dev/null", explanation: 'Check systemd log disk space usage' }) },
+  { pattern: /^check\s+active\s+systemd\s+mount\s+units\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=mount 2>/dev/null | head -5", explanation: 'Check active systemd mount units' }) },
+  { pattern: /^check\s+active\s+systemd\s+automount\s+units\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=automount 2>/dev/null", explanation: 'Check active systemd automount units' }) },
+  { pattern: /^check\s+systemd\s+socket\s+units\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=socket 2>/dev/null | head -5", explanation: 'Check systemd socket units' }) },
   { pattern: /^reset\s+failed\s+systemd\s+units\s+state\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl reset-failed 2>/dev/null || true; echo 'Failed units counter reset: Clean exit code 0'", explanation: 'Reset failed systemd units state' }) },
 
   // Generic network checks & port shortcuts
@@ -882,6 +800,18 @@ export function isSingleShotInspection(goal: string, command: string): boolean {
   const asksToInspect = /^(?:what|what's|whats|which|who|where|when|how\s+(?:much|many|long|big|fast|full|old)|is|are|does|do|did|has|have|show|list|display|print|check|tell\s+me|give\s+me|get|find|count|search|look\s+up|view|see|inspect|verify)\b/.test(normalized);
   const wantsMore = /\b(?:then|after|afterwards|also|explain|why|delete|remove|kill|stop|restart|start|install|uninstall|open|launch|close|create|make|move|copy|rename|fix|change|set|update|upgrade|enable|disable|write|edit|push|commit|deploy|build|compile|clean|clear|free\s+up|summari[sz]e|compare)\b/.test(normalized);
   return asksToInspect && !wantsMore && isReadOnlyCommandLine(command).readOnly;
+}
+
+/**
+ * True for "open/launch/start X" requests answered by a command that starts X in the
+ * background (`code . &`, `setsid -f firefox`, `xdg-open ...`, `gtk-launch ...`).
+ */
+export function isAppLaunchRequest(goal: string, command: string): boolean {
+  const normalized = normalizeGoalText(goal).trim().toLowerCase();
+  if (!/^(?:open|launch|start|run)\s+\S/.test(normalized) || requiresExecutionPlan(normalized)) return false;
+  if (/\b(?:and|then|after|install|update|build|test)\b/.test(normalized)) return false;
+  const trimmed = command.trim();
+  return /&\s*$/.test(trimmed) || /^(?:\(.*\)\s*;\s*)?(?:setsid|nohup|xdg-open|gtk-launch|gio\s+open|flatpak\s+run)\b/.test(trimmed);
 }
 
 /**
@@ -1094,6 +1024,15 @@ export function findFastPath(goal: string): { tool: string; params: Record<strin
   return null;
 }
 
+/**
+ * Whole-word match (optionally plural). The heuristic fallback used bare substring checks, so
+ * "export" matched "port", "stopping" matched "ping", "zip" matched "ip" and "closest" matched
+ * "close", which routed unrelated requests to port listings, pings or process kills.
+ */
+function hasWord(text: string, word: string): boolean {
+  return new RegExp(`\\b${word}(?:s|es)?\\b`, 'i').test(text);
+}
+
 export class AgentLoop {
   private toolExecutor: ToolExecutor;
   private toolSpecs: ToolSpec[];
@@ -1260,7 +1199,37 @@ export class AgentLoop {
    * 2. If no shortcut matches, use LLM agent loop
    * 3. If LLM is unavailable, report error
    */
+  /** Last requests' timings, newest last (for the latency view and diagnostics). */
+  public static readonly recentMetrics: (AgentRunMetrics & { goal: string; at: number })[] = [];
+  private runDepth = 0;
+  private modelCalls = 0;
+  private modelMs = 0;
+
   public async run(goal: string, context: AgentRunContext): Promise<AgentResult> {
+    const started = performance.now();
+    if (this.runDepth === 0) {
+      this.modelCalls = 0;
+      this.modelMs = 0;
+    }
+    this.runDepth++;
+    try {
+      const result = await this.runRequest(goal, context);
+      if (this.runDepth === 1) {
+        result.metrics = {
+          totalMs: Math.round(performance.now() - started),
+          modelCalls: this.modelCalls,
+          modelMs: Math.round(this.modelMs)
+        };
+        AgentLoop.recentMetrics.push({ ...result.metrics, goal: goal.slice(0, 80), at: Date.now() });
+        if (AgentLoop.recentMetrics.length > 50) AgentLoop.recentMetrics.shift();
+      }
+      return result;
+    } finally {
+      this.runDepth--;
+    }
+  }
+
+  private async runRequest(goal: string, context: AgentRunContext): Promise<AgentResult> {
     goal = normalizeGoalText(goal);
 
     // Simultaneous Task Execution + Named Workflow Save Pattern
@@ -1668,9 +1637,24 @@ export class AgentLoop {
       };
     }
 
-    // When the AI engine is available, ALWAYS route user requests directly to the LLM model
-    // so the AI understands, reasons, selects tools, and executes dynamically.
-    // Local fast paths are strictly reserved as an offline fallback when no AI engine is active.
+    // Instant deterministic answers for the most common inspection questions. They run before
+    // any provider probe, so "check battery" never waits for a model. A failure (e.g. `ss` not
+    // installed) falls through to the model.
+    const instant = findInstantAnswer(cleaned || goal, context.os);
+    if (instant) {
+      const instantResult = await this.runInstantAnswer(instant, context);
+      if (instantResult) {
+        this.conversationHistory.push({ role: 'user', content: goal.trim() });
+        this.conversationHistory.push({ role: 'assistant', content: instantResult.summary });
+        if (this.conversationHistory.length > 10) {
+          this.conversationHistory = this.conversationHistory.slice(this.conversationHistory.length - 10);
+        }
+        return instantResult;
+      }
+    }
+
+    // Everything else goes to the model when one is available; the older fast-path table is
+    // an offline fallback only.
     let isAIAvailable = false;
     try {
       isAIAvailable = await this.modelManager.getActiveProvider().isAvailable();
@@ -1991,6 +1975,63 @@ export class AgentLoop {
    * The core LLM agent loop — sends the goal to Ollama, executes tools,
    * feeds results back, and repeats until done.
    */
+  /** Run an instant answer; null when the command failed so the caller can fall back to the model. */
+  private async runInstantAnswer(answer: InstantAnswer, context: AgentRunContext): Promise<AgentResult | null> {
+    const tool = answer.tool && this.toolExecutor.hasDriver(answer.tool) ? answer.tool : 'shell.execute';
+    const params = tool === 'shell.execute'
+      ? { command: answer.command, explanation: answer.explanation }
+      : (answer.params || {});
+    this.emit({ type: 'tool_start', message: answer.explanation });
+    const result = await this.toolExecutor.execute(tool, params, context.cwd, this.authorizationHandler);
+    if (!result.success) return null;
+    const stdout = typeof result.data?.stdout === 'string' ? result.data.stdout.trim() : '';
+    const summaryText = stdout || this.formatSuccessSummary(tool, params, result);
+    if (!summaryText) return null;
+    this.emit({ type: 'tool_done', message: this.formatSuccessSummary(tool, params, result), data: result.data });
+    this.emit({ type: 'done', message: 'Done.' });
+    return {
+      success: true,
+      summary: AgentLoop.truncateObservation(summaryText),
+      steps: [{ tool, params, result }]
+    };
+  }
+
+  /** How long to wait for the local engine to load its model before giving up (CPU loads can take ~20 s). */
+  public static readonly ENGINE_START_WAIT_MS = 45_000;
+
+  /**
+   * Returns a provider that answers, or null. Replaces blind retries (about 7 s of sleeps on
+   * every request while nothing was running): probe once, re-detect once, and only wait when
+   * a local model exists and the engine is actually being started.
+   */
+  private async resolveAvailableProvider(): Promise<ModelProvider | null> {
+    let provider = this.modelManager.getActiveProvider();
+    if (await provider.isAvailable()) return provider;
+
+    try {
+      await this.modelManager.initialize();
+      provider = this.modelManager.getActiveProvider();
+      if (await provider.isAvailable()) return provider;
+    } catch {
+      // detection failed; fall through
+    }
+
+    try {
+      const embeddedMgr = EmbeddedEngineManager.getInstance();
+      if (!(await embeddedMgr.checkModelExists())) return null;
+      this.emit({ type: 'tool_start', message: 'Starting the local AI engine (loading the model into memory)...' });
+      if (!(await embeddedMgr.startEngine())) return null;
+      const deadline = Date.now() + AgentLoop.ENGINE_START_WAIT_MS;
+      while (Date.now() < deadline) {
+        if (await provider.isAvailable()) return provider;
+        await new Promise(r => setTimeout(r, 500));
+      }
+    } catch {
+      // engine could not start
+    }
+    return null;
+  }
+
   private async runLLMLoop(
     goal: string,
     context: AgentRunContext,
@@ -2069,45 +2110,10 @@ export class AgentLoop {
 
     this.emit({ type: 'thinking', message: 'Thinking...' });
 
-    // Discover and check available AI provider (Embedded llama.cpp, Ollama, etc.)
-    let provider = this.modelManager.getActiveProvider();
-    let isAvailable = await provider.isAvailable();
-    if (!isAvailable) {
-      try {
-        await this.modelManager.initialize();
-        provider = this.modelManager.getActiveProvider();
-        isAvailable = await provider.isAvailable();
-      } catch {
-        // ignore initialization probe errors
-      }
-    }
-
-    if (!isAvailable) {
-      // Retry for embedded sidecar if it is still booting
-      for (let attempt = 0; attempt < 3; attempt++) {
-        isAvailable = await provider.isAvailable();
-        if (isAvailable) break;
-        await new Promise(r => setTimeout(r, 1000));
-      }
-    }
-
-    if (!isAvailable) {
-      try {
-        const embeddedMgr = EmbeddedEngineManager.getInstance();
-        const hasModel = await embeddedMgr.checkModelExists();
-        if (hasModel) {
-          this.emit({ type: 'tool_start', message: 'Starting Sentinel Embedded AI engine...' });
-          await embeddedMgr.startEngine();
-          for (let attempt = 0; attempt < 5; attempt++) {
-            if (await provider.isAvailable()) {
-              isAvailable = true;
-              break;
-            }
-            await new Promise(r => setTimeout(r, 800));
-          }
-        }
-      } catch { /* ignore */ }
-    }
+    // Discover and check available AI provider (Embedded llama.cpp, Ollama, cloud)
+    let provider = await this.resolveAvailableProvider();
+    const isAvailable = provider !== null;
+    if (!provider) provider = this.modelManager.getActiveProvider();
 
     if (!isAvailable) {
       // Fallback: try to parse the goal with simple heuristics
@@ -2222,6 +2228,9 @@ export class AgentLoop {
           sessionId: context.sessionId || 'default-session',
           requestId: `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
         });
+
+        this.modelCalls++;
+        this.modelMs += response.latencyMs ?? 0;
 
         // Resolve multi-turn context (e.g. referential follow-ups)
         const effectiveGoal = this.resolveEffectiveGoal(goal);
@@ -2498,6 +2507,12 @@ export class AgentLoop {
             // A read-only inspection answered by its first command needs no second model call:
             // the output is already on screen (tool_done carries it), so finish here.
             const stdout = typeof result.data?.stdout === 'string' ? result.data.stdout.trim() : '';
+            if (steps.length === 1 && toolId === 'shell.execute' && typeof params.command === 'string'
+              && isAppLaunchRequest(goal, params.command)) {
+              // A backgrounded launch that succeeded is the whole task; no summary call needed.
+              this.emit({ type: 'done', message: 'Launched.' });
+              return { success: true, summary: `Launched: ${params.command}`, steps, cdPath };
+            }
             if (steps.length === 1 && toolId === 'shell.execute' && typeof params.command === 'string'
               && stdout && isSingleShotInspection(goal, params.command)) {
               this.emit({ type: 'done', message: 'Done.' });
@@ -3076,23 +3091,23 @@ User request: ${goal}`;
     }
 
     // Bluetooth
-    if (lower.includes('bluetooth')) {
-      if (lower.includes('on') || lower.includes('enable')) return { tool: 'network.bluetooth.on', params: {} };
-      if (lower.includes('off') || lower.includes('disable')) return { tool: 'network.bluetooth.off', params: {} };
-      if (lower.includes('connect')) return { tool: 'network.bluetooth.connect', params: {} };
-      if (lower.includes('list') || lower.includes('scan') || lower.includes('device')) return { tool: 'network.bluetooth.list', params: {} };
+    if (hasWord(lower, 'bluetooth')) {
+      if (hasWord(lower, 'list') || hasWord(lower, 'scan') || hasWord(lower, 'device') || hasWord(lower, 'show') || hasWord(lower, 'status')) return { tool: 'network.bluetooth.list', params: {} };
+      if (hasWord(lower, 'on') || hasWord(lower, 'enable')) return { tool: 'network.bluetooth.on', params: {} };
+      if (hasWord(lower, 'off') || hasWord(lower, 'disable')) return { tool: 'network.bluetooth.off', params: {} };
+      if (hasWord(lower, 'connect')) return { tool: 'network.bluetooth.connect', params: {} };
     }
 
     // WiFi
-    if (lower.includes('wifi') || lower.includes('wi-fi')) {
-      if (lower.includes('on') || lower.includes('enable')) return { tool: 'network.wifi.on', params: {} };
-      if (lower.includes('off') || lower.includes('disable')) return { tool: 'network.wifi.off', params: {} };
-      if (lower.includes('scan') || lower.includes('list') || lower.includes('network')) return { tool: 'network.wifi.scan', params: {} };
+    if (hasWord(lower, 'wifi') || lower.includes('wi-fi')) {
+      if (hasWord(lower, 'scan') || hasWord(lower, 'list') || hasWord(lower, 'network') || hasWord(lower, 'show') || hasWord(lower, 'status')) return { tool: 'network.wifi.scan', params: {} };
+      if (hasWord(lower, 'on') || hasWord(lower, 'enable')) return { tool: 'network.wifi.on', params: {} };
+      if (hasWord(lower, 'off') || hasWord(lower, 'disable')) return { tool: 'network.wifi.off', params: {} };
     }
 
     // Processes & CPU / Memory consuming tasks
-    if (lower.includes('process') || lower.includes('processes') || lower.includes('top cpu') || lower.includes('most cpu') || lower.includes('high cpu') || lower.includes('eating cpu') || lower.includes('consuming cpu') || lower.includes('most ram') || lower.includes('high ram')) {
-      if ((lower.includes('kill') || lower.includes('stop') || lower.includes('close') || lower.includes('terminate') || lower.includes('force quit')) && !lower.includes('show') && !lower.includes('list') && !lower.includes('which') && !lower.includes('what')) {
+    if (hasWord(lower, 'process') || hasWord(lower, 'processes') || lower.includes('top cpu') || lower.includes('most cpu') || lower.includes('high cpu') || lower.includes('eating cpu') || lower.includes('consuming cpu') || lower.includes('most ram') || lower.includes('high ram')) {
+      if ((hasWord(lower, 'kill') || hasWord(lower, 'stop') || hasWord(lower, 'close') || hasWord(lower, 'terminate') || lower.includes('force quit')) && !hasWord(lower, 'show') && !hasWord(lower, 'list') && !hasWord(lower, 'which') && !hasWord(lower, 'what')) {
         let target = goal.replace(/^.*(?:kill|stop|close|terminate|force\s+quit)\s+/i, '').replace(/\s+(?:process|app|application).*$/i, '').trim();
         target = target.replace(/^(?:the|my|a|an)\s+/i, '').trim();
         if (target.toLowerCase() === 'vs code') target = 'Visual Studio Code';
@@ -3103,7 +3118,7 @@ User request: ${goal}`;
       return { 
         tool: 'system.processes', 
         params: { 
-          sort: lower.includes('ram') || lower.includes('memory') ? 'ram' : 'cpu',
+          sort: hasWord(lower, 'ram') || hasWord(lower, 'memory') ? 'ram' : 'cpu',
           count: isSingular ? 1 : 15,
           singular: isSingular
         } 
@@ -3111,22 +3126,22 @@ User request: ${goal}`;
     }
 
     // Network Utilities: Ping, Ports, Interfaces, DNS, IP
-    if (lower.includes('ping') || lower.includes('latency')) {
+    if (hasWord(lower, 'ping') || hasWord(lower, 'latency')) {
       const hostMatch = lower.match(/(?:ping|latency\s+to)\s+([a-z0-9_.-]+)/i);
       const host = hostMatch && hostMatch[1] ? hostMatch[1].trim() : 'google.com';
       return { tool: 'network.ping', params: { host } };
     }
 
-    if (lower.includes('port') || lower.includes('ports') || lower.includes('listening')) {
+    if (hasWord(lower, 'port') || hasWord(lower, 'ports') || hasWord(lower, 'listening')) {
       const portMatch = lower.match(/(?:port|listening\s+on)\s*:?\s*(\d+)/i);
       const port = portMatch && portMatch[1] ? parseInt(portMatch[1], 10) : undefined;
-      const isFree = lower.includes('free') || lower.includes('available') || lower.includes('unused') || lower.includes('open');
+      const isFree = hasWord(lower, 'free') || hasWord(lower, 'available') || hasWord(lower, 'unused') || hasWord(lower, 'open');
       return { tool: 'network.ports', params: port ? { port } : (isFree ? { findFree: true } : {}) };
     }
 
     // IP Address & DHCP Lease Management
-    if (lower.includes('ip address') || lower.includes('ip config') || lower.includes('my ip') || (lower.includes('ip') && (lower.includes('address') || lower.includes('what is') || lower.includes('check') || lower.includes('change') || lower.includes('renew') || lower.includes('refresh') || lower.includes('rotate') || lower.includes('without vpn') || lower.includes('dhcp')))) {
-      const isRenewOrChange = lower.includes('change') || lower.includes('renew') || lower.includes('refresh') || lower.includes('rotate') || lower.includes('reset') || lower.includes('switch') || lower.includes('dhcp') || lower.includes('try');
+    if (lower.includes('ip address') || lower.includes('ip config') || lower.includes('my ip') || (hasWord(lower, 'ip') && (hasWord(lower, 'address') || lower.includes('what is') || hasWord(lower, 'check') || hasWord(lower, 'change') || hasWord(lower, 'renew') || hasWord(lower, 'refresh') || hasWord(lower, 'rotate') || lower.includes('without vpn') || hasWord(lower, 'dhcp')))) {
+      const isRenewOrChange = hasWord(lower, 'change') || hasWord(lower, 'renew') || hasWord(lower, 'refresh') || hasWord(lower, 'rotate') || hasWord(lower, 'reset') || hasWord(lower, 'switch') || hasWord(lower, 'dhcp') || hasWord(lower, 'try');
       const isMac = context.os.toLowerCase().includes('mac') || context.os.toLowerCase().includes('darwin');
 
       if (isRenewOrChange) {
@@ -3185,12 +3200,12 @@ User request: ${goal}`;
     }
 
     // System info & Storage
-    if (lower.includes('battery')) return { tool: 'system.battery', params: {} };
-    if (lower.includes('disk') || lower.includes('storage') || lower.includes('free space') || lower.includes('disk space')) return { tool: 'system.storage', params: {} };
-    if (lower.includes('system info') || lower.includes('specs') || lower.includes('hardware info') || lower.includes('cpu') || lower.includes('ram') || lower.includes('uptime')) return { tool: 'system.info', params: {} };
+    if (hasWord(lower, 'battery')) return { tool: 'system.battery', params: {} };
+    if (hasWord(lower, 'disk') || hasWord(lower, 'storage') || lower.includes('free space') || lower.includes('disk space')) return { tool: 'system.storage', params: {} };
+    if (lower.includes('system info') || hasWord(lower, 'specs') || lower.includes('hardware info') || hasWord(lower, 'cpu') || hasWord(lower, 'ram') || hasWord(lower, 'uptime')) return { tool: 'system.info', params: {} };
 
     // System Services (systemctl / launchctl / Windows Services)
-    if (lower.includes('service') && (lower.includes('status') || lower.includes('start') || lower.includes('stop') || lower.includes('restart') || lower.includes('enable') || lower.includes('disable'))) {
+    if (hasWord(lower, 'service') && (hasWord(lower, 'status') || hasWord(lower, 'start') || hasWord(lower, 'stop') || hasWord(lower, 'restart') || hasWord(lower, 'enable') || hasWord(lower, 'disable'))) {
       const actMatch = lower.match(/(start|stop|restart|enable|disable|status)/);
       const action = actMatch ? actMatch[1] : 'status';
       const svcMatch = lower.match(/(?:service\s+([a-z0-9_.-]+)|([a-z0-9_.-]+)\s+service)/i);
@@ -3201,18 +3216,18 @@ User request: ${goal}`;
     }
 
     // Dotfile Rice and Autostart
-    if (lower.includes('rice') || lower.includes('autostart') || lower.includes('hyprland') || lower.includes('i3')) {
+    if (hasWord(lower, 'rice') || hasWord(lower, 'autostart') || hasWord(lower, 'hyprland') || hasWord(lower, 'i3')) {
       const toggleMatch = lower.match(/(?:turn\s+(on|off)|enable|disable)\s+([a-z0-9_.-]+)/i);
       if (toggleMatch) {
-        const enable = toggleMatch[1] === 'on' || lower.includes('enable');
+        const enable = toggleMatch[1] === 'on' || hasWord(lower, 'enable');
         const app = toggleMatch[2].trim();
-        const target = lower.includes('i3') ? 'i3' : lower.includes('sway') ? 'sway' : 'hyprland';
+        const target = hasWord(lower, 'i3') ? 'i3' : hasWord(lower, 'sway') ? 'sway' : 'hyprland';
         return { tool: 'system.dotfile', params: { app, enable, target } };
       }
     }
 
     // System Operations
-    if (lower.includes('lock') && (lower.includes('mac') || lower.includes('screen') || lower.includes('laptop') || lower.includes('computer'))) {
+    if (hasWord(lower, 'lock') && (hasWord(lower, 'mac') || hasWord(lower, 'screen') || hasWord(lower, 'laptop') || hasWord(lower, 'computer'))) {
       return { tool: 'system.lock', params: {} };
     }
 
@@ -3220,7 +3235,7 @@ User request: ${goal}`;
     if (lower.includes('git status') || lower.includes('branch status')) {
       return { tool: 'git.status', params: {} };
     }
-    if (lower.includes('git log') || lower.includes('commits') || lower.includes('commit history')) {
+    if (lower.includes('git log') || hasWord(lower, 'commits') || lower.includes('commit history')) {
       return { tool: 'git.log', params: {} };
     }
 
@@ -3235,7 +3250,7 @@ User request: ${goal}`;
     }
 
     // Processes & Applications
-    if ((lower.includes('kill') || lower.includes('stop') || lower.includes('close') || lower.includes('terminate') || lower.includes('force quit')) && !lower.includes('show') && !lower.includes('list')) {
+    if ((hasWord(lower, 'kill') || hasWord(lower, 'stop') || hasWord(lower, 'close') || hasWord(lower, 'terminate') || lower.includes('force quit')) && !hasWord(lower, 'show') && !hasWord(lower, 'list')) {
       let target = goal.replace(/^.*(?:kill|stop|close|terminate|force\s+quit)\s+/i, '').replace(/\s+(?:process|app|application).*$/i, '').trim();
       target = target.replace(/^(?:the|my|a|an)\s+/i, '').trim();
       if (target.toLowerCase() === 'vs code') target = 'Visual Studio Code';
@@ -3245,7 +3260,7 @@ User request: ${goal}`;
 
     // Open app
     const openMatch = lower.match(/(?:open|launch)\s+(?:the\s+)?([a-z0-9\s]+?)(?:\s+application|\s+app)?(?:$|\s)/i);
-    if (openMatch && openMatch[1] && !lower.includes('browser') && !lower.includes('url')) {
+    if (openMatch && openMatch[1] && !hasWord(lower, 'browser') && !hasWord(lower, 'url')) {
       let target = openMatch[1].trim();
       // Handle known aliases to prevent hallucination
       if (target.includes('antigrav')) target = 'Antigravity IDE';
@@ -3257,7 +3272,7 @@ User request: ${goal}`;
 
     // Update app
     const updateMatch = lower.match(/(?:update|upgrade)\s+(?:the\s+)?([a-z0-9\s]+?)(?:\s+application|\s+app)?(?:$|\s)/i);
-    if (updateMatch && updateMatch[1] && !lower.includes('all')) {
+    if (updateMatch && updateMatch[1] && !hasWord(lower, 'all')) {
       let target = updateMatch[1].trim();
       if (target.includes('antigrav')) target = 'Antigravity IDE';
       if (target === 'vs code') target = 'Visual Studio Code';
@@ -3265,11 +3280,11 @@ User request: ${goal}`;
     }
 
     // Scaffolding / Project Init
-    if (lower.includes('initialize') || lower.includes('scaffold') || (lower.includes('make') && lower.includes('project'))) {
-      const isNext = lower.includes('next');
-      const isReact = lower.includes('react');
-      const isDjango = lower.includes('django');
-      const isExpress = lower.includes('express');
+    if (hasWord(lower, 'initialize') || hasWord(lower, 'scaffold') || (hasWord(lower, 'make') && hasWord(lower, 'project'))) {
+      const isNext = hasWord(lower, 'next');
+      const isReact = hasWord(lower, 'react');
+      const isDjango = hasWord(lower, 'django');
+      const isExpress = hasWord(lower, 'express');
       
       if (isNext || isReact || isDjango || isExpress) {
         let frontend = isNext ? 'nextjs' : isReact ? 'react' : undefined;

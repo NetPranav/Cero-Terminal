@@ -877,18 +877,19 @@ describe('Single-call answers for read-only inspection', () => {
     return { loop, generate };
   };
 
-  it('answers "how much disk space is free" with one model call and the real output', async () => {
+  it('answers "how big is my downloads folder" with one model call and the real output', async () => {
     const { loop, generate } = makeLoop(
-      [{ action: 'execute', command: 'df -h /', explanation: 'Show root filesystem usage' }],
-      'Filesystem Size Used Avail Use% Mounted on\n/dev/nvme0n1p2 234G 170G 64G 73% /'
+      [{ action: 'execute', command: 'du -sh ~/Downloads', explanation: 'Size of the Downloads folder' }],
+      '12G\t/home/u/Downloads'
     );
     const events: any[] = [];
     loop.onEvent(e => events.push(e));
-    const result = await loop.run('how much disk space is free', { os: 'linux', cwd: '/home/u' });
+    const result = await loop.run('how big is my downloads folder', { os: 'linux', cwd: '/home/u' });
 
     expect(generate).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(true);
-    expect(result.summary).toContain('64G');
+    expect(result.summary).toContain('12G');
+    expect(result.metrics?.modelCalls).toBe(1);
     const done = events.filter(e => e.type === 'done');
     expect(done).toHaveLength(1);
     expect(done[0].data).toBeUndefined(); // output already shown by tool_done
@@ -951,5 +952,79 @@ describe('Auto-heal context', () => {
     const system = generate.mock.calls[0][2].messages[0].content as string;
     expect(system).toContain('<TOOL_OUTPUT capability="terminal.output" readonly="true">');
     expect(system).toContain('EADDRINUSE');
+  });
+});
+
+describe('Heuristic fallback word matching', () => {
+  const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any);
+  const fallback = (goal: string) => (loop as any).tryHeuristicFallback(goal, { os: 'linux', cwd: '/home/u' });
+
+  it('does not toggle radios for questions about connections', () => {
+    expect(fallback('show wifi connections')?.tool).toBe('network.wifi.scan');
+    expect(fallback('show bluetooth connection status')?.tool).toBe('network.bluetooth.list');
+    expect(fallback('turn on bluetooth')?.tool).toBe('network.bluetooth.on');
+    expect(fallback('turn off wifi')?.tool).toBe('network.wifi.off');
+  });
+
+  it('does not match words hidden inside other words', () => {
+    expect(fallback('export my bookmarks to a file')?.tool).not.toBe('network.ports');
+    expect(fallback('what is stopping the build')?.tool).not.toBe('network.ping');
+    expect(JSON.stringify(fallback('unzip the archive and check it') ?? {})).not.toMatch(/ip addr|ip -br|hostname -I|ipconfig/);
+    expect(fallback('find the closest match in the logs')?.tool).not.toBe('system.kill_process');
+    expect(fallback('which ports are listening')?.tool).toBe('network.ports');
+  });
+});
+
+describe('Provider resolution', () => {
+  it('fails fast with guidance when no provider answers and no local model exists', async () => {
+    const { EmbeddedEngineManager } = await import('../models/EmbeddedEngineManager');
+    const spy = vi.spyOn(EmbeddedEngineManager.getInstance(), 'checkModelExists').mockResolvedValue(false);
+    try {
+      const provider = { name: 'down', isAvailable: vi.fn().mockResolvedValue(false), generate: vi.fn() };
+      const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+        getActiveProvider: () => provider,
+        getActiveModel: () => ({ modelId: 'x' }),
+        initialize: vi.fn().mockResolvedValue(undefined)
+      } as any);
+      const started = Date.now();
+      const result = await (loop as any).runLLMLoop('summarise the kernel log', { os: 'linux', cwd: '/home/u' });
+      expect(result.success).toBe(false);
+      expect(result.summary).toContain('No AI model or API configured');
+      expect(provider.generate).not.toHaveBeenCalled();
+      expect(Date.now() - started).toBeLessThan(1000);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('Instant answers run before any model call', () => {
+  it('answers "which process is using the most cpu" without touching the provider', async () => {
+    const generate = vi.fn();
+    const isAvailable = vi.fn().mockResolvedValue(true);
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable, generate }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    const execute = vi.fn().mockResolvedValue({ success: true, data: { stdout: '  PID %CPU %MEM COMMAND\n 4242 96.0  3.1 cc1plus', code: 0 } });
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+
+    const result = await loop.run('which process is using the most cpu', { os: 'linux', cwd: '/home/u' });
+
+    expect(result.success).toBe(true);
+    expect(result.summary).toContain('cc1plus');
+    expect(generate).not.toHaveBeenCalled();
+    expect(isAvailable).not.toHaveBeenCalled();
+    expect(result.metrics?.modelCalls).toBe(0);
+    expect(execute.mock.calls[0][1].command).toContain('--sort=-pcpu');
+  });
+
+  it('finishes an app launch without a summary call', async () => {
+    const { isAppLaunchRequest } = await import('./AgentLoop');
+    expect(isAppLaunchRequest('open vs code here', 'code . &')).toBe(true);
+    expect(isAppLaunchRequest('launch firefox', 'setsid -f firefox >/dev/null 2>&1')).toBe(true);
+    expect(isAppLaunchRequest('open the logs and find errors', 'less /var/log/syslog')).toBe(false);
+    expect(isAppLaunchRequest('open vs code', 'code --version')).toBe(false);
   });
 });

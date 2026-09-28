@@ -175,3 +175,18 @@ describe('LocalIntentClassifier (Phase 0.75 Tasks 0.75.1, 0.75.8, 0.75.9)', () =
     });
   });
 });
+
+describe('LocalIntentClassifier endpoint opt-in', () => {
+  it('never calls a model server unless an intent endpoint is configured', async () => {
+    const fetchSpy = vi.fn();
+    const original = global.fetch;
+    global.fetch = fetchSpy as any;
+    try {
+      const res = await new LocalIntentClassifier().classify('check battery status');
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(res.executionTier).toBe('intent_cpu');
+    } finally {
+      global.fetch = original;
+    }
+  });
+});

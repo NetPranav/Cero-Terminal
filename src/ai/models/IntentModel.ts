@@ -27,12 +27,31 @@ export interface IntentModel {
 export class LocalIntentClassifier implements IntentModel {
   public static readonly DEFAULT_TIMEOUT_MS = 3000; // Phase 0.75 Task 0.75.8: Hard ~3s latency budget
 
-  private defaultEndpoint: string;
+  /** localStorage key holding an Ollama-compatible endpoint for the optional intent model */
+  public static readonly ENDPOINT_STORAGE_KEY = 'sentinel_intent_model_endpoint';
+
+  private configuredEndpoint?: string;
   private defaultTimeoutMs: number;
 
   constructor(options?: { endpointUrl?: string; timeoutMs?: number }) {
-    this.defaultEndpoint = options?.endpointUrl || 'http://127.0.0.1:11434';
+    this.configuredEndpoint = options?.endpointUrl;
     this.defaultTimeoutMs = options?.timeoutMs || LocalIntentClassifier.DEFAULT_TIMEOUT_MS;
+  }
+
+  /**
+   * The model tier is opt-in. It used to call Ollama at 127.0.0.1:11434 with qwen2.5:1.5b
+   * before every request, adding up to 3 s even for users on the embedded engine or a cloud
+   * API who never installed that model. Without a configured endpoint the heuristic runs alone.
+   */
+  private resolveEndpoint(context?: IntentContext): string | undefined {
+    if (context?.endpointUrl) return context.endpointUrl;
+    if (this.configuredEndpoint) return this.configuredEndpoint;
+    try {
+      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(LocalIntentClassifier.ENDPOINT_STORAGE_KEY) : null;
+      return saved || undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /**
@@ -42,12 +61,10 @@ export class LocalIntentClassifier implements IntentModel {
   public async classify(prompt: string, context?: IntentContext): Promise<IntentData> {
     const startTime = performance.now();
     const timeoutMs = Math.min(context?.timeoutMs || this.defaultTimeoutMs, LocalIntentClassifier.DEFAULT_TIMEOUT_MS);
-    const endpoint = context?.endpointUrl || this.defaultEndpoint;
+    const endpoint = this.resolveEndpoint(context);
 
-    // 1. Attempt lightweight CPU model inference if available and not in test mode without mock
-    const shouldAttemptModel = typeof process === 'undefined' || process.env.NODE_ENV !== 'test' || Boolean(context?.endpointUrl);
-
-    if (shouldAttemptModel) {
+    // 1. Optional small-model classification, only when an endpoint was configured
+    if (endpoint) {
       try {
         const controller = new AbortController();
         const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);

@@ -38,6 +38,8 @@ const ALWAYS_READ_ONLY = new Set<string>([
 /** Shell keywords the lightweight parser reports as command names. */
 const PASS_THROUGH_KEYWORDS = new Set(['do', 'then', 'else', 'elif', 'if', 'while', 'until', '!', 'time']);
 const NO_OP_KEYWORDS = new Set(['done', 'fi', 'esac', 'for', 'in', '{', '}']);
+/** Builtins that only affect the short-lived shell running the command. eval/source/exec/trap are excluded. */
+const TRANSIENT_BUILTINS = new Set(['continue', 'break', ':', 'exit', 'return', 'shift', 'set', 'export', 'local', 'readonly', 'unset', 'read', 'wait']);
 
 const MUTATING_VERBS = new Set([
   'add', 'del', 'delete', 'remove', 'set', 'change', 'replace', 'flush', 'append', 'prepend', 'restore',
@@ -179,7 +181,7 @@ function simpleCommandVerdict(cmd: SimpleCommandNode): ReadOnlyVerdict {
     name = args[0];
     args = args.slice(1);
   }
-  if (NO_OP_KEYWORDS.has(name) || PASS_THROUGH_KEYWORDS.has(name)) {
+  if (NO_OP_KEYWORDS.has(name) || PASS_THROUGH_KEYWORDS.has(name) || TRANSIENT_BUILTINS.has(name)) {
     return { readOnly: true, reason: `shell keyword ${name}` };
   }
   // A path like /usr/bin/ls is judged by its basename

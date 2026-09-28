@@ -16,11 +16,16 @@ export class OllamaProvider implements ModelProvider {
   constructor(public baseUrl: string = 'http://localhost:11434') {}
 
   public async isAvailable(): Promise<boolean> {
+    // Bounded: an unanswered probe must not stall every request
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1500);
     try {
-      const res = await fetch(this.baseUrl, { method: 'GET' });
+      const res = await fetch(this.baseUrl, { method: 'GET', signal: controller.signal });
       return res.status === 200;
     } catch {
       return false;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
