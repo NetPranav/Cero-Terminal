@@ -318,3 +318,47 @@ In order of value:
 9. **Model training:** the LoRA/DPO/GRPO scripts exist but no adapter has gone through the
    regression gate; train on real transcripts only after the benchmark is re-baselined (see I-43).
 
+
+---
+
+## 5. macOS GUI test pass (release build, 2026-09-28)
+
+The release bundle (`npm run bundle:mac`) was launched and driven through its real window:
+keystrokes, clicks and screenshots, no headless mode. All side effects stayed in a throwaway
+sandbox. The local engine was Qwen2.5-Coder-3B served by `~/.sentinel/bin/llama-server`.
+
+**Found and fixed (each commit is named after the fix):**
+
+| Area | Problem seen in the window | Fix |
+|---|---|---|
+| Input routing | A `>` request typed while another ran, or one containing `$ % #`, went to zsh as a `>file` redirect | Keystroke shadow and input anchor (`InputLineTracker`); requests are queued |
+| Wrong data | The macOS battery, CPU, RAM, disk, uptime and temperature readings were hard-coded sample values | Real `pmset`/`vm_stat`/`sysctl`/`df` readings; honest errors otherwise |
+| Folder | `cd X && clear` became the folder "X && clear", so the agent ran git in the wrong place | The shell's real cwd from the OS (`get_pty_cwd`) |
+| Consent | Enter typed while a dialog opened approved `screencapture`, which captured the screen | Enter arms after 0.8 s with no typing; screen, camera and mic capture always ask |
+| Declines | After "Cancel" the model tried another way (`git init`, a second screenshot) | A declined command ends the request |
+| Questions | A failed read-only question escalated to `git init` | Questions never run modifying follow-ups |
+| Learning | `ls build` after declining "delete the build folder" was learned as how to delete it | Plausibility gate; declined requests are not unresolved |
+| OS labels | "darwin" contains "win": Mac samples were labelled Windows and Windows rules applied | `isWindowsName()` exact match |
+| Accuracy | "explain math.js" described the npm library; "111 lines" was invented; multi-part questions stopped early | Named files are read; figures must appear in command output; multi-part questions continue |
+| Watcher | An unrelated error re-applied an old fix to the wrong repo | Each error diagnosed on its own; the fix targets the repo in the error line |
+| Auto-heal | `git statsu` offered the fix `status`, printed above the git output | `git status`, printed after the output, above a fresh prompt |
+| Engine | A killed instance left llama-server (2 GB) running | An orphaned Sentinel server is stopped at the next start |
+| Look | Saturated colors, dim text drawn as black boxes, repeated status lines, "/16GB" RAM, broken breadcrumbs | Grayscale truecolor renderer, in-place status line, real totals, compact path |
+
+**Creative prompts used** (all answered correctly after the fixes unless noted):
+`how much battery is left` · `what's eating my RAM` · `how full is my disk` · `what's my ip` ·
+`what changed in the last commit here` · `explain what math.js does` ·
+`how many javascript files are in this folder and how many lines do they have in total` ·
+`which node version do I have and where is it installed` · `what's my battery and uptime` ·
+`show listening ports` · `delete the build folder` (declined) · `take a screenshot` (declined) ·
+`watch file <log>` then a git lock error and a crafted `Cannot find module 'evil-pkg'` line ·
+`watch mode auto-safe` · `watch list` · `unwatch 1` · `why` · `export session` · `git statsu` then Tab.
+
+**Still open after this pass:**
+
+1. The 3B model sometimes writes a correct-looking but wrong pipeline (it summed `wc -l`'s own
+   total line). Rule 14 addresses that case; a larger tier (Qwen3-4B) is more reliable.
+2. The line parser in `ReadOnlyCommandPolicy` misreads `"$i"` followed by `2>/dev/null` inside
+   `$(...)`. It errs toward asking for consent, never toward skipping it.
+3. `>watch list` and `>why` print long absolute paths; shorten them with `~` and middle ellipsis.
+4. Window listing on macOS needs Accessibility rights; only screenshots are covered today.
