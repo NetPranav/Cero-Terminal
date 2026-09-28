@@ -363,6 +363,7 @@ ${searchRule}
 12. FAILURES: If a command fails because something does not exist (not a git repository, no such file, unit not found), explain that in "done". Never create, initialize, install or delete anything the user did not ask for to get around a failure.
 13. FILES: When the user asks about a file, answer from its contents (given below or read with cat/head). Never describe a file from general knowledge of a package with a similar name.
 14. COUNTING: "wc -l" on several files prints a final "total" line; read that line instead of summing the output again. For one total use: find . -type f -name '*.js' -not -path '*/node_modules/*' -exec cat {} + | wc -l
+15. LONG-RUNNING: Servers, watchers, "tail -f" and ROS 2 nodes (ros2 run, ros2 launch, ros2 topic echo) keep running. Emit each as its own execute action; Sentinel opens it in a separate terminal pane and tells you. Never start the same one twice; continue with short checks (ros2 node list, curl) afterwards. The OTHER TERMINALS section shows what is already running.
 
 JSON CONTRACT:
 To execute a terminal command:

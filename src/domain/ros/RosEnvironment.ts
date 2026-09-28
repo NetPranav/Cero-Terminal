@@ -47,3 +47,23 @@ export function withRosEnvironment(command: string, distro?: string): string {
   if (!needsRosEnvironment(command)) return command;
   return `${rosEnvironmentPrefix(distro)} ${boundStreamingRosCommand(command)}`;
 }
+
+/**
+ * Prefix for a command typed into an interactive terminal pane. The pane runs the user's own
+ * shell, so zsh needs setup.zsh (setup.bash fails there). No globs: an unmatched glob aborts
+ * the whole line in zsh. Streams are not bounded: a pane is where a stream belongs.
+ */
+export function rosPaneSetupPrefix(shell: string, distro?: string): string {
+  const ext = /zsh$/.test(shell || '') ? 'zsh' : 'bash';
+  const src = ext === 'zsh' ? 'source' : '.';
+  const base = distro
+    ? `[ -f /opt/ros/${distro}/setup.${ext} ] && ${src} /opt/ros/${distro}/setup.${ext}`
+    : `__ros=$(find /opt/ros -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort | tail -n 1); [ -n "$__ros" ] && [ -f "$__ros/setup.${ext}" ] && ${src} "$__ros/setup.${ext}"`;
+  const overlay = `for __ws in . .. ../.. ../../..; do if [ -f "$__ws/install/setup.${ext}" ]; then ${src} "$__ws/install/setup.${ext}"; break; fi; done`;
+  return `${base}; ${overlay};`;
+}
+
+export function withRosEnvironmentForPane(command: string, shell: string, distro?: string): string {
+  if (!needsRosEnvironment(command)) return command;
+  return `${rosPaneSetupPrefix(shell, distro)} ${command}`;
+}

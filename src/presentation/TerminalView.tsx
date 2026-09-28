@@ -40,6 +40,7 @@ import {
 import { SearchAddon } from '@xterm/addon-search';
 import { TerminalSearchBar } from './TerminalSearchBar';
 import { InputLineTracker, stripPrompt, parseCdTarget } from './InputLineTracker';
+import { TerminalWorkspace } from '../domain/terminal/TerminalWorkspace';
 import { readClipboardText, writeClipboardText, formatTerminalPastePayload } from '../utils/clipboard';
 
 /** Goal text for an auto-heal request: the failing command and diagnosis, not just a title. */
@@ -51,6 +52,8 @@ function autoHealGoal(rem: RemediationPrompt): string {
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalViewProps {
+  /** Layout id of this pane; registers it with the TerminalWorkspace */
+  paneId?: string;
   sessionId?: string;
   onSessionCreated?: (sessionId: string) => void;
   isActive: boolean;
@@ -58,7 +61,7 @@ interface TerminalViewProps {
   onPathChange?: (newPath: string) => void;
 }
 
-export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSessionId, onSessionCreated, isActive, currentPath, onPathChange }) => {
+export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, sessionId: initialSessionId, onSessionCreated, isActive, currentPath, onPathChange }) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -535,6 +538,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
     // We must define the callback here so we can remove it later
     let outputCallback: ((data: Uint8Array) => void) | null = null;
     let shellRedrawMuteUntil = 0;
+    let unsubPaneState: (() => void) | null = null;
     let shellRedrawSeen = false;
     // Runs `next` once the shell has redrawn after the discarded `>` line (or the mute window
     // ran out), then unmutes: a fast answer must not race the redraw into a double prompt
@@ -578,11 +582,39 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
           await sessionManager.resize(currentSessionId, term.rows, term.cols);
         }
 
+        // Tell the workspace about this pane so the agent knows what every terminal is doing
+        const workspace = TerminalWorkspace.getInstance();
+        if (paneId) {
+          workspace.register(paneId, { sessionId: currentSessionId, cwd: currentPathRef.current || currentPath || '~' });
+          unsubPaneState = ptyTrackerRef.current.subscribe((state) => {
+            if (state === 'idle-at-prompt') workspace.update(paneId, { busy: false, runningCommand: undefined });
+          });
+        }
+        // A pane the agent opened runs its command once the shell has printed its first prompt
+        // (output quiet for a moment), so the command is not typed into shell start-up
+        let pendingTimer: ReturnType<typeof setTimeout> | undefined;
+        const schedulePendingCommand = () => {
+          if (!paneId || !workspace.hasPendingCommand(paneId)) return;
+          if (pendingTimer) clearTimeout(pendingTimer);
+          pendingTimer = setTimeout(() => {
+            const request = workspace.takePendingCommand(paneId);
+            if (!request || !currentSessionId) return;
+            writeTerm(`  ${S.muted}› Opened by Sentinel to run: ${request.command}${S.reset}\r\n`);
+            workspace.update(paneId, { busy: true, runningCommand: request.command });
+            ptyTrackerRef.current.notifyCommandStarted(request.command);
+            sessionManager.write(currentSessionId, `${request.command}\r`);
+          }, 400);
+        };
+
         // One decoder in streaming mode: a UTF-8 character can be split across PTY reads
         const decoder = new TextDecoder();
         outputCallback = (data: Uint8Array) => {
           const text = decoder.decode(data, { stream: true });
           ptyTrackerRef.current.feedOutput(text);
+          if (paneId) {
+            workspace.appendOutput(paneId, text);
+            schedulePendingCommand();
+          }
           // Discarding a `>` request line makes the shell print a fresh prompt; hide that redraw so
           // agent output follows the request directly (the final prompt is printed at the end)
           if (Date.now() < shellRedrawMuteUntil) { shellRedrawSeen = true; return; }
@@ -696,6 +728,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
               currentPathRef.current = cwd;
               notifyNavigation(cwd);
             }
+            if (paneId) TerminalWorkspace.getInstance().update(paneId, { cwd });
             return cwd;
           } catch {
             return null;
@@ -784,7 +817,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
           });
 
           // Run the agent loop
-          agentLoop.run(aiGoal, { os: getPlatform(), cwd }).then(result => {
+          agentLoop.run(aiGoal, { os: getPlatform(), cwd, paneId }).then(result => {
             const leftover = renderer.finish();
             if (leftover) writeTerm(leftover);
             PromptProgressManager.getInstance().completePrompt(result.success, result.summary);
@@ -1090,6 +1123,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
               } else if (cleanCmd) {
                 // User submitted a command to the shell
                 ptyTrackerRef.current.notifyCommandStarted(cleanCmd);
+                if (paneId) TerminalWorkspace.getInstance().update(paneId, { busy: true, runningCommand: cleanCmd });
                 // Pick up directory changes once the shell has run it
                 setTimeout(() => { void syncCwd(); }, 400);
                 setTimeout(() => { void syncCwd(); }, 2000);
@@ -1178,6 +1212,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
       unsubscribeTheme();
       unsubConsent?.();
       unsubWatch?.();
+      unsubPaneState?.();
+      if (paneId) TerminalWorkspace.getInstance().unregister(paneId);
       ConsentQueue.getInstance().clearQueue(currentSessionId);
       window.removeEventListener('sentinel:toggle-search', handleToggleSearch);
       searchAddon.dispose();

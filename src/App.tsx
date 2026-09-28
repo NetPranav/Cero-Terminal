@@ -35,6 +35,7 @@ import {
   Code2 
 } from "lucide-react";
 import { isLinux, getShortcutModifier, formatShortcut } from "./shared/platform";
+import { TerminalWorkspace, MAX_PANES_PER_TAB } from "./domain/terminal/TerminalWorkspace";
 import "./App.css";
 
 // Large screens that are only shown on demand load as separate chunks, keeping them out of the
@@ -238,6 +239,57 @@ export function App({ initialPath }: AppProps = {}) {
     setTabs(prev => [...prev, { id: newId, name: `Terminal ${prev.length + 1}`, rootPane: newPane }]);
     setActiveTabId(newId);
     setActivePaneId(newPane.data.id);
+  }, []);
+
+  // Latest layout for callbacks that outlive a render (the agent's pane spawner)
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
+
+  // Panes opened by the agent for long-running commands (servers, `tail -f`, ROS nodes).
+  // The first goes beside the requesting pane, later ones stack under it; a tab that already
+  // has MAX_PANES_PER_TAB panes gets a new tab instead. Focus stays where the user is typing.
+  useEffect(() => {
+    const workspace = TerminalWorkspace.getInstance();
+    const terminalIds = (node: PaneNode): string[] => node.type === 'terminal'
+      ? [node.data.id]
+      : [...terminalIds(node.data.pane1), ...terminalIds(node.data.pane2)];
+    const insertSplit = (node: PaneNode, targetId: string, newPane: PaneNode, direction: SplitDirection): PaneNode => {
+      if (node.type === 'terminal') {
+        if (node.data.id !== targetId) return node;
+        return { type: 'split', data: { id: getUniqueId('split'), direction, ratio: 0.5, pane1: node, pane2: newPane } };
+      }
+      return { ...node, data: { ...node.data, pane1: insertSplit(node.data.pane1, targetId, newPane, direction), pane2: insertSplit(node.data.pane2, targetId, newPane, direction) } };
+    };
+
+    workspace.setWriter((sessionId, data) => { void SessionManager.getInstance().write(sessionId, data); });
+    workspace.setSpawner((request) => {
+      const allTabs = tabsRef.current;
+      const hostTab = allTabs.find(t => request.requesterPaneId && terminalIds(t.rootPane).includes(request.requesterPaneId))
+        ?? allTabs.find(t => t.id === activeTabIdRef.current)
+        ?? allTabs[0];
+      const newPane = createTerminalPane();
+      const newId = (newPane as { data: { id: string } }).data.id;
+      setPanePaths(prev => ({ ...prev, [newId]: request.cwd || '~' }));
+
+      const ids = hostTab ? terminalIds(hostTab.rootPane) : [];
+      const useNewTab = !hostTab || request.placement === 'tab' || (request.placement !== 'split' && ids.length >= MAX_PANES_PER_TAB);
+      if (useNewTab) {
+        setTabs(prev => [...prev, { id: getUniqueId('tab'), name: request.title || `Terminal ${prev.length + 1}`, customName: Boolean(request.title), rootPane: newPane }]);
+      } else {
+        // One pane: split it side by side. More: stack under the last one.
+        const single = ids.length === 1;
+        const target = single ? (request.requesterPaneId && ids.includes(request.requesterPaneId) ? request.requesterPaneId : ids[0]) : ids[ids.length - 1];
+        setTabs(prev => prev.map(t => t.id !== hostTab.id ? t : { ...t, rootPane: insertSplit(t.rootPane, target, newPane, single ? 'vertical' : 'horizontal') }));
+      }
+      return newId;
+    });
+    return () => {
+      workspace.setSpawner(null);
+      workspace.setWriter(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const startupArgsProcessedRef = useRef(false);
@@ -751,6 +803,7 @@ export function App({ initialPath }: AppProps = {}) {
           <div style={{ flex: 1, position: 'relative', overflow: 'hidden', padding: '6px', zIndex: 1 }}>
             <TerminalView 
               key={node.data.id}
+              paneId={node.data.id}
               sessionId={node.data.sessionId}
               isActive={isTabActive}
               currentPath={panePaths[node.data.id] || '~'}

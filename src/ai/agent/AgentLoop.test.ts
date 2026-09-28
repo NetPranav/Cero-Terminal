@@ -1231,3 +1231,144 @@ describe('Questions about several things are not ended by the first command', ()
   });
 });
 
+
+describe('Long-running commands open their own terminal pane', () => {
+  const makeLoop = (steps: Array<{ command: string; explanation: string }>) => {
+    const generate = vi.fn();
+    for (const step of steps) generate.mockResolvedValueOnce({ content: JSON.stringify({ action: 'execute', ...step }) });
+    generate.mockResolvedValue({ content: JSON.stringify({ action: 'done', summary: 'Both are running.' }) });
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    const execute = vi.fn().mockResolvedValue({ success: true, data: { stdout: 'ok', code: 0 } });
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+    return { loop, generate, execute };
+  };
+
+  it('spawns servers and log followers in panes and never runs them inline', async () => {
+    const { TerminalWorkspace } = await import('../../domain/terminal/TerminalWorkspace');
+    TerminalWorkspace.resetForTests();
+    const spawner = vi.fn().mockReturnValueOnce('pane-a').mockReturnValueOnce('pane-b');
+    TerminalWorkspace.getInstance().setSpawner(spawner);
+    const { loop, execute } = makeLoop([
+      { command: 'tail -f app.log', explanation: 'Follow the log' },
+      { command: 'python3 -m http.server 8000', explanation: 'Serve the folder' },
+    ]);
+    loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
+    const result = await loop.run('follow app.log and serve this folder on port 8000', { os: 'macos', cwd: '/tmp/site', paneId: 'main' });
+    expect(result.success).toBe(true);
+    expect(spawner).toHaveBeenCalledTimes(2);
+    expect(spawner.mock.calls[0][0]).toMatchObject({ command: 'tail -f app.log', cwd: '/tmp/site', requesterPaneId: 'main' });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('asks before opening a pane for a command that needs consent, and stops on decline', async () => {
+    const { TerminalWorkspace } = await import('../../domain/terminal/TerminalWorkspace');
+    TerminalWorkspace.resetForTests();
+    const spawner = vi.fn();
+    TerminalWorkspace.getInstance().setSpawner(spawner);
+    const { loop } = makeLoop([{ command: 'npm run dev', explanation: 'Start the dev server' }]);
+    const handler = vi.fn().mockResolvedValue(false);
+    loop.setAuthorizationHandler(handler);
+    const result = await loop.run('start the dev server', { os: 'macos', cwd: '/tmp/app', paneId: 'main' });
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ capabilityId: 'terminal.spawn' }));
+    expect(result.declined).toBe(true);
+    expect(spawner).not.toHaveBeenCalled();
+  });
+
+  it('tells the model what the other terminals are running', async () => {
+    const { TerminalWorkspace } = await import('../../domain/terminal/TerminalWorkspace');
+    TerminalWorkspace.resetForTests();
+    const ws = TerminalWorkspace.getInstance();
+    ws.register('main', { cwd: '/ws' });
+    ws.register('other', { title: 'talker', busy: true, runningCommand: 'ros2 run demo_nodes_cpp talker' });
+    const { loop, generate } = makeLoop([]);
+    await loop.run('is the talker still publishing', { os: 'linux', cwd: '/ws', paneId: 'main' });
+    const prompt = generate.mock.calls[0][0] + generate.mock.calls[0][1];
+    expect(prompt).toContain('OTHER TERMINALS');
+    expect(prompt).toContain('running: ros2 run demo_nodes_cpp talker');
+  });
+});
+
+describe('Multi-step chains', () => {
+  const setup = (generateContents: string[] = []) => {
+    const generate = vi.fn();
+    for (const c of generateContents) generate.mockResolvedValueOnce({ content: c });
+    generate.mockResolvedValue({ content: JSON.stringify({ action: 'done', summary: 'x' }) });
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    const execute = vi.fn(async (_tool: string, params: any, cwd: string) => {
+      if (params.command.startsWith('cd ')) return { success: true, data: { stdout: `${cwd}/chain-demo\n`, code: 0 } };
+      return { success: true, data: { stdout: '', code: 0 } };
+    });
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+    return { loop, execute, generate };
+  };
+
+  it('asks once for the whole plan, carries the folder and moves the shell there', async () => {
+    const { loop, execute, generate } = setup();
+    const handler = vi.fn().mockResolvedValue(true);
+    loop.setAuthorizationHandler(handler);
+    const result = await loop.run('create a folder called chain-demo here, go into it, initialize a git repository, create a package.json with npm init -y and then list the files', { os: 'macos', cwd: '/tmp/wf' });
+
+    expect(result.success).toBe(true);
+    expect(generate).not.toHaveBeenCalled();
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0]).toMatchObject({ capabilityId: 'workflow.batch' });
+    expect(handler.mock.calls[0][0].parameters.command).toContain('1. mkdir -p chain-demo');
+    const calls = execute.mock.calls.map(c => [c[1].command, c[2]]);
+    expect(calls).toEqual([
+      ['mkdir -p chain-demo', '/tmp/wf'],
+      ["cd '/tmp/wf/chain-demo' && pwd", '/tmp/wf'],
+      ['git init', '/tmp/wf/chain-demo'],
+      ['npm init -y', '/tmp/wf/chain-demo'],
+      ['ls -la', '/tmp/wf/chain-demo'],
+    ]);
+    expect(result.cdPath).toBe('/tmp/wf/chain-demo');
+  });
+
+  it('asks the model only for the clause it could not plan, and never runs English', async () => {
+    const { loop, execute, generate } = setup([JSON.stringify({ action: 'execute', command: 'npx express-generator --no-view api', explanation: 'Scaffold' })]);
+    loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
+    const result = await loop.run('create a folder called chain-demo, go into it, then scaffold an express app called api', { os: 'linux', cwd: '/tmp/wf' });
+    expect(result.success).toBe(true);
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls.map(c => c[1].command)).toContain('npx express-generator --no-view api');
+    expect(execute.mock.calls.every(c => !/scaffold an express/.test(c[1].command))).toBe(true);
+  });
+
+  it('stops at the first failing step and reports it', async () => {
+    const { loop, execute } = setup();
+    (execute as any).mockImplementation(async (_t: string, params: any) => params.command === 'git init'
+      ? { success: false, error: 'git: command not found', data: { code: 127 } }
+      : { success: true, data: { stdout: '/tmp/wf/x\n', code: 0 } });
+    loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
+    const result = await loop.run('make a folder named x, go into it, initialize git, then list the files', { os: 'linux', cwd: '/tmp/wf' });
+    expect(result.success).toBe(false);
+    expect(result.summary).toContain('Stopped at step 3');
+    expect(execute.mock.calls.map(c => c[1].command)).not.toContain('ls -la');
+  });
+
+  it('runs nothing when the plan is declined', async () => {
+    const { loop, execute } = setup();
+    loop.setAuthorizationHandler(vi.fn().mockResolvedValue(false));
+    const result = await loop.run('create a folder called chain-demo, go into it and initialize git', { os: 'linux', cwd: '/tmp/wf' });
+    expect(result.declined).toBe(true);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('tells commands from sentences', async () => {
+    const { looksLikeShellCommand } = await import('./AgentLoop');
+    expect(looksLikeShellCommand('git init')).toBe(true);
+    expect(looksLikeShellCommand('npx create-vite@latest app')).toBe(true);
+    expect(looksLikeShellCommand('./build.sh --release')).toBe(true);
+    expect(looksLikeShellCommand('FOO=1 make')).toBe(true);
+    expect(looksLikeShellCommand('create a folder called chain-demo here, go into it &&')).toBe(false);
+    expect(looksLikeShellCommand('list the files')).toBe(false);
+  });
+});
