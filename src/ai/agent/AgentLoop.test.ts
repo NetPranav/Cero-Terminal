@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isExplicitFilesystemSearch, findFastPath, AgentLoop, isConversationalRefusal, isActionableGoal, isReferentialFollowup, cleanseConversationalRefusal } from './AgentLoop';
+import { isExplicitFilesystemSearch, findFastPath, AgentLoop, isConversationalRefusal, isActionableGoal, isReferentialFollowup, cleanseConversationalRefusal, isSingleShotInspection } from './AgentLoop';
 import { DemonstrationLearningEngine } from '../../domain/learning/DemonstrationLearningEngine';
 
 describe('AgentLoop fast-path routing', () => {
@@ -313,13 +313,7 @@ describe('AgentLoop fast-path routing', () => {
               explanation: 'Search for frontend folders'
             })
           })
-          // Step 3: Done
-          .mockResolvedValueOnce({
-            content: JSON.stringify({
-              action: 'done',
-              summary: 'Found frontend folders.'
-            })
-          })
+          // No third "summarise" call: a successful read-only search answers the question itself
       };
 
       const mockModelManager = {
@@ -348,7 +342,8 @@ describe('AgentLoop fast-path routing', () => {
       const result = await loop.run('find all frontend folders in my system', { os: 'mac', cwd: '/test' });
 
       expect(result.success).toBe(true);
-      expect(mockProvider.generate).toHaveBeenCalledTimes(3);
+      expect(mockProvider.generate).toHaveBeenCalledTimes(2);
+      expect(result.summary).toContain('/Users/test/projects/frontend');
       expect(mockProvider.generate).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(String),
@@ -863,3 +858,98 @@ To push the current branch and set the remote as upstream, use
   });
 });
 
+
+describe('Single-call answers for read-only inspection', () => {
+  const makeLoop = (responses: object[], stdout: string) => {
+    const generate = vi.fn();
+    for (const r of responses) generate.mockResolvedValueOnce({ content: JSON.stringify(r) });
+    const provider = { name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate };
+    const modelManager = {
+      getActiveProvider: () => provider,
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any;
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, modelManager);
+    (loop as any).toolExecutor = {
+      hasDriver: vi.fn().mockReturnValue(true),
+      execute: vi.fn().mockResolvedValue({ success: true, data: { stdout, code: 0 } })
+    };
+    return { loop, generate };
+  };
+
+  it('answers "how much disk space is free" with one model call and the real output', async () => {
+    const { loop, generate } = makeLoop(
+      [{ action: 'execute', command: 'df -h /', explanation: 'Show root filesystem usage' }],
+      'Filesystem Size Used Avail Use% Mounted on\n/dev/nvme0n1p2 234G 170G 64G 73% /'
+    );
+    const events: any[] = [];
+    loop.onEvent(e => events.push(e));
+    const result = await loop.run('how much disk space is free', { os: 'linux', cwd: '/home/u' });
+
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(true);
+    expect(result.summary).toContain('64G');
+    const done = events.filter(e => e.type === 'done');
+    expect(done).toHaveLength(1);
+    expect(done[0].data).toBeUndefined(); // output already shown by tool_done
+  });
+
+  it('keeps the model in the loop when the request asks for a follow-up action', async () => {
+    const { generate, loop } = makeLoop(
+      [
+        { action: 'execute', command: 'du -sh ~/Downloads/* | sort -h | tail -n 3', explanation: 'Largest downloads' },
+        { action: 'done', summary: 'The largest item is big.iso (4.2G).' }
+      ],
+      '1.1G a.zip\n2.0G b.tar\n4.2G big.iso'
+    );
+    const result = await loop.run('find my largest downloads and tell me which to delete', { os: 'linux', cwd: '/home/u' });
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(result.summary).toContain('big.iso');
+  });
+});
+
+describe('isSingleShotInspection', () => {
+  it.each([
+    ['how much disk space is free', 'df -h /'],
+    ['is docker running', 'systemctl is-active docker'],
+    ['which process is using the most cpu', 'ps -eo pid,pcpu,pmem,comm --sort=-pcpu | head -n 2'],
+    ['show listening ports', 'ss -tulpn'],
+    ['list the active ros2 topics', 'ros2 topic list'],
+  ])('single call for "%s"', (goal, command) => {
+    expect(isSingleShotInspection(goal, command)).toBe(true);
+  });
+
+  it.each([
+    ['find large log files and delete them', 'find /var/log -size +100M'],
+    ['why is my disk full', 'du -sh /* 2>/dev/null | sort -h'],
+    ['check disk usage then clean the cache', 'df -h'],
+    ['how much disk space is free', 'df -h > report.txt'],
+    ['install htop', 'pacman -S htop'],
+  ])('model stays in the loop for "%s"', (goal, command) => {
+    expect(isSingleShotInspection(goal, command)).toBe(false);
+  });
+});
+
+describe('Auto-heal context', () => {
+  it('sends attached terminal output to the model as delimited untrusted data', async () => {
+    const generate = vi.fn().mockResolvedValue({
+      content: JSON.stringify({ action: 'done', summary: 'Port 3000 is held by node (PID 4242).' })
+    });
+    const provider = { name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate };
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => provider,
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+
+    await loop.run('fix the error from `npm run dev`: port already in use', {
+      os: 'linux',
+      cwd: '/home/u/app',
+      attachedContext: 'Error: listen EADDRINUSE: address already in use :::3000'
+    });
+
+    const system = generate.mock.calls[0][2].messages[0].content as string;
+    expect(system).toContain('<TOOL_OUTPUT capability="terminal.output" readonly="true">');
+    expect(system).toContain('EADDRINUSE');
+  });
+});

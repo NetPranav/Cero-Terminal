@@ -39,6 +39,13 @@ import {
 import { SearchAddon } from '@xterm/addon-search';
 import { TerminalSearchBar } from './TerminalSearchBar';
 import { readClipboardText, writeClipboardText, formatTerminalPastePayload } from '../utils/clipboard';
+
+/** Goal text for an auto-heal request: the failing command and diagnosis, not just a title. */
+function autoHealGoal(rem: RemediationPrompt): string {
+  return rem.failedCommand
+    ? `fix the error from \`${rem.failedCommand}\`: ${rem.cause}`
+    : `fix this terminal error: ${rem.cause}`;
+}
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalViewProps {
@@ -623,7 +630,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                } else {
                  PromptProgressManager.getInstance().startPrompt(`Auto-Heal: ${activeRem.actionTitle}`);
                  try {
-                   const res = await agentLoop.run(`fix error: ${activeRem.actionTitle}`, { os: getPlatform() === 'linux' ? 'linux' : 'mac', cwd: currentPath || '~' });
+                   const res = await agentLoop.run(autoHealGoal(activeRem), { os: getPlatform(), cwd: currentPath || '~', attachedContext: activeRem.outputTail });
                    PromptProgressManager.getInstance().completePrompt(res.success, res.summary);
                  } catch (err: any) {
                    PromptProgressManager.getInstance().completePrompt(false, err?.message);
@@ -786,7 +793,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId: initialSe
                   PtyOutputObserver.getInstance().clearRemediation();
                   PromptProgressManager.getInstance().startPrompt(`Auto-Heal: ${rem.actionTitle}`);
                   try {
-                    const res = await agentLoop.run(`fix error: ${rem.actionTitle}`, { os: getPlatform(), cwd: currentPath || '~' });
+                    const res = await agentLoop.run(autoHealGoal(rem), { os: getPlatform(), cwd: currentPath || '~', attachedContext: rem.outputTail });
                     PromptProgressManager.getInstance().completePrompt(res.success, res.summary);
                   } catch (err: any) {
                     PromptProgressManager.getInstance().completePrompt(false, err?.message);

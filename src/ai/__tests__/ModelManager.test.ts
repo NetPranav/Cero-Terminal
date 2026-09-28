@@ -52,3 +52,32 @@ describe('Phase X — ModelManager Verification', () => {
     expect(rolledBack?.modelId).toBe('qwen2.5:1.5b');
   });
 });
+
+describe('ModelManager provider preference', () => {
+  const provider = (providerId: string, models: string[]) => ({
+    providerId,
+    providerName: providerId,
+    isAvailable: async () => true,
+    listModels: async () => models.map(id => ({ id, name: id, sizeBytes: 0 })),
+    hasModel: async () => true,
+    pullModel: async () => true,
+    generate: async () => ({ content: '', usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }, latencyMs: 0 })
+  });
+
+  it('prefers a running embedded engine over higher-scored Ollama models', async () => {
+    const manager = new ModelManager([
+      provider('embedded', ['qwen2.5-coder-3b-instruct-q4_k_m.gguf']) as any,
+      provider('ollama', ['qwen2.5-coder:7b', 'qwen3:4b']) as any
+    ]);
+    const active = await manager.initialize();
+    expect(active.providerId).toBe('embedded');
+  });
+
+  it('still picks the best Ollama model when the embedded engine is not running', async () => {
+    const offline = { ...provider('embedded', []), isAvailable: async () => false };
+    const manager = new ModelManager([offline as any, provider('ollama', ['qwen2.5-coder:7b', 'smollm2:1.7b']) as any]);
+    const active = await manager.initialize();
+    expect(active.providerId).toBe('ollama');
+    expect(active.modelId).toBe('qwen2.5-coder:7b');
+  });
+});

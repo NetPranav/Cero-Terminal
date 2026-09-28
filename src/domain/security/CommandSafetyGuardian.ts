@@ -428,7 +428,7 @@ export class CommandSafetyGuardian {
       `\r\n\x1b[1;31m┌${divider}┐\x1b[0m`,
       `\x1b[1;31m${paddedTitle}\x1b[0m`,
       `\x1b[1;31m└${divider}┘\x1b[0m`,
-      `\x1b[1;37m✕ Capability Statement:\x1b[0m \x1b[1;31m${evalResult.capabilityRefusal}\x1b[0m`,
+      `\x1b[1;37m✗ Capability Statement:\x1b[0m \x1b[1;31m${evalResult.capabilityRefusal}\x1b[0m`,
       `  • Attempted Command : \x1b[1;33m${rawCmd}\x1b[0m`,
       `  • Threat Category   : \x1b[1;35m${evalResult.category || 'CATASTROPHIC_DESTRUCTION'}\x1b[0m${evalResult.targetedSubsystem ? ` (Target: ${evalResult.targetedSubsystem})` : ''}`,
       ``,

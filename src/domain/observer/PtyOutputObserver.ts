@@ -19,6 +19,10 @@ export interface RemediationPrompt {
   rawError: string;
   timestamp: number;
   fixedCommand?: string;
+  /** The command whose output triggered this remediation, when it could be identified */
+  failedCommand?: string;
+  /** Last lines of terminal output, so the model sees the actual error text */
+  outputTail?: string;
 }
 
 export class PtyOutputObserver {
@@ -101,7 +105,9 @@ export class PtyOutputObserver {
         params: diag.remediation.params,
         rawError: diag.cause,
         timestamp: Date.now(),
-        fixedCommand: fixedCmd
+        fixedCommand: fixedCmd,
+        failedCommand: detectedCommand,
+        outputTail: this.recentOutputBuffer.slice(-15).join('\n')
       };
       this.activeRemediation = remediation;
       this.notify(remediation);

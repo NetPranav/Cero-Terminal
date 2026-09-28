@@ -108,7 +108,7 @@ export function formatAgentEvent(event: AgentEventFormatted): string {
     case 'tool_done':
       if (event.message.startsWith('✓')) {
         return `${C.green}  ${event.message.replace(/\r?\n/g, '\r\n  ')}${C.reset}\r\n`;
-      } else if (event.message.startsWith('⚠')) {
+      } else if (event.message.startsWith('Warning:')) {
         return `${C.yellow}  ${event.message.replace(/\r?\n/g, '\r\n  ')}${C.reset}\r\n`;
       }
       return `${C.white}  ${event.message.replace(/\r?\n/g, '\r\n  ')}${C.reset}\r\n`;

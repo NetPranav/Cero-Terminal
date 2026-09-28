@@ -224,6 +224,24 @@ export class ModelManager {
       this.activeProvider = availableProviders[0];
     }
 
+    // Sentinel's own engine is the default whenever it is running. Catalog scores used to let any
+    // larger Ollama model (qwen3:4b, 7B coders) take over automatically, which silently traded
+    // latency for a model the user never chose. An explicit choice (above) still wins.
+    const embedded = availableProviders.find(p => p.providerId === 'embedded');
+    if (embedded) {
+      this.activeProvider = embedded;
+      this.setActiveModel({
+        providerId: embedded.providerId,
+        modelId: 'sentinel-embedded',
+        displayName: 'Sentinel Embedded Model',
+        score: 100,
+        sizeBytes: 0,
+        isReady: true,
+        lastVerified: Date.now()
+      });
+      return this.activeModelInfo!;
+    }
+
     // Scan installed models across all available providers
     const detectedCandidates: { provider: ModelProvider; model: ModelMetadata; spec: CandidateModelSpec }[] = [];
 

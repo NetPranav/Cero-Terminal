@@ -40,6 +40,14 @@ export interface AgentEvent {
 }
 
 export type AgentEventListener = (event: AgentEvent) => void;
+export interface AgentRunContext {
+  os: string;
+  cwd: string;
+  sessionId?: string;
+  /** Extra untrusted text for this request only (e.g. the terminal output auto-heal is fixing) */
+  attachedContext?: string;
+}
+
 export type AgentAuthorizationHandler = (plan: ExecutionPreviewPlan) => Promise<boolean>;
 
 export interface AgentResult {
@@ -58,6 +66,7 @@ import { DemonstrationLearningEngine } from '../../domain/learning/Demonstration
 import { ErrorDiagnosticsEngine } from './ErrorDiagnosticsEngine';
 import { ShadowPtySimulator } from './ShadowPtySimulator';
 import { ShellAstParser } from '../../domain/security/ShellAstParser';
+import { isReadOnlyCommandLine } from '../../domain/security/ReadOnlyCommandPolicy';
 import { WorkflowRecorder } from '../../workflows/engine/WorkflowRecorder';
 import { DeterministicReplayEngine } from '../../workflows/engine/DeterministicReplayEngine';
 import { MultistagePromptDecomposer } from '../../workflows/engine/MultistagePromptDecomposer';
@@ -861,6 +870,21 @@ export function requiresExecutionPlan(goal: string): boolean {
 }
 
 /**
+ * True when one successful read-only command fully answers the request (e.g. "how much disk is
+ * free", "is docker running"). The command output is already printed to the terminal, so a
+ * second model call only to paraphrase it costs seconds and can misquote the numbers.
+ * Deliberately conservative: any follow-up verb or multi-step phrasing keeps the model in the loop.
+ */
+export function isSingleShotInspection(goal: string, command: string): boolean {
+  const normalized = normalizeGoalText(goal).trim().toLowerCase();
+  if (!normalized || requiresExecutionPlan(normalized)) return false;
+
+  const asksToInspect = /^(?:what|what's|whats|which|who|where|when|how\s+(?:much|many|long|big|fast|full|old)|is|are|does|do|did|has|have|show|list|display|print|check|tell\s+me|give\s+me|get|find|count|search|look\s+up|view|see|inspect|verify)\b/.test(normalized);
+  const wantsMore = /\b(?:then|after|afterwards|also|explain|why|delete|remove|kill|stop|restart|start|install|uninstall|open|launch|close|create|make|move|copy|rename|fix|change|set|update|upgrade|enable|disable|write|edit|push|commit|deploy|build|compile|clean|clear|free\s+up|summari[sz]e|compare)\b/.test(normalized);
+  return asksToInspect && !wantsMore && isReadOnlyCommandLine(command).readOnly;
+}
+
+/**
  * Detect canned chatbot refusals from models that were alignment-trained
  * to decline file system or network access (e.g. "I don't have access to your file system").
  */
@@ -1236,7 +1260,7 @@ export class AgentLoop {
    * 2. If no shortcut matches, use LLM agent loop
    * 3. If LLM is unavailable, report error
    */
-  public async run(goal: string, context: { os: string; cwd: string; sessionId?: string }): Promise<AgentResult> {
+  public async run(goal: string, context: AgentRunContext): Promise<AgentResult> {
     goal = normalizeGoalText(goal);
 
     // Simultaneous Task Execution + Named Workflow Save Pattern
@@ -1547,7 +1571,7 @@ export class AgentLoop {
     }
 
     if (/^(?:who\s+are\s+you|what\s+can\s+you\s+do|help|what\s+is\s+sentinel)[\s?!.]*$/i.test(rawLower)) {
-      const helpMsg = "I am Sentinel AI — an autonomous terminal agent. You can ask me to:\n• Inspect listening ports: \">what is using port 3000\"\n• Kill zombie processes: \">kill node\"\n• Git actions: \">create a feature branch named auth\"\n• Fix shell errors: Press [Tab] on the Auto-Heal banner\n• Switch projects: Press Cmd+O\n• Search history: Press Ctrl+R\n• Manage Embedded AI (Qwen 2.5 3B): Press Cmd+Shift+P > 'Sentinel Embedded AI'";
+      const helpMsg = "I am Sentinel AI — an autonomous terminal agent. You can ask me to:\n• Inspect listening ports: \">what is using port 3000\"\n• Kill zombie processes: \">kill node\"\n• Git actions: \">create a feature branch named auth\"\n• Fix shell errors: Press [Tab] on the Auto-Heal banner\n• Switch projects: Press Cmd+O\n• Search history: Press Ctrl+R\n• Manage the local AI model: Command Palette (Ctrl+Shift+P) > 'Sentinel Embedded AI'";
       this.emit({ type: 'done', message: helpMsg });
       return { success: true, summary: helpMsg, steps: [] };
     }
@@ -1562,13 +1586,15 @@ export class AgentLoop {
     }
 
     if (/^(?:setup-?ai|download-?model|install-?model|get-?model)[\s]*$/i.test(rawLower)) {
-      this.emit({ type: 'tool_start', message: 'Initiating Sentinel Embedded AI download (Qwen 2.5 Coder 3B)...' });
-      EmbeddedEngineManager.getInstance().downloadRecommendedModel().then(async (ok) => {
-        if (ok) {
-          await EmbeddedEngineManager.getInstance().startEngine();
+      const model = EmbeddedEngineManager.RECOMMENDED_MODEL;
+      this.emit({ type: 'tool_start', message: `Downloading ${model.displayName}...` });
+      const manager = EmbeddedEngineManager.getInstance();
+      manager.downloadRecommendedModel().then(async (ok) => {
+        if (ok && await manager.ensureEngineInstalled()) {
+          await manager.startEngine();
         }
-      });
-      const msg = "Starting download of Qwen 2.5 Coder 3B (~1.9 GB) into ~/.sentinel/models/...\nYou can monitor progress in Command Palette (Cmd+Shift+P > 'Sentinel Embedded AI').";
+      }).catch(err => console.warn('[AgentLoop] setup-ai failed:', err));
+      const msg = `Downloading ${model.displayName} (~${(model.sizeBytes / 1e9).toFixed(1)} GB) into ~/.sentinel/models/.\nTrack progress in the Command Palette (Ctrl+Shift+P > 'Sentinel Embedded AI').`;
       this.emit({ type: 'done', message: msg });
       return { success: true, summary: msg, steps: [] };
     }
@@ -1967,7 +1993,7 @@ export class AgentLoop {
    */
   private async runLLMLoop(
     goal: string,
-    context: { os: string; cwd: string; sessionId?: string },
+    context: AgentRunContext,
     options?: { toolSubset?: ToolSpec[]; stageContext?: string }
   ): Promise<AgentResult> {
     // Phase 0.75 Task 0.75.1 & 0.75.9: Two-Tier Intent Classification on CPU
@@ -2011,6 +2037,11 @@ export class AgentLoop {
     let systemPrompt = buildSystemPrompt(activeTools, context, goal);
     if (options?.stageContext) {
       systemPrompt += `\n\n[STAGE CONTEXT & PRECONDITIONS]\n${options.stageContext}\n`;
+    }
+    if (context.attachedContext) {
+      // Terminal output attached by auto-heal. Delimited as untrusted data: it may contain text
+      // that looks like instructions.
+      systemPrompt += `\n\nTERMINAL OUTPUT FOR THIS REQUEST:\n${AgentLoop.formatToolObservation('terminal.output', context.attachedContext)}`;
     }
 
     // Phase 5.1: Ground-Truth Exemplar Enrichment from TLDR Knowledge Base
@@ -2087,7 +2118,7 @@ export class AgentLoop {
         `No AI Model or API Configured.\n\n` +
         `Sentinel requires an active AI model or API backend to intercept and run prompts.\n\n` +
         `• Option 1 (Embedded Local Model - Recommended):\n` +
-        `  Download Qwen 2.5 Coder 3B Instruct (~1.96 GB) for 100% private, offline inference with zero API fees.\n` +
+        `  Download a local model (1.1 to 2.5 GB depending on the size you pick) for private, offline inference.\n` +
         `  Type ">setup-ai" or press Command Palette (Ctrl+Shift+P) > "Sentinel Embedded AI" to start 1-click download.\n\n` +
         `• Option 2 (Zero Local Download - Cloud API):\n` +
         `  Connect an API key (Groq, OpenAI, Anthropic, DeepSeek, OpenRouter, or Custom OpenAI-compatible endpoint).\n` +
@@ -2340,7 +2371,10 @@ export class AgentLoop {
             }
           }
 
-          const lastStepData = steps.length > 0 ? steps[steps.length - 1].result?.data : undefined;
+          // A successful last step already printed its output on tool_done; attaching it again
+          // made the terminal show the same output twice.
+          const lastStep = steps.length > 0 ? steps[steps.length - 1] : undefined;
+          const lastStepData = lastStep && !lastStep.result?.success ? lastStep.result?.data : undefined;
           this.emit({ type: 'done', message: summary, data: lastStepData });
           return { success: true, summary, steps, cdPath };
         }
@@ -2459,6 +2493,21 @@ export class AgentLoop {
                 command: params.command,
                 tool: toolId
               });
+            }
+
+            // A read-only inspection answered by its first command needs no second model call:
+            // the output is already on screen (tool_done carries it), so finish here.
+            const stdout = typeof result.data?.stdout === 'string' ? result.data.stdout.trim() : '';
+            if (steps.length === 1 && toolId === 'shell.execute' && typeof params.command === 'string'
+              && stdout && isSingleShotInspection(goal, params.command)) {
+              this.emit({ type: 'done', message: 'Done.' });
+              return {
+                success: true,
+                // Kept in conversation history so follow-up questions can refer to the output
+                summary: AgentLoop.truncateObservation(stdout),
+                steps,
+                cdPath
+              };
             }
 
             // Feed successful result back to LLM with prompt injection delimiters (Phase 0.5, Item 13)
