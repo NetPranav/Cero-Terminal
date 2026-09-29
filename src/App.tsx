@@ -1,3 +1,4 @@
+import type { AppAction } from "./domain/app/AppActions";
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { TerminalView } from "./presentation/TerminalView";
@@ -815,6 +816,64 @@ export function App({ initialPath }: AppProps = {}) {
       window.removeEventListener('sentinel:toggle-history', handleToggleHistory);
     };
   }, [tabs, activeTabId, activeTab, activeTerminal, addTab]);
+
+  // App functions asked for in plain language ("open settings", "go to tab 2"); see AppActions.ts
+  useEffect(() => {
+    const tabOfPane = (paneId?: string) =>
+      (paneId && tabs.find(t => TerminalWorkspace.getInstance().get(paneId)?.tabId === t.id)) || activeTab;
+    const openSettings = (section: string) => {
+      setSettingsTab(section as any);
+      setShowAiSettings(true);
+    };
+    const onAppAction = (event: Event) => {
+      const action = (event as CustomEvent<AppAction>).detail;
+      if (!action) return;
+      const index = tabs.findIndex(t => t.id === activeTabId);
+      switch (action.id) {
+        case 'settings':
+        case 'settings_ai': openSettings('ai'); break;
+        case 'settings_integrations': openSettings('integrations'); break;
+        case 'settings_terminal': openSettings('appearance'); break;
+        case 'settings_general': openSettings('general'); break;
+        case 'history': setShowHistorySearch(true); break;
+        case 'find':
+          window.dispatchEvent(new CustomEvent('sentinel:find-in-terminal', { detail: { paneId: action.paneId ?? activeTerminal?.id, query: action.query } }));
+          break;
+        case 'workflows': setShowWorkflowManager(true); break;
+        case 'shortcuts': setShowHelpModal(true); break;
+        case 'themes': setShowThemeModal(true); break;
+        case 'zen_mode': handleToggleUiMode('zen'); break;
+        case 'visual_mode': handleToggleUiMode('visual'); break;
+        case 'command_palette': setCommandPaletteOpen(true); break;
+        case 'plugins': setShowPluginMarketplace(true); break;
+        case 'model_manager': setShowEmbeddedModal(true); break;
+        case 'onboarding': setShowWizard(true); break;
+        case 'close_pane':
+          if (action.paneId || activeTerminal) closePane(action.paneId ?? activeTerminal!.id);
+          break;
+        case 'close_tab': {
+          const tab = tabOfPane(action.paneId);
+          if (tab && tabs.length > 1) closeTab(tab.id, { stopPropagation: () => {} } as any);
+          else if (activeTerminal) closePane(activeTerminal.id);
+          break;
+        }
+        case 'focus_tab': {
+          const target = action.tab === -1 ? tabs[tabs.length - 1] : tabs[(action.tab ?? 1) - 1];
+          if (target) setActiveTabId(target.id);
+          break;
+        }
+        case 'next_tab': if (tabs.length) setActiveTabId(tabs[(index + 1) % tabs.length].id); break;
+        case 'previous_tab': if (tabs.length) setActiveTabId(tabs[(index - 1 + tabs.length) % tabs.length].id); break;
+        case 'rename_tab': {
+          const tab = tabOfPane(action.paneId);
+          if (tab && action.name) setTabs(prev => prev.map(t => (t.id === tab.id ? { ...t, name: action.name!, customName: true } : t)));
+          break;
+        }
+      }
+    };
+    window.addEventListener('sentinel:app-action', onAppAction);
+    return () => window.removeEventListener('sentinel:app-action', onAppAction);
+  }, [tabs, activeTabId, activeTab, activeTerminal]);
 
   const handleStatusBarNavigate = (targetPath: string, commandToExecute: string) => {
     if (activeTerminal) {

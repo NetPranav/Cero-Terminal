@@ -7,13 +7,16 @@ export interface TerminalSearchBarProps {
   onClose: () => void;
   searchAddon: SearchAddon | null;
   onFocusTerminal?: () => void;
+  /** Text to search for as soon as the bar opens (a "search the terminal for X" request) */
+  initialQuery?: { text: string; id: number };
 }
 
 export const TerminalSearchBar: React.FC<TerminalSearchBarProps> = ({
   isOpen,
   onClose,
   searchAddon,
-  onFocusTerminal
+  onFocusTerminal,
+  initialQuery
 }) => {
   const [query, setQuery] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
@@ -40,6 +43,11 @@ export const TerminalSearchBar: React.FC<TerminalSearchBarProps> = ({
       searchAddon?.clearDecorations();
     }
   }, [isOpen, searchAddon]);
+
+  // A requested search fills the box; the query effect below runs it
+  useEffect(() => {
+    if (isOpen && initialQuery?.text) setQuery(initialQuery.text);
+  }, [isOpen, initialQuery?.id, initialQuery?.text]);
 
   // Subscribe to search result changes
   useEffect(() => {

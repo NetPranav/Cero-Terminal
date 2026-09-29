@@ -142,6 +142,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   });
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchRequest, setSearchRequest] = useState<{ text: string; id: number } | undefined>(undefined);
+  // Read by window listeners registered once, which would otherwise see the first value
+  const isFocusedRef = useRef(isFocused);
+  useEffect(() => { isFocusedRef.current = isFocused; }, [isFocused]);
 
   const [securityModalPlan, setSecurityModalPlan] = useState<{
     plan: any;
@@ -528,6 +532,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       setIsSearchOpen(prev => !prev);
     };
     window.addEventListener('sentinel:toggle-search', handleToggleSearch);
+    // "search the terminal for ERROR": only the pane the request came from opens its search
+    const handleFindRequest = (event: Event) => {
+      const detail = (event as CustomEvent<{ paneId?: string; query?: string }>).detail || {};
+      if (detail.paneId && detail.paneId !== paneId) return;
+      if (!detail.paneId && !isFocusedRef.current) return;
+      setIsSearchOpen(true);
+      if (detail.query) setSearchRequest({ text: detail.query, id: Date.now() });
+    };
+    window.addEventListener('sentinel:find-in-terminal', handleFindRequest);
 
     term.open(terminalRef.current);
     
@@ -1278,6 +1291,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       if (paneId) TerminalWorkspace.getInstance().unregister(paneId);
       ConsentQueue.getInstance().clearQueue(currentSessionId);
       window.removeEventListener('sentinel:toggle-search', handleToggleSearch);
+      window.removeEventListener('sentinel:find-in-terminal', handleFindRequest);
       searchAddon.dispose();
       term.dispose();
     };
@@ -1348,6 +1362,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         onClose={() => setIsSearchOpen(false)}
         searchAddon={searchAddonRef.current}
         onFocusTerminal={() => xtermRef.current?.focus()}
+        initialQuery={searchRequest}
       />
 
       {/* Execution Plan Floating HUD Notification Overlay */}
