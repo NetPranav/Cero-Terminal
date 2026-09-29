@@ -122,6 +122,11 @@ export function parseTerminalAction(goal: string): TerminalAction | null {
     const target = parseTarget(m[1]);
     if (target) return { kind: 'stop', target, phrase: m[1].trim() };
   }
+  // "stop top", "quit htop": the terminal running that program (none running it: the agent handles it)
+  m = lower.match(/^(?:stop|quit|exit|end|interrupt)\s+([a-z][\w.+-]{1,30})$/);
+  if (m && !/^(?:it|this|that|everything|all|now|here)$/.test(m[1])) {
+    return { kind: 'stop', target: { kind: 'name', name: m[1] }, phrase: m[1] };
+  }
 
   // What another terminal is showing
   m = lower.match(/^(?:what(?:'s|\s+is)|show(?:\s+me)?)\s+(?:the\s+)?(?:(?:output|last\s+lines?)\s+(?:of|in|from)\s+)?(.+?)\s+(?:printing|showing|saying|outputting|output|doing)\s*\??$/)
