@@ -290,7 +290,10 @@ fn sentinel_dir() -> Option<std::path::PathBuf> {
 /// Resolve a path relative to ~/.sentinel, refusing anything that escapes it.
 fn resolve_in_sentinel(relative: &str) -> Result<std::path::PathBuf, String> {
     let rel = std::path::Path::new(relative);
-    if rel.is_absolute() || rel.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+    // Only plain names: a root ("\\x" or "/x" on Windows is not `is_absolute()` but `join` would
+    // still leave the store), a drive prefix ("C:x") or ".." could all reach outside ~/.sentinel
+    let plain = rel.components().all(|c| matches!(c, std::path::Component::Normal(_) | std::path::Component::CurDir));
+    if relative.is_empty() || !plain {
         return Err(format!("Path must stay inside ~/.sentinel: {}", relative));
     }
     Ok(sentinel_dir().ok_or("HOME is not set")?.join(rel))
@@ -392,12 +395,13 @@ mod tests {
         assert_eq!(expanded.to_str().unwrap(), home);
 
         let expanded_sub = expand_tilde("~/test_dir");
-        assert_eq!(expanded_sub.to_str().unwrap(), format!("{}/test_dir", home));
+        assert_eq!(expanded_sub, std::path::PathBuf::from(&home).join("test_dir"));
 
         let regular = expand_tilde("/tmp");
         assert_eq!(regular.to_str().unwrap(), "/tmp");
     }
 
+    #[cfg(unix)]
     fn sh(script: &str) -> (String, Vec<String>) {
         ("sh".to_string(), vec!["-c".to_string(), script.to_string()])
     }
@@ -408,6 +412,14 @@ mod tests {
         assert!(resolve_in_sentinel("../.ssh/authorized_keys").is_err());
         assert!(resolve_in_sentinel("/etc/passwd").is_err());
         assert!(resolve_in_sentinel("learning/../../x").is_err());
+        assert!(resolve_in_sentinel("").is_err());
+        #[cfg(windows)]
+        {
+            assert!(resolve_in_sentinel("\\Windows\\System32\\x").is_err());
+            assert!(resolve_in_sentinel("C:x").is_err());
+            assert!(resolve_in_sentinel("C:\\x").is_err());
+            assert!(resolve_in_sentinel("learning\\deficits.jsonl").is_ok());
+        }
     }
 
     #[cfg(unix)]

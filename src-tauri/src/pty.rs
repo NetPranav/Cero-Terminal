@@ -129,6 +129,7 @@ pub fn spawn_pty(
     }
 
     if let Ok(path) = std::env::var("PATH") {
+        #[allow(unused_mut)] // only macOS and Linux add entries
         let mut path_additions: Vec<String> = Vec::new();
         #[cfg(target_os = "macos")]
         {
@@ -359,6 +360,7 @@ pub fn process_cwd(_pid: u32) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     use super::process_cwd;
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]
