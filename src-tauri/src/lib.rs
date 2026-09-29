@@ -32,6 +32,14 @@ fn request_bluetooth_permission() {
 #[cfg(not(target_os = "macos"))]
 fn request_bluetooth_permission() {}
 
+/// macOS asks "Sentinel Terminal would like to use Bluetooth" the first time CoreBluetooth is touched.
+/// That used to happen at every launch, before anyone had asked for anything Bluetooth-related; now the
+/// app calls this only when a Bluetooth request is made.
+#[tauri::command]
+fn request_bluetooth_access() {
+    request_bluetooth_permission();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     logger::init();
@@ -39,7 +47,7 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             logger::log_info("SETUP", "Initializing core application services");
-            request_bluetooth_permission();
+            process_cmds::ensure_private_data_dir();
             // A previous instance that crashed or was killed can leave its model server running
             std::thread::spawn(|| embedded_server::reap_orphaned_server(8847));
             // The window starts hidden: shown now, unless the app was opened to run a .flow file
@@ -177,6 +185,7 @@ pub fn run() {
             process_cmds::kill_process,
             process_cmds::get_system_stats,
             process_cmds::execute_command,
+            request_bluetooth_access,
             process_cmds::get_launch_args,
             process_cmds::get_app_binary_path,
             process_cmds::write_system_file,

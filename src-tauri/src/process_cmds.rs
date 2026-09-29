@@ -290,6 +290,21 @@ fn sentinel_dir() -> Option<std::path::PathBuf> {
         .map(|home| std::path::PathBuf::from(home).join(".sentinel"))
 }
 
+/// Make ~/.sentinel readable by its owner only. It holds the audit log, session transcripts and
+/// learning data; a folder that is world-readable would expose them on machines whose home folders
+/// are open to other users. Everything inside is protected by this folder's permissions.
+pub fn ensure_private_data_dir() {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Some(dir) = sentinel_dir() {
+            if std::fs::create_dir_all(&dir).is_ok() {
+                let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+            }
+        }
+    }
+}
+
 /// Resolve a path relative to ~/.sentinel, refusing anything that escapes it.
 pub(crate) fn resolve_in_sentinel(relative: &str) -> Result<std::path::PathBuf, String> {
     let rel = std::path::Path::new(relative);

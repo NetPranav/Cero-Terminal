@@ -79,6 +79,12 @@ describe('draftFlow', () => {
     expect(d.actions[3]).toMatchObject({ command: 'ls -la', windows: 'Get-ChildItem -Force', cwd: 'demo-project' });
   });
 
+  it('opens a folder by path, and never mistakes a folder phrase for an app', () => {
+    const d = draftFlow(['open textedit', 'open ~/sentinel-demo', 'open the demo folder', 'open ~/Downloads']);
+    expect(d.actions.map(a => [a.type, a.app ?? a.path])).toEqual([['app', 'textedit'], ['folder', '~/sentinel-demo'], ['folder', '~/Downloads']]);
+    expect(d.unrecognised).toEqual(['open the demo folder']);
+  });
+
   it('does not turn prose after "run" into a command', () => {
     const d = draftFlow(['run the tests', 'run it', 'watch the logs', 'run npm test']);
     expect(d.unrecognised).toEqual(['run the tests', 'run it', 'watch the logs']);

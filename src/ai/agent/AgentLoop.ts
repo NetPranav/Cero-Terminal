@@ -2969,7 +2969,13 @@ export class AgentLoop {
    */
   private async runSystemAction(action: SystemAction, context: AgentRunContext): Promise<AgentResult | null> {
     const os = /^win/i.test(context.os) ? 'windows' : /^(?:mac|darwin)/i.test(context.os) ? 'macos' : 'linux';
-    if (os === 'macos' && (action.kind === 'wifi' || action.kind === 'bluetooth') && action.op !== 'status' && action.op !== 'devices') return null;
+    // The macOS Bluetooth permission prompt appears now, when Bluetooth is first asked about, not at launch
+    if (os === 'macos' && action.kind === 'bluetooth') {
+      try { const { invoke } = await import('@tauri-apps/api/core'); await invoke('request_bluetooth_access'); } catch { /* outside the app */ }
+    }
+    // macOS turns Wi-Fi and Bluetooth on or off through the existing fast paths; joining a network (a
+    // typed name and, on secured networks, a saved password) needs exact quoting, never the model
+    if (os === 'macos' && (action.kind === 'wifi' || action.kind === 'bluetooth') && (action.op === 'on' || action.op === 'off')) return null;
     if (os !== 'windows' && action.kind === 'battery') return null;
     if (action.kind === 'suggest') {
       const options = suggestionsFor(action.topic, os);

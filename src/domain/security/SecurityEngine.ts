@@ -104,7 +104,7 @@ export class SecurityEngine implements ISecurityEngine {
         return { 
           score: 100, 
           level: 'CRITICAL', 
-          explanation: 'Destructive super-user system command detected. Mandatory user consent and password authentication required.',
+          explanation: 'Destructive super-user system command detected. Mandatory explicit user approval required.',
           requiresPassword: true,
           requiresConsent: true,
           categories: ['privilege-escalation', 'filesystem-delete']
@@ -113,7 +113,7 @@ export class SecurityEngine implements ISecurityEngine {
       return { 
         score: 90, 
         level: 'ADMIN', 
-        explanation: 'Super-user / administrative privilege elevation detected. Password and explicit user consent required.',
+        explanation: 'Super-user / administrative privilege elevation detected. Explicit user approval required.',
         requiresPassword: true,
         requiresConsent: true,
         categories: ['privilege-escalation']
@@ -126,7 +126,7 @@ export class SecurityEngine implements ISecurityEngine {
       return { 
         score: 95, 
         level: 'CRITICAL', 
-        explanation: 'Filesystem deletion or trash operation detected. Deleting anything strictly requires explicit user consent and password authentication.',
+        explanation: 'Filesystem deletion or trash operation detected. Deleting anything strictly requires explicit user approval.',
         requiresPassword: true,
         requiresConsent: true,
         categories: ['filesystem-delete']
@@ -165,7 +165,7 @@ export class SecurityEngine implements ISecurityEngine {
       return { 
         score: 85, 
         level: 'ADMIN', 
-        explanation: 'Mid-level operating system modification or process termination detected. User consent and password authentication strictly required.',
+        explanation: 'Mid-level operating system modification or process termination detected. Explicit user approval required.',
         requiresPassword: true,
         requiresConsent: true,
         categories: [isKill ? 'process-kill' : 'network-config']
@@ -225,7 +225,7 @@ export class SecurityEngine implements ISecurityEngine {
     return {
       score: highestScore > 100 ? 100 : highestScore,
       level: highestScore >= 80 ? 'CRITICAL' : highestScore > 50 ? 'SENSITIVE' : 'SAFE',
-      explanation: requiresPassword ? 'Workflow contains deletion, super-user, or mid-level system commands requiring password authentication and consent.' : 'Workflow risk analyzed.',
+      explanation: requiresPassword ? 'Workflow contains deletion, super-user, or mid-level system commands requiring explicit approval.' : 'Workflow risk analyzed.',
       requiresPassword,
       requiresConsent,
       categories: Array.from(categoriesSet)
@@ -245,7 +245,7 @@ export class SecurityEngine implements ISecurityEngine {
         return { 
           score: 100, 
           level: 'CRITICAL', 
-          explanation: `Destructive filesystem deletion (${op}) on '${path}'. All deletion operations strictly require explicit user consent and password authentication.`,
+          explanation: `Destructive filesystem deletion (${op}) on '${path}'. All deletion operations strictly require explicit user approvalentication.`,
           requiresPassword: true,
           requiresConsent: true,
           categories: ['filesystem-delete']
@@ -255,7 +255,7 @@ export class SecurityEngine implements ISecurityEngine {
         return {
           score: 80,
           level: 'ADMIN',
-          explanation: `Filesystem alteration (${op}) on '${path}'. Mid-level file modifications require user consent and password authentication.`,
+          explanation: `Filesystem alteration (${op}) on '${path}'. Mid-level file modifications require explicit user approval.`,
           requiresPassword: true,
           requiresConsent: true,
           categories: ['filesystem-write']
@@ -280,7 +280,7 @@ export class SecurityEngine implements ISecurityEngine {
         return {
           score: 85,
           level: 'ADMIN',
-          explanation: `Mid-level process control or application termination (${capabilityId}) detected. Explicit user consent and password authentication are strictly required.`,
+          explanation: `Mid-level process control or application termination (${capabilityId}) detected. Explicit user approval is strictly required.`,
           requiresPassword: true,
           requiresConsent: true,
           categories: ['process-kill']
@@ -317,7 +317,7 @@ export class SecurityEngine implements ISecurityEngine {
         return {
           score: 80,
           level: 'ADMIN',
-          explanation: `Mid-level network/hardware system configuration (${capabilityId}) detected. Requires user consent and password authentication.`,
+          explanation: `Mid-level network/hardware system configuration (${capabilityId}) detected. Requires explicit user approval.`,
           requiresPassword: true,
           requiresConsent: true,
           categories: ['network-config']

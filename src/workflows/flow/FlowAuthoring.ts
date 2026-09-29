@@ -209,7 +209,8 @@ function actionsForClause(raw: string, st: DraftState): Recognised {
     }
     if (!via) {
       const app = target.toLowerCase().replace(/^the\s+/, '').replace(/\s+(?:app|application)$/, '');
-      if (KNOWN_APP_NAMES.includes(app) || /^[A-Za-z][A-Za-z0-9 .+-]{1,30}$/.test(app) && !/\b(?:the|a|an|it|this|that|my|of|for|and)\b/.test(app)) {
+      // "open the demo folder" is a folder, not an app called "demo folder": never guess
+      if (KNOWN_APP_NAMES.includes(app) || /^[A-Za-z][A-Za-z0-9 .+-]{1,30}$/.test(app) && !/\b(?:the|a|an|it|this|that|my|of|for|and|folder|directory|file|project)\b/.test(app)) {
         const action: any = { type: 'app', name: `Open ${APP_LABELS[app] ?? cap(app)}`, app };
         return stepForAction(action, 'macos', 0) ? { actions: [action] } : null;
       }

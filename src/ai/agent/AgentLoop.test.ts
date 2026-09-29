@@ -1744,3 +1744,27 @@ describe('Closing a port', () => {
     expect(forced.execute.mock.calls[1][1].command).toBe('kill -9 63988');
   });
 });
+
+describe('Joining a Wi-Fi network', () => {
+  it('uses the exact quoted command on macOS instead of asking the model (which invented a password)', async () => {
+    const execute = vi.fn(async (_t: string, params: any, _c: string, authorize?: any) => {
+      if (authorize && !(await authorize({ capabilityId: 'shell.execute', parameters: params }))) return { success: false, errorCode: 'USER_CANCELLED' };
+      return { success: true, data: { stdout: '', code: 0 } };
+    });
+    const generate = vi.fn();
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate }),
+      getActiveModel: () => ({ modelId: 'mock' }), initialize: vi.fn()
+    } as any);
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+    const handler = vi.fn().mockResolvedValue(false);
+    loop.setAuthorizationHandler(handler);
+    const r = await loop.run('connect to wifi Demo Network', { os: 'macos', cwd: '/tmp' });
+    expect(generate).not.toHaveBeenCalled();
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].parameters.command).toContain(`networksetup -setairportnetwork`);
+    expect(handler.mock.calls[0][0].parameters.command).toContain(`'Demo Network'`);
+    expect(handler.mock.calls[0][0].parameters.command).not.toMatch(/password/i);
+    expect(r).toMatchObject({ success: false, declined: true });
+  });
+});
