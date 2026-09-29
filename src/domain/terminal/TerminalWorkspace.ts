@@ -13,7 +13,16 @@
 
 export interface PaneInfo {
   paneId: string;
+  /** Stable number shown in the pane header ("terminal 2"); lowest free number at registration */
+  number?: number;
   tabId?: string;
+  /** Position of the pane's tab in the tab bar (1-based) and the tab's title */
+  tabIndex?: number;
+  tabTitle?: string;
+  /** A full-screen program (vim, htop, less) is showing */
+  alternateScreen?: boolean;
+  /** Count of output lines received so far; used to tell what is new since the agent last looked */
+  seq?: number;
   sessionId?: string;
   /** Short label for agent-opened panes ("talker", "dev server") */
   title?: string;
@@ -27,12 +36,24 @@ export interface PaneInfo {
 }
 
 export interface SpawnRequest {
-  command: string;
+  /** Command to run once the shell is ready; omitted for "just open a tab" */
+  command?: string;
   cwd?: string;
   title?: string;
   /** Pane the request came from; its tab is split first */
   requesterPaneId?: string;
   placement?: 'auto' | 'split' | 'tab';
+  /** Split direction when splitting (default: side by side for the first split) */
+  direction?: 'vertical' | 'horizontal';
+  /** Move focus to the new pane (an explicit "open a tab"); agent-started processes keep focus where it is */
+  focus?: boolean;
+}
+
+export interface LayoutTab {
+  tabId: string;
+  index: number;
+  title: string;
+  paneIds: string[];
 }
 
 export interface SpawnResult {
@@ -85,15 +106,39 @@ export class TerminalWorkspace {
 
   public register(paneId: string, info: Partial<PaneInfo> = {}): void {
     const existing = this.panes.get(paneId);
+    const layout = this.layoutFor(paneId);
     this.panes.set(paneId, {
       paneId,
       busy: false,
       spawnedByAgent: false,
       outputTail: [],
+      seq: 0,
+      ...layout,
       ...existing,
       ...info,
+      number: existing?.number ?? info.number ?? this.nextNumber(),
       updatedAt: Date.now(),
     });
+  }
+
+  private layout: LayoutTab[] = [];
+
+  /** Tab positions and titles from the app, so "tab 2" means the second tab in the bar. */
+  public setLayout(tabs: LayoutTab[]): void {
+    this.layout = tabs;
+    for (const pane of this.panes.values()) Object.assign(pane, this.layoutFor(pane.paneId));
+  }
+
+  private layoutFor(paneId: string): Partial<PaneInfo> {
+    const tab = this.layout.find(t => t.paneIds.includes(paneId));
+    return tab ? { tabId: tab.tabId, tabIndex: tab.index, tabTitle: tab.title } : {};
+  }
+
+  private nextNumber(): number {
+    const used = new Set([...this.panes.values()].map(p => p.number));
+    let n = 1;
+    while (used.has(n)) n++;
+    return n;
   }
 
   public update(paneId: string, patch: Partial<PaneInfo>): void {
@@ -126,6 +171,7 @@ export class TerminalWorkspace {
     const lines = parts.map(l => l.trimEnd()).filter(l => l.length > 0);
     if (lines.length === 0) return;
     pane.outputTail = [...pane.outputTail, ...lines].slice(-TAIL_LINES);
+    pane.seq = (pane.seq ?? 0) + lines.length;
     pane.updatedAt = Date.now();
   }
 
@@ -134,9 +180,10 @@ export class TerminalWorkspace {
    * otherwise ask the app to create one. Throws when no layout is available (tests, CLI).
    */
   public spawn(request: SpawnRequest): SpawnResult {
-    const reusable = this.list().find(p => p.spawnedByAgent && !p.busy && p.sessionId
-      && p.paneId !== request.requesterPaneId);
-    if (reusable && this.writer && reusable.sessionId) {
+    const reusable = request.command && request.placement !== 'tab' && request.placement !== 'split' && !request.focus
+      ? this.list().find(p => p.spawnedByAgent && !p.busy && p.sessionId && p.paneId !== request.requesterPaneId)
+      : undefined;
+    if (reusable && this.writer && reusable.sessionId && request.command) {
       const cd = request.cwd && request.cwd !== reusable.cwd ? `cd ${shellQuote(request.cwd)} && ` : '';
       this.writer(reusable.sessionId, `${cd}${request.command}\r`);
       this.update(reusable.paneId, { busy: true, runningCommand: request.command, title: request.title ?? reusable.title, outputTail: [] });
@@ -144,8 +191,8 @@ export class TerminalWorkspace {
     }
     if (!this.spawner) throw new Error('No terminal layout is available to open a new pane.');
     const paneId = this.spawner(request);
-    this.pending.set(paneId, request);
-    this.register(paneId, { spawnedByAgent: true, title: request.title, cwd: request.cwd, busy: true, runningCommand: request.command });
+    if (request.command) this.pending.set(paneId, request);
+    this.register(paneId, { spawnedByAgent: true, title: request.title, cwd: request.cwd, busy: Boolean(request.command), runningCommand: request.command });
     return { paneId, reused: false };
   }
 
@@ -163,19 +210,48 @@ export class TerminalWorkspace {
   /**
    * The other terminals, for the model's prompt. Bounded (6 panes, 5 lines each, 160 chars a
    * line); the caller wraps it as untrusted data because pane output can contain anything.
+   *
+   * `seen` holds each pane's output count from the last time this requester looked: a pane
+   * with nothing new gets one line instead of its output, so the prompt only grows with news.
+   * Nothing here runs in the background; it is read only when the user makes a request.
    */
-  public describeForPrompt(excludePaneId?: string): string {
+  public describeForPrompt(excludePaneId?: string, seen?: Map<string, number>): string {
     const others = this.list().filter(p => p.paneId !== excludePaneId).slice(0, 6);
     if (others.length === 0) return '';
-    return others.map((p, i) => {
+    return others.map((p) => {
       const head = [
-        `Terminal ${i + 1}${p.title ? ` "${p.title}"` : ''}`,
+        `Terminal ${p.number ?? '?'}${p.tabIndex ? ` (tab ${p.tabIndex})` : ''}${p.title ? ` "${p.title}"` : ''}`,
         p.cwd ? `in ${p.cwd}` : '',
-        p.busy && p.runningCommand ? `running: ${p.runningCommand}` : 'idle',
+        p.alternateScreen ? 'full-screen program' : p.busy && p.runningCommand ? `running: ${p.runningCommand}` : 'idle',
       ].filter(Boolean).join(', ');
-      const tail = p.outputTail.slice(-5).map(l => `  | ${l.slice(0, 160)}`).join('\n');
+      const seq = p.seq ?? 0;
+      const lastSeen = seen?.get(p.paneId);
+      if (lastSeen !== undefined && lastSeen >= seq) return `${head} (no new output)`;
+      const fresh = lastSeen === undefined ? 5 : Math.min(5, seq - lastSeen);
+      const tail = p.outputTail.slice(-fresh).map(l => `  | ${l.slice(0, 160)}`).join('\n');
       return tail ? `${head}\n${tail}` : head;
     }).join('\n');
+  }
+
+  /** Output counts of every pane now, to pass back as `seen` next time. */
+  public snapshotSeq(): Map<string, number> {
+    return new Map(this.list().map(p => [p.paneId, p.seq ?? 0]));
+  }
+
+  /** Lines a pane printed after output count `since` (at most its stored tail). */
+  public outputSince(paneId: string, since: number): string[] {
+    const pane = this.panes.get(paneId);
+    if (!pane) return [];
+    const count = Math.max(0, (pane.seq ?? 0) - since);
+    return count === 0 ? [] : pane.outputTail.slice(-Math.min(count, pane.outputTail.length));
+  }
+
+  /** Type into a pane's shell (the caller has already checked it is ready and approved). */
+  public write(paneId: string, data: string): boolean {
+    const pane = this.panes.get(paneId);
+    if (!pane?.sessionId || !this.writer) return false;
+    this.writer(pane.sessionId, data);
+    return true;
   }
 }
 

@@ -613,7 +613,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         if (paneId) {
           workspace.register(paneId, { sessionId: currentSessionId, cwd: currentPathRef.current || currentPath || '~' });
           unsubPaneState = ptyTrackerRef.current.subscribe((state) => {
-            if (state === 'idle-at-prompt') workspace.update(paneId, { busy: false, runningCommand: undefined });
+            if (state === 'idle-at-prompt') workspace.update(paneId, { busy: false, runningCommand: undefined, alternateScreen: false });
+            else if (state === 'alternate-screen-buffer') workspace.update(paneId, { alternateScreen: true });
+            else workspace.update(paneId, { alternateScreen: false });
           });
         }
         // A pane the agent opened runs its command once the shell has printed its first prompt
@@ -624,7 +626,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           if (pendingTimer) clearTimeout(pendingTimer);
           pendingTimer = setTimeout(() => {
             const request = workspace.takePendingCommand(paneId);
-            if (!request || !currentSessionId) return;
+            if (!request?.command || !currentSessionId) return;
             workspace.update(paneId, { busy: true, runningCommand: request.command });
             ptyTrackerRef.current.notifyCommandStarted(request.command);
             sessionManager.write(currentSessionId, `${request.command}\r`);

@@ -307,12 +307,21 @@ export function App({ initialPath }: AppProps = {}) {
       const ids = hostTab ? terminalIds(hostTab.rootPane) : [];
       const useNewTab = !hostTab || request.placement === 'tab' || (request.placement !== 'split' && ids.length >= MAX_PANES_PER_TAB);
       if (useNewTab) {
-        setTabs(prev => [...prev, { id: getUniqueId('tab'), name: request.title || `Terminal ${prev.length + 1}`, customName: Boolean(request.title), rootPane: newPane }]);
+        const tabId = getUniqueId('tab');
+        setTabs(prev => [...prev, { id: tabId, name: request.title || `Terminal ${prev.length + 1}`, customName: Boolean(request.title), rootPane: newPane }]);
+        if (request.focus) {
+          setActiveTabId(tabId);
+          setActivePaneId(newId);
+        }
       } else {
-        // One pane: split it side by side. More: stack under the last one.
+        // One pane: split it side by side. More: stack under the last one. An explicit request
+        // splits the pane it came from, in the direction asked.
         const single = ids.length === 1;
-        const target = single ? (request.requesterPaneId && ids.includes(request.requesterPaneId) ? request.requesterPaneId : ids[0]) : ids[ids.length - 1];
-        setTabs(prev => prev.map(t => t.id !== hostTab.id ? t : { ...t, rootPane: insertSplit(t.rootPane, target, newPane, single ? 'vertical' : 'horizontal') }));
+        const requester = request.requesterPaneId && ids.includes(request.requesterPaneId) ? request.requesterPaneId : undefined;
+        const target = request.focus && requester ? requester : single ? (requester ?? ids[0]) : ids[ids.length - 1];
+        const direction = request.direction ?? (single ? 'vertical' : 'horizontal');
+        setTabs(prev => prev.map(t => t.id !== hostTab.id ? t : { ...t, rootPane: insertSplit(t.rootPane, target, newPane, direction) }));
+        if (request.focus) setActivePaneId(newId);
       }
       return newId;
     });
@@ -322,6 +331,20 @@ export function App({ initialPath }: AppProps = {}) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Tab positions and titles for the workspace, so "tab 2" means the second tab in the bar
+  useEffect(() => {
+    const terminalIds = (node: PaneNode): string[] => node.type === 'terminal'
+      ? [node.data.id]
+      : [...terminalIds(node.data.pane1), ...terminalIds(node.data.pane2)];
+    TerminalWorkspace.getInstance().setLayout(tabs.map((t, i) => ({
+      tabId: t.id,
+      index: i + 1,
+      title: getTabDisplayTitle(t),
+      paneIds: terminalIds(t.rootPane),
+    })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabs, panePaths]);
 
   const startupArgsProcessedRef = useRef(false);
   const activeSessionIdsRef = useRef<Record<string, string>>({});
@@ -818,6 +841,11 @@ export function App({ initialPath }: AppProps = {}) {
           {!isRoot && (
             <div className="pane-header-controls pane-header-compact">
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.85, fontSize: '11px', fontWeight: 500 }}>
+                {TerminalWorkspace.getInstance().get(node.data.id)?.number !== undefined && (
+                  <span title="Terminal number: refer to it as “terminal N” in a > request" style={{ fontVariantNumeric: 'tabular-nums', padding: '0 5px', borderRadius: '4px', border: '1px solid rgba(255, 255, 255, 0.16)', color: 'rgba(255, 255, 255, 0.75)', fontSize: '10px', lineHeight: '15px' }}>
+                    {TerminalWorkspace.getInstance().get(node.data.id)?.number}
+                  </span>
+                )}
                 <Folder size={11} style={{ opacity: 0.75, flexShrink: 0 }} />
                 <span>{formatDisplayPath(panePaths[node.data.id] || '~')} — -${detectedShell}</span>
               </span>

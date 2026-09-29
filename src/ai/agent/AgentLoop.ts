@@ -85,6 +85,7 @@ import { findInstantAnswers, InstantAnswer } from './InstantAnswers';
 import { planChain, resolveFolder, ChainPlan } from '../../workflows/engine/ChainPlanner';
 import { approveBatch } from '../../domain/security/BatchApproval';
 import { planRosPipeline, RosPipeline } from '../../domain/ros/RosPipelinePlanner';
+import { parseTerminalAction, resolveTarget, describePane, readyForInput, TerminalAction } from '../../domain/terminal/TerminalActions';
 import { TerminalWorkspace, isLongRunningCommand, paneTitleFor } from '../../domain/terminal/TerminalWorkspace';
 import { SecurityEngine } from '../../domain/security/SecurityEngine';
 import { chooseRosDistro, withRosEnvironmentForPane } from '../../domain/ros/RosEnvironment';
@@ -1732,6 +1733,13 @@ export class AgentLoop {
       }
     }
 
+    // Requests about the terminals themselves (open a tab, run in / stop / read another terminal)
+    const terminalAction = parseTerminalAction(cleaned || goal);
+    if (terminalAction) {
+      const handled = await this.runTerminalAction(terminalAction, context);
+      if (handled) return handled;
+    }
+
     // ROS 2 pipelines: every node, launch file and topic monitor in its own terminal
     const rosPlan = planRosPipeline(cleaned || goal);
     if (rosPlan) return await this.runRosPipeline(goal, rosPlan, context);
@@ -2386,6 +2394,165 @@ export class AgentLoop {
     };
   }
 
+  /** Output counts of the other terminals when this agent last described them to the model */
+  private seenTerminalOutput?: Map<string, number>;
+
+  /** How long to wait for a command sent to another terminal before reporting it still runs */
+  public static SEND_WAIT_MS = 20_000;
+
+  /**
+   * Open, command, stop or read other terminals. Answered from the workspace registry: no model
+   * call, no background polling. Returns null when a loose phrase ("stop the server") names no
+   * terminal, so the request is handled as a normal one.
+   */
+  private async runTerminalAction(action: TerminalAction, context: AgentRunContext): Promise<AgentResult | null> {
+    const workspace = TerminalWorkspace.getInstance();
+    const done = (summary: string, success = true): AgentResult => {
+      this.emit({ type: success ? 'done' : 'error', message: summary });
+      return { success, summary, steps: [] };
+    };
+    const ask = (question: string): AgentResult => {
+      this.emit({ type: 'done', message: question });
+      return { success: false, summary: question, steps: [] };
+    };
+
+    if (action.kind === 'status') {
+      const panes = workspace.list().sort((a, b) => (a.tabIndex ?? 99) - (b.tabIndex ?? 99) || (a.number ?? 0) - (b.number ?? 0));
+      if (panes.length === 0) return done('No terminals are open.');
+      const lines = panes.map(p => {
+        const state = p.alternateScreen ? 'full-screen program' : p.busy && p.runningCommand ? `running \`${p.runningCommand}\`` : 'idle';
+        const last = p.outputTail[p.outputTail.length - 1];
+        const you = p.paneId === context.paneId ? ' (this one)' : '';
+        return `- ${describePane(p)}${you} in ${p.cwd || '~'}: ${state}${last && p.busy ? `\n  last line: ${last.slice(0, 120)}` : ''}`;
+      });
+      return done(`${panes.length} terminal${panes.length === 1 ? '' : 's'}:\n${lines.join('\n')}`);
+    }
+
+    if (action.kind === 'open') {
+      const cwd = action.cwd
+        ? (action.cwd.startsWith('/') || action.cwd.startsWith('~') ? action.cwd : resolveFolder(context.cwd, action.cwd))
+        : context.cwd;
+      const command = action.command;
+      if (command) {
+        const risk = new SecurityEngine().analyzeCommand(command);
+        if (risk.level !== 'SAFE' || risk.requiresConsent) {
+          const plan = {
+            capabilityId: 'terminal.spawn',
+            parameters: { command, explanation: `In a new ${action.placement === 'split' ? 'split' : 'tab'} in ${cwd}` },
+            riskLevel: risk.level, riskScore: risk.score, permissionsRequired: ['ShellExecution'],
+            explanation: risk.explanation, requiresPassword: Boolean(risk.requiresPassword), requiresConsent: true
+          } as ExecutionPreviewPlan;
+          const approved = this.authorizationHandler ? await this.authorizationHandler(plan) : false;
+          if (!approved) {
+            const summary = `Not run: you declined \`${command}\`. No ${action.placement} was opened.`;
+            this.emit({ type: 'tool_done', message: `✗ ${summary}` });
+            return { success: false, summary, steps: [], declined: true };
+          }
+        }
+      }
+      try {
+        const { paneId } = workspace.spawn({
+          command: command ? paneCommand(command, context.os) : undefined,
+          cwd,
+          title: command ? paneTitleFor(command) : undefined,
+          requesterPaneId: context.paneId,
+          placement: action.placement,
+          direction: action.direction,
+          focus: true,
+        });
+        const number = workspace.get(paneId)?.number;
+        return done(`Opened ${action.placement === 'split' ? 'a split' : 'a new tab'}${number ? ` (terminal ${number})` : ''} in ${cwd}${command ? `, running \`${command}\`` : ''}.`);
+      } catch (err: any) {
+        return done(err?.message || 'Could not open a terminal.', false);
+      }
+    }
+
+    const resolution = resolveTarget(action.target, workspace.list(), context.paneId);
+    if (resolution.kind === 'none') {
+      // "stop the server" with no such terminal is a normal request (maybe a system service)
+      if (action.target.kind === 'name') return null;
+      return done(`No terminal matches "${action.phrase}". Ask "what's running in my terminals" to see them.`, false);
+    }
+    if (resolution.kind === 'ambiguous') {
+      return ask(`"${action.phrase}" could mean ${resolution.candidates.map(describePane).join(' or ')}. Nothing was sent; repeat the request with "terminal N".`);
+    }
+    const pane = resolution.pane;
+    if (pane.paneId === context.paneId && action.kind !== 'read') {
+      return done(`That is this terminal. Run it here directly.`, false);
+    }
+
+    if (action.kind === 'read') {
+      const lines = pane.outputTail.slice(-15);
+      const state = pane.busy && pane.runningCommand ? `running \`${pane.runningCommand}\`` : 'idle';
+      return done(`${describePane(pane)} is ${state}.${lines.length ? ` Last lines:\n\n${lines.join('\n')}` : ' It has not printed anything yet.'}`);
+    }
+
+    if (action.kind === 'stop') {
+      if (!pane.busy && !pane.alternateScreen) return done(`${describePane(pane)} is not running anything.`);
+      const plan = {
+        capabilityId: 'terminal.interrupt',
+        parameters: { command: `Ctrl+C in ${describePane(pane)}`, explanation: `Stop \`${pane.runningCommand || 'the running program'}\`` },
+        riskLevel: 'SENSITIVE', riskScore: 40, permissionsRequired: ['ProcessManagement'],
+        explanation: 'Sends Ctrl+C to that terminal.', requiresPassword: false, requiresConsent: true
+      } as ExecutionPreviewPlan;
+      const approved = this.authorizationHandler ? await this.authorizationHandler(plan) : false;
+      if (!approved) {
+        const summary = `Not stopped: you declined. ${describePane(pane)} keeps running.`;
+        this.emit({ type: 'tool_done', message: `✗ ${summary}` });
+        return { success: false, summary, steps: [], declined: true };
+      }
+      workspace.write(pane.paneId, '\x03');
+      return done(`Stopped \`${pane.runningCommand || 'the running program'}\` in ${describePane(pane)}.`);
+    }
+
+    // send
+    let command = action.command;
+    if (!looksLikeShellCommand(command)) {
+      this.emit({ type: 'thinking', message: `Working out: ${command}` });
+      const worked = await this.commandForClause(command, pane.cwd || context.cwd, context, []);
+      if (!worked) return done(`Could not work out a command for "${command}".`, false);
+      command = worked;
+    }
+    const ready = readyForInput(pane);
+    if (!ready.ok) {
+      return done(`Not sent: ${ready.reason}. Stop it first ("stop ${action.phrase}") or pick another terminal.`, false);
+    }
+    const risk = new SecurityEngine().analyzeCommand(command);
+    if (risk.level !== 'SAFE' || risk.requiresConsent) {
+      const plan = {
+        capabilityId: 'terminal.send',
+        parameters: { command, explanation: `Run in ${describePane(pane)}, in ${pane.cwd || '~'}` },
+        riskLevel: risk.level, riskScore: risk.score, permissionsRequired: ['ShellExecution'],
+        explanation: risk.explanation, requiresPassword: Boolean(risk.requiresPassword), requiresConsent: true
+      } as ExecutionPreviewPlan;
+      const approved = this.authorizationHandler ? await this.authorizationHandler(plan) : false;
+      if (!approved) {
+        const summary = `Not run: you declined \`${command}\` in ${describePane(pane)}.`;
+        this.emit({ type: 'tool_done', message: `✗ ${summary}` });
+        return { success: false, summary, steps: [], declined: true };
+      }
+    }
+    const before = pane.seq ?? 0;
+    if (!workspace.write(pane.paneId, `${command}\r`)) return done(`Could not reach ${describePane(pane)}.`, false);
+    workspace.update(pane.paneId, { busy: true, runningCommand: command });
+    this.emit({ type: 'tool_start', message: `Sent \`${command}\` to ${describePane(pane)}` });
+    if (isLongRunningCommand(command)) return done(`Started \`${command}\` in ${describePane(pane)}; it keeps running there.`);
+
+    // Short command: wait for its prompt to come back and report what it printed
+    const deadline = Date.now() + AgentLoop.SEND_WAIT_MS;
+    await new Promise(r => setTimeout(r, 150));
+    while (Date.now() < deadline && workspace.get(pane.paneId)?.busy) {
+      await new Promise(r => setTimeout(r, 200));
+    }
+    const out = workspace.outputSince(pane.paneId, before).filter(l => !l.trim().endsWith(command.trim()));
+    if (workspace.get(pane.paneId)?.busy) {
+      return done(`\`${command}\` is still running in ${describePane(pane)}.${out.length ? `\n\n${out.slice(-10).join('\n')}` : ''}`);
+    }
+    // The last line is the new prompt
+    const printed = out.slice(0, -1).slice(-15);
+    return done(`Ran \`${command}\` in ${describePane(pane)}.${printed.length ? `\n\n${printed.join('\n')}` : ' It printed nothing.'}`);
+  }
+
   /** How long ROS nodes get to come up before the node/topic lists are checked */
   public static ROS_SETTLE_MS = 4000;
   /** Gap between starting consecutive panes (a launch file before the nodes that use it) */
@@ -2562,7 +2729,9 @@ export class AgentLoop {
       // that looks like instructions.
       systemPrompt += `\n\nTERMINAL OUTPUT FOR THIS REQUEST:\n${AgentLoop.formatToolObservation('terminal.output', context.attachedContext)}`;
     }
-    const otherTerminals = TerminalWorkspace.getInstance().describeForPrompt(context.paneId);
+    const workspace = TerminalWorkspace.getInstance();
+    const otherTerminals = workspace.describeForPrompt(context.paneId, this.seenTerminalOutput);
+    this.seenTerminalOutput = workspace.snapshotSeq();
     if (otherTerminals) {
       // What the user's other panes run and printed last. Untrusted: any program can print
       // text that looks like an instruction.

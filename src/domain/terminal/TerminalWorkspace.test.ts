@@ -105,9 +105,42 @@ describe('TerminalWorkspace', () => {
     ws.register('talker', { title: 'talker', cwd: '/ws', busy: true, runningCommand: 'ros2 run demo_nodes_cpp talker' });
     ws.appendOutput('talker', '[INFO] Publishing: "Hello World: 1"\n');
     const text = ws.describeForPrompt('main');
-    expect(text).toContain('Terminal 1 "talker", in /ws, running: ros2 run demo_nodes_cpp talker');
+    expect(text).toContain('Terminal 2 "talker", in /ws, running: ros2 run demo_nodes_cpp talker');
     expect(text).toContain('| [INFO] Publishing: "Hello World: 1"');
     expect(text).not.toContain('/home/u');
     expect(ws.describeForPrompt('main').split('\n').length).toBeLessThanOrEqual(6 * 6);
+  });
+});
+
+describe('TerminalWorkspace change-only context', () => {
+  beforeEach(() => TerminalWorkspace.resetForTests());
+
+  it('numbers panes and shows only terminals with new output since the last look', () => {
+    const ws = TerminalWorkspace.getInstance();
+    ws.register('me');
+    ws.register('srv', { title: 'server', busy: true, runningCommand: 'npm run dev' });
+    expect(ws.get('me')!.number).toBe(1);
+    expect(ws.get('srv')!.number).toBe(2);
+    ws.appendOutput('srv', 'ready on :5173\n');
+
+    const first = ws.describeForPrompt('me', undefined);
+    expect(first).toContain('| ready on :5173');
+    const seen = ws.snapshotSeq();
+    expect(ws.describeForPrompt('me', seen)).toContain('(no new output)');
+
+    ws.appendOutput('srv', 'GET / 200\n');
+    const next = ws.describeForPrompt('me', seen);
+    expect(next).toContain('| GET / 200');
+    expect(next).not.toContain('ready on :5173');
+    expect(ws.outputSince('srv', seen.get('srv')!)).toEqual(['GET / 200']);
+  });
+
+  it('uses tab positions from the app layout', () => {
+    const ws = TerminalWorkspace.getInstance();
+    ws.register('a');
+    ws.setLayout([{ tabId: 't1', index: 1, title: 'app', paneIds: ['a'] }, { tabId: 't2', index: 2, title: 'api', paneIds: ['b'] }]);
+    ws.register('b');
+    expect(ws.get('a')).toMatchObject({ tabIndex: 1, tabTitle: 'app' });
+    expect(ws.get('b')).toMatchObject({ tabIndex: 2, tabTitle: 'api' });
   });
 });

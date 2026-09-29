@@ -1425,3 +1425,92 @@ describe('ROS 2 pipelines', () => {
     expect(spawner).not.toHaveBeenCalled();
   });
 });
+
+describe('Talking to other terminals', () => {
+  const setup = async () => {
+    const { TerminalWorkspace } = await import('../../domain/terminal/TerminalWorkspace');
+    TerminalWorkspace.resetForTests();
+    const ws = TerminalWorkspace.getInstance();
+    const writes: Array<[string, string]> = [];
+    ws.setWriter((sessionId, data) => writes.push([sessionId, data]));
+    const spawner = vi.fn().mockReturnValue('new-pane');
+    ws.setSpawner(spawner);
+    ws.register('me', { sessionId: 's-me', cwd: '/home/u/app', outputTail: ['u@h app % '] });
+    ws.register('idle', { sessionId: 's-idle', cwd: '/home/u/api', title: 'api', outputTail: ['u@h api % '] });
+    ws.register('srv', { sessionId: 's-srv', cwd: '/home/u/web', busy: true, runningCommand: 'npm run dev', title: 'dev server', outputTail: ['ready on :5173'] });
+    ws.setLayout([{ tabId: 't1', index: 1, title: 'app', paneIds: ['me', 'idle'] }, { tabId: 't2', index: 2, title: 'web', paneIds: ['srv'] }]);
+    const generate = vi.fn().mockResolvedValue({ content: JSON.stringify({ action: 'done', summary: 'ok' }) });
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    (loop as any).toolExecutor = { hasDriver: () => true, execute: vi.fn() };
+    return { ws, writes, spawner, loop, generate };
+  };
+
+  it("answers what's running in every terminal without calling the model", async () => {
+    const { loop, generate } = await setup();
+    const r = await loop.run("what's running in my terminals", { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    expect(generate).not.toHaveBeenCalled();
+    expect(r.summary).toContain('terminal 1 (tab 1, app) (this one)');
+    expect(r.summary).toContain('terminal 3 (tab 2, dev server) in /home/u/web: running `npm run dev`');
+  });
+
+  it('sends a command to an idle terminal after approval and reports its output', async () => {
+    const { ws, loop, writes } = await setup();
+    const { AgentLoop: Loop } = await import('./AgentLoop');
+    Loop.SEND_WAIT_MS = 2000;
+    loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
+    setTimeout(() => {
+      ws.appendOutput('idle', 'git pull\nAlready up to date.\nu@h api % \n');
+      ws.update('idle', { busy: false });
+    }, 300);
+    const r = await loop.run('run git pull in terminal 2', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    expect(writes).toEqual([['s-idle', 'git pull\r']]);
+    expect(r.summary).toContain('Ran `git pull` in terminal 2');
+    expect(r.summary).toContain('Already up to date.');
+  });
+
+  it('refuses to type into a busy terminal and asks when the target is ambiguous', async () => {
+    const { loop, writes } = await setup();
+    loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
+    const busy = await loop.run('run ls in tab 2', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    expect(busy.summary).toContain('busy running `npm run dev`');
+    const other = await loop.run('run ls in the other terminal', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    expect(other.summary).toContain('could mean terminal 2');
+    expect(writes).toEqual([]);
+  });
+
+  it('stops the server with Ctrl+C only after confirmation', async () => {
+    const { loop, writes } = await setup();
+    const handler = vi.fn().mockResolvedValue(true);
+    loop.setAuthorizationHandler(handler);
+    const r = await loop.run('stop the server', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ capabilityId: 'terminal.interrupt' }));
+    expect(writes).toEqual([['s-srv', '\x03']]);
+    expect(r.summary).toContain('Stopped `npm run dev` in terminal 3');
+  });
+
+  it('opens a focused tab in a folder, running a command after approval', async () => {
+    const { loop, spawner } = await setup();
+    loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
+    const r = await loop.run('open a new tab in ../api and run npm run dev', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    expect(spawner).toHaveBeenCalledWith(expect.objectContaining({ placement: 'tab', cwd: '/home/u/api', command: 'npm run dev', focus: true }));
+    expect(r.success).toBe(true);
+  });
+
+  it('gives the model only terminal output it has not seen', async () => {
+    const { ws, loop, generate } = await setup();
+    await loop.run('summarize the project', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    await loop.run('anything new?', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    const second = generate.mock.calls[generate.mock.calls.length - 1];
+    const prompt = String(second[0]) + JSON.stringify(second[2]?.messages ?? '');
+    expect(prompt).toContain('(no new output)');
+    expect(prompt).not.toContain('ready on :5173');
+    ws.appendOutput('srv', 'GET /api 500\n');
+    await loop.run('and now?', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    const third = generate.mock.calls[generate.mock.calls.length - 1];
+    expect(String(third[0]) + JSON.stringify(third[2]?.messages ?? '')).toContain('GET /api 500');
+  });
+});
