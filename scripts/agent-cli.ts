@@ -204,7 +204,7 @@ async function runPrompt(
     }
   });
 
-  const detectedOs = process.platform === 'darwin' ? 'mac' : (process.platform === 'win32' ? 'windows' : 'linux');
+  const detectedOs = process.platform === 'darwin' ? 'macos' : (process.platform === 'win32' ? 'windows' : 'linux');
 
   // Auto-approve or handle authorization for CLI/headless runs
   agentLoop.setAuthorizationHandler(async (plan) => {

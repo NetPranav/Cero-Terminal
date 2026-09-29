@@ -63,3 +63,4 @@ coverage/
 *~
 Thumbs.db
 reports/
+scripts/stress/.runs/
