@@ -374,3 +374,29 @@ shell history show nothing unexpected ran; the cause is not known.
    `$(...)`. It errs toward asking for consent, never toward skipping it.
 3. `>watch list` and `>why` print long absolute paths; shorten them with `~` and middle ellipsis.
 4. Window listing on macOS needs Accessibility rights; only screenshots are covered today.
+
+---
+
+## 6. Complex features and release check (2026-09-29)
+
+Tested in the release build's window (and last on the exact app inside the DMG):
+
+| Feature | Before | After |
+|---|---|---|
+| Workflow Manager "Run" | Dialog opened behind the drawer; the run hung | Runs in the focused terminal; one dialog lists every command |
+| Workflow steps | Ran in the app's folder; `cd` did not carry over; `tail -f` blocked 5 min | Start in the terminal's folder; `cd` carries over; long steps open a pane |
+| Opening a workflow file | Opened a tab at the file path | Previews every command, runs after approval; `.flow` is a registered file type |
+| `.flow` files | Never listed | Listed and runnable (browser/app/folder/command actions, macOS and Linux) |
+| "create folder, go into it, git init, npm init, list files" | The English sentence was sent to the shell | Planned into commands, one approval, shell ends in the new folder |
+| "follow app.log and serve this folder" | Blocked the agent | Two panes; the agent reports both and knows what they print |
+| "what is running in my other terminals" | No knowledge of other panes | Correct answer, including an error line from another pane |
+| ROS 2 pipelines | One process at a time, blocking | Each node / launch / echo in its own pane after one approval, then `ros2 node list` / `topic list`; clear message when ROS is missing (the only result verifiable on this Mac) |
+| Auto-heal with several panes | Fix shown in every pane; timing-dependent misses | Only in the pane that failed; errors split across chunks are found |
+| Restored screens after splitting | Doubled text; stale fix popups | Drawn once, never re-diagnosed |
+
+**Distribution status:** `npm run bundle:dmg` produces `Sentinel Terminal_2.0.0_aarch64.dmg`
+(Apple Silicon only), ad-hoc signed with a valid bundle signature. It is not notarized, so on
+another Mac Gatekeeper blocks the first launch until the user allows it (System Settings, Privacy
+& Security, Open Anyway). Intel Macs need a universal build; Linux packages must be built on Linux
+(the CI workflow can do this). A clean machine has no engine or model: the in-app installer
+downloads them (about 2 GB); that download path has unit tests but was not run end to end here.
