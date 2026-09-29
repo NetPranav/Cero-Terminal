@@ -55,6 +55,15 @@ export class PtyOutputObserver {
   private isSuspended: boolean = false;
   /** Last command reported to SERL, so one failing command is logged once, not once per chunk */
   private lastReportedFailure = '';
+  /**
+   * Programs write one error across several writes ("...not a git command", then "The most
+   * similar command is", then "status"), which can arrive as separate chunks. After a chunk with
+   * an error signal, the following chunks are diagnosed too until this time.
+   */
+  private errorWindowUntil = 0;
+  /** The fix last announced, so re-diagnosing the same error does not announce it twice */
+  private lastRemediationKey = '';
+  constructor(private readonly now: () => number = () => Date.now()) {}
 
   /** Shared instance for callers outside a terminal pane; each TerminalView owns its own observer. */
   public static getInstance(): PtyOutputObserver {
@@ -117,7 +126,9 @@ export class PtyOutputObserver {
       }
     }
 
-    if (!ERROR_SIGNAL.test(cleanChunk)) {
+    if (ERROR_SIGNAL.test(cleanChunk)) {
+      this.errorWindowUntil = this.now() + 2000;
+    } else if (this.now() > this.errorWindowUntil) {
       return null;
     }
 
@@ -126,6 +137,11 @@ export class PtyOutputObserver {
 
     if (diag.category === 'SOFTWARE_RECOVERABLE' && diag.remediation) {
       const fixedCmd = diag.remediation.params?.command;
+      const key = `${diag.cause}|${fixedCmd ?? diag.remediation.title}`;
+      if (key === this.lastRemediationKey && this.activeRemediation) {
+        return this.activeRemediation;
+      }
+      this.lastRemediationKey = key;
       const remediation: RemediationPrompt = {
         id: 'rem_' + Date.now(),
         cause: diag.cause,
@@ -169,6 +185,8 @@ export class PtyOutputObserver {
 
   public clearRemediation(): void {
     this.activeRemediation = null;
+    this.lastRemediationKey = '';
+    this.errorWindowUntil = 0;
     this.recentOutputBuffer = [];
     this.notify(null);
   }

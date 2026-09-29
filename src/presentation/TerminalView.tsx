@@ -642,7 +642,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           // Discarding a `>` request line makes the shell print a fresh prompt; hide that redraw so
           // agent output follows the request directly (the final prompt is printed at the end)
           if (Date.now() < shellRedrawMuteUntil) { shellRedrawSeen = true; return; }
-          writeTerm(text);
+          // SessionManager already recorded this shell output; only Sentinel's own text is
+          // recorded by writeTerm (recording both doubled every restored screen)
+          term.write(text.replace(/\r?\n/g, '\r\n'));
           outputObserverRef.current.ingest(text, currentPathRef.current);
         };
 

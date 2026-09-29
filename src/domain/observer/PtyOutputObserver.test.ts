@@ -152,3 +152,33 @@ describe('PtyOutputObserver per pane', () => {
     expect(seenByB).not.toHaveBeenCalled();
   });
 });
+
+describe('PtyOutputObserver with errors split across chunks', () => {
+  it('finds the fix when the suggestion arrives in a later chunk, and announces it once', async () => {
+    const { PtyOutputObserver } = await import('./PtyOutputObserver');
+    let t = 1000;
+    const o = new PtyOutputObserver(() => t);
+    const seen = vi.fn();
+    o.onRemediation(seen);
+    for (const chunk of [
+      'user@mac repo % git statsu\r\n',
+      "git: 'statsu' is not a git command. See 'git --help'.\r\n",
+      '\r\nThe most similar command is\r\n',
+      '\tstatus\r\n',
+      'user@mac repo % ',
+    ]) { t += 5; o.ingest(chunk, '/repo'); }
+    expect(o.getActiveRemediation()?.params?.command).toBe('git status');
+    expect(seen.mock.calls.filter(c => c[0]).length).toBe(1);
+  });
+
+  it('stops looking once the error window has passed', async () => {
+    const { PtyOutputObserver } = await import('./PtyOutputObserver');
+    let t = 1000;
+    const o = new PtyOutputObserver(() => t);
+    o.ingest('user@mac repo % git statsu\r\n', '/repo');
+    o.ingest('\r\nThe most similar command is\r\n', '/repo');
+    t += 5000;
+    o.ingest('\tstatus\r\n', '/repo');
+    expect(o.getActiveRemediation()).toBeNull();
+  });
+});
