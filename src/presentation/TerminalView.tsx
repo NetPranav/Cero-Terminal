@@ -987,6 +987,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             if (line) {
               // Exact text from where typing started on this line (see InputLineTracker)
               const anchored = inputLineRef.current.typedText() ?? inputLineRef.current.read(buffer, lineIndex);
+              // Typed while a program was running (a server, a REPL): clear the line with Ctrl+U,
+              // never ^C, which would stop that program
+              const typedWhileRunning = inputLineRef.current.startedWhileRunning();
               inputLineRef.current.reset();
               let commandText: string;
               if (anchored !== null) {
@@ -1007,7 +1010,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
               // A line typed while a program owns the terminal (a sudo or ssh password prompt, a
               // full-screen editor) is input to that program, not a shell command: never keep it
-              const atShellPrompt = !ptyTrackerRef.current.isProcessRunning()
+              const atShellPrompt = !typedWhileRunning && !ptyTrackerRef.current.isProcessRunning()
                 && !ptyTrackerRef.current.isAlternateBuffer()
                 && term.buffer.active.type !== 'alternate';
               if (commandText.trim() && atShellPrompt) {
@@ -1019,7 +1022,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               // Intercept dangerous / catastrophic destruction commands
               const safetyEval = CommandSafetyGuardian.getInstance().evaluate(cleanCmd);
               if (safetyEval.isBlocked) {
-                await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
+                await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
                 const banner = CommandSafetyGuardian.getInstance().formatTerminalBanner(safetyEval, cleanCmd);
                 writeTerm(banner);
                 return;
@@ -1031,7 +1034,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
               // Intercept application mapping slash commands: /app, /apps, /alias, /aliases
               if (cleanCmd.startsWith('/app') || cleanCmd.startsWith('/alias')) {
-                await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
+                await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
                 const match = cleanCmd.match(/^\/(?:apps?|aliases?)(?:\s+([^\s"']+)\s+["']?(.+?)["']?)?\s*$/i);
                 if (match && match[1] && match[2]) {
                   AppAliasRegistry.getInstance().setAlias(match[1], match[2]);
@@ -1052,7 +1055,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
               // Intercept demonstration learning slash commands: /learn, /learned, /forget
               if (cleanCmd.startsWith('/learn') || cleanCmd.startsWith('/learned') || cleanCmd.startsWith('/forget')) {
-                await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
+                await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
                 if (cleanCmd.startsWith('/learned')) {
                   const patterns = DemonstrationLearningEngine.getInstance().getAllPatterns();
                   if (patterns.length === 0) {
@@ -1100,7 +1103,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
               // Intercept auto-heal remediation commands: >fix, >heal
               if (cleanCmd === '>fix' || cleanCmd === '>heal') {
-                await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
+                await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
                 const rem = outputObserverRef.current.getActiveRemediation();
                 if (rem) {
                   writeTerm(`\r\n  ${S.muted}›${S.reset} ${S.soft}Applying fix: ${rem.actionTitle}${S.reset}\r\n`);
@@ -1162,7 +1165,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               // workflow can resume without making the user retype the request.
               const answeringAgentQuestion = agentLoop.hasPendingQuestion();
               if (answeringAgentQuestion && cleanCmd === '/cancel') {
-                await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
+                await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
                 agentLoop.cancelPendingQuestion();
                 clearPlanDismissTimer();
                 setLatestPlan(null);
@@ -1182,7 +1185,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                   shellRedrawMuteUntil = Date.now() + 400;
                   shellRedrawSeen = false;
                 }
-                await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
+                await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
 
                 // One request at a time: the agent keeps a single transcript and event listener
                 if (aiBusyRef.current) {

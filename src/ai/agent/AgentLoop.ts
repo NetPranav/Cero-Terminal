@@ -1563,7 +1563,9 @@ export class AgentLoop {
 
     // Smart Directory Navigation & Fuzzy Matching ("Did you mean?", "Ask to create")
     const navEngine = DirectoryNavigationEngine.getInstance();
-    const navResult = await navEngine.resolve(goal, context.cwd);
+    // "go to tab 2" / "switch to the next tab" are app actions, not folders
+    const isAppOrTerminalRequest = Boolean(parseAppAction(goal) || parseTerminalAction(goal));
+    const navResult = isAppOrTerminalRequest ? { type: 'none' as const } : await navEngine.resolve(goal, context.cwd);
     if (navResult.type !== 'none') {
       if (navResult.type === 'exact' && navResult.cdPath) {
         this.emit({

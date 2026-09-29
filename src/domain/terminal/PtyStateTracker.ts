@@ -107,7 +107,10 @@ export class PtyStateTracker {
     // Heuristic: Check if output ends with a common shell prompt sequence
     // Examples: 'user@host:~$ ', '[user@host ~]# ', '➜  sentinal git:(main) ✗ ', 'user@host ~/dir ❯ '
     const promptRegex = /(?:[\r\n]|^)[^\r\n]{0,100}[$#%❯>➜✗\u2713\u2717]\s*$/;
-    if (promptRegex.test(this.outputBuffer)) {
+    // A lone ">" is the echo of the AI prefix typed into a running program (or a continuation
+    // prompt), not a shell prompt: treating it as one made the request ^C the program
+    const lastLine = this.outputBuffer.split(/[\r\n]/).pop() || '';
+    if (promptRegex.test(this.outputBuffer) && lastLine.trim() !== '>') {
       this.setState('idle-at-prompt');
     }
   }

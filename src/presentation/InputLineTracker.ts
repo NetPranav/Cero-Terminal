@@ -80,6 +80,11 @@ export class InputLineTracker {
     return this.anchor && this.shadowExact ? this.shadow : null;
   }
 
+  /** Typing on this line began while a program was running: its input, never a shell line to ^C */
+  public startedWhileRunning(): boolean {
+    return this.anchor !== null && this.typedAhead;
+  }
+
   public hasAnchor(): boolean {
     return this.anchor !== null && !this.typedAhead;
   }

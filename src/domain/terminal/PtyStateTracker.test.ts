@@ -94,3 +94,17 @@ describe('PtyStateTracker', () => {
     unsub();
   });
 });
+
+describe('PtyStateTracker and the AI prefix', () => {
+  it('does not treat the echoed ">" typed into a running program as a shell prompt', async () => {
+    const { PtyStateTracker } = await import('./PtyStateTracker');
+    const t = new PtyStateTracker();
+    t.notifyCommandStarted('python3 -m http.server 8765');
+    t.feedOutput('Serving HTTP on :: port 8765 ...\r\n');
+    t.feedOutput('>');
+    expect(t.isProcessRunning()).toBe(true);
+    expect(t.canSafelyInjectCtrlC()).toBe(false);
+    t.feedOutput('\r\nuser@mac app % ');
+    expect(t.isIdleAtPrompt()).toBe(true);
+  });
+});

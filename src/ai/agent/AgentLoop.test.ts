@@ -1517,3 +1517,16 @@ describe('Talking to other terminals', () => {
     expect(String(third[0]) + JSON.stringify(third[2]?.messages ?? '')).toContain('GET /api 500');
   });
 });
+
+describe('App actions win over folder navigation', () => {
+  it('"go to tab 2" switches tabs instead of offering to create a folder', async () => {
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate: vi.fn() }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    const r = await loop.run('go to tab 2', { os: 'macos', cwd: '/tmp' });
+    expect(r.steps[0]).toMatchObject({ tool: '__app__', params: { id: 'focus_tab', tab: 2 } });
+    expect(r.summary).not.toMatch(/mkdir|does not exist/);
+  });
+});
