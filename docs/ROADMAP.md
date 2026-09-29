@@ -511,3 +511,34 @@ package built on Arch with `packaging/arch/build-pacman.sh`.
 - The GUI retest of the server-in-a-tab case on the rebuilt DMG is pending. The screen was in use
   by other automation; regression tests cover both fixes.
 
+
+---
+
+## 9. .flow files and the 2.1.0 releases (2026-09-29)
+
+**.flow files** (see [FLOW_FILES.md](FLOW_FILES.md)): opening one runs it on macOS, Windows and Linux.
+- A flow with only desktop actions runs without the terminal, and the app quits afterwards.
+- A flow that installs or runs things opens the terminal, asks once with every command listed, and
+  types each step.
+- New actions: `install` (winget / Homebrew / apt, dnf, pacman, zypper), per-OS `command`, `clone`,
+  `download`.
+- Tested in the macOS release build: the desktop-only flow showed no window and exited in about 3 s;
+  the terminal flow was approved, ran 4 steps and reported "finished"; declining ran nothing.
+- Windows and Linux flows are covered by tests but were not run on those systems.
+
+**Fixed while releasing:**
+- `.flow` files could not open on Windows (`cat`), and Windows flows were planned as macOS ones.
+- The app's `path` module mishandled `C:\` and `resolve()`.
+- The `.deb`/`.rpm` desktop entry did not pass the opened file (`%F`).
+- Linux had no MIME type for `*.flow`.
+- Checksum names did not match the asset names.
+
+**Releases** (one per platform, each from its own branch, by `scripts/release.sh`):
+
+| Release | Files |
+|---|---|
+| `v2.1.0-macos` (`release/macos`) | Apple Silicon DMG (tested on this Mac), Intel DMG (CI) |
+| `v2.1.0-linux` (`release/linux`) | Arch package built on Arch, `.deb`, `.rpm`, `.AppImage` |
+| `v2.1.0-windows` (`release/windows`) | `.msi`, setup `.exe` |
+
+To fix one platform, commit to its branch and push. Only that release is rebuilt.
