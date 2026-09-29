@@ -362,9 +362,10 @@ sandbox. The local engine was Qwen2.5-Coder-3B served by `~/.sentinel/bin/llama-
 | `watch list`, `unwatch 1`, `why`, `export session` | Correct |
 | `git statsu` then Tab | Fix `git status` shown after the output and applied |
 
-**Unexplained:** once, right after relaunching the app, the typed `cd ... && clear` line opened three
-split panes and never reached the shell, as if a Command modifier were held. The audit log and the
-shell history show nothing unexpected ran; the cause is not known.
+**Explained later (section 7):** once, right after relaunching the app, the typed `cd ... && clear`
+line opened three split panes and never reached the shell. A Command modifier was held down at the
+system level by other GUI automation running on the same test Mac, so typed letters arrived as
+shortcuts (Cmd+D splits, Cmd+R resets the shell). An environment issue, not an app bug.
 
 **Still open after this pass:**
 
@@ -400,3 +401,54 @@ another Mac Gatekeeper blocks the first launch until the user allows it (System 
 & Security, Open Anyway). Intel Macs need a universal build; Linux packages must be built on Linux
 (the CI workflow can do this). A clean machine has no engine or model: the in-app installer
 downloads them (about 2 GB); that download path has unit tests but was not run end to end here.
+
+---
+
+## 7. Talking to other terminals, three-OS CI, simpler Settings (2026-09-29)
+
+**Requests about the terminals themselves** are parsed without the model and answered from the
+terminal registry:
+
+| Request | Behavior |
+|---|---|
+| "what's running in my terminals" | Lists every terminal (number, tab, folder, running command); no model call |
+| "open a new tab in ~/api and run npm run dev" | Asks once for the command, opens the tab in that folder and focuses it |
+| "split the screen vertically and run htop" | Splits the requesting pane |
+| "run npm test in tab 2" / "in terminal 3, run ls" | Asks for confirmation, types it there, reports the output of short commands |
+| the same while tab 2 is busy, in vim/less, or at a password prompt | Refuses and says why; nothing typed |
+| "stop the server" / "stop tab 2" | Confirmation, then Ctrl+C in that terminal |
+| "what is the other terminal showing" | Its last lines |
+| "run ls in the other terminal" with two other terminals | Asks which one ("repeat with terminal N"); never guesses |
+
+**The model does not watch terminals.** The registry is event-driven (no polling, no model). The
+model sees other terminals only when the user makes a request: new output since its previous request,
+and for a terminal with nothing new only its latest error line and last line.
+
+**Also in this pass:** Settings reduced to one question ("Which AI answers your requests") with
+advanced options behind a toggle; Ctrl+R history now lists real commands (it showed built-in samples
+with invented counts) and never records lines typed into a running program (a sudo password would
+have been saved); on Windows, `~/.sentinel` store paths such as `\Windows\x` or `C:x` could leave the
+store (found by the new Windows CI job, fixed).
+
+**Verification:** unit and integration tests cover the parser, target resolution, refusals,
+confirmations and the change-only context. These requests were **not** exercised in the app window in
+this pass: the test Mac's screen was being driven by another automation at the time. Manual check:
+open a tab running `python3 -m http.server 8765`; ask what is running; "run ls in tab 2" (refused,
+busy); "stop the server"; "run ls in tab 2" (output shown); open a third terminal and ask "run ls in
+the other terminal" (asks which).
+
+**Cross-platform status.** CI builds and tests the frontend on Linux and the Rust backend on Linux,
+macOS and Windows, and builds installers for all three (`build-installers.yml`). What works on
+Windows today, by code path (not run on a Windows machine):
+
+| Works | Does not work yet (uses `sh -c` or Unix tools) |
+|---|---|
+| Terminal with PowerShell, tabs, splits | Built-in model: download, engine install and start (`sh`, `curl`, `uname`; looks for `llama-server` without `.exe`) |
+| AI through Ollama or a cloud provider | Error watcher checks, port/process manager |
+| Agent commands (`shell.execute` runs PowerShell) | Docker, Wi-Fi, Bluetooth, networking, system, filesystem, developer and browser drivers |
+| Confirmations, workflows (the adapter emits PowerShell), talking to other terminals | ROS detection, workspace discovery, system scan, integration installers |
+| | Folder tracking reads the shell's folder from the OS on macOS/Linux only; Windows falls back to parsing `cd` |
+
+Next step for Windows: one shell helper (PowerShell on Windows, `sh -c` elsewhere) used by every
+driver, and a native Rust download/install for the engine.
+
