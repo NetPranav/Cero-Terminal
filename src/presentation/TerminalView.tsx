@@ -1,3 +1,5 @@
+import { AuditLogger } from '../domain/security/AuditLogger';
+import { SystemSettingsProvider } from '../domain/autocomplete/SystemSettingsProvider';
 import { runFlowInTerminal, parseStepMarker, flowApprovalPlan, type ShellFamily } from '../workflows/flow/FlowRunner';
 import { flowOsOf, type FlowPlan } from '../workflows/flow/FlowPlan';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -748,6 +750,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         autocompleteEngine.registerProvider(historyProvider);
         autocompleteEngine.registerProvider(demonstrationProvider);
         autocompleteEngine.registerProvider(workspaceContextProvider);
+        autocompleteEngine.registerProvider(new SystemSettingsProvider());
         
         // Start Tier 4 Sentinel-SERL Autonomous Orchestrator
         SentinelSerlCoordinator.getInstance().startCoordinator();
@@ -977,6 +980,21 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 }, 500);
               }),
               approve: (p) => ConsentQueue.getInstance().enqueue(flowApprovalPlan(p, os, source), currentSessionId!),
+              audit: (event) => {
+                void AuditLogger.getInstance().log({
+                  source: 'user',
+                  capabilityId: event.type === 'step' ? 'workflow.flow.step' : 'workflow.flow',
+                  parameters: event.type === 'step'
+                    ? { flow: plan.name, source, step: event.step?.name, command: event.step?.command, exitCode: event.exitCode }
+                    : { flow: plan.name, source, steps: plan.steps.map(s => s.command) },
+                  riskScore: 0,
+                  permissionResult: event.type === 'declined' ? 'Denied' : 'Granted',
+                  executionTimeMs: 0,
+                  verificationResult: event.type === 'step' ? (event.exitCode === 0 ? 'Success' : 'Failure') : 'NotApplicable',
+                  rollbackAvailable: false,
+                  userConfirmation: event.type !== 'declined',
+                }).catch(() => {});
+              },
               execute: (command, args) => invoke<{ code: number; stdout: string; stderr: string }>('execute_command', { command, args, timeoutMs: 30000 }),
               notice: (text, tone) => {
                 const color = tone === 'error' ? S.err : tone === 'ok' ? S.ok : S.muted;
@@ -1806,6 +1824,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               securityModalPlan.resolve(false);
               setSecurityModalPlan(null);
               setAuthPassword('');
+            } else if (e.key === 'Enter' && securityModalPlan.plan.requiresClick) {
+              // Flows opened from a file start only with a click on Run
+              consentStrayKeyAtRef.current = now;
             } else if (e.key === 'Enter' && !securityModalPlan.plan.requiresPassword) {
               // Armed only after the dialog was visible for a moment with no typing going on
               const armed = now - consentShownAtRef.current > 800 && now - consentStrayKeyAtRef.current > 800 && !e.repeat;
@@ -1875,7 +1896,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             <p style={{ fontSize: '13px', lineHeight: '1.55', color: 'rgba(255, 255, 255, 0.75)', margin: '0 0 18px 0' }}>
               {securityModalPlan.plan.requiresPassword
                 ? 'This is a protected action. Enter your login password to allow it once.'
-                : 'Sentinel will run exactly what is shown below. Nothing runs until you approve.'}
+                : securityModalPlan.plan.requiresClick
+                  ? 'These commands come from a file. Sentinel will run exactly what is shown below, only after you click Run.'
+                  : 'Sentinel will run exactly what is shown below. Nothing runs until you approve.'}
             </p>
 
             <div style={{
@@ -2009,7 +2032,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               >
                 <Check size={14} />
                 <span>{isVerifying ? 'Checking...' : securityModalPlan.plan.requiresPassword ? 'Authorize' : 'Run'}</span>
-                {!isVerifying && <span style={{ opacity: 0.55, fontSize: '11px', background: 'rgba(0,0,0,0.08)', padding: '1px 5px', borderRadius: '4px' }}>↵</span>}
+                {!isVerifying && !securityModalPlan.plan.requiresClick && <span style={{ opacity: 0.55, fontSize: '11px', background: 'rgba(0,0,0,0.08)', padding: '1px 5px', borderRadius: '4px' }}>↵</span>}
               </button>
             </div>
           </div>

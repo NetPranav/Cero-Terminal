@@ -84,6 +84,8 @@ export interface TerminalFlowIO {
   execute: ExecuteFn;
   /** A status line in the terminal (not sent to the shell) */
   notice: (text: string, tone: 'info' | 'ok' | 'error') => void;
+  /** Audit trail: the decision and every step's result */
+  audit?: (event: { type: 'approved' | 'declined' | 'step'; step?: FlowStep; exitCode?: number | null }) => void;
 }
 
 export interface TerminalFlowResult {
@@ -96,7 +98,9 @@ export interface TerminalFlowResult {
 /** Run a plan that needs the terminal: approve once, then step by step, stopping at the first failure. */
 export async function runFlowInTerminal(plan: FlowPlan, io: TerminalFlowIO, source?: string): Promise<TerminalFlowResult> {
   const from = source ? ` from ${source.split(/[\\/]/).pop()}` : '';
-  if (!(await io.approve(plan))) {
+  const approved = await io.approve(plan);
+  io.audit?.({ type: approved ? 'approved' : 'declined' });
+  if (!approved) {
     const summary = `Flow "${plan.name}"${from} not run: you declined it. Nothing was changed.`;
     io.notice(summary, 'error');
     return { success: false, declined: true, completed: 0, summary };
@@ -109,6 +113,7 @@ export async function runFlowInTerminal(plan: FlowPlan, io: TerminalFlowIO, sour
     io.notice(`Step ${i + 1}/${plan.steps.length}: ${step.name}`, 'info');
     if (step.kind === 'desktop') {
       const res = await runDesktopSteps([step], io.os, io.execute);
+      io.audit?.({ type: 'step', step, exitCode: res.ok ? 0 : 1 });
       if (!res.ok) {
         const summary = `Flow "${plan.name}" stopped at step ${i + 1} (${step.name}): ${res.failed[0]}`;
         io.notice(summary, 'error');
@@ -123,6 +128,7 @@ export async function runFlowInTerminal(plan: FlowPlan, io: TerminalFlowIO, sour
     const result = io.nextStepResult();
     await io.type(`${typedStep(step, io.os, io.shell)}\r`);
     const code = await result;
+    io.audit?.({ type: 'step', step, exitCode: code });
     if (code !== 0) {
       const why = code === null ? 'it was interrupted' : `it exited with code ${code}`;
       const summary = `Flow "${plan.name}" stopped at step ${i + 1} (${step.name}): ${why}. The remaining ${plan.steps.length - i - 1} step(s) were not run.`;
@@ -164,6 +170,9 @@ export function flowApprovalPlan(plan: FlowPlan, os: FlowOs, source?: string): E
     explanation: worst.explanation || `${plan.steps.length} steps from a flow file`,
     requiresPassword: false,
     requiresConsent: true,
+    // A flow from a file is someone else's commands: only a click on Run starts it, never a key
+    // press (a stray or synthetic Enter must not approve it)
+    requiresClick: Boolean(source),
   } as ExecutionPreviewPlan;
 }
 

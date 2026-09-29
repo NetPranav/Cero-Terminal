@@ -200,9 +200,6 @@ export class BluetoothCapability extends BaseCapabilityDriver<BluetoothInput, an
               }
             }
           }
-          if (devices.length === 0) {
-            devices.push({ address: '00:11:22:33:44:55', name: 'Bluetooth Peripheral', connected: true });
-          }
           const stdout = `Discovered / Paired Bluetooth Devices (${devices.length}):\r\n` + devices.map(d => `  • ${d.name} (${d.address})`).join('\r\n');
           return { success: true, data: { devices, stdout }, commandExecuted: 'bluetoothctl devices' };
         }
@@ -241,9 +238,13 @@ export class BluetoothCapability extends BaseCapabilityDriver<BluetoothInput, an
 
           const output = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', {
             command: 'sh',
-            args: ['-c', `bluetoothctl power ${op} 2>/dev/null || rfkill ${op === 'on' ? 'unblock' : 'block'} bluetooth 2>/dev/null || echo "Controller powered: ${op === 'on' ? 'yes' : 'no'}"`]
+            args: ['-c', `bluetoothctl power ${op} 2>/dev/null | grep -q succeeded || rfkill ${op === 'on' ? 'unblock' : 'block'} bluetooth`]
           });
-          const stdout = output.stdout?.trim() || `Controller powered: ${op === 'on' ? 'yes' : 'no'}`;
+          // Only a command that worked counts: this used to report success whatever happened
+          if (output.code !== 0) {
+            return { success: false, error: { code: 'BT_POWER_FAILED', message: output.stderr?.trim() || `Could not turn Bluetooth ${op} (no bluetoothctl or rfkill access)` } };
+          }
+          const stdout = output.stdout?.trim() || `Bluetooth powered ${op}`;
           return { success: true, data: { power: op, stdout }, commandExecuted: `bluetoothctl power ${op}`, rollbackPayload: { op, prev: op === 'on' ? 'off' : 'on' } };
         }
 

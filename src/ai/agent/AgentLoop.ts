@@ -18,6 +18,7 @@
  * and to direct shell passthrough if Ollama is unavailable.
  */
 
+import { parseSystemAction, commandFor, suggestionsFor, TOPIC_NAMES, type SystemAction, type SystemCommand } from '../../domain/system/SystemControl';
 import { parseFixFileRequest, runCommandFor, extractCodeBlock, extractFixNote, lineDiff, FixFileRequest } from './FixFile';
 import { pathsInError, localImports, parseDiagnoseRequest, DiagnoseRequest } from './ErrorSources';
 import { referencesSecretPath } from '../../domain/security/SecretRedactor';
@@ -1695,6 +1696,13 @@ export class AgentLoop {
     const appAction = parseAppAction(cleaned || goal);
     if (appAction) return this.runAppAction({ ...appAction, paneId: context.paneId });
 
+    // System settings: Wi-Fi, Bluetooth, brightness, volume, dark mode, settings pages
+    const systemAction = parseSystemAction(cleaned || goal);
+    if (systemAction) {
+      const handled = await this.runSystemAction(systemAction, context);
+      if (handled) return handled;
+    }
+
     // "run the workflow in deploy.flow", "run my nightly workflow"
     const workflowRequest = parseWorkflowRequest(cleaned || goal);
     if (workflowRequest) return this.runWorkflowRequest(workflowRequest, context);
@@ -2928,6 +2936,56 @@ export class AgentLoop {
       }
     }
     return finish(false, `${request.file} still fails after two fixes (${lastNote}). Last output:\n${output(run).split('\n').slice(-4).join('\n')}\nThe original is kept as ${request.file}.bak.`);
+  }
+
+  /**
+   * A system setting on this OS. Reads and settings pages run without a dialog; changes go through
+   * the confirmation policy. When a change cannot be made here, its settings page opens instead.
+   * Null leaves the request to the capability drivers (macOS Wi-Fi/Bluetooth, battery on macOS and
+   * Linux), which already handle them.
+   */
+  private async runSystemAction(action: SystemAction, context: AgentRunContext): Promise<AgentResult | null> {
+    const os = /^win/i.test(context.os) ? 'windows' : /^(?:mac|darwin)/i.test(context.os) ? 'macos' : 'linux';
+    if (os === 'macos' && (action.kind === 'wifi' || action.kind === 'bluetooth') && action.op !== 'status' && action.op !== 'devices') return null;
+    if (os !== 'windows' && action.kind === 'battery') return null;
+    if (action.kind === 'suggest') {
+      const options = suggestionsFor(action.topic, os);
+      const summary = `Did you mean one of these ${TOPIC_NAMES[action.topic]} requests?\n${options.map(o => `  > ${o}`).join('\n')}`;
+      this.emit({ type: 'done', message: summary });
+      return { success: true, summary, steps: [] };
+    }
+    const cmd = commandFor(action, os);
+    if (!cmd) return null;
+    const steps: { tool: string; params: any; result: ToolExecutionResult }[] = [];
+    const run = async (c: SystemCommand, authorize: AgentAuthorizationHandler | undefined) => {
+      this.emit({ type: 'tool_start', message: c.title });
+      const params = { command: c.command, explanation: c.title };
+      const result = await this.toolExecutor.execute('shell.execute', params, context.cwd, authorize);
+      steps.push({ tool: 'shell.execute', params, result });
+      return result;
+    };
+    const result = await run(cmd, cmd.changes ? this.authorizationHandler : async () => true);
+    if (result.errorCode === 'USER_CANCELLED') {
+      const summary = `Not changed: you declined "${cmd.title}".`;
+      this.emit({ type: 'tool_done', message: `✗ ${summary}` });
+      return { success: false, summary, steps, declined: true };
+    }
+    const code = typeof result.data?.code === 'number' ? result.data.code : (result.success ? 0 : 1);
+    if (result.success && code === 0) {
+      const summary = cmd.done(String(result.data?.stdout ?? '')) || `${cmd.title}: done.`;
+      this.emit({ type: 'done', message: summary });
+      return { success: true, summary, steps };
+    }
+    const why = String(result.data?.stderr || result.error || 'it failed').trim().split('\n').filter(Boolean).pop() || 'it failed';
+    if (cmd.fallback) {
+      await run(cmd.fallback, async () => true);
+      const summary = `${cmd.title} did not work here (${why}). Opened ${cmd.fallback.title.replace(/^Open /, '')} so you can change it there.`;
+      this.emit({ type: 'error', message: summary });
+      return { success: false, summary, steps };
+    }
+    const summary = `${cmd.title} failed: ${why}`;
+    this.emit({ type: 'error', message: summary });
+    return { success: false, summary, steps };
   }
 
   /** Deliver an app action to the window; outside the desktop app there is nothing to open. */

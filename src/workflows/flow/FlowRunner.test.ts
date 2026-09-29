@@ -60,3 +60,15 @@ describe('FlowRunner', () => {
     expect(parseStepMarker('other;1')).toBeNull();
   });
 });
+
+describe('flow approvals', () => {
+  it('a flow from a file needs a click, and approvals and steps are audited', async () => {
+    const { flowApprovalPlan } = await import('./FlowRunner');
+    const plan = planFlow(TUTORIAL, 'demo', 'macos')!;
+    expect((flowApprovalPlan(plan, 'macos', '/Users/me/Downloads/demo.flow') as any).requiresClick).toBe(true);
+    const events: string[] = [];
+    await runFlowInTerminal(plan, { os: 'macos', shell: 'posix', type: () => {}, nextStepResult: async () => 0, approve: async () => true,
+      execute: async () => ({ code: 0 }), notice: () => {}, audit: e => events.push(`${e.type}:${e.exitCode ?? ''}`) });
+    expect(events).toEqual(['approved:', 'step:0', 'step:0', 'step:0']);
+  });
+});
