@@ -16,7 +16,15 @@
         "title": "Sentinel Terminal",
         "width": 1024,
         "height": 768,
-        "visible": false
+        "visible": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 14,
+          "y": 18
+        },
+        "minWidth": 640,
+        "minHeight": 400
       }
     ],
     "security": {

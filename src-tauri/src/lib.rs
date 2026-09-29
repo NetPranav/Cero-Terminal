@@ -46,6 +46,13 @@ pub fn run() {
             launch::show_unless_flow(app.handle());
 
             use tauri::Manager;
+            // No separate title bar on any OS: macOS overlays its traffic lights on the tab bar
+            // (tauri.conf.json titleBarStyle Overlay); Windows and Linux draw their own window
+            // controls in the tab bar, so the native frame is removed here.
+            #[cfg(not(target_os = "macos"))]
+            if let Some(main_win) = app.get_webview_window("main") {
+                let _ = main_win.set_decorations(false);
+            }
             if let Some(main_win) = app.get_webview_window("main") {
                 match main_win.url() {
                     Ok(url) => {

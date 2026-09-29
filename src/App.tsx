@@ -35,7 +35,8 @@ import {
   Search,
   Code2 
 } from "lucide-react";
-import { isLinux, getShortcutModifier, formatShortcut } from "./shared/platform";
+import { isLinux, isMacOS, getShortcutModifier, formatShortcut } from "./shared/platform";
+import { WindowControls, WindowTitleStrip } from "./ui/components/WindowControls";
 import { TerminalWorkspace, MAX_PANES_PER_TAB } from "./domain/terminal/TerminalWorkspace";
 import { submitTerminalRequest } from "./presentation/TerminalRequests";
 import { paneToFocus } from "./presentation/paneFocus";
@@ -999,8 +1000,10 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
         }
       }}
     >
-      <div className={`tabs-bar window-drag-region ${isLinux() ? 'platform-linux' : ''}`}>
-        <div className="tabs-track">
+      {/* The tab bar is the title bar: drag it to move the window, double-click to maximize. macOS
+          overlays its traffic lights on the left inset; Windows and Linux get WindowControls. */}
+      <div className={`tabs-bar window-drag-region ${isMacOS() ? '' : 'platform-linux'}`} data-tauri-drag-region>
+        <div className="tabs-track" data-tauri-drag-region>
           {tabs.map((tab) => {
             const isActive = activeTabId === tab.id;
             const isEditing = editingTabId === tab.id;
@@ -1214,6 +1217,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
             </button>
           </div>
         )}
+        {!isMacOS() && <WindowControls />}
       </div>
 
       {/* Classic Minimalist Workspace Appearance Modal */}
@@ -1524,7 +1528,9 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
         }}
       />
       {showAiSettings && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: '#090b10' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: '#090b10', display: 'flex', flexDirection: 'column' }}>
+          <WindowTitleStrip isMac={isMacOS()} />
+          <div style={{ flex: 1, minHeight: 0 }}>
           <Suspense fallback={null}>
           <AiSettingsPage 
             onClose={() => setShowAiSettings(false)} 
@@ -1537,6 +1543,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
             }}
           />
           </Suspense>
+          </div>
         </div>
       )}
       {showWizard && (

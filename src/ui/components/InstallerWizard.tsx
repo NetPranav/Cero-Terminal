@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { InstallerService, IntegrationStatus } from '../../domain/integration/InstallerService';
 import { Terminal, Folder, Code2, Check, ExternalLink, Cpu, Download, CheckCircle2, Sparkles, AlertCircle, X, ArrowRight, GitBranch, Layers } from 'lucide-react';
-import { isLinux } from '../../shared/platform';
+import { isLinux, isMacOS } from '../../shared/platform';
+import { WindowTitleStrip } from './WindowControls';
 import { EmbeddedEngineManager, DownloadProgress } from '../../ai/models/EmbeddedEngineManager';
 import { STARTER_WORKFLOWS, getRecommendedStarterWorkflowIds, getAllStarterWorkflowIds } from '../../workflows/templates/StarterWorkflows';
 import { DiskWorkflowStorage } from '../../workflows/storage/DiskWorkflowStorage';
@@ -228,6 +229,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
       fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif',
       color: '#ffffff'
     }}>
+      <WindowTitleStrip isMac={isMacOS()} />
       {/* Top Application Header Bar */}
       <div
         className="window-drag-region"

@@ -466,3 +466,45 @@ input, textarea, select, pre, code, .terminal-selectable {
   background: rgba(255, 255, 255, 0.3);
 }
 
+
+/* Windows and Linux window controls at the right end of the tab bar (no native title bar) */
+.window-controls {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  margin: 0 -10px 0 8px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.window-control {
+  width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--sentinel-fg-muted, rgba(255, 255, 255, 0.62));
+  cursor: default;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.window-control:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--sentinel-fg, #ffffff);
+}
+
+.window-control-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.window-title-strip {
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0 10px;
+  background: #090b10;
+  -webkit-app-region: drag;
+}
