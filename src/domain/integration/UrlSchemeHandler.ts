@@ -44,7 +44,8 @@ export class UrlSchemeHandler {
     }
 
     // Handle raw filesystem paths passed via Finder Quick Actions, CLI, or open -a commands
-    if (cleanInput.startsWith('/') || cleanInput.startsWith('~/') || cleanInput.startsWith('./') || cleanInput.startsWith('../')) {
+    if (cleanInput.startsWith('/') || cleanInput.startsWith('~/') || cleanInput.startsWith('./') || cleanInput.startsWith('../')
+      || /^[A-Za-z]:[\\/]/.test(cleanInput) || cleanInput.startsWith('\\\\')) {
       return {
         type: 'open',
         path: cleanInput,

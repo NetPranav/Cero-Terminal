@@ -1458,6 +1458,14 @@ describe('Talking to other terminals', () => {
     expect(r.summary).toContain('terminal 3 (tab 2, dev server) in /home/u/web: running `npm run dev`');
   });
 
+  it('shows the last line with text for a busy terminal, never an empty one', async () => {
+    const { ws, loop } = await setup();
+    ws.register('srv', { sessionId: 's-srv', cwd: '/home/u/web', busy: true, runningCommand: 'python3 -m http.server', outputTail: ['GET / HTTP/1.1 200', '', '   '] });
+    const r = await loop.run("what's running in my terminals", { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    expect(r.summary).toContain('last line: GET / HTTP/1.1 200');
+    expect(r.summary).not.toMatch(/last line:\s*$/m);
+  });
+
   it('sends a command to an idle terminal after approval and reports its output', async () => {
     const { ws, loop, writes } = await setup();
     const { AgentLoop: Loop } = await import('./AgentLoop');

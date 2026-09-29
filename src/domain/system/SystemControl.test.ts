@@ -80,16 +80,19 @@ describe('commandFor', () => {
   });
 
   // On the Windows CI runner: every generated script must parse in Windows PowerShell
+  // One PowerShell process parses them all (starting one per script exceeds the test timeout)
   it.skipIf(process.platform !== 'win32')('every Windows command parses in PowerShell', () => {
-    for (const action of ACTIONS) {
+    const scripts = ACTIONS.flatMap(action => {
       const cmd = commandFor(action, 'windows')!;
-      for (const script of [cmd.command, cmd.fallback?.command].filter(Boolean) as string[]) {
-        const check = `$errors = $null; [System.Management.Automation.Language.Parser]::ParseInput([Console]::In.ReadToEnd(), [ref]$null, [ref]$errors) | Out-Null; if ($errors.Count) { $errors | ForEach-Object { $_.Message }; exit 1 }`;
-        const res = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', check], { input: script, encoding: 'utf8' });
-        expect(res.status, `${JSON.stringify(action)}: ${res.stdout}${res.stderr}`).toBe(0);
-      }
-    }
-  });
+      return [cmd.command, cmd.fallback?.command].filter(Boolean).map(script => ({ name: JSON.stringify(action), script }));
+    });
+    const check = '$failed = 0; foreach ($item in ([Console]::In.ReadToEnd() | ConvertFrom-Json)) { $errors = $null; '
+      + '[System.Management.Automation.Language.Parser]::ParseInput($item.script, [ref]$null, [ref]$errors) | Out-Null; '
+      + "if ($errors.Count) { $failed++; Write-Output ($item.name + ': ' + (($errors | ForEach-Object { $_.Message }) -join '; ')) } }; exit $failed";
+    const res = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', check], { input: JSON.stringify(scripts), encoding: 'utf8' });
+    expect(res.error).toBeUndefined();
+    expect(res.status, `${res.stdout}${res.stderr}`).toBe(0);
+  }, 60_000);
 });
 
 describe('suggestions', () => {

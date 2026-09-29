@@ -2522,7 +2522,8 @@ export class AgentLoop {
       if (panes.length === 0) return done('No terminals are open.');
       const lines = panes.map(p => {
         const state = p.alternateScreen ? 'full-screen program' : p.busy && p.runningCommand ? `running \`${p.runningCommand}\`` : 'idle';
-        const last = p.outputTail[p.outputTail.length - 1];
+        // The last line with text (a trailing blank line printed "last line:" with nothing after it)
+        const last = [...p.outputTail].reverse().find(l => l.trim())?.trim();
         const you = p.paneId === context.paneId ? ' (this one)' : '';
         return `- ${describePane(p)}${you} in ${p.cwd || '~'}: ${state}${last && p.busy ? `\n  last line: ${last.slice(0, 120)}` : ''}`;
       });

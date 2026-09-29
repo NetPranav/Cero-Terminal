@@ -44,6 +44,13 @@ describe('UrlSchemeHandler', () => {
     expect(encodedAction.path).toBe('/home/user/My Documents/test');
   });
 
+  it('accepts Windows folders passed by the sentinel CLI', () => {
+    expect(handler.parse('C:\\Users\\me\\api')).toMatchObject({ type: 'open', path: 'C:\\Users\\me\\api' });
+    expect(handler.parse('D:/work')).toMatchObject({ type: 'open', path: 'D:/work' });
+    expect(handler.parse('\\\\server\\share')).toMatchObject({ type: 'open', path: '\\\\server\\share' });
+    expect(handler.parse('C:relative').type).toBe('noop');
+  });
+
   it('filters out invalid or noop inputs when parsing many', () => {
     const actions = handler.parseMany(['--debug', 'sentinel://open?path=/dir', 'file:///var/log', 'unsupported:protocol']);
     expect(actions.length).toBe(2);

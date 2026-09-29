@@ -38,6 +38,7 @@ import {
 import { isLinux, getShortcutModifier, formatShortcut } from "./shared/platform";
 import { TerminalWorkspace, MAX_PANES_PER_TAB } from "./domain/terminal/TerminalWorkspace";
 import { submitTerminalRequest } from "./presentation/TerminalRequests";
+import { paneToFocus } from "./presentation/paneFocus";
 import { isWorkflowFilePath } from "./workflows/storage/FlowImport";
 import { planFlowFile, flowOsOf } from "./workflows/flow/FlowPlan";
 import { runDesktopSteps } from "./workflows/flow/FlowRunner";
@@ -286,6 +287,15 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
     setActiveTabId(newId);
     setActivePaneId(newPane.data.id);
   }, []);
+
+  // The focused pane is always in the tab on screen. Switching tabs (click, "go to tab 1",
+  // shortcuts) or closing a pane used to leave focus in a hidden tab, so an opened .flow file or
+  // a Workflow Manager run was typed into a terminal the user could not see.
+  useEffect(() => {
+    const tab = tabs.find(t => t.id === activeTabId);
+    const next = tab ? paneToFocus(tab.rootPane, activePaneId) : null;
+    if (next) setActivePaneId(next);
+  }, [tabs, activeTabId, activePaneId]);
 
   // Latest layout for callbacks that outlive a render (the agent's pane spawner)
   const tabsRef = useRef(tabs);
