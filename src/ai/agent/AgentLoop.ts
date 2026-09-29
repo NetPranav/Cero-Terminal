@@ -2973,9 +2973,9 @@ export class AgentLoop {
     if (os === 'macos' && action.kind === 'bluetooth') {
       try { const { invoke } = await import('@tauri-apps/api/core'); await invoke('request_bluetooth_access'); } catch { /* outside the app */ }
     }
-    // macOS turns Wi-Fi and Bluetooth on or off through the existing fast paths; joining a network (a
-    // typed name and, on secured networks, a saved password) needs exact quoting, never the model
-    if (os === 'macos' && (action.kind === 'wifi' || action.kind === 'bluetooth') && (action.op === 'on' || action.op === 'off')) return null;
+    // Wi-Fi is fully deterministic here (exact networksetup commands, no model: the older path took the model
+    // 15 seconds and once invented a password). Bluetooth on or off keeps its existing driver on macOS.
+    if (os === 'macos' && action.kind === 'bluetooth' && (action.op === 'on' || action.op === 'off')) return null;
     if (os !== 'windows' && action.kind === 'battery') return null;
     if (action.kind === 'suggest') {
       const options = suggestionsFor(action.topic, os);

@@ -343,3 +343,19 @@ export function withCwd(step: FlowStep, os: FlowOs): string {
   if (!step.cwd) return step.command;
   return os === 'windows' ? `Set-Location -LiteralPath ${psPath(step.cwd)}; ${step.command}` : `cd ${posixPath(step.cwd)} && ${step.command}`;
 }
+
+/**
+ * Resolve each step's relative folder against the folder the terminal is in when the flow starts.
+ *
+ * Steps are typed into one shell, and `cd 'app' && git init` leaves the shell inside app, so the next
+ * step's `cd 'app'` would look for app/app and fail. With an absolute folder, repeating the `cd` is harmless
+ * in every shell, and the approval lists exactly what is typed.
+ */
+export function absolutizeCwd(plan: FlowPlan, base: string | undefined, os: FlowOs): FlowPlan {
+  if (!base) return plan;
+  const sep = os === 'windows' ? '\\' : '/';
+  const isAbsolute = (p: string) => /^(?:~(?:[\\/]|$)|\/|[A-Za-z]:[\\/]|\\\\)/.test(p);
+  const join = (dir: string, rel: string) => `${dir.replace(/[\\/]+$/, '')}${sep}${rel.replace(/^\.[\\/]/, '').replace(/[\\/]+/g, sep)}`;
+  return { ...plan, steps: plan.steps.map(step => (step.cwd && !isAbsolute(step.cwd) ? { ...step, cwd: join(base, step.cwd) } : step)) };
+}
+

@@ -1768,3 +1768,28 @@ describe('Joining a Wi-Fi network', () => {
     expect(r).toMatchObject({ success: false, declined: true });
   });
 });
+
+describe('Turning Wi-Fi on and off on macOS', () => {
+  it('runs the exact networksetup command after approval, without calling the model', async () => {
+    const commands: string[] = [];
+    const execute = vi.fn(async (_t: string, params: any, _c: string, authorize?: any) => {
+      commands.push(params.command);
+      if (authorize && !(await authorize({ capabilityId: 'shell.execute', parameters: params }))) return { success: false, errorCode: 'USER_CANCELLED' };
+      return { success: true, data: { stdout: '', code: 0 } };
+    });
+    const generate = vi.fn();
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate }),
+      getActiveModel: () => ({ modelId: 'mock' }), initialize: vi.fn()
+    } as any);
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+    loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
+    const off = await loop.run('turn wifi off', { os: 'macos', cwd: '/tmp' });
+    expect(off).toMatchObject({ success: true, summary: 'Wi-Fi is off.' });
+    expect(commands[0]).toContain('networksetup -setairportpower');
+    expect(commands[0]).toMatch(/ off$/);
+    const on = await loop.run('turn wifi on', { os: 'macos', cwd: '/tmp' });
+    expect(on.summary).toBe('Wi-Fi is on.');
+    expect(generate).not.toHaveBeenCalled();
+  });
+});

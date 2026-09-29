@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { planFlow, planFlowFile, isDesktopCommand, withCwd } from './FlowPlan';
+import { planFlow, planFlowFile, isDesktopCommand, withCwd, absolutizeCwd } from './FlowPlan';
 
 const MORNING = {
   metadata: { name: 'Morning' },
@@ -98,5 +98,28 @@ describe('example flows', () => {
     }
     expect(planFlowFile(fs.readFileSync(`${dir}/morning.flow`, 'utf8'), 'morning.flow', 'windows')!.needsTerminal).toBe(false);
     expect(planFlowFile(fs.readFileSync(`${dir}/node-project.flow`, 'utf8'), 'node-project.flow', 'linux')!.needsTerminal).toBe(true);
+  });
+});
+
+describe('absolutizeCwd', () => {
+  const plan = (cwds: (string | undefined)[]) => ({ name: 'x', needsTerminal: true, skipped: [], steps: cwds.map((cwd, i) => ({ name: `s${i}`, kind: 'terminal' as const, command: 'true', platformCommands: { macos: 'true', linux: 'true', windows: 'true' }, cwd })) });
+
+  it('resolves relative folders against the folder the terminal starts in, so a repeated cd is harmless', () => {
+    const out = absolutizeCwd(plan([undefined, 'demo-project', 'demo-project', './sub/dir']), '/Users/me/work/', 'macos');
+    expect(out.steps.map(s => s.cwd)).toEqual([undefined, '/Users/me/work/demo-project', '/Users/me/work/demo-project', '/Users/me/work/sub/dir']);
+    const win = absolutizeCwd(plan(['app']), 'C:\\Users\\me', 'windows');
+    expect(win.steps[0].cwd).toBe('C:\\Users\\me\\app');
+  });
+
+  it('leaves absolute, home and drive folders, and steps without a folder, alone; no base changes nothing', () => {
+    const p = plan(['~/app', '/opt/x', 'C:\\x', '~', undefined]);
+    expect(absolutizeCwd(p, '/base', 'linux').steps.map(s => s.cwd)).toEqual(['~/app', '/opt/x', 'C:\\x', '~', undefined]);
+    expect(absolutizeCwd(plan(['a']), undefined, 'macos').steps[0].cwd).toBe('a');
+  });
+
+  it('what is typed for step 3 matches step 2 after the shell moved into the folder', () => {
+    const out = absolutizeCwd(plan(['demo-project', 'demo-project']), '/tmp/w', 'macos');
+    expect(withCwd(out.steps[0], 'macos')).toBe(withCwd(out.steps[1], 'macos'));
+    expect(withCwd(out.steps[1], 'macos')).toBe("cd '/tmp/w/demo-project' && true");
   });
 });

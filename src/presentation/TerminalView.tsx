@@ -1,7 +1,7 @@
 import { AuditLogger } from '../domain/security/AuditLogger';
 import { SystemSettingsProvider } from '../domain/autocomplete/SystemSettingsProvider';
 import { runFlowInTerminal, parseStepMarker, flowApprovalPlan, type ShellFamily } from '../workflows/flow/FlowRunner';
-import { flowOsOf, type FlowPlan } from '../workflows/flow/FlowPlan';
+import { flowOsOf, absolutizeCwd, type FlowPlan } from '../workflows/flow/FlowPlan';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -903,10 +903,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         };
 
         // .flow files that install or run things: typed into this terminal step by step
-        const runFlow = async (plan: FlowPlan, source?: string) => {
+        const runFlow = async (originalPlan: FlowPlan, source?: string) => {
           aiBusyRef.current = true;
           const os = flowOsOf(getPlatform());
+          let plan = originalPlan;
           try {
+            // Relative folders in a flow mean "from where the terminal is now" (see absolutizeCwd)
+            const startFolder = await invoke<string | null>('get_pty_cwd', { sessionId: currentSessionId }).catch(() => null);
+            plan = absolutizeCwd(originalPlan, startFolder || undefined, os);
             let shell: ShellFamily = 'powershell';
             if (os !== 'windows') {
               const probe = await invoke<{ stdout: string }>('execute_command', { command: '/bin/sh', args: ['-c', 'printf %s "$SHELL"'], timeoutMs: 5000 }).catch(() => ({ stdout: '' }));
