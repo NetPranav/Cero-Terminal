@@ -102,6 +102,29 @@ export class SessionManager {
     }
   }
 
+  /**
+   * The terminal view currently showing each session. A pane is rebuilt when the layout changes
+   * (a split, a closed neighbour); an agent request started in the old view keeps running and its
+   * output must reach the new view, not the discarded one.
+   */
+  private displays = new Map<string, (text: string) => void>();
+
+  /** Register the view showing a session; returns a detach that only removes this view. */
+  public attachDisplay(sessionId: string, write: (text: string) => void): () => void {
+    this.displays.set(sessionId, write);
+    return () => {
+      if (this.displays.get(sessionId) === write) this.displays.delete(sessionId);
+    };
+  }
+
+  /** Draw Sentinel's own text in the session's current view. False when no view is attached. */
+  public display(sessionId: string, text: string): boolean {
+    const write = this.displays.get(sessionId);
+    if (!write) return false;
+    write(text);
+    return true;
+  }
+
   public offOutput(sessionId: string, callback: TerminalOutputCallback): void {
     const callbacks = this.outputListeners.get(sessionId);
     if (callbacks) {

@@ -21,3 +21,23 @@ describe('SessionManager replay', () => {
     expect(sm.sessionBuffers.get(id)).toHaveLength(2);
   });
 });
+
+describe('SessionManager displays', () => {
+  it('sends text to the view currently showing the session, even from an older view', () => {
+    const sm = SessionManager.getInstance();
+    const id = `disp-${Date.now()}`;
+    const oldView = vi.fn();
+    const newView = vi.fn();
+    const detachOld = sm.attachDisplay(id, oldView);
+    sm.attachDisplay(id, newView);
+    // The old view unmounts after the new one attached: it must not detach the new view
+    detachOld();
+    expect(sm.display(id, 'Done.')).toBe(true);
+    expect(newView).toHaveBeenCalledWith('Done.');
+    expect(oldView).not.toHaveBeenCalled();
+  });
+
+  it('reports when no view is attached', () => {
+    expect(SessionManager.getInstance().display('nobody', 'x')).toBe(false);
+  });
+});

@@ -548,7 +548,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     // Helper to write output locally while recording to SessionManager buffer for pane switching persistence
     const writeTerm = (text: string) => {
       const normalized = text.replace(/\r?\n/g, '\r\n');
-      term.write(normalized);
+      // Through the session's current view: this closure may outlive this view (see attachDisplay)
+      if (!currentSessionId || !sessionManager.display(currentSessionId, normalized)) {
+        term.write(normalized);
+      }
       if (currentSessionId) {
         sessionManager.recordOutput(currentSessionId, normalized);
       }
@@ -558,6 +561,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     let outputCallback: ((data: Uint8Array, replay?: boolean) => void) | null = null;
     let shellRedrawMuteUntil = 0;
     let unsubPaneState: (() => void) | null = null;
+    let detachDisplay: (() => void) | null = null;
     let shellRedrawSeen = false;
     // Runs `next` once the shell has redrawn after the discarded `>` line (or the mute window
     // ran out), then unmutes: a fast answer must not race the redraw into a double prompt
@@ -600,6 +604,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           sessionIdRef.current = currentSessionId;
           await sessionManager.resize(currentSessionId, term.rows, term.cols);
         }
+
+        // This view now shows the session: output from requests started in an earlier view lands here
+        detachDisplay = sessionManager.attachDisplay(currentSessionId, (text) => term.write(text));
 
         // Tell the workspace about this pane so the agent knows what every terminal is doing
         const workspace = TerminalWorkspace.getInstance();
@@ -1258,6 +1265,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       unsubConsent?.();
       unsubWatch?.();
       unsubPaneState?.();
+      detachDisplay?.();
       if (paneId) TerminalWorkspace.getInstance().unregister(paneId);
       ConsentQueue.getInstance().clearQueue(currentSessionId);
       window.removeEventListener('sentinel:toggle-search', handleToggleSearch);
