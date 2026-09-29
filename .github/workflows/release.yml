@@ -139,6 +139,8 @@ jobs:
           find assets -type f \( -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \
             -o -name '*.pkg.tar.zst' -o -name '*.msi' -o -name '*.exe' \) -exec cp {} release/ \;
           cd release
+          # GitHub turns spaces in asset names into dots; name the files that way so SHA256SUMS matches
+          for f in *\ *; do [ -e "$f" ] && mv "$f" "${f// /.}"; done
           ls -la
           [ -n "$(ls)" ] || { echo "No installers were built" >&2; exit 1; }
           sha256sum * > SHA256SUMS.txt
