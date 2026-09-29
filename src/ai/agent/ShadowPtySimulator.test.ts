@@ -231,7 +231,8 @@ describe('ShadowPtySimulator — Speculative Shadow-PTY Simulation Engine', () =
     });
   });
 
-  describe('Live Subshell Ephemeral Execution (Integration)', () => {
+  // Runs real POSIX commands (sw_vers, kill -0) in a subshell
+  describe.skipIf(process.platform === 'win32')('Live Subshell Ephemeral Execution (Integration)', () => {
     const simulator = new ShadowPtySimulator();
 
     it('should execute read-only probe in ephemeral subshell in <50ms', async () => {

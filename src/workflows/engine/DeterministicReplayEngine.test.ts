@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DeterministicReplayEngine } from './DeterministicReplayEngine';
+
+// These tests are about terminal semantics (folders, cd, approvals) with POSIX steps. On a Windows
+// runner the adapter would (correctly) translate the steps to PowerShell, so the platform is fixed.
+vi.mock('../../shared/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../shared/platform')>()),
+  getPlatform: () => 'linux',
+}));
 import { SavedWorkflowDefinition } from '../models/WorkflowTypes';
 import { UndoLog } from '../../domain/session/UndoLog';
 

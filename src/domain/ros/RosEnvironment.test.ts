@@ -25,7 +25,8 @@ describe('RosEnvironment', () => {
     expect(boundStreamingRosCommand('ros2 topic hz /scan')).toBe('timeout 10 ros2 topic hz /scan');
   });
 
-  it('produces valid bash that sources ROS and the nearest workspace overlay', () => {
+  // Runs the generated script with /bin/bash (ROS 2 runs on Linux)
+  it.skipIf(process.platform === 'win32')('produces valid bash that sources ROS and the nearest workspace overlay', () => {
     const cmd = withRosEnvironment('ros2 topic list', 'jazzy');
     expect(cmd).toContain('. /opt/ros/jazzy/setup.bash');
     expect(cmd).toContain('install/setup.bash');
