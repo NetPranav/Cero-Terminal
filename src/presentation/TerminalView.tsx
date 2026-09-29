@@ -992,7 +992,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 commandText = stripPrompt(fullText);
               }
 
-              if (commandText.trim()) {
+              // A line typed while a program owns the terminal (a sudo or ssh password prompt, a
+              // full-screen editor) is input to that program, not a shell command: never keep it
+              const atShellPrompt = !ptyTrackerRef.current.isProcessRunning()
+                && !ptyTrackerRef.current.isAlternateBuffer()
+                && term.buffer.active.type !== 'alternate';
+              if (commandText.trim() && atShellPrompt) {
                  historyProvider.addHistory(commandText.trim(), currentPath || '~');
               }
 
@@ -1102,6 +1107,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
               // If there was an unresolved AI goal within the last 3 minutes and the user demonstrates a command
               if (
+                atShellPrompt &&
                 lastUnresolvedGoalRef.current &&
                 Date.now() - lastUnresolvedGoalRef.current.timestamp < 180000 &&
                 !['ls', 'pwd', 'clear', 'exit'].includes(cleanCmd.toLowerCase()) &&
