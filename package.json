@@ -1,7 +1,7 @@
 {
   "name": "tauri-app",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,7 +20,8 @@
     "cli": "tsx scripts/agent-cli.ts",
     "benchmark": "tsx scripts/benchmark_prompts.ts",
     "benchmark:domain": "tsx scripts/benchmark_prompts.ts --domain",
-    "smoke:engine": "tsx scripts/engine_smoke.ts"
+    "smoke:engine": "tsx scripts/engine_smoke.ts",
+    "stress": "bash scripts/stress/run.sh"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

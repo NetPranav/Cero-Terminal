@@ -8,8 +8,13 @@ on:
 
 jobs:
   frontend:
-    name: Tests and production build
-    runs-on: ubuntu-latest
+    name: Tests and production build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The agent writes different commands per OS (PowerShell on Windows): run the suite everywhere
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -25,6 +30,7 @@ jobs:
         run: npm test
 
       - name: Type check and bundle
+        if: runner.os == 'Linux'
         run: npm run build
 
   backend:
