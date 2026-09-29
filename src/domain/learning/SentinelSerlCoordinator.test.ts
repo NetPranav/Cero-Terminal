@@ -285,7 +285,8 @@ describe('SentinelSerlCoordinator — End-to-End Orchestrator', () => {
   });
 
   describe('7. Unified Intelligence Resolution Oracle (Tier 4 + Tier 5)', () => {
-    it('resolves canonical recipes via TLDR Knowledge Base without LLM', async () => {
+    // The recipe is trial-run in the shadow shell (sh), which a Windows host does not have
+    it.skipIf(process.platform === 'win32')('resolves canonical recipes via TLDR Knowledge Base without LLM', async () => {
       const res = await coordinator.executeUnifiedResolution('flush dns cache', { os: 'macos', cwd: '/tmp' });
       expect(res.resolved).toBe(true);
       expect(res.source).toBe('tldr_oracle');
