@@ -51,7 +51,15 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
   onSelectUiMode
 }) => {
   const [mainTab, setMainTab] = useState<SettingsTabId>(initialTab);
-  const [activeTab, setActiveTab] = useState<'local' | 'cloud'>('local');
+  const [activeTab, setActiveTabState] = useState<'local' | 'cloud'>('local');
+  // Model size, hardware profile, Ollama models and cloud keys live behind "Advanced"
+  const [showAdvancedAi, setShowAdvancedAi] = useState(false);
+  // Any click that needs an advanced section opens it too
+  const setActiveTab = (tab: 'local' | 'cloud') => {
+    setActiveTabState(tab);
+    setShowAdvancedAi(true);
+  };
+  const embeddedModelName = EmbeddedEngineManager.RECOMMENDED_MODEL.displayName;
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [ollamaHealthy, setOllamaHealthy] = useState(false);
@@ -129,8 +137,8 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
     const mm = ModelManager.getInstance();
     await mm.setActiveProviderId(provId, modelId);
     refreshActiveAiInfo();
-    const name = provId === 'embedded' ? 'Sentinel Embedded (Qwen 2.5 Coder 3B)' : provId === 'cloud_api' ? 'Cloud API' : `Local Ollama (${modelId || 'default'})`;
-    setSaveSuccessMsg(`✓ Active AI execution engine set to ${name}!`);
+    const name = provId === 'embedded' ? `the built-in model (${EmbeddedEngineManager.RECOMMENDED_MODEL.displayName})` : provId === 'cloud_api' ? 'the cloud service' : `Ollama (${modelId || 'default'})`;
+    setSaveSuccessMsg(`✓ Requests now use ${name}.`);
     setTimeout(() => setSaveSuccessMsg(null), 3000);
   };
 
@@ -405,10 +413,10 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
             </div>
             <div>
               <h1 style={{ fontSize: '17px', margin: 0, fontWeight: 600, color: '#ffffff', letterSpacing: '-0.2px' }}>
-                Sentinel Settings Center
+                Settings
               </h1>
               <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'rgba(255, 255, 255, 0.55)' }}>
-                AI models, native desktop integrations, terminal profile, and workspace preferences
+                AI, terminal and desktop options
               </p>
             </div>
           </div>
@@ -474,7 +482,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
             }}
           >
             <Cpu size={14} />
-            <span>AI Models & Architecture</span>
+            <span>AI</span>
           </button>
 
           <button
@@ -496,7 +504,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
             }}
           >
             <Layers size={14} />
-            <span>Desktop Integrations</span>
+            <span>Integrations</span>
             {integrationStatus.cliInstalled && (
               <span style={{
                 width: '6px',
@@ -526,7 +534,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
             }}
           >
             <Layout size={14} />
-            <span>Terminal Experience</span>
+            <span>Terminal</span>
             <span style={{
               fontSize: '10px',
               textTransform: 'uppercase',
@@ -559,7 +567,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
             }}
           >
             <Compass size={14} />
-            <span>General & Setup</span>
+            <span>General</span>
           </button>
         </div>
 
@@ -581,11 +589,11 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Sparkles size={16} />
                     <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#ffffff', margin: 0 }}>
-                      Active AI Execution Model & Provider
+                      Which AI answers your requests
                     </h2>
                   </div>
                   <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
-                    Select the active model or API backend used to execute terminal prompts (<code style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '1px 5px', borderRadius: '3px' }}>&gt; ...</code>) and autonomous workflows.
+                    Used for requests typed after <code style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '1px 5px', borderRadius: '3px' }}>&gt;</code> and for workflows.
                   </p>
                 </div>
 
@@ -602,7 +610,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                   color: '#ffffff'
                 }}>
                   <Check size={13} strokeWidth={2.5} />
-                  <span>Currently Active: {activeProviderId === 'embedded' ? 'Embedded Local Model (Qwen 2.5 3B)' : activeProviderId === 'cloud_api' ? `Cloud API (${cloudProvider.getActiveConfig()?.displayName || 'Active Service'})` : `Local Ollama (${activeModelInfo.displayName || activeModelInfo.modelId})`}</span>
+                  <span>{activeProviderId === 'embedded' ? `Built-in: ${embeddedModelName}` : activeProviderId === 'cloud_api' ? `Cloud: ${cloudProvider.getActiveConfig()?.displayName || 'service'}` : `Ollama: ${activeModelInfo.displayName || activeModelInfo.modelId}`}</span>
                 </div>
               </div>
 
@@ -630,7 +638,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Cpu size={14} />
                         <span style={{ fontWeight: 600, fontSize: '13px', color: '#ffffff' }}>
-                          Sentinel Embedded
+                          Built-in model
                         </span>
                       </div>
                       {activeProviderId === 'embedded' && (
@@ -640,13 +648,13 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                       )}
                     </div>
                     <span style={{ fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.6)', lineHeight: 1.4 }}>
-                      Qwen 2.5 Coder 3B Instruct. Bundled local inference via embedded llama.cpp. No setup or API keys required.
+                      {embeddedModelName}, running on this computer. Private, works offline, no account.
                     </span>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', fontSize: '10.5px' }}>
                     <span style={{ color: embeddedStatus?.modelDownloaded ? '#ffffff' : 'rgba(255, 255, 255, 0.5)' }}>
-                      {embeddedStatus?.modelDownloaded ? (embeddedStatus.isRunning ? '● Engine Running' : '✓ Model Downloaded') : '○ Model Not Downloaded'}
+                      {embeddedStatus?.modelDownloaded ? (embeddedStatus.isRunning ? '● Running' : '✓ Ready') : '○ Not downloaded'}
                     </span>
                     <button
                       type="button"
@@ -661,7 +669,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                         textDecoration: 'underline'
                       }}
                     >
-                      Manage Model
+                      Manage
                     </button>
                   </div>
                 </div>
@@ -691,7 +699,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Server size={14} />
                         <span style={{ fontWeight: 600, fontSize: '13px', color: '#ffffff' }}>
-                          Local Ollama
+                          Ollama
                         </span>
                       </div>
                       {activeProviderId === 'ollama' && (
@@ -701,14 +709,14 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                       )}
                     </div>
                     <span style={{ fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.6)', lineHeight: 1.4 }}>
-                      Custom external daemon on localhost:11434. Uses any model pulled through the Ollama CLI.
+                      Use models you already run with Ollama on this computer.
                     </span>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '10.5px' }}>
                       <span style={{ color: ollamaHealthy ? '#ffffff' : 'rgba(255, 255, 255, 0.45)' }}>
-                        {ollamaHealthy ? `● Online (${models.length} models)` : '○ Daemon Offline'}
+                        {ollamaHealthy ? `● Running (${models.length} models)` : '○ Not running'}
                       </span>
                     </div>
                     {models.length > 0 && (
@@ -770,7 +778,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Key size={14} />
                         <span style={{ fontWeight: 600, fontSize: '13px', color: '#ffffff' }}>
-                          Cloud API Services
+                          Cloud service
                         </span>
                       </div>
                       {activeProviderId === 'cloud_api' && (
@@ -780,13 +788,13 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                       )}
                     </div>
                     <span style={{ fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.6)', lineHeight: 1.4 }}>
-                      Fast external cloud LLMs: Groq, OpenAI, Anthropic, DeepSeek, OpenRouter, or Custom API. Zero local RAM usage.
+                      Groq, OpenAI, Anthropic, DeepSeek or OpenRouter with your API key. Uses no local memory.
                     </span>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', fontSize: '10.5px' }}>
                     <span style={{ color: cloudProvider.getActiveConfig() ? '#ffffff' : 'rgba(255, 255, 255, 0.5)' }}>
-                      {cloudProvider.getActiveConfig() ? `✓ ${cloudProvider.getActiveConfig()?.displayName || 'Configured'}` : '○ No Key Configured'}
+                      {cloudProvider.getActiveConfig() ? `✓ ${cloudProvider.getActiveConfig()?.displayName || 'Configured'}` : '○ No key yet'}
                     </span>
                     <button
                       type="button"
@@ -801,13 +809,36 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                         textDecoration: 'underline'
                       }}
                     >
-                      Configure Keys
+                      Add key
                     </button>
                   </div>
                 </div>
               </div>
             </div>
 
+            <button
+              type="button"
+              onClick={() => setShowAdvancedAi(v => !v)}
+              aria-expanded={showAdvancedAi}
+              style={{
+                alignSelf: 'flex-start',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                color: 'rgba(255, 255, 255, 0.8)',
+                fontSize: '12px',
+                cursor: 'pointer'
+              }}
+            >
+              <Layers size={13} />
+              <span>{showAdvancedAi ? 'Hide advanced options' : 'Advanced: model size, hardware, cloud keys'}</span>
+            </button>
+
+            {showAdvancedAi && (<>
             {/* Secondary Navigation Tabs for AI */}
             <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(255, 255, 255, 0.06)', paddingBottom: '8px' }}>
               <button
@@ -829,7 +860,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                 }}
               >
                 <Cpu size={13} />
-                <span>Local Engine & Hardware Tiers</span>
+                <span>Model size & hardware</span>
               </button>
 
               <button
@@ -851,7 +882,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                 }}
               >
                 <Key size={13} />
-                <span>Cloud API Keys & External Providers</span>
+                <span>Cloud keys</span>
                 {cloudProvider.getActiveConfig() && (
                   <span style={{
                     width: '6px',
@@ -1395,6 +1426,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
             </div>
           </div>
         )}
+            </>)}
           </>
         )}
 
