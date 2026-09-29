@@ -6,6 +6,12 @@
 
 **First launch.** The app is ad-hoc signed, not notarized. macOS blocks the first launch: open System Settings, then Privacy & Security, and choose "Open Anyway". On a new machine the app downloads the llama.cpp engine (about 12 MB) and the Qwen2.5-Coder 3B model (about 2 GB) from Settings, AI, Built-in model. Or use Ollama or a cloud key instead.
 
+**Open a .flow file and it runs.** A `.flow` file (from a tutorial, a teammate or you) lists what to install, run and open. Sentinel picks the commands for this OS.
+- A flow that only opens apps and links (Chrome, YouTube, VS Code) runs without showing the terminal.
+- A flow that installs or runs things opens the terminal, lists every command for one approval, then types each step so you can see output and answer prompts.
+
+See [FLOW_FILES.md](https://github.com/NetPranav/Sentinal-Terminal/blob/linux-v2-update/docs/FLOW_FILES.md) and the [example flows](https://github.com/NetPranav/Sentinal-Terminal/tree/linux-v2-update/examples/flows).
+
 **New in 2.1.0**
 - Ask for the app's own functions in plain language: "open settings", "show my command history", "switch to zen mode", "search the terminal for ERROR", "go to tab 2", "rename this tab to api".
 - Talk to other terminals: "open a new tab here and run npm run dev", "run ls in tab 2", "stop the server", "what's running in my terminals". The model reads other terminals only when you ask, and only what changed.

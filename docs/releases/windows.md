@@ -6,6 +6,12 @@
 
 The installers are not code-signed, so SmartScreen shows "Windows protected your PC": choose "More info", then "Run anyway".
 
+**Open a .flow file and it runs.** A `.flow` file (from a tutorial, a teammate or you) lists what to install, run and open. Sentinel picks the commands for this OS.
+- A flow that only opens apps and links (Chrome, YouTube, VS Code) runs without showing the terminal.
+- A flow that installs or runs things opens the terminal, lists every command for one approval, then types each step so you can see output and answer prompts.
+
+See [FLOW_FILES.md](https://github.com/NetPranav/Sentinal-Terminal/blob/linux-v2-update/docs/FLOW_FILES.md) and the [example flows](https://github.com/NetPranav/Sentinal-Terminal/tree/linux-v2-update/examples/flows).
+
 **What works on Windows in this release**
 - The terminal (PowerShell), tabs and splits, and talking to other terminals.
 - AI requests through the built-in model, Ollama or a cloud key. The built-in engine now downloads and unpacks natively on Windows (Vulkan build when `vulkan-1.dll` is present, else CPU), with no console windows popping up.
