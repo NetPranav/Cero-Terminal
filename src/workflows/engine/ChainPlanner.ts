@@ -214,6 +214,11 @@ function planClause(clause: string, os: ChainOs, ctx: ClauseContext): { step: Ch
   m = c.match(/^(?:follow|tail|watch)\s+(?:the\s+)?(?:log\s+(?:file\s+)?)?(\S+\.(?:log|txt|out))$/i);
   if (m) return { step: step(forOs(os, `tail -f ${quote(m[1])}`, `Get-Content -Wait -Tail 20 ${psQuote(m[1])}`)) };
 
+  // "run git init", "run npm test": a known program with its arguments is already the command, so it
+  // is part of the one approval (it used to go to the model, which asked a second time)
+  m = c.match(/^(?:run|execute)\s+((?:git|npm|npx|pnpm|yarn|bun|node|deno|python3?|pip3?|uv|cargo|go|make|cmake|docker|kubectl|ls|pwd|cat|echo|tree|code|brew)\b[^;&|`$<>\\]*)$/i);
+  if (m) return { step: step(m[1].trim()) };
+
   // Anything else: the model works this clause out, with the folder it will run in
   void lower;
   return { step: step() };

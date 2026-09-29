@@ -1538,3 +1538,56 @@ describe('App actions win over folder navigation', () => {
     expect(r.summary).not.toMatch(/mkdir|does not exist/);
   });
 });
+
+describe('Quitting an app the user names', () => {
+  const setup = (lists: string[]) => {
+    const execute = vi.fn(async (_tool: string, params: any, _cwd: string, authorize?: any) => {
+      if (/^ps /.test(params.command)) return { success: true, data: { stdout: lists.shift() ?? '', code: 0 } };
+      if (authorize && !(await authorize({ capabilityId: 'shell.execute', parameters: params }))) return { success: false, errorCode: 'USER_CANCELLED' };
+      return { success: true, data: { stdout: '', code: 0 } };
+    });
+    const generate = vi.fn();
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+    return { loop, execute, generate };
+  };
+  const RUNNING = '/Applications/Claude.app/Contents/MacOS/Claude\n/Users/me/.local/bin/claude\n/Applications/Safari.app/Contents/MacOS/Safari';
+  const AFTER = '/Users/me/.local/bin/claude\n/Applications/Safari.app/Contents/MacOS/Safari';
+
+  it('looks up the running app first and quits "Claude" by its real name', async () => {
+    const { loop, execute, generate } = setup([RUNNING, AFTER]);
+    const handler = vi.fn().mockResolvedValue(true);
+    loop.setAuthorizationHandler(handler);
+    const r = await loop.run('terminate or stop the claude application', { os: 'macos', cwd: '/tmp' });
+    const commands = execute.mock.calls.map(c => c[1].command);
+    expect(commands).toEqual(['ps -axo comm=', `osascript -e 'quit app "Claude"'`, 'ps -axo comm=']);
+    expect(commands.some(c => /pkill|killall/.test(c))).toBe(false);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(r).toMatchObject({ success: true, summary: 'Quit Claude.' });
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('says so, and closes nothing, when no running app has that name', async () => {
+    const { loop, execute } = setup([RUNNING]);
+    loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
+    const r = await loop.run('quit the safary app', { os: 'macos', cwd: '/tmp' });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(r.success).toBe(false);
+    expect(r.summary).toContain('No running app is called "safary". Nothing was closed. Running now with a similar name: Safari.');
+  });
+
+  it('reports an app that did not quit, and a declined quit changes nothing', async () => {
+    const stuck = setup([RUNNING, RUNNING]);
+    stuck.loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
+    const r = await stuck.loop.run('quit claude', { os: 'macos', cwd: '/tmp' });
+    expect(r.summary).toContain('Claude is still running (it may be asking to save your work). Say "force quit Claude"');
+    const declined = setup([RUNNING]);
+    declined.loop.setAuthorizationHandler(vi.fn().mockResolvedValue(false));
+    const d = await declined.loop.run('quit claude', { os: 'macos', cwd: '/tmp' });
+    expect(d).toMatchObject({ success: false, declined: true });
+  });
+});

@@ -19,6 +19,7 @@
  */
 
 import { parseSystemAction, commandFor, suggestionsFor, TOPIC_NAMES, type SystemAction, type SystemCommand } from '../../domain/system/SystemControl';
+import { parseQuitRequest, listRunningCommand, parseRunning, matchRunning, quitCommand, type QuitRequest, type RunningItem } from '../../domain/system/AppControl';
 import { parseFixFileRequest, runCommandFor, extractCodeBlock, extractFixNote, lineDiff, FixFileRequest } from './FixFile';
 import { pathsInError, localImports, parseDiagnoseRequest, DiagnoseRequest } from './ErrorSources';
 import { referencesSecretPath } from '../../domain/security/SecretRedactor';
@@ -1703,6 +1704,13 @@ export class AgentLoop {
       if (handled) return handled;
     }
 
+    // "quit claude", "terminate or stop the claude application": check what is running first
+    const quit = parseQuitRequest(cleaned || goal);
+    if (quit) {
+      const handled = await this.runQuitApp(quit, context);
+      if (handled) return handled;
+    }
+
     // "run the workflow in deploy.flow", "run my nightly workflow"
     const workflowRequest = parseWorkflowRequest(cleaned || goal);
     if (workflowRequest) return this.runWorkflowRequest(workflowRequest, context);
@@ -2989,6 +2997,62 @@ export class AgentLoop {
     return { success: false, summary, steps };
   }
 
+  /**
+   * Quit an app the user named: list what is running, match the name (any case), ask with the exact
+   * name, quit it the normal way, then check that it is gone. Returns null to let other routes handle
+   * a bare "stop <word>" that is not a running app.
+   */
+  private async runQuitApp(req: QuitRequest, context: AgentRunContext): Promise<AgentResult | null> {
+    const os = /^win/i.test(context.os) ? 'windows' : /^(?:mac|darwin)/i.test(context.os) ? 'macos' : 'linux';
+    const steps: AgentResult['steps'] = [];
+    const list = async (): Promise<RunningItem[] | null> => {
+      const params = { command: listRunningCommand(os), explanation: 'List running apps' };
+      const result = await this.toolExecutor.execute('shell.execute', params, context.cwd, async () => true);
+      steps.push({ tool: 'shell.execute', params, result });
+      return result.success ? parseRunning(String(result.data?.stdout ?? ''), os) : null;
+    };
+    const finish = (success: boolean, summary: string, extra: Partial<AgentResult> = {}): AgentResult => {
+      this.emit({ type: success ? 'done' : 'error', message: summary });
+      return { success, summary, steps, ...extra };
+    };
+
+    this.emit({ type: 'tool_start', message: `Looking for a running app called "${req.name}"` });
+    const running = await list();
+    if (!running) return req.explicit ? finish(false, 'Could not list the running apps on this computer.') : null;
+    const match = matchRunning(req.name, running, req.appOnly);
+    if (match.kind === 'none') {
+      if (req.ifRunning) return finish(true, `"${req.name}" is not running, so there was nothing to close.`);
+      if (!req.explicit) return null;
+      const near = match.closest.map(c => c.name);
+      return finish(false, `No running ${req.appOnly ? 'app' : 'app or process'} is called "${req.name}". Nothing was closed.${near.length ? ` Running now with a similar name: ${near.join(', ')}.` : ''}`);
+    }
+    if (match.kind === 'many') {
+      return finish(false, `Several running apps match "${req.name}": ${match.items.map(i => i.name).join(', ')}. Say which one to quit.`);
+    }
+
+    const item = match.item;
+    const what = item.app ? `the app ${item.name}` : `the process ${item.name}`;
+    const title = `${req.force ? 'Force quit' : 'Quit'} ${what}`;
+    const params = { command: quitCommand(item, os, req.force), explanation: `${title} (running now; matched "${req.name}")` };
+    this.emit({ type: 'tool_start', message: title });
+    const result = await this.toolExecutor.execute('shell.execute', params, context.cwd, this.authorizationHandler);
+    steps.push({ tool: 'shell.execute', params, result });
+    if (result.errorCode === 'USER_CANCELLED') return finish(false, `Not closed: you declined "${title}".`, { declined: true });
+
+    // Check that it is gone: an app can stay open to ask about unsaved work
+    await new Promise(r => setTimeout(r, process.env.NODE_ENV === 'test' ? 0 : 1500));
+    const after = await list();
+    const still = after?.some(r => r.app === item.app && r.name === item.name);
+    if (still) {
+      return finish(false, `${item.name} is still running${item.app && !req.force ? ' (it may be asking to save your work)' : ''}. Say "force quit ${item.name}" to close it without saving.`);
+    }
+    const code = typeof result.data?.code === 'number' ? result.data.code : (result.success ? 0 : 1);
+    if (after === null && code !== 0) {
+      return finish(false, `Could not quit ${item.name}: ${String(result.data?.stderr || result.error || 'it failed').trim().split('\n').pop()}`);
+    }
+    return finish(true, `Quit ${item.name}.`);
+  }
+
   /** Deliver an app action to the window; outside the desktop app there is nothing to open. */
   private runAppAction(action: AppAction): AgentResult {
     const delivered = requestAppAction(action);
@@ -3007,6 +3071,10 @@ export class AgentLoop {
     if (/^[A-Za-z][\w.+-]*$/.test(clause.trim())) return clause.trim();
     const planned = commandForSingleClause(clause, chainOs(context.os));
     if (planned) return planned;
+    // "run git init", "execute npm test": a known program with its arguments is the command itself
+    // (it used to go to the model, which then asked for approval a second time)
+    const direct = clause.trim().match(/^(?:run|execute)\s+(.+)$/i)?.[1].trim();
+    if (direct && KNOWN_COMMANDS.has(direct.split(/\s+/)[0]) && !/[;&|`$<>]/.test(direct)) return direct;
     this.emit({ type: 'thinking', message: `Working out: ${clause}` });
     return this.commandForClause(clause, cwd, context, []);
   }

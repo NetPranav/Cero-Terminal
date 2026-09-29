@@ -121,3 +121,16 @@ describe('resolveFolder', () => {
     expect(resolveFolder('/', '..')).toBe('/');
   });
 });
+
+describe('"run <command>" clauses', () => {
+  it('plans a known program with its arguments, so the one approval lists it', () => {
+    const plan = planChain('create a folder demo-app, go into it, run git init, then npm init -y, then list the files', 'macos')!;
+    expect(plan.steps.map(s => s.command ?? (s.enter ? `enter ${s.enter}` : null))).toEqual(['mkdir -p demo-app', 'enter demo-app', 'git init', 'npm init -y', 'ls -la']);
+  });
+
+  it('leaves unknown programs and shell syntax to the model', () => {
+    const plan = planChain('create a folder x, go into it, run the tests, then run npm test; rm -rf ~', 'linux')!;
+    expect(plan.steps[2].command).toBeUndefined();
+    expect(plan.steps.some(s => s.command?.includes('rm -rf'))).toBe(false);
+  });
+});
