@@ -14,9 +14,9 @@ export default defineConfig(async () => ({
     setupFiles: ['./src/test/isolateHome.ts'],
   },
   resolve: {
-    // The app bundle maps `path` to a POSIX polyfill on every OS; tests use Node's POSIX path so
-    // they check the same behaviour on a Windows runner as the app has on Windows
-    alias: isVitest ? [{ find: /^(?:node:)?path$/, replacement: 'node:path/posix' }] : {
+    // The app bundle maps `path` to src/utils/pathPolyfill.ts on every OS; the tests use the same
+    // module, so a Windows runner checks what the Windows app does
+    alias: isVitest ? [{ find: /^(?:node:)?path$/, replacement: path.resolve(__dirname, "src/utils/pathPolyfill.ts") }] : {
       path: path.resolve(__dirname, "src/utils/pathPolyfill.ts"),
       "node:path": path.resolve(__dirname, "src/utils/pathPolyfill.ts"),
       fs: path.resolve(__dirname, "src/utils/fsPolyfill.ts"),
