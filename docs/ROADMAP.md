@@ -452,3 +452,62 @@ Windows today, by code path (not run on a Windows machine):
 Next step for Windows: one shell helper (PowerShell on Windows, `sh -c` elsewhere) used by every
 driver, and a native Rust download/install for the engine.
 
+
+---
+
+## 8. Local-model stress test, app functions by request, Windows engine (2026-09-29)
+
+**How it was measured.** A headless harness runs the real `AgentLoop` against the local
+llama-server (Qwen2.5-Coder 3B, the model a fresh install gets), with the app's context (`macos`,
+a pane id, the terminal registry). Other terminals are real pseudo-terminals, so tabs, busy state,
+prompts and Ctrl+C behave as in the app. Every confirmation is recorded; destructive commands are
+denied. Each request has an automatic check of the result (files created, output, refusals).
+
+| Batch | Passed | Model calls | Time |
+|---|---|---|---|
+| 50 complex requests, before this pass | 22 | 77 | 450 s |
+| same 50, after | 50 | 32 | 272 s |
+| 20 new requests written after the fixes (holdout): first run, then after its fixes | 8, then 18 | 17 (second run) | 80 s (second run) |
+
+**What failed first, and the fix**
+
+| Found | Fix |
+|---|---|
+| `cat ~/.ssh/id_rsa` ran without a dialog; output went to the model | Credential files always ask; keys and tokens masked before any model sees output |
+| An `awk` that printed nothing, then an invented total ("100") | Grounding uses command output only (step metadata such as a 0.1 ms duration had "grounded" it); empty output is reported; CSV math is a tested recipe |
+| The same failing command retried 3-5 times; `git init` used to "repair" "not a git repository" | Failed commands are never re-run; no unrequested `git init` |
+| `${f,,}` under zsh, `python` (missing on macOS), shortened paths, `gzip` deleting originals, `{{template}}` examples executed | Portability rewrites and pre-run checks (see `CommandPortability.ts`) |
+| "open settings" became `open -a "System Settings"`; zen mode became `hyprctl` | App functions by request (`AppActions.ts`) |
+| "run the workflow in x.json" tried to execute the JSON | Workflow files and saved names by request |
+| "why is npm test failing" never read the code; "fix buggy.py" cd-ed into the file | Diagnosis and fix-file flows |
+| "open a new tab here and run ..." fell through to the model (`open -a Terminal`) | Terminal requests understand "here", "run X in a new tab", "stop the server on port N" |
+| An idle terminal after Ctrl+C was "not at a prompt" | The prompt line (no newline yet) is tracked |
+| Answers without running anything ("Python 3.11.4 is installed") | A question about this machine needs a command |
+
+**Still weak (local 3B model).** Requests with no recipe and unusual phrasing are answered by
+the model alone and fail more often, as the holdout shows. A larger tier (Qwen3-4B) or a cloud key
+helps. Recipes should grow from real usage.
+
+**Windows.**
+- The built-in engine now downloads, verifies and unpacks natively (`downloads.rs`: resumable
+  HTTPS, SHA-256, system `tar`, no symlinks). It picks the llama.cpp `win-vulkan-x64` build when
+  `vulkan-1.dll` is present, else `win-cpu-x64` or `win-cpu-arm64`.
+- `llama-server.exe` is found.
+- Commands, the engine and file watchers no longer open console windows.
+- Learning stores, app aliases and the audit log no longer depend on `sh`.
+- Not run on a Windows PC in this pass. CI builds and tests the Rust side on Windows.
+
+**Releases.** One release per platform, each built from its own branch (`release/macos`,
+`release/linux`, `release/windows`) by `.github/workflows/release.yml`. Linux includes an Arch
+package built on Arch with `packaging/arch/build-pacman.sh`.
+
+**Found in the 2.1.0 macOS release build (GUI), fixed:**
+- Typing an AI request into a tab running a program stopped the program: the echoed ">" looked like
+  a shell prompt, and clearing the typed line sent Ctrl+C.
+- "go to tab 1" was read as a folder name.
+
+**Open:**
+- A server started in a Sentinel tab kept running after the app quit (it became an orphan process).
+- The GUI retest of the server-in-a-tab case on the rebuilt DMG is pending. The screen was in use
+  by other automation; regression tests cover both fixes.
+
