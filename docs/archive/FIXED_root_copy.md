@@ -28,11 +28,11 @@ This behavior created user friction and confusion, falsely signaling that entere
 ### 1.2 Resolution Status
 - **Status:** Resolved & Verified
 - **Commit:** `5daff74` (`fix(cloud-provider): resolve transient connection test failures with auto-retry and endpoint normalization`)
-- **Validation:** 100% test pass rate across unit test suite ([`CloudApiProvider.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/provider/CloudApiProvider.test.ts)) and full workspace build.
+- **Validation:** 100% test pass rate across unit test suite ([`CloudApiProvider.test.ts`](file:///home/user/project/src/ai/provider/CloudApiProvider.test.ts)) and full workspace build.
 
 ### 1.3 Technical Root Causes
 1. **Zero-Retry Single-Shot Network Probe:**
-   - In [`CloudApiProvider.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/provider/CloudApiProvider.ts), `testConnection()` originally performed a single, un-retried HTTP POST request.
+   - In [`CloudApiProvider.ts`](file:///home/user/project/src/ai/provider/CloudApiProvider.ts), `testConnection()` originally performed a single, un-retried HTTP POST request.
    - Initial connections to cloud endpoints encounter cold TCP/TLS handshakes, DNS resolution latency, proxy route establishment, or transient server-side cold starts (e.g. Groq/OpenRouter rate limiter spikes, 429 concurrency blips, 502/503/504 gateway timeouts).
    - Any single transient error immediately surfaced as a failure in the UI. When the user re-clicked the button after several seconds, the socket and TLS session were warmed, leading to delayed success.
 2. **Missing Request Timeout Budget:**
@@ -46,7 +46,7 @@ This behavior created user friction and confusion, falsely signaling that entere
 
 ### 1.4 Implemented Architecture & Remediation
 1. **Automated Retry Loop with Progressive Backoff:**
-   - [`CloudApiProvider.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/provider/CloudApiProvider.ts) implements an automated 3-attempt retry loop with progressive backoff delays (350ms, 700ms) for transient network dropouts, 429 rate limits, and 5xx gateway errors.
+   - [`CloudApiProvider.ts`](file:///home/user/project/src/ai/provider/CloudApiProvider.ts) implements an automated 3-attempt retry loop with progressive backoff delays (350ms, 700ms) for transient network dropouts, 429 rate limits, and 5xx gateway errors.
 2. **Immediate Fast Abort for Authentication Failures:**
    - HTTP 401 Unauthorized and HTTP 403 Forbidden errors bypass retries and abort immediately, avoiding artificial delays when an API key is genuinely invalid.
 3. **Strict 8-Second Timeout Budget per Attempt:**
@@ -63,13 +63,13 @@ This behavior created user friction and confusion, falsely signaling that entere
 6. **Cached Dynamic Module Resolution:**
    - Cached `@tauri-apps/plugin-http` import to eliminate IPC module loading latency on repeated calls.
 7. **UI Visual Feedback:**
-   - Added rotating spinner indicator and "Verifying Connection..." state in [`AiSettingsPage.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/AiSettingsPage.tsx).
+   - Added rotating spinner indicator and "Verifying Connection..." state in [`AiSettingsPage.tsx`](file:///home/user/project/src/ui/components/AiSettingsPage.tsx).
 
 ### 1.5 Touched Components & Files
-- [`src/ai/provider/CloudApiProvider.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/provider/CloudApiProvider.ts): Retry engine, backoff scheduler, endpoint normalizer, and reasoning payload handler.
-- [`src/ui/components/AiSettingsPage.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/AiSettingsPage.tsx): Connection testing state and visual spinner.
-- [`src/App.css`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.css): Spinner animation keyframes adhering to grayscale aesthetics.
-- [`src/ai/provider/CloudApiProvider.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/provider/CloudApiProvider.test.ts): Unit test coverage for retry behavior, 401 fast abort, timeout handling, and URL normalization.
+- [`src/ai/provider/CloudApiProvider.ts`](file:///home/user/project/src/ai/provider/CloudApiProvider.ts): Retry engine, backoff scheduler, endpoint normalizer, and reasoning payload handler.
+- [`src/ui/components/AiSettingsPage.tsx`](file:///home/user/project/src/ui/components/AiSettingsPage.tsx): Connection testing state and visual spinner.
+- [`src/App.css`](file:///home/user/project/src/App.css): Spinner animation keyframes adhering to grayscale aesthetics.
+- [`src/ai/provider/CloudApiProvider.test.ts`](file:///home/user/project/src/ai/provider/CloudApiProvider.test.ts): Unit test coverage for retry behavior, 401 fast abort, timeout handling, and URL normalization.
 
 ---
 
@@ -87,11 +87,11 @@ The card:
 ### 3.2 Resolution Status
 - **Status:** Resolved & Verified
 - **Commit:** `8613aca` (`fix(presentation): resolve persistent execution plan HUD overlay with auto-dismiss, manual close, and user duration settings`)
-- **Validation:** 100% test pass rate across unit test suite ([`SettingsCenter.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/__tests__/SettingsCenter.test.ts)) and full workspace build.
+- **Validation:** 100% test pass rate across unit test suite ([`SettingsCenter.test.ts`](file:///home/user/project/src/ui/__tests__/SettingsCenter.test.ts)) and full workspace build.
 
 ### 3.3 Technical Root Causes
 1. **Unconditional State Persistence on Error:**
-   - In [`TerminalView.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx), when an `error` event was emitted by the agent loop, `PromptProgressManager.getInstance().completePrompt(false, event.message)` was executed, but `setLatestPlan(null)` was never invoked. The plan state variable remained set indefinitely.
+   - In [`TerminalView.tsx`](file:///home/user/project/src/presentation/TerminalView.tsx), when an `error` event was emitted by the agent loop, `PromptProgressManager.getInstance().completePrompt(false, event.message)` was executed, but `setLatestPlan(null)` was never invoked. The plan state variable remained set indefinitely.
 2. **Missing Manual Dismiss Action:**
    - The native `<details>` card had no close action. Clicking the summary merely toggled accordion collapse, leaving the header permanently anchored across terminal output.
 3. **Absence of Auto-Dismiss Timer:**
@@ -103,15 +103,15 @@ The card:
 
 ### 3.4 Implemented Architecture & Remediation
 1. **Manual Dismiss and Header Collapse Actions:**
-   - Replaced `<details>` element with a structured HUD card component in [`TerminalView.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx).
+   - Replaced `<details>` element with a structured HUD card component in [`TerminalView.tsx`](file:///home/user/project/src/presentation/TerminalView.tsx).
    - Added a dedicated monochrome `X` dismiss button that immediately unmounts the card and clears pending dismiss timers.
    - Added a `ChevronUp` / `ChevronDown` button to toggle collapsing the phase breakdown while keeping the header visible.
 2. **Configurable Auto-Dismiss with Hover Pausing:**
-   - Added `schedulePlanDismiss()` and `clearPlanDismissTimer()` in [`TerminalView.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx).
+   - Added `schedulePlanDismiss()` and `clearPlanDismissTimer()` in [`TerminalView.tsx`](file:///home/user/project/src/presentation/TerminalView.tsx).
    - Automatically schedules auto-dismiss upon plan completion or error according to user preferences (default: 8 seconds).
    - Added `onMouseEnter` / `onMouseLeave` handlers: hovering over the card pauses auto-dismissal so users can inspect phase outputs or error logs; moving the mouse away resumes the countdown.
 3. **Settings Center Preferences:**
-   - Added dedicated "Workflow Execution Plan HUD & Notifications" configuration card in [`AiSettingsPage.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/AiSettingsPage.tsx) under the **General** tab.
+   - Added dedicated "Workflow Execution Plan HUD & Notifications" configuration card in [`AiSettingsPage.tsx`](file:///home/user/project/src/ui/components/AiSettingsPage.tsx) under the **General** tab.
    - Added toggle to enable/disable HUD overlay (`sentinel_hud_plan_enabled`).
    - Added duration selector (`5s`, `8s (Default)`, `15s`, `Persistent / Manual Close Only`) backed by `sentinel_hud_plan_duration`.
    - Dispatches `sentinel:hud-settings-changed` CustomEvents so all open terminal panes update dynamically without reload.
@@ -120,9 +120,9 @@ The card:
    - Standardized typographical status indicators (`✓` Completed, `✗` Failed, `▸` Running, `⊘` Skipped, `○` Pending). Zero emojis.
 
 ### 3.5 Touched Components & Files
-- [`src/presentation/TerminalView.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx): Floating HUD overlay component, manual dismiss `X`, collapse toggle, hover-pause auto-dismiss timer, and settings event listener.
-- [`src/ui/components/AiSettingsPage.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/AiSettingsPage.tsx): Workflow Execution Plan HUD & Notifications settings section under General tab.
-- [`src/ui/__tests__/SettingsCenter.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/__tests__/SettingsCenter.test.ts): Unit tests verifying HUD preference persistence and custom event dispatching.
+- [`src/presentation/TerminalView.tsx`](file:///home/user/project/src/presentation/TerminalView.tsx): Floating HUD overlay component, manual dismiss `X`, collapse toggle, hover-pause auto-dismiss timer, and settings event listener.
+- [`src/ui/components/AiSettingsPage.tsx`](file:///home/user/project/src/ui/components/AiSettingsPage.tsx): Workflow Execution Plan HUD & Notifications settings section under General tab.
+- [`src/ui/__tests__/SettingsCenter.test.ts`](file:///home/user/project/src/ui/__tests__/SettingsCenter.test.ts): Unit tests verifying HUD preference persistence and custom event dispatching.
 
 ---
 
@@ -135,7 +135,7 @@ Users lacked an onboarding screen option to select which starter workflows they 
 
 ### 7.2 Resolution Status
 - **Status:** Resolved & Verified
-- **Validation:** 100% test pass rate across test suite (193 test files, 1,387 tests), dedicated storage tests ([`DiskWorkflowStorage.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/storage/DiskWorkflowStorage.test.ts)), and production bundle build (`npm run build`).
+- **Validation:** 100% test pass rate across test suite (193 test files, 1,387 tests), dedicated storage tests ([`DiskWorkflowStorage.test.ts`](file:///home/user/project/src/workflows/storage/DiskWorkflowStorage.test.ts)), and production bundle build (`npm run build`).
 
 ### 7.3 Technical Root Causes
 1. **Test Fixture Directory Leakage:**
@@ -172,14 +172,14 @@ Users lacked an onboarding screen option to select which starter workflows they 
    - Fixed `AgentLoopWorkflow.test.ts` and `FeatureEnginesIntegration.test.ts` to properly call `storage.setCustomBaseDir(tmpDir)` and reset to `undefined` in `afterEach()`.
 
 ### 7.5 Touched Components & Files
-- [`src/workflows/templates/StarterWorkflows.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/templates/StarterWorkflows.ts): Curated starter workflows catalog.
-- [`src/workflows/storage/DiskWorkflowStorage.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/storage/DiskWorkflowStorage.ts): Added `purgeTestStubs`, `purgeAllWorkflows`, and `initializeStarterWorkflows`.
-- [`src/workflows/storage/DiskWorkflowStorage.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/storage/DiskWorkflowStorage.test.ts): Unit tests for seeding and stub purging.
-- [`src/ui/components/InstallerWizard.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/InstallerWizard.tsx): Curated Starter Workflows section with quick-selection and stub purge toggle.
-- [`src/ui/components/WorkflowManagerDrawer.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/WorkflowManagerDrawer.tsx): Added Clean Stubs and Seed Starters header actions, stub banner, and empty state CTA.
-- [`src/ai/agent/AgentLoopWorkflow.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/AgentLoopWorkflow.test.ts): Fixed `customBaseDir` test isolation.
-- [`src/ai/agent/FeatureEnginesIntegration.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/FeatureEnginesIntegration.test.ts): Fixed `customBaseDir` test isolation.
-- [`src/repair/__tests__/Performance.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/repair/__tests__/Performance.test.ts): Tuned CPU jitter timing threshold.
+- [`src/workflows/templates/StarterWorkflows.ts`](file:///home/user/project/src/workflows/templates/StarterWorkflows.ts): Curated starter workflows catalog.
+- [`src/workflows/storage/DiskWorkflowStorage.ts`](file:///home/user/project/src/workflows/storage/DiskWorkflowStorage.ts): Added `purgeTestStubs`, `purgeAllWorkflows`, and `initializeStarterWorkflows`.
+- [`src/workflows/storage/DiskWorkflowStorage.test.ts`](file:///home/user/project/src/workflows/storage/DiskWorkflowStorage.test.ts): Unit tests for seeding and stub purging.
+- [`src/ui/components/InstallerWizard.tsx`](file:///home/user/project/src/ui/components/InstallerWizard.tsx): Curated Starter Workflows section with quick-selection and stub purge toggle.
+- [`src/ui/components/WorkflowManagerDrawer.tsx`](file:///home/user/project/src/ui/components/WorkflowManagerDrawer.tsx): Added Clean Stubs and Seed Starters header actions, stub banner, and empty state CTA.
+- [`src/ai/agent/AgentLoopWorkflow.test.ts`](file:///home/user/project/src/ai/agent/AgentLoopWorkflow.test.ts): Fixed `customBaseDir` test isolation.
+- [`src/ai/agent/FeatureEnginesIntegration.test.ts`](file:///home/user/project/src/ai/agent/FeatureEnginesIntegration.test.ts): Fixed `customBaseDir` test isolation.
+- [`src/repair/__tests__/Performance.test.ts`](file:///home/user/project/src/repair/__tests__/Performance.test.ts): Tuned CPU jitter timing threshold.
 
 ---
 
@@ -191,11 +191,11 @@ When typing an AI prompt starting with `>` (or entering any shell command) in th
 ### 8.2 Resolution Status
 - **Status:** Resolved & Verified
 - **Commit:** `224a50e` (`fix(terminal): resolve clipboard paste failure on prompt entry with native clipboard integration and ref sync`)
-- **Validation:** 100% test pass rate across unit test suite ([`src/utils/__tests__/clipboard.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/utils/__tests__/clipboard.test.ts)), full test suite (192 test files, 1,374 tests), and production bundle build.
+- **Validation:** 100% test pass rate across unit test suite ([`src/utils/__tests__/clipboard.test.ts`](file:///home/user/project/src/utils/__tests__/clipboard.test.ts)), full test suite (192 test files, 1,374 tests), and production bundle build.
 
 ### 8.3 Technical Root Causes
 1. **Stale Closure Bug on `sessionId` in `attachCustomKeyEventHandler`:**
-   - In [`TerminalView.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx), `term.attachCustomKeyEventHandler` was registered on initial component mount inside `useEffect(() => { ... }, [])`.
+   - In [`TerminalView.tsx`](file:///home/user/project/src/presentation/TerminalView.tsx), `term.attachCustomKeyEventHandler` was registered on initial component mount inside `useEffect(() => { ... }, [])`.
    - It closed over `sessionId` from the component scope, which initialized as `initialSessionId` (`undefined`).
    - When asynchronous PTY session initialization created `currentSessionId`, the `attachCustomKeyEventHandler` closure retained `sessionId === undefined`.
    - Consequently, `if (text && sessionId)` continuously evaluated to `false`, and `SessionManager.getInstance().write(sessionId, text)` was never invoked.
@@ -209,11 +209,11 @@ When typing an AI prompt starting with `>` (or entering any shell command) in th
 
 ### 8.4 Implemented Architecture & Remediation
 1. **Unified Clipboard Utility Module:**
-   - Created [`src/utils/clipboard.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/utils/clipboard.ts) providing `readClipboardText()` and `writeClipboardText()`.
+   - Created [`src/utils/clipboard.ts`](file:///home/user/project/src/utils/clipboard.ts) providing `readClipboardText()` and `writeClipboardText()`.
    - Directly leverages Tauri's native desktop clipboard plugin (`@tauri-apps/plugin-clipboard-manager`) to read system clipboards via `wl-clipboard` / `x11-clipboard` on Linux, completely bypassing WebKitGTK permission constraints.
    - Gracefully falls back to `navigator.clipboard` for web preview and testing environments.
 2. **Mutable Session Ref Synchronization:**
-   - Introduced `sessionIdRef = useRef<string | undefined>(initialSessionId)` in [`TerminalView.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx).
+   - Introduced `sessionIdRef = useRef<string | undefined>(initialSessionId)` in [`TerminalView.tsx`](file:///home/user/project/src/presentation/TerminalView.tsx).
    - Synchronized `sessionIdRef.current` immediately during `initSession()` upon session creation and whenever props update.
    - Wrapped paste execution in `handlePasteRef.current()` so key handlers always resolve the active PTY session without stale closure traps.
 3. **Comprehensive Linux & Universal Shortcut Support:**
@@ -224,12 +224,12 @@ When typing an AI prompt starting with `>` (or entering any shell command) in th
    - Implemented `formatTerminalPastePayload()` to wrap payloads in `\x1b[200~` ... `\x1b[201~` when the terminal mode indicates active bracketed paste.
    - For environments where bracketed paste is inactive and the user is drafting an AI prompt (`>`), automatically flattens internal line breaks into clean spaces to protect against premature shell execution of partial commands.
 5. **Automated Unit Testing:**
-   - Created test suite [`src/utils/__tests__/clipboard.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/utils/__tests__/clipboard.test.ts) covering formatting, bracketed paste wrapping, multiline flattening, and web API fallbacks.
+   - Created test suite [`src/utils/__tests__/clipboard.test.ts`](file:///home/user/project/src/utils/__tests__/clipboard.test.ts) covering formatting, bracketed paste wrapping, multiline flattening, and web API fallbacks.
 
 ### 8.5 Touched Components & Files
-- [`src/utils/clipboard.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/utils/clipboard.ts): Unified clipboard read/write engine and terminal paste payload formatter.
-- [`src/utils/__tests__/clipboard.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/utils/__tests__/clipboard.test.ts): Unit tests for clipboard utilities.
-- [`src/presentation/TerminalView.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx): Replaced stale closure paste with ref-synchronized handler, integrated native clipboard reading, expanded Linux shortcut support (`Shift+Insert`, `Ctrl+Insert`), and unified context menu handling.
+- [`src/utils/clipboard.ts`](file:///home/user/project/src/utils/clipboard.ts): Unified clipboard read/write engine and terminal paste payload formatter.
+- [`src/utils/__tests__/clipboard.test.ts`](file:///home/user/project/src/utils/__tests__/clipboard.test.ts): Unit tests for clipboard utilities.
+- [`src/presentation/TerminalView.tsx`](file:///home/user/project/src/presentation/TerminalView.tsx): Replaced stale closure paste with ref-synchronized handler, integrated native clipboard reading, expanded Linux shortcut support (`Shift+Insert`, `Ctrl+Insert`), and unified context menu handling.
 
 ---
 
@@ -240,7 +240,7 @@ When a user drafts or edits a multi-step prompt (e.g. `> Create a temporary test
 
 ### 9.2 Resolution Status
 - **Status:** Resolved & Verified
-- **Validation:** 100% test pass rate across unit test suite ([`src/domain/terminal/PromptNavigationEngine.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/terminal/PromptNavigationEngine.test.ts) - 12/12 tests), full project test suite (193 test files, 1,386 tests), and production bundle build (`npm run build`).
+- **Validation:** 100% test pass rate across unit test suite ([`src/domain/terminal/PromptNavigationEngine.test.ts`](file:///home/user/project/src/domain/terminal/PromptNavigationEngine.test.ts) - 12/12 tests), full project test suite (193 test files, 1,386 tests), and production bundle build (`npm run build`).
 
 ### 9.3 Technical Root Causes
 1. **GNU Readline Single-Line Buffer Ingestion Model:**
@@ -270,9 +270,9 @@ When a user drafts or edits a multi-step prompt (e.g. `> Create a temporary test
    - 11 comprehensive unit tests validating single-line history pass-through, empty prompt pass-through, alternate buffer bypass, trailing space behind last character history pass-through, first character history pass-through, on/ahead of last character line navigation, behind first character line navigation, middle line navigation, and bottom-row end-of-text navigation. All 11 tests pass.
 
 ### 9.5 Touched Components & Files
-- [`src/domain/terminal/PromptNavigationEngine.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/terminal/PromptNavigationEngine.ts): Spatial character boundary detection, first/last character column resolution, and navigation evaluation.
-- [`src/domain/terminal/PromptNavigationEngine.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/terminal/PromptNavigationEngine.test.ts): Unit tests covering all behavioral specifications.
-- [`src/presentation/TerminalView.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx): Integrated `PromptNavigationEngine.evaluateNavigation` into xterm key event listener.
+- [`src/domain/terminal/PromptNavigationEngine.ts`](file:///home/user/project/src/domain/terminal/PromptNavigationEngine.ts): Spatial character boundary detection, first/last character column resolution, and navigation evaluation.
+- [`src/domain/terminal/PromptNavigationEngine.test.ts`](file:///home/user/project/src/domain/terminal/PromptNavigationEngine.test.ts): Unit tests covering all behavioral specifications.
+- [`src/presentation/TerminalView.tsx`](file:///home/user/project/src/presentation/TerminalView.tsx): Integrated `PromptNavigationEngine.evaluateNavigation` into xterm key event listener.
 
 ---
 
@@ -297,17 +297,17 @@ The close button on terminal tab pills was barely visible, rendering as an indis
 
 ### 10.4 Implemented Architecture & Remediation
 1. **Upgraded Vector Glyph Size & Stroke:**
-   - Upgraded tab close button icon in [`src/App.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx) from `<X size={10} />` to `<X size={13} strokeWidth={2} />`.
+   - Upgraded tab close button icon in [`src/App.tsx`](file:///home/user/project/src/App.tsx) from `<X size={10} />` to `<X size={13} strokeWidth={2} />`.
    - Upgraded split pane close button from `<X size={11} />` to `<X size={12} strokeWidth={2} />`.
 2. **Expanded Hit-Target Container:**
-   - Enlarged `.pill-close-btn` dimensions to `20px × 20px` with flex centering and a 4px rounded radius in [`src/App.css`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.css).
+   - Enlarged `.pill-close-btn` dimensions to `20px × 20px` with flex centering and a 4px rounded radius in [`src/App.css`](file:///home/user/project/src/App.css).
 3. **Optimized Opacity & Grayscale Hover:**
    - Raised base button opacity to `0.65`, increasing to `0.85` on `.tab-pill:hover`.
    - On `.pill-close-btn:hover`, applied grayscale highlight `background-color: rgba(255, 255, 255, 0.12)`, `color: #ffffff`, and `opacity: 1`.
 
 ### 10.5 Touched Components & Files
-- [`src/App.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx): Upgraded Lucide `X` icon sizing and stroke widths for tabs and split panes.
-- [`src/App.css`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.css): Enlarged close button hit-target to 20x20px, tuned opacity hierarchy, and aligned hover state with matte grayscale design standards.
+- [`src/App.tsx`](file:///home/user/project/src/App.tsx): Upgraded Lucide `X` icon sizing and stroke widths for tabs and split panes.
+- [`src/App.css`](file:///home/user/project/src/App.css): Enlarged close button hit-target to 20x20px, tuned opacity hierarchy, and aligned hover state with matte grayscale design standards.
 
 ---
 
@@ -332,20 +332,20 @@ When closing a terminal tab (or split pane), the shell prompt (`username@hostnam
 
 ### 11.4 Implemented Architecture & Remediation
 1. **Preserve Viewport Geometry with Visibility Toggling:**
-   - In [`src/App.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx) and [`src/presentation/TerminalView.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx), replaced `display: none` with `visibility: isTabActive ? 'visible' : 'hidden'`, `position: isTabActive ? 'relative' : 'absolute'`, `inset: 0`, and `pointerEvents: isTabActive ? 'auto' : 'none'`.
+   - In [`src/App.tsx`](file:///home/user/project/src/App.tsx) and [`src/presentation/TerminalView.tsx`](file:///home/user/project/src/presentation/TerminalView.tsx), replaced `display: none` with `visibility: isTabActive ? 'visible' : 'hidden'`, `position: isTabActive ? 'relative' : 'absolute'`, `inset: 0`, and `pointerEvents: isTabActive ? 'auto' : 'none'`.
    - Inactive tabs retain exact full-frame viewport dimensions in background DOM layout without rendering visible pixels or capturing mouse events. Their internal canvas buffers never collapse to 0x0.
 2. **Immediate Synchronous Refit & RequestAnimationFrame Sync:**
-   - Eliminated the 50ms `setTimeout` delay in [`src/presentation/TerminalView.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx).
+   - Eliminated the 50ms `setTimeout` delay in [`src/presentation/TerminalView.tsx`](file:///home/user/project/src/presentation/TerminalView.tsx).
    - When a tab becomes active, `TerminalView` executes `fitAddon.fit()` and `xterm.focus()` immediately and synchronously on the current execution tick, followed by a `requestAnimationFrame` pass for seamless raster buffer alignment.
 3. **Smooth Adjacent Tab Selection:**
-   - Updated `closeTab` in [`src/App.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx) to select `newTabs[Math.min(closingIndex, newTabs.length - 1)]`, maintaining natural tab strip focus.
+   - Updated `closeTab` in [`src/App.tsx`](file:///home/user/project/src/App.tsx) to select `newTabs[Math.min(closingIndex, newTabs.length - 1)]`, maintaining natural tab strip focus.
 4. **Crisp GPU Rendering Style:**
-   - Added `image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;` to `.terminal-container .xterm-screen canvas` in [`src/App.css`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.css) to eliminate bilinear interpolation blur during container transitions.
+   - Added `image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;` to `.terminal-container .xterm-screen canvas` in [`src/App.css`](file:///home/user/project/src/App.css) to eliminate bilinear interpolation blur during container transitions.
 
 ### 11.5 Touched Components & Files
-- [`src/App.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx): Replaced `display: none` with absolute positioning and visibility toggling for tab containers, and updated `closeTab` index selection.
-- [`src/presentation/TerminalView.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx): Removed 50ms refit delay; added immediate synchronous + rAF `fitAddon.fit()` and visibility styling.
-- [`src/App.css`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.css): Enforced crisp canvas rendering styles.
+- [`src/App.tsx`](file:///home/user/project/src/App.tsx): Replaced `display: none` with absolute positioning and visibility toggling for tab containers, and updated `closeTab` index selection.
+- [`src/presentation/TerminalView.tsx`](file:///home/user/project/src/presentation/TerminalView.tsx): Removed 50ms refit delay; added immediate synchronous + rAF `fitAddon.fit()` and visibility styling.
+- [`src/App.css`](file:///home/user/project/src/App.css): Enforced crisp canvas rendering styles.
 
 ---
 
@@ -356,7 +356,7 @@ Selecting the onboarding option "Linux Desktop / File Manager Actions" previousl
 
 ### 4.2 Resolution Status
 - **Status:** Resolved & Verified
-- **Validation:** 100% test pass rate across unit test suite ([`InstallerService.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.test.ts), [`UrlSchemeHandler.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/UrlSchemeHandler.test.ts)) and full workspace build.
+- **Validation:** 100% test pass rate across unit test suite ([`InstallerService.test.ts`](file:///home/user/project/src/domain/integration/InstallerService.test.ts), [`UrlSchemeHandler.test.ts`](file:///home/user/project/src/domain/integration/UrlSchemeHandler.test.ts)) and full workspace build.
 
 ### 4.3 Technical Root Causes
 1. **Limited File Manager Coverage**:
@@ -367,7 +367,7 @@ Selecting the onboarding option "Linux Desktop / File Manager Actions" previousl
 2. **Startup CLI Argument Void in `App.tsx`**:
    - `App.tsx` never queried `get_launch_args` during initial mount. `panePaths` initialized to `{}`, defaulting all initial terminal panes to `'~'`.
 3. **Missing `file://` URI Support in URL Scheme Handler**:
-   - Standard FreeDesktop desktop entries with `%U` supply arguments as `file://` URIs (e.g. `file:///home/user/project`), which [`UrlSchemeHandler.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/UrlSchemeHandler.ts) previously treated as `noop`.
+   - Standard FreeDesktop desktop entries with `%U` supply arguments as `file://` URIs (e.g. `file:///home/user/project`), which [`UrlSchemeHandler.ts`](file:///home/user/project/src/domain/integration/UrlSchemeHandler.ts) previously treated as `noop`.
 4. **Tauri v2 Plugin-FS Scope Sandboxing Block (`forbidden path`)**:
    - Tauri v2 enforces strict permission scopes for `@tauri-apps/plugin-fs` via `src-tauri/capabilities/default.json`.
    - The default capability file lacked global and `$HOME` filesystem scopes for write/mkdir operations, granting only default app-data scopes.
@@ -375,37 +375,37 @@ Selecting the onboarding option "Linux Desktop / File Manager Actions" previousl
 
 ### 4.4 Implemented Architecture & Remediation
 1. **Multi-File Manager Desktop Integrations**:
-   - In [`InstallerService.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.ts), expanded `enableFinderIntegration()` to register context actions across:
+   - In [`InstallerService.ts`](file:///home/user/project/src/domain/integration/InstallerService.ts), expanded `enableFinderIntegration()` to register context actions across:
      - **GNOME Nautilus**: `~/.local/share/nautilus/scripts/Open in Sentinel Terminal`
      - **Cinnamon Nemo**: `~/.local/share/nemo/scripts/Open in Sentinel Terminal`
      - **MATE Caja**: `~/.local/share/caja/scripts/Open in Sentinel Terminal`
      - **KDE Dolphin**: `~/.local/share/kio/servicemenus/sentinel_open.desktop` and legacy `~/.local/share/kservices5/ServiceMenus/sentinel_open.desktop` (`ServiceTypes=KonqPopupMenu/Plugin,inode/directory`, `Exec=sentinel "%f"`, `X-KDE-Priority=TopLevel`)
      - **XFCE Thunar**: Injects custom action into `~/.config/Thunar/uca.xml` for folder patterns `*` with `<command>sentinel %f</command>`.
 2. **Dual-Layer Filesystem Permission & Native Fallback Architecture**:
-   - **Tauri IPC Scope Resolution**: Updated [`src-tauri/capabilities/default.json`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/capabilities/default.json) with `fs:allow-home-read-recursive`, `fs:allow-home-write-recursive`, and an explicit `fs:scope` configuration allowing `$HOME/**`, `$HOME/**/*`, and root paths.
-   - **Native Rust Host Fallbacks**: Implemented `write_system_file`, `create_system_dir`, `read_system_file`, and `check_path_exists` in [`src-tauri/src/process_cmds.rs`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/src/process_cmds.rs) and registered them in [`src-tauri/src/lib.rs`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/src/lib.rs).
-   - **Resilient Frontend Helpers**: Created `safeExists()`, `safeMkdir()`, `safeWriteTextFile()`, and `safeReadTextFile()` in [`InstallerService.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.ts). If `@tauri-apps/plugin-fs` is restricted by webview security sandboxing on any environment, the operation automatically and seamlessly falls back to the native Rust commands.
+   - **Tauri IPC Scope Resolution**: Updated [`src-tauri/capabilities/default.json`](file:///home/user/project/src-tauri/capabilities/default.json) with `fs:allow-home-read-recursive`, `fs:allow-home-write-recursive`, and an explicit `fs:scope` configuration allowing `$HOME/**`, `$HOME/**/*`, and root paths.
+   - **Native Rust Host Fallbacks**: Implemented `write_system_file`, `create_system_dir`, `read_system_file`, and `check_path_exists` in [`src-tauri/src/process_cmds.rs`](file:///home/user/project/src-tauri/src/process_cmds.rs) and registered them in [`src-tauri/src/lib.rs`](file:///home/user/project/src-tauri/src/lib.rs).
+   - **Resilient Frontend Helpers**: Created `safeExists()`, `safeMkdir()`, `safeWriteTextFile()`, and `safeReadTextFile()` in [`InstallerService.ts`](file:///home/user/project/src/domain/integration/InstallerService.ts). If `@tauri-apps/plugin-fs` is restricted by webview security sandboxing on any environment, the operation automatically and seamlessly falls back to the native Rust commands.
 3. **Universal FreeDesktop Desktop Entry**:
    - Installed `~/.local/share/applications/sentinel-terminal.desktop` with `Exec=sentinel-terminal %U`, `MimeType=inode/directory;x-scheme-handler/sentinel;`, and `Actions=NewWindow;`.
    - Executed non-fatal `update-desktop-database` and `xdg-mime default` registrations.
 4. **Startup Launch Argument Processing in `App.tsx`**:
-   - Added startup `useEffect` in [`App.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx) consuming `get_launch_args`.
+   - Added startup `useEffect` in [`App.tsx`](file:///home/user/project/src/App.tsx) consuming `get_launch_args`.
    - Filters flags, parses paths and URIs, sets `panePaths` for the initial pane (`tab_initial`), and transitions already-spawned sessions via `cd <path>`.
    - Automatically opens separate tabs for additional folder paths.
 5. **Enhanced URI Protocol Parsing**:
-   - Updated [`UrlSchemeHandler.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/UrlSchemeHandler.ts) to parse `file://` URIs and extract clean decoded paths.
+   - Updated [`UrlSchemeHandler.ts`](file:///home/user/project/src/domain/integration/UrlSchemeHandler.ts) to parse `file://` URIs and extract clean decoded paths.
 
 ### 4.5 Touched Components & Files
-- [`src-tauri/capabilities/default.json`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/capabilities/default.json): Expanded filesystem permissions and scope configuration.
-- [`src-tauri/src/process_cmds.rs`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/src/process_cmds.rs): Native commands for `write_system_file`, `create_system_dir`, `read_system_file`, and `check_path_exists`.
-- [`src-tauri/src/lib.rs`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/src/lib.rs): Registered native system file commands in `generate_handler!`.
-- [`src/domain/integration/InstallerService.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.ts): Safe filesystem helpers (`safeExists`, `safeMkdir`, `safeWriteTextFile`, `safeReadTextFile`) and multi-file manager integrations.
-- [`src/infrastructure/execution/NodeTauriBridge.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/infrastructure/execution/NodeTauriBridge.ts): Node.js IPC emulation for system file commands.
-- [`src/App.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx): Startup argument processing, pane path binding, and race-free session directory navigation.
-- [`src/domain/integration/UrlSchemeHandler.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/UrlSchemeHandler.ts): Support for `file://` URIs.
-- [`src/ui/components/InstallerWizard.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/InstallerWizard.tsx): Updated integration cards and badges.
-- [`src/domain/integration/InstallerService.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.test.ts): Unit tests verifying multi-file manager script and desktop file creation.
-- [`src/domain/integration/UrlSchemeHandler.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/UrlSchemeHandler.test.ts): Unit tests for `file://` URI decoding.
+- [`src-tauri/capabilities/default.json`](file:///home/user/project/src-tauri/capabilities/default.json): Expanded filesystem permissions and scope configuration.
+- [`src-tauri/src/process_cmds.rs`](file:///home/user/project/src-tauri/src/process_cmds.rs): Native commands for `write_system_file`, `create_system_dir`, `read_system_file`, and `check_path_exists`.
+- [`src-tauri/src/lib.rs`](file:///home/user/project/src-tauri/src/lib.rs): Registered native system file commands in `generate_handler!`.
+- [`src/domain/integration/InstallerService.ts`](file:///home/user/project/src/domain/integration/InstallerService.ts): Safe filesystem helpers (`safeExists`, `safeMkdir`, `safeWriteTextFile`, `safeReadTextFile`) and multi-file manager integrations.
+- [`src/infrastructure/execution/NodeTauriBridge.ts`](file:///home/user/project/src/infrastructure/execution/NodeTauriBridge.ts): Node.js IPC emulation for system file commands.
+- [`src/App.tsx`](file:///home/user/project/src/App.tsx): Startup argument processing, pane path binding, and race-free session directory navigation.
+- [`src/domain/integration/UrlSchemeHandler.ts`](file:///home/user/project/src/domain/integration/UrlSchemeHandler.ts): Support for `file://` URIs.
+- [`src/ui/components/InstallerWizard.tsx`](file:///home/user/project/src/ui/components/InstallerWizard.tsx): Updated integration cards and badges.
+- [`src/domain/integration/InstallerService.test.ts`](file:///home/user/project/src/domain/integration/InstallerService.test.ts): Unit tests verifying multi-file manager script and desktop file creation.
+- [`src/domain/integration/UrlSchemeHandler.test.ts`](file:///home/user/project/src/domain/integration/UrlSchemeHandler.test.ts): Unit tests for `file://` URI decoding.
 
 ---
 
@@ -416,7 +416,7 @@ Configuring Sentinel Terminal inside VS Code and Cursor wrote `"path": "sentinel
 
 ### 5.2 Resolution Status
 - **Status:** Resolved & Verified
-- **Validation:** 100% test pass rate across unit test suite ([`InstallerService.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.test.ts)) and full workspace build.
+- **Validation:** 100% test pass rate across unit test suite ([`InstallerService.test.ts`](file:///home/user/project/src/domain/integration/InstallerService.test.ts)) and full workspace build.
 
 ### 5.3 Technical Root Causes
 1. **PTY Stream Process vs. GUI Desktop Window**:
@@ -434,16 +434,16 @@ Configuring Sentinel Terminal inside VS Code and Cursor wrote `"path": "sentinel
      - Sources `~/.sentinel/env` if present.
      - Seamlessly replaces process via `exec "$USER_SHELL" "$@"`, honoring user's shell preference (`fish`, `zsh`, `bash`) with zero overhead and full PTY support.
 2. **Absolute Path Binding in IDE Configuration**:
-   - In [`InstallerService.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.ts), `updateIdeSettings()` binds `"Sentinel Shell"` to the resolved absolute path (`/usr/bin/sentinel-shell` or `~/.local/bin/sentinel-shell`).
+   - In [`InstallerService.ts`](file:///home/user/project/src/domain/integration/InstallerService.ts), `updateIdeSettings()` binds `"Sentinel Shell"` to the resolved absolute path (`/usr/bin/sentinel-shell` or `~/.local/bin/sentinel-shell`).
 3. **External Terminal Integration**:
    - Sets `"terminal.external.linuxExec": "sentinel-terminal"` in editor settings, allowing `Ctrl+Shift+C` ("Open New External Terminal") to launch a full Sentinel Terminal GUI window in the workspace.
 4. **Enhanced Status Checks**:
    - Updated `checkStatus()` to verify both `"Sentinel Shell"` and legacy profile keys across VS Code and Cursor.
 
 ### 5.5 Touched Components & Files
-- [`src/domain/integration/InstallerService.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.ts): `ensureSentinelShellWrapper()`, absolute wrapper path resolution, and `terminal.external.linuxExec` configuration.
-- [`src/ui/components/InstallerWizard.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/InstallerWizard.tsx): Updated IDE profile card details and badges.
-- [`src/domain/integration/InstallerService.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.test.ts): Unit tests verifying absolute path profile injection and external terminal configuration.
+- [`src/domain/integration/InstallerService.ts`](file:///home/user/project/src/domain/integration/InstallerService.ts): `ensureSentinelShellWrapper()`, absolute wrapper path resolution, and `terminal.external.linuxExec` configuration.
+- [`src/ui/components/InstallerWizard.tsx`](file:///home/user/project/src/ui/components/InstallerWizard.tsx): Updated IDE profile card details and badges.
+- [`src/domain/integration/InstallerService.test.ts`](file:///home/user/project/src/domain/integration/InstallerService.test.ts): Unit tests verifying absolute path profile injection and external terminal configuration.
 
 ---
 
@@ -454,7 +454,7 @@ The onboarding CLI launcher installation generated a script at `~/.local/bin/sen
 
 ### 6.2 Resolution Status
 - **Status:** Resolved & Verified
-- **Validation:** 100% test pass rate across unit test suite ([`InstallerService.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.test.ts)), full workspace build, and Arch Linux pacman package rebuild (`sentinel-terminal-bin-2.0.0-2-x86_64.pkg.tar.zst`).
+- **Validation:** 100% test pass rate across unit test suite ([`InstallerService.test.ts`](file:///home/user/project/src/domain/integration/InstallerService.test.ts)), full workspace build, and Arch Linux pacman package rebuild (`sentinel-terminal-bin-2.0.0-2-x86_64.pkg.tar.zst`).
 
 ### 6.3 Technical Root Causes
 1. **Unbounded Recursion**:
@@ -471,33 +471,33 @@ The onboarding CLI launcher installation generated a script at `~/.local/bin/sen
    - Removed `|| sentinel "$resolved_path"` from the launcher script template.
 2. **Hierarchical Binary Resolution**:
    - Script scans candidate paths in order: detected binary via `get_app_binary_path`, `command -v sentinel-terminal`, `/usr/bin/sentinel-terminal`, `/usr/local/bin/sentinel-terminal`, `~/.local/bin/sentinel-terminal`, `$APPIMAGE`, and sibling binary.
-   - Added native Rust command `get_app_binary_path` in [`src-tauri/src/process_cmds.rs`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/src/process_cmds.rs).
+   - Added native Rust command `get_app_binary_path` in [`src-tauri/src/process_cmds.rs`](file:///home/user/project/src-tauri/src/process_cmds.rs).
 3. **Background Disowning & Pass-Through**:
    - Direct pass-through for CLI flags (`--help`, `-h`, `--version`, `-v`, `--new-tab`, `--split`).
    - Resolves target files to containing directory (`if [ -f "$target" ]; then target="$(dirname "$target")"; fi`).
    - Disowns background execution (`"$APP_BIN" "$resolved_path" >/dev/null 2>&1 &; exit 0`) so user prompts return immediately.
 4. **Desktop Entry & URL Scheme Registration**:
-   - Added `ensureDesktopEntry()` in [`InstallerService.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.ts) creating `sentinel-terminal.desktop` with `inode/directory;x-scheme-handler/sentinel;`.
+   - Added `ensureDesktopEntry()` in [`InstallerService.ts`](file:///home/user/project/src/domain/integration/InstallerService.ts) creating `sentinel-terminal.desktop` with `inode/directory;x-scheme-handler/sentinel;`.
    - Added `isLocalBinInPath()` to guide users in onboarding wizard if `~/.local/bin` is missing from `$PATH`.
 5. **Arch Linux Package Release (`2.0.0-2`)**:
-   - Updated [`PKGBUILD`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/arch/PKGBUILD) and [`build-pacman.sh`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/arch/build-pacman.sh).
+   - Updated [`PKGBUILD`](file:///home/user/project/packaging/arch/PKGBUILD) and [`build-pacman.sh`](file:///home/user/project/packaging/arch/build-pacman.sh).
    - Packaged `/usr/bin/sentinel` (755), `/usr/bin/sentinel-shell` (755), `/usr/bin/sentinel-terminal` (755), `/usr/share/applications/sentinel-terminal.desktop` (644), and `/usr/share/kio/servicemenus/sentinel_open.desktop` (644).
    - Validated package archive generation: `sentinel-terminal-bin-2.0.0-2-x86_64.pkg.tar.zst` verified via `tar -tvf`.
 
 ### 6.5 Touched Components & Files
-- [`src/domain/integration/InstallerService.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.ts): Recursion-free launcher template, multi-tier binary resolution, desktop scheme handler, and PATH detection.
-- [`src-tauri/src/process_cmds.rs`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/src/process_cmds.rs): Added `get_app_binary_path` Rust command.
-- [`src-tauri/src/lib.rs`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/src/lib.rs): Registered `get_app_binary_path` in `invoke_handler`.
-- [`src/infrastructure/execution/NodeTauriBridge.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/infrastructure/execution/NodeTauriBridge.ts): Stubbed `get_app_binary_path`.
-- [`packaging/arch/PKGBUILD`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/arch/PKGBUILD): Updated to release 2 with CLI launcher, shell wrapper, and Dolphin service menu.
-- [`packaging/arch/.SRCINFO`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/arch/.SRCINFO): Regenerated metadata.
-- [`packaging/arch/build-pacman.sh`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/arch/build-pacman.sh): Staged CLI launcher, shell wrapper, and service menu.
-- [`packaging/arch/sentinel`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/arch/sentinel): System-wide CLI launcher script.
-- [`packaging/arch/sentinel-shell`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/arch/sentinel-shell): IDE terminal shell profile wrapper.
-- [`packaging/arch/sentinel_open.desktop`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/arch/sentinel_open.desktop): Dolphin KIO context menu entry.
-- [`packaging/arch/sentinel-terminal.desktop`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/arch/sentinel-terminal.desktop): Updated desktop entry with `%U` and directory MIME type.
-- [`packaging/desktop/com.pranav.sentinel-terminal.desktop`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/desktop/com.pranav.sentinel-terminal.desktop): Updated desktop entry with `inode/directory`.
-- [`src/domain/integration/InstallerService.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.test.ts): Unit tests verifying recursion elimination, wrapper generation, and desktop registration.
+- [`src/domain/integration/InstallerService.ts`](file:///home/user/project/src/domain/integration/InstallerService.ts): Recursion-free launcher template, multi-tier binary resolution, desktop scheme handler, and PATH detection.
+- [`src-tauri/src/process_cmds.rs`](file:///home/user/project/src-tauri/src/process_cmds.rs): Added `get_app_binary_path` Rust command.
+- [`src-tauri/src/lib.rs`](file:///home/user/project/src-tauri/src/lib.rs): Registered `get_app_binary_path` in `invoke_handler`.
+- [`src/infrastructure/execution/NodeTauriBridge.ts`](file:///home/user/project/src/infrastructure/execution/NodeTauriBridge.ts): Stubbed `get_app_binary_path`.
+- [`packaging/arch/PKGBUILD`](file:///home/user/project/packaging/arch/PKGBUILD): Updated to release 2 with CLI launcher, shell wrapper, and Dolphin service menu.
+- [`packaging/arch/.SRCINFO`](file:///home/user/project/packaging/arch/.SRCINFO): Regenerated metadata.
+- [`packaging/arch/build-pacman.sh`](file:///home/user/project/packaging/arch/build-pacman.sh): Staged CLI launcher, shell wrapper, and service menu.
+- [`packaging/arch/sentinel`](file:///home/user/project/packaging/arch/sentinel): System-wide CLI launcher script.
+- [`packaging/arch/sentinel-shell`](file:///home/user/project/packaging/arch/sentinel-shell): IDE terminal shell profile wrapper.
+- [`packaging/arch/sentinel_open.desktop`](file:///home/user/project/packaging/arch/sentinel_open.desktop): Dolphin KIO context menu entry.
+- [`packaging/arch/sentinel-terminal.desktop`](file:///home/user/project/packaging/arch/sentinel-terminal.desktop): Updated desktop entry with `%U` and directory MIME type.
+- [`packaging/desktop/com.pranav.sentinel-terminal.desktop`](file:///home/user/project/packaging/desktop/com.pranav.sentinel-terminal.desktop): Updated desktop entry with `inode/directory`.
+- [`src/domain/integration/InstallerService.test.ts`](file:///home/user/project/src/domain/integration/InstallerService.test.ts): Unit tests verifying recursion elimination, wrapper generation, and desktop registration.
 
 ---
 
@@ -563,17 +563,17 @@ No interface rendered, terminal prompts were inaccessible, and when launched via
    - Bumped package release to `pkgrel=4` in `PKGBUILD`, producing `sentinel-terminal-bin-2.0.0-4-x86_64.pkg.tar.zst`.
 
 ### 12.5 Touched Components & Files
-- [`src-tauri/Cargo.toml`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/Cargo.toml): Added `[features]` default with `custom-protocol`, added `chrono`.
-- [`src-tauri/src/logger.rs`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/src/logger.rs): Native diagnostic logging engine with flag parsing and formatted output.
-- [`src-tauri/src/lib.rs`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/src/lib.rs): Registered logger commands, webview URL validation, and lifecycle hooks.
-- [`src-tauri/src/pty.rs`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/src/pty.rs): Added PTY session spawn/kill diagnostic logs.
-- [`src-tauri/src/embedded_server.rs`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/src/embedded_server.rs): Added LLM server process spawn/kill diagnostic logs.
-- [`packaging/arch/sentinel`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/arch/sentinel): Added foreground streaming pass-through for debug flags.
-- [`src/domain/integration/InstallerService.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.ts): Updated CLI launcher template with debug flag support.
-- [`src/infrastructure/logging/DiagnosticLogger.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/infrastructure/logging/DiagnosticLogger.ts): Frontend error interceptor and console forwarder.
-- [`src/main.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/main.tsx): Initialized `DiagnosticLogger` on application startup.
-- [`packaging/arch/PKGBUILD`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/arch/PKGBUILD): Bumped `pkgrel=4`.
-- [`packaging/arch/build-pacman.sh`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/arch/build-pacman.sh): Automated web asset build, custom-protocol compilation, and binary asset verification.
-- [`docs/TROUBLESHOOTING.md`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/TROUBLESHOOTING.md): Documented root cause, permanent resolution, and terminal live logging usage.
-- [`docs/FIXED.md`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/FIXED.md): Documented Issue 12 resolution.
+- [`src-tauri/Cargo.toml`](file:///home/user/project/src-tauri/Cargo.toml): Added `[features]` default with `custom-protocol`, added `chrono`.
+- [`src-tauri/src/logger.rs`](file:///home/user/project/src-tauri/src/logger.rs): Native diagnostic logging engine with flag parsing and formatted output.
+- [`src-tauri/src/lib.rs`](file:///home/user/project/src-tauri/src/lib.rs): Registered logger commands, webview URL validation, and lifecycle hooks.
+- [`src-tauri/src/pty.rs`](file:///home/user/project/src-tauri/src/pty.rs): Added PTY session spawn/kill diagnostic logs.
+- [`src-tauri/src/embedded_server.rs`](file:///home/user/project/src-tauri/src/embedded_server.rs): Added LLM server process spawn/kill diagnostic logs.
+- [`packaging/arch/sentinel`](file:///home/user/project/packaging/arch/sentinel): Added foreground streaming pass-through for debug flags.
+- [`src/domain/integration/InstallerService.ts`](file:///home/user/project/src/domain/integration/InstallerService.ts): Updated CLI launcher template with debug flag support.
+- [`src/infrastructure/logging/DiagnosticLogger.ts`](file:///home/user/project/src/infrastructure/logging/DiagnosticLogger.ts): Frontend error interceptor and console forwarder.
+- [`src/main.tsx`](file:///home/user/project/src/main.tsx): Initialized `DiagnosticLogger` on application startup.
+- [`packaging/arch/PKGBUILD`](file:///home/user/project/packaging/arch/PKGBUILD): Bumped `pkgrel=4`.
+- [`packaging/arch/build-pacman.sh`](file:///home/user/project/packaging/arch/build-pacman.sh): Automated web asset build, custom-protocol compilation, and binary asset verification.
+- [`docs/TROUBLESHOOTING.md`](file:///home/user/project/docs/TROUBLESHOOTING.md): Documented root cause, permanent resolution, and terminal live logging usage.
+- [`docs/FIXED.md`](file:///home/user/project/docs/FIXED.md): Documented Issue 12 resolution.
 

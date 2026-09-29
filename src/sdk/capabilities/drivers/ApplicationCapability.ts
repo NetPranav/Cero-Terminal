@@ -336,7 +336,7 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
           try {
             const osascriptRes = await invoke<{ code?: number }>('execute_command', {
               command: 'osascript',
-              args: ['-e', `tell application "${target}" to quit`]
+              args: ['-e', 'on run argv', '-e', 'tell application (item 1 of argv) to quit', '-e', 'end run', target]
             });
             if (osascriptRes && (osascriptRes.code === 0 || osascriptRes.code === undefined)) {
               killed = true;
@@ -416,7 +416,7 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
             try {
               const checkRes = await invoke<{ code: number }>('execute_command', {
                 command: 'sh',
-                args: ['-c', `which "${target.toLowerCase()}" >/dev/null 2>&1 || brew list "${pkgInfo.name}" >/dev/null 2>&1`]
+                args: ['-c', 'which -- "$1" >/dev/null 2>&1 || brew list -- "$2" >/dev/null 2>&1', 'sh', target.toLowerCase(), pkgInfo.name]
               });
               if (checkRes.code === 0) {
                 return {
@@ -442,7 +442,7 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
             try {
               const checkRes = await invoke<{ code: number }>('execute_command', {
                 command: 'sh',
-                args: ['-c', `which "${target.toLowerCase()}" >/dev/null 2>&1 || (which pacman >/dev/null 2>&1 && pacman -Q "${target.toLowerCase()}" >/dev/null 2>&1) || (which dpkg-query >/dev/null 2>&1 && dpkg-query -W -f='\${Status}' "${target.toLowerCase()}" 2>/dev/null | grep -q "ok installed") || (which zypper >/dev/null 2>&1 && rpm -q "${target.toLowerCase()}" >/dev/null 2>&1)`]
+                args: ['-c', `which "$1" >/dev/null 2>&1 || (which pacman >/dev/null 2>&1 && pacman -Q "$1" >/dev/null 2>&1) || (which dpkg-query >/dev/null 2>&1 && dpkg-query -W -f='\${Status}' "$1" 2>/dev/null | grep -q "ok installed") || (which zypper >/dev/null 2>&1 && rpm -q "$1" >/dev/null 2>&1)`, 'sh', target.toLowerCase()]
               });
               if (checkRes.code === 0) {
                 return {

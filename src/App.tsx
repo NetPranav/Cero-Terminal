@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { isLinux, isMacOS, getShortcutModifier, formatShortcut } from "./shared/platform";
 import { WindowControls, WindowTitleStrip } from "./ui/components/WindowControls";
+import { changeDirectoryLine, hasControlChars } from "./utils/shellQuote";
 import { TerminalWorkspace, MAX_PANES_PER_TAB } from "./domain/terminal/TerminalWorkspace";
 import { submitTerminalRequest } from "./presentation/TerminalRequests";
 import { paneToFocus } from "./presentation/paneFocus";
@@ -433,7 +434,8 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
               });
               const existingSessionId = activeSessionIdsRef.current[targetPaneId] || activeTerminalRef.current?.sessionId;
               if (existingSessionId) {
-                SessionManager.getInstance().write(existingSessionId, `cd ${JSON.stringify(targetPath)}\n`);
+                // A folder named $(...) or `...` must not run: quote it, and skip names with control characters
+                if (!hasControlChars(targetPath)) SessionManager.getInstance().write(existingSessionId, changeDirectoryLine(targetPath, getPlatform() === 'windows'));
               }
             }
           }

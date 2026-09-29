@@ -68,7 +68,9 @@ export class CrossPlatformCommandAdapter {
     cwd?: string,
     platform: Platform = getPlatform()
   ): { command: string; args: string[] } {
-    const fullCmd = cwd ? (platform === 'windows' ? `Set-Location -LiteralPath "${cwd}"; ${command}` : `cd "${cwd}" && ${command}`) : command;
+    const fullCmd = cwd
+      ? (platform === 'windows' ? `Set-Location -LiteralPath '${cwd.replace(/'/g, "''")}'; ${command}` : `cd '${cwd.replace(/'/g, `'\\''`)}' && ${command}`)
+      : command;
 
     if (platform === 'windows') {
       return {
@@ -258,8 +260,8 @@ export class CrossPlatformCommandAdapter {
     }
 
     const testCmd = platform === 'windows'
-      ? `where.exe "${binary}" >NUL 2>&1`
-      : `command -v "${binary}" >/dev/null 2>&1 || which "${binary}" >/dev/null 2>&1`;
+      ? `where.exe '${binary.replace(/'/g, "''")}' >NUL 2>&1`
+      : `command -v '${binary.replace(/'/g, `'\\''`)}' >/dev/null 2>&1 || which '${binary.replace(/'/g, `'\\''`)}' >/dev/null 2>&1`;
 
     try {
       if (executor) {
@@ -291,8 +293,8 @@ export class CrossPlatformCommandAdapter {
     }
 
     const testCmd = platform === 'windows'
-      ? `if (Test-Path -LiteralPath "${pathToCheck}") { exit 0 } else { exit 1 }`
-      : `test -e "${pathToCheck}"`;
+      ? `if (Test-Path -LiteralPath '${pathToCheck.replace(/'/g, "''")}') { exit 0 } else { exit 1 }`
+      : `test -e '${pathToCheck.replace(/'/g, `'\\''`)}'`;
 
     try {
       if (executor) {

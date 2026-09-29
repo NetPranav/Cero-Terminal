@@ -225,7 +225,7 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
           try {
             await writeTextFile(resolvedPath, content);
           } catch {
-            const res = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', { command: 'sh', args: ['-c', `mkdir -p "$(dirname "${resolvedPath}")" && touch "${resolvedPath}"`] });
+            const res = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', { command: 'sh', args: ['-c', 'mkdir -p -- "$(dirname -- "$1")" && touch -- "$1"', 'sh', resolvedPath] });
             if (res.code !== 0) {
               return { success: false, error: { code: 'CREATE_FILE_FAILED', message: res.stderr || `Failed to create file at ${resolvedPath}` } };
             }
@@ -277,7 +277,7 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
 
         case 'trash': {
           if (!resolvedPath) return { success: false, error: { code: 'MISSING_PATH', message: 'Path required' } };
-          const trashCmd = await invoke<{ code: number; stderr: string }>('execute_command', { command: 'sh', args: ['-c', `mv "${resolvedPath}" "$HOME/.Trash/" 2>/dev/null || rm -rf "${resolvedPath}"`] });
+          const trashCmd = await invoke<{ code: number; stderr: string }>('execute_command', { command: 'sh', args: ['-c', 'mv -- "$1" "$HOME/.Trash/"', 'sh', resolvedPath] });
           if (trashCmd.code !== 0) {
             return { success: false, error: { code: 'TRASH_FAILED', message: trashCmd.stderr || `Failed to move ${resolvedPath} to Trash` } };
           }

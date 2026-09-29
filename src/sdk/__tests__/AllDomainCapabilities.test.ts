@@ -106,7 +106,7 @@ describe('All Domain Capabilities — Comprehensive 13-Domain Verification', () 
   });
 
   it('13. DeveloperCapability: should trigger engineering toolchains and open IDEs (Cursor, VS Code, Xcode)', async () => {
-    const res = await executor.execute(createTestNode('dev-1', 'developer.open', { ide: 'Cursor', path: '/Users/pranav/Project Folder/AI Terminal' }), context);
+    const res = await executor.execute(createTestNode('dev-1', 'developer.open', { ide: 'Cursor', path: '/home/user/project' }), context);
     expect(res.success).toBe(true);
     expect(res.outputs.ide).toBe('Cursor');
     expect(res.verification?.verifiedOutputs.activeEditor).toBe('Cursor AI');

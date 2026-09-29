@@ -38,7 +38,7 @@ describe('StateQueries — Strongly-Typed Ergonomic Query Layer', () => {
   });
 
   it('4 & 5. exists & isEmpty: should verify directory paths and emptiness assertions', async () => {
-    const exRes = await queries.exists('/Users/pranav/Project Folder/AI Terminal');
+    const exRes = await queries.exists('/home/user/project');
     expect(exRes.data).toBe(true);
 
     const emptyRes = await queries.isEmpty('/tmp/empty_test_folder');

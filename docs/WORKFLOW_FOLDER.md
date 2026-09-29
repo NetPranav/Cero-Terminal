@@ -4,7 +4,7 @@ This document is the exhaustive, file-by-file technical reference for the workfl
 - `src/workflows/`: The enterprise declarative workflow library, AST/IR compiler, scheduling, telemetry, and zero-token deterministic replay system.
 - `src/domain/workflow/`: The runtime execution engine, step state tracker, priority task queue, and variable interpolation engine that coordinates with the ReAct agent and capability drivers.
 
-For high-level usage guides and CLI macro replay documentation, see [docs/WORKFLOWS.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/WORKFLOWS.md).
+For high-level usage guides and CLI macro replay documentation, see [docs/WORKFLOWS.md](file:///home/user/project/docs/WORKFLOWS.md).
 
 ---
 
@@ -138,7 +138,7 @@ src/domain/workflow/
 
 ### 3.1. Models & Type System (`src/workflows/models/WorkflowTypes.ts`)
 
-File: [src/workflows/models/WorkflowTypes.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/models/WorkflowTypes.ts)
+File: [src/workflows/models/WorkflowTypes.ts](file:///home/user/project/src/workflows/models/WorkflowTypes.ts)
 
 This file establishes the foundational domain contracts for the three-tier workflow library and the intermediate representation.
 
@@ -192,7 +192,7 @@ Persisted to `~/.sentinel/workflows/<name>.json`:
 
 ### 3.2. Programmatic Workflow Builder (`src/workflows/builder/WorkflowBuilder.ts`)
 
-File: [src/workflows/builder/WorkflowBuilder.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/builder/WorkflowBuilder.ts)
+File: [src/workflows/builder/WorkflowBuilder.ts](file:///home/user/project/src/workflows/builder/WorkflowBuilder.ts)
 
 Provides a fluent, chainable API for programmatic construction of `UserWorkflow` objects.
 
@@ -221,7 +221,7 @@ Provides a fluent, chainable API for programmatic construction of `UserWorkflow`
 
 ### 3.3. Workflow Registry & Discovery (`src/workflows/registry/WorkflowRegistry.ts`)
 
-File: [src/workflows/registry/WorkflowRegistry.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/registry/WorkflowRegistry.ts)
+File: [src/workflows/registry/WorkflowRegistry.ts](file:///home/user/project/src/workflows/registry/WorkflowRegistry.ts)
 
 Decouples workflow discovery from storage persistence. Aggregates built-in templates, user workflows, and plugin workflows into a unified search and lookup layer.
 
@@ -244,7 +244,7 @@ Decouples workflow discovery from storage persistence. Aggregates built-in templ
 
 ### 3.4. Structural & Semantic Validation (`src/workflows/validation/WorkflowValidator.ts`)
 
-File: [src/workflows/validation/WorkflowValidator.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/validation/WorkflowValidator.ts)
+File: [src/workflows/validation/WorkflowValidator.ts](file:///home/user/project/src/workflows/validation/WorkflowValidator.ts)
 
 Enforces integrity rules on `UserWorkflow` instances before compilation or execution.
 
@@ -267,7 +267,7 @@ Returns `ValidationResult` containing `{ valid: boolean, errors: string[], warni
 
 ### 3.5. Control Flow Primitives (`src/workflows/conditions/ControlFlow.ts`)
 
-File: [src/workflows/conditions/ControlFlow.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/conditions/ControlFlow.ts)
+File: [src/workflows/conditions/ControlFlow.ts](file:///home/user/project/src/workflows/conditions/ControlFlow.ts)
 
 Resolves control flow directives and conditional assertions against resolved runtime variables.
 
@@ -290,7 +290,7 @@ Resolves control flow directives and conditional assertions against resolved run
 
 ### 3.6. Loop Iteration Engine (`src/workflows/loops/LoopEngine.ts`)
 
-File: [src/workflows/loops/LoopEngine.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/loops/LoopEngine.ts)
+File: [src/workflows/loops/LoopEngine.ts](file:///home/user/project/src/workflows/loops/LoopEngine.ts)
 
 Handles loop unrolling into flattened `WorkflowIRNode` structures during intermediate representation compilation.
 
@@ -307,7 +307,7 @@ Handles loop unrolling into flattened `WorkflowIRNode` structures during interme
 
 ### 3.7. Variable Typing & Resolution (`src/workflows/variables/WorkflowVariables.ts`)
 
-File: [src/workflows/variables/WorkflowVariables.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/variables/WorkflowVariables.ts)
+File: [src/workflows/variables/WorkflowVariables.ts](file:///home/user/project/src/workflows/variables/WorkflowVariables.ts)
 
 Manages runtime variable resolution, domain-specific typing, defaults, and parameter interpolation.
 
@@ -323,7 +323,7 @@ Manages runtime variable resolution, domain-specific typing, defaults, and param
 
 ### 3.8. Multi-Trigger Scheduler (`src/workflows/scheduler/WorkflowScheduler.ts`)
 
-File: [src/workflows/scheduler/WorkflowScheduler.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/scheduler/WorkflowScheduler.ts)
+File: [src/workflows/scheduler/WorkflowScheduler.ts](file:///home/user/project/src/workflows/scheduler/WorkflowScheduler.ts)
 
 Schedules and triggers workflows across 8 operational trigger modes.
 
@@ -348,14 +348,14 @@ Schedules and triggers workflows across 8 operational trigger modes.
 ### 3.9. Storage Subsystems
 
 #### In-Memory Versioned Storage (`src/workflows/storage/WorkflowStorage.ts`)
-File: [src/workflows/storage/WorkflowStorage.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/storage/WorkflowStorage.ts)
+File: [src/workflows/storage/WorkflowStorage.ts](file:///home/user/project/src/workflows/storage/WorkflowStorage.ts)
 - Manages in-memory storage of `UserWorkflow` definitions.
 - Automatic snapshotting: Creates a `WorkflowVersion` snapshot in `versionHistory` before any overwrite.
 - `rollback(id: string, version: string)`: Reverts a workflow to any historical version.
 - `exportAsJSON(id)` / `importFromJSON(jsonStr)`: Serializes workflows into `sentinel-workflow-v1` payloads with SHA-256 checksums.
 
 #### Disk Workflow Storage (`src/workflows/storage/DiskWorkflowStorage.ts`)
-File: [src/workflows/storage/DiskWorkflowStorage.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/storage/DiskWorkflowStorage.ts)
+File: [src/workflows/storage/DiskWorkflowStorage.ts](file:///home/user/project/src/workflows/storage/DiskWorkflowStorage.ts)
 - Persists workflows as JSON files in `~/.sentinel/workflows/<name>.json` (Windows: `%USERPROFILE%\.sentinel\workflows\<name>.json`).
 - Uses Tauri Rust filesystem bridge (`@tauri-apps/plugin-fs`) in desktop mode with Node.js `fs` fallback for headless testing.
 - Enforces `schemaVersion: 1` and automatically migrates legacy unversioned workflow definitions.
@@ -381,20 +381,20 @@ Execution via Phase 4 Runtime Engine
 ```
 
 #### `WorkflowIRCompiler.ts`
-File: [src/workflows/engine/WorkflowIRCompiler.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/engine/WorkflowIRCompiler.ts)
+File: [src/workflows/engine/WorkflowIRCompiler.ts](file:///home/user/project/src/workflows/engine/WorkflowIRCompiler.ts)
 - Compiles `UserWorkflow` + runtime inputs into a `WorkflowIR`.
 - Recursively expands nodes, evaluates conditions, unrolls loops via `LoopEngine`, inlines nested workflows (up to `maxNestedDepth = 10`), and partitions tasks into parallel execution groups via topological sort.
 
 #### `WorkflowGraphCompiler.ts`
-File: [src/workflows/engine/WorkflowGraphCompiler.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/engine/WorkflowGraphCompiler.ts)
+File: [src/workflows/engine/WorkflowGraphCompiler.ts](file:///home/user/project/src/workflows/engine/WorkflowGraphCompiler.ts)
 - Converts `WorkflowIRNode` entries into standard `ActionNode` definitions compatible with the agent execution runtime.
 
 #### `WorkflowExecutionEngine.ts`
-File: [src/workflows/engine/WorkflowExecutionEngine.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/engine/WorkflowExecutionEngine.ts)
+File: [src/workflows/engine/WorkflowExecutionEngine.ts](file:///home/user/project/src/workflows/engine/WorkflowExecutionEngine.ts)
 - Orchestrates the full lifecycle: compiles IR, produces `ActionGraph`, dispatches nodes, records `WorkflowInstance` records into `WorkflowHistory`, and logs metrics to `WorkflowTelemetry`.
 
 #### `DeterministicReplayEngine.ts`
-File: [src/workflows/engine/DeterministicReplayEngine.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/engine/DeterministicReplayEngine.ts)
+File: [src/workflows/engine/DeterministicReplayEngine.ts](file:///home/user/project/src/workflows/engine/DeterministicReplayEngine.ts)
 - Replays saved workflows (`~/.sentinel/workflows/<name>.json`) with zero LLM inference tokens in ~22ms.
 - Pre-execution validation: Verifies required binaries, ports, and paths, preventing environment drift.
 - Parameter substitution: Injects CLI overrides (`--port=9000`) into commands.
@@ -402,17 +402,17 @@ File: [src/workflows/engine/DeterministicReplayEngine.ts](file:///home/overxpowe
 - Reversibility: Appends all executed steps to the session `UndoLog`.
 
 #### `MultistagePromptDecomposer.ts`
-File: [src/workflows/engine/MultistagePromptDecomposer.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/engine/MultistagePromptDecomposer.ts)
+File: [src/workflows/engine/MultistagePromptDecomposer.ts](file:///home/user/project/src/workflows/engine/MultistagePromptDecomposer.ts)
 - Parses natural language composite instructions (e.g. `build frontend, run tests, and package release :: save as workflow ci-pipeline`).
 - Extracts pipeline stages, parameter tokens, required ports, and prerequisite binaries.
 
 #### `CrossPlatformCommandAdapter.ts`
-File: [src/workflows/engine/CrossPlatformCommandAdapter.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/engine/CrossPlatformCommandAdapter.ts)
+File: [src/workflows/engine/CrossPlatformCommandAdapter.ts](file:///home/user/project/src/workflows/engine/CrossPlatformCommandAdapter.ts)
 - Translates shell commands between POSIX environments (Linux Debian/Arch/Fedora/Alpine, macOS) and Windows PowerShell.
 - Handles platform-specific command overrides declared in workflow step definitions.
 
 #### `WorkflowRecorder.ts`
-File: [src/workflows/engine/WorkflowRecorder.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/engine/WorkflowRecorder.ts)
+File: [src/workflows/engine/WorkflowRecorder.ts](file:///home/user/project/src/workflows/engine/WorkflowRecorder.ts)
 - Records interactive CLI command sequences, recent steps from the session `UndoLog`, or multi-phase `AgentPlan` hierarchies into `SavedWorkflowDefinition` JSON files.
 
 ---
@@ -420,11 +420,11 @@ File: [src/workflows/engine/WorkflowRecorder.ts](file:///home/overxpowered/padha
 ### 3.11. Telemetry & Execution History
 
 #### `WorkflowTelemetry.ts`
-File: [src/workflows/telemetry/WorkflowTelemetry.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/telemetry/WorkflowTelemetry.ts)
+File: [src/workflows/telemetry/WorkflowTelemetry.ts](file:///home/user/project/src/workflows/telemetry/WorkflowTelemetry.ts)
 - Collects runtime execution metrics: `totalExecutions`, `successes`, `failures`, `successRate` (percentage), `totalDurationMs`, `averageDurationMs`, `repairRate` (automated repairs per execution), and `mostUsedWorkflows` (top 5 by frequency).
 
 #### `WorkflowHistory.ts`
-File: [src/workflows/history/WorkflowHistory.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/history/WorkflowHistory.ts)
+File: [src/workflows/history/WorkflowHistory.ts](file:///home/user/project/src/workflows/history/WorkflowHistory.ts)
 - Maintains an in-memory ring-buffer repository of up to 5,000 `WorkflowInstance` execution records.
 - Provides filtering by `workflowId` and calculates aggregate statistics (`getStats`: total, successes, failures, average duration, total repairs).
 
@@ -432,7 +432,7 @@ File: [src/workflows/history/WorkflowHistory.ts](file:///home/overxpowered/padha
 
 ### 3.12. Workflow Sharing (`src/workflows/sharing/WorkflowSharing.ts`)
 
-File: [src/workflows/sharing/WorkflowSharing.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/sharing/WorkflowSharing.ts)
+File: [src/workflows/sharing/WorkflowSharing.ts](file:///home/user/project/src/workflows/sharing/WorkflowSharing.ts)
 
 Implements the `sentinel-workflow-v1` sharing and portability protocol.
 - Computes SHA-256 integrity checksums over workflow definitions to guarantee payload integrity.
@@ -443,7 +443,7 @@ Implements the `sentinel-workflow-v1` sharing and portability protocol.
 
 ### 3.13. Starter Templates (`src/workflows/templates/WorkflowTemplates.ts`)
 
-File: [src/workflows/templates/WorkflowTemplates.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/templates/WorkflowTemplates.ts)
+File: [src/workflows/templates/WorkflowTemplates.ts](file:///home/user/project/src/workflows/templates/WorkflowTemplates.ts)
 
 Contains 6 immutable built-in starter templates:
 1. **`tpl-morning-development`** (`Morning Development`): Launches developer editor, terminal, browser, and connects to development WiFi.
@@ -460,7 +460,7 @@ Contains 6 immutable built-in starter templates:
 While `src/workflows/` handles high-level authoring, compilation, and declarative DAGs, `src/domain/workflow/` orchestrates immediate step execution during active agent operations.
 
 ### 4.1. `WorkflowEngine.ts`
-File: [src/domain/workflow/WorkflowEngine.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/workflow/WorkflowEngine.ts)
+File: [src/domain/workflow/WorkflowEngine.ts](file:///home/user/project/src/domain/workflow/WorkflowEngine.ts)
 - **Active State Tracking**: Tracks running workflows in an `executions` map (`Map<string, Map<string, WorkflowTaskExecution>>`).
 - **DAG Readiness Resolution (`getNextTasks`)**: Evaluates the dependency graph and returns steps that are `PENDING` with all prerequisite dependencies `COMPLETED`.
 - **Task Lifecycle**: Coordinates state transitions: `PENDING` -> `RUNNING` -> `COMPLETED` | `FAILED` | `CANCELLED`.
@@ -468,19 +468,19 @@ File: [src/domain/workflow/WorkflowEngine.ts](file:///home/overxpowered/padhai_i
 - **Rollback Tracking**: Stores `rollbackAction` closures for every completed step to support reversibility.
 
 ### 4.2. `TaskQueue.ts`
-File: [src/domain/workflow/TaskQueue.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/workflow/TaskQueue.ts)
+File: [src/domain/workflow/TaskQueue.ts](file:///home/user/project/src/domain/workflow/TaskQueue.ts)
 - Implements a priority-based queue for `QueuedTask` objects.
 - Sorts tasks dynamically by descending priority (`priority` score).
 - Provides execution controls: `enqueue`, `dequeue`, `peek`, `pause`, `resume`, and `removeByWorkflowId`.
 
 ### 4.3. `VariableEngine.ts`
-File: [src/domain/workflow/VariableEngine.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/workflow/VariableEngine.ts)
+File: [src/domain/workflow/VariableEngine.ts](file:///home/user/project/src/domain/workflow/VariableEngine.ts)
 - Handles variable interpolation across strings, arrays, and nested objects.
 - Supports dot-notation path traversal (e.g. `{{user.credentials.token}}`).
 - Type-preserving single-variable extraction: If a string is exactly `"{{var}}"`, it returns the raw underlying type (e.g. number or object) rather than coercing to string.
 
 ### 4.4. `types.ts`
-File: [src/domain/workflow/types.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/workflow/types.ts)
+File: [src/domain/workflow/types.ts](file:///home/user/project/src/domain/workflow/types.ts)
 - Defines runtime domain interfaces and Zod validation schemas (`workflowSchema`, `retryPolicySchema`).
 - **10 Primitive Step Types (`StepType`)**:
   - `ExecuteCapability`: Dispatches an SDK capability.
@@ -501,16 +501,16 @@ The workflow implementations are validated by 13 comprehensive test suites guara
 
 | Test Suite File | Tested Subsystem | Key Verification Scenarios |
 | :--- | :--- | :--- |
-| [`CrossPlatformCommandAdapter.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/__tests__/CrossPlatformCommandAdapter.test.ts) | CrossPlatformCommandAdapter | Linux distro detection, macOS POSIX handling, Windows PowerShell translation, override resolution. |
-| [`DeterministicReplayEngine.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/__tests__/DeterministicReplayEngine.test.ts) | DeterministicReplayEngine | Zero-token replay latency, parameter interpolation, drift detection, dry-run simulation, SecurityEngine consent halting. |
-| [`Execution.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/__tests__/Execution.test.ts) | WorkflowExecutionEngine | Runtime Reuse pipeline: IR compilation -> Graph compilation -> Action execution -> Telemetry/History recording. |
-| [`MultistagePromptDecomposer.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/__tests__/MultistagePromptDecomposer.test.ts) | MultistagePromptDecomposer | Natural language sequential conjunction parsing, parameter extraction, binary prerequisite detection. |
-| [`Performance.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/__tests__/Performance.test.ts) | Compilers & Engines | Large DAG compilation benchmarking, memory usage, unrolling performance under 1,000 iterations. |
-| [`Scheduler.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/__tests__/Scheduler.test.ts) | WorkflowScheduler | Time calculations, cron intervals, login/startup triggers, filesystem event path matching, application bundle ID filtering. |
-| [`Storage.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/__tests__/Storage.test.ts) | WorkflowStorage | In-memory persistence, version snapshotting, rollback verification, JSON export/import with SHA-256 checks. |
-| [`DiskWorkflowStorage.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/storage/DiskWorkflowStorage.test.ts) | DiskWorkflowStorage | File path sanitization, `schemaVersion: 1` validation, legacy migration, atomic file I/O. |
-| [`Templates.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/__tests__/Templates.test.ts) | WorkflowTemplates & Registry | Immutability of built-ins, instantiation to UserWorkflow, validation of all 6 starter templates. |
-| [`Validation.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/__tests__/Validation.test.ts) | WorkflowValidator | 11 validation gates: duplicate IDs, missing dependencies, DFS circular dependency detection, output source validation. |
-| [`Variables.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/__tests__/Variables.test.ts) | WorkflowVariables | Strict typing across 11 domains, default value fallback, required checks, mustache parameter substitution. |
-| [`WorkflowBuilder.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/__tests__/WorkflowBuilder.test.ts) | WorkflowBuilder | Fluent builder construction, duplicate/clone utilities, nested workflow linkage. |
-| [`WorkflowRecorder.test.ts`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/__tests__/WorkflowRecorder.test.ts) | WorkflowRecorder | Command sequence capture, UndoLog step extraction, AgentPlan translation to SavedWorkflowDefinition. |
+| [`CrossPlatformCommandAdapter.test.ts`](file:///home/user/project/src/workflows/__tests__/CrossPlatformCommandAdapter.test.ts) | CrossPlatformCommandAdapter | Linux distro detection, macOS POSIX handling, Windows PowerShell translation, override resolution. |
+| [`DeterministicReplayEngine.test.ts`](file:///home/user/project/src/workflows/__tests__/DeterministicReplayEngine.test.ts) | DeterministicReplayEngine | Zero-token replay latency, parameter interpolation, drift detection, dry-run simulation, SecurityEngine consent halting. |
+| [`Execution.test.ts`](file:///home/user/project/src/workflows/__tests__/Execution.test.ts) | WorkflowExecutionEngine | Runtime Reuse pipeline: IR compilation -> Graph compilation -> Action execution -> Telemetry/History recording. |
+| [`MultistagePromptDecomposer.test.ts`](file:///home/user/project/src/workflows/__tests__/MultistagePromptDecomposer.test.ts) | MultistagePromptDecomposer | Natural language sequential conjunction parsing, parameter extraction, binary prerequisite detection. |
+| [`Performance.test.ts`](file:///home/user/project/src/workflows/__tests__/Performance.test.ts) | Compilers & Engines | Large DAG compilation benchmarking, memory usage, unrolling performance under 1,000 iterations. |
+| [`Scheduler.test.ts`](file:///home/user/project/src/workflows/__tests__/Scheduler.test.ts) | WorkflowScheduler | Time calculations, cron intervals, login/startup triggers, filesystem event path matching, application bundle ID filtering. |
+| [`Storage.test.ts`](file:///home/user/project/src/workflows/__tests__/Storage.test.ts) | WorkflowStorage | In-memory persistence, version snapshotting, rollback verification, JSON export/import with SHA-256 checks. |
+| [`DiskWorkflowStorage.test.ts`](file:///home/user/project/src/workflows/storage/DiskWorkflowStorage.test.ts) | DiskWorkflowStorage | File path sanitization, `schemaVersion: 1` validation, legacy migration, atomic file I/O. |
+| [`Templates.test.ts`](file:///home/user/project/src/workflows/__tests__/Templates.test.ts) | WorkflowTemplates & Registry | Immutability of built-ins, instantiation to UserWorkflow, validation of all 6 starter templates. |
+| [`Validation.test.ts`](file:///home/user/project/src/workflows/__tests__/Validation.test.ts) | WorkflowValidator | 11 validation gates: duplicate IDs, missing dependencies, DFS circular dependency detection, output source validation. |
+| [`Variables.test.ts`](file:///home/user/project/src/workflows/__tests__/Variables.test.ts) | WorkflowVariables | Strict typing across 11 domains, default value fallback, required checks, mustache parameter substitution. |
+| [`WorkflowBuilder.test.ts`](file:///home/user/project/src/workflows/__tests__/WorkflowBuilder.test.ts) | WorkflowBuilder | Fluent builder construction, duplicate/clone utilities, nested workflow linkage. |
+| [`WorkflowRecorder.test.ts`](file:///home/user/project/src/workflows/__tests__/WorkflowRecorder.test.ts) | WorkflowRecorder | Command sequence capture, UndoLog step extraction, AgentPlan translation to SavedWorkflowDefinition. |

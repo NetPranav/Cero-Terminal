@@ -293,7 +293,7 @@ To push the current branch and set the remote as upstream, use
     it('restores ~/.config ownership when EACCES occurs', () => {
       const ctx: RuleContext = {
         command: 'nvim',
-        output: "EACCES: permission denied, open '/Users/pranav/.config/nvim/state.json'",
+        output: "EACCES: permission denied, open '/Users/dev/.config/nvim/state.json'",
         exitCode: 1
       };
 

@@ -364,6 +364,8 @@ export class AgentRuntime {
     
     if (cmdMatch && cmdMatch[1]) {
       const missingCmd = cmdMatch[1].replace(/['"]/g, '');
+      // It is read from program output: only a plain package name may reach the shell
+      if (!/^[A-Za-z0-9][A-Za-z0-9._+@-]{0,80}$/.test(missingCmd)) return false;
       
       // Generalized Auto-heal: Attempt to install ANY missing dependency via Homebrew
       this.emit('PlannerRepairCompleted', { log: `Missing dependency "${missingCmd}". Attempting to auto-install via Homebrew...` });
@@ -375,7 +377,7 @@ export class AgentRuntime {
         capabilityId: 'shell.execute',
         parameters: { 
           command: 'sh',
-          args: ['-c', `export PATH=$PATH:/opt/homebrew/bin:/usr/local/bin && brew install ${missingCmd}`] 
+          args: ['-c', 'export PATH=$PATH:/opt/homebrew/bin:/usr/local/bin && brew install -- "$1"', 'sh', missingCmd] 
         },
         dependencies: [],
         retryPolicy: { type: 'none', maxAttempts: 0, delayMs: 0 }

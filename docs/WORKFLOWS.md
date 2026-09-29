@@ -5,7 +5,7 @@ Sentinel Terminal features an intelligent, multi-tiered workflow and macro autom
 Developers can decompose high-level goals into multi-stage pipelines using natural language, persist verified execution trajectories as schema-versioned JSON workflows, and deterministically replay them with sub-millisecond dispatch, parameter substitution, environment drift detection, and categorical security guardrails.
 
 > [!NOTE]
-> For the complete file-by-file technical reference of the codebase workflow folders (`src/workflows/` and `src/domain/workflow/`), including full module taxonomy, APIs, internal compiler mechanics, and test suite matrix, see [docs/WORKFLOW_FOLDER.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/WORKFLOW_FOLDER.md).
+> For the complete file-by-file technical reference of the codebase workflow folders (`src/workflows/` and `src/domain/workflow/`), including full module taxonomy, APIs, internal compiler mechanics, and test suite matrix, see [docs/WORKFLOW_FOLDER.md](file:///home/user/project/docs/WORKFLOW_FOLDER.md).
 
 ---
 

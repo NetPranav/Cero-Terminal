@@ -2,7 +2,7 @@
 
 > **Document Version:** 2.0.0  
 > **Target OS:** Linux (Arch Linux, Hyprland, Wayland, X11, Systemd)  
-> **Active Roadmap:** [`roadmap.md`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/roadmap.md) (v6.0.0) / [`docs/ROADMAP.md`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/ROADMAP.md)  
+> **Active Roadmap:** [`roadmap.md`](file:///home/user/project/roadmap.md) (v6.0.0) / [`docs/ROADMAP.md`](file:///home/user/project/docs/ROADMAP.md)  
 > **Status:** Phase 0, 0.5, 0.75 & 1 Completed; Phase 2 Next Priority
 
 ---

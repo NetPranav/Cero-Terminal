@@ -138,7 +138,7 @@ describe('Phase 4.7 — The "Dream-State" Nightly Autonomous Self-Play Engine', 
         runningServices: ['postgresql@14'],
         activePorts: [{ port: 8847, process: 'antigravity', pid: 55432 }],
         devToolchains: ['git', 'docker', 'node'],
-        repositories: ['/Users/pranav/Project Folder/AI Terminal'],
+        repositories: ['/home/user/project'],
         osVersion: 'macOS Darwin',
         scannedAt: Date.now(),
       };

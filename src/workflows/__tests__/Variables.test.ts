@@ -27,11 +27,11 @@ describe('WorkflowVariables — 11 Strongly Typed Variable Domains & Runtime Res
       files: ['a.ts', 'b.ts'],
       config: { key: 'value' },
       apiKey: 'sk-12345',
-      projectPath: '/Users/pranav/Project Folder/AI Terminal',
+      projectPath: '/home/user/project',
       ide: 'Cursor',
       port: 3000,
       device: 'Magic Keyboard',
-      repo: '/Users/pranav/repos/sentinel',
+      repo: '/Users/dev/repos/sentinel',
     };
 
     const { resolved, errors } = resolver.resolve(declarations, inputs);
@@ -67,10 +67,10 @@ describe('WorkflowVariables — 11 Strongly Typed Variable Domains & Runtime Res
 
   it('should substitute {{variable}} placeholders in action parameters', () => {
     const params = { path: '{{projectPath}}/src', branch: '{{branch}}', port: '{{port}}' };
-    const vars = { projectPath: '/Users/pranav', branch: 'develop', port: '8080' };
+    const vars = { projectPath: '/Users/dev', branch: 'develop', port: '8080' };
 
     const result = resolver.substituteParameters(params, vars);
-    expect(result.path).toBe('/Users/pranav/src');
+    expect(result.path).toBe('/Users/dev/src');
     expect(result.branch).toBe('develop');
     expect(result.port).toBe('8080');
   });

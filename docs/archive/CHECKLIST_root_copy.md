@@ -2,7 +2,7 @@
 
 > **Document Version:** 1.0.0  
 > **Target OS:** Linux (Arch Linux, Hyprland, Wayland, X11, Systemd)  
-> **Active Roadmap:** [`roadmap.md`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/roadmap.md) (v5.0.0)  
+> **Active Roadmap:** [`roadmap.md`](file:///home/user/project/roadmap.md) (v5.0.0)  
 > **Status:** Phase 0 Active (Harness Automation)
 
 ---

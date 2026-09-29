@@ -29,7 +29,12 @@ describe('CrossPlatformCommandAdapter', () => {
 
       const macInv = adapter.getShellInvocation('echo hello', '/tmp', 'macos');
       expect(macInv.command).toBe('sh');
-      expect(macInv.args).toEqual(['-c', 'cd "/tmp" && echo hello']);
+      expect(macInv.args).toEqual(['-c', "cd '/tmp' && echo hello"]);
+
+      // a folder is data: nothing inside it is expanded or run
+      const evil = adapter.getShellInvocation('echo hi', '/tmp/$(touch pwned)`id`\'x', 'macos');
+      expect(evil.args[1]).toBe("cd '/tmp/$(touch pwned)`id`'\\''x' && echo hi");
+      expect(adapter.getShellInvocation('echo hi', "C:\\it's", 'windows').args.join(' ')).toContain("Set-Location -LiteralPath 'C:\\it''s'");
     });
   });
 

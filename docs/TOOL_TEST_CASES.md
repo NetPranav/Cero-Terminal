@@ -10,7 +10,7 @@ Every capability includes real-world natural language prompts, expected JSON too
 > - **Connect Soundcore Space One Headphone**: `network.bluetooth.connect` (`{"device": "soundcore space one headphone"}`)
 > - **Check Available Bluetooth Devices**: `network.bluetooth.list`
 >
-> All **101 capabilities** are fully covered below, with machine-readable automated test cases stored in [`tests/tool_test_cases.json`](file:///Users/pranav/Project%20Folder/AI%20Terminal/tests/tool_test_cases.json).
+> All **101 capabilities** are fully covered below, with machine-readable automated test cases stored in [`tests/tool_test_cases.json`](file:///Users/dev/Project%20Folder/AI%20Terminal/tests/tool_test_cases.json).
 
 ---
 
@@ -1358,7 +1358,7 @@ turn off bluetooth
 ```
 
 ### 2. Automated Programmatic Testing via Vitest
-All test definitions in [`tests/tool_test_cases.json`](file:///Users/pranav/Project%20Folder/AI%20Terminal/tests/tool_test_cases.json) can be validated with Vitest against `AgentLoop`:
+All test definitions in [`tests/tool_test_cases.json`](file:///Users/dev/Project%20Folder/AI%20Terminal/tests/tool_test_cases.json) can be validated with Vitest against `AgentLoop`:
 ```bash
 npx vitest run src/ai/agent/AgentLoop.test.ts
 ```

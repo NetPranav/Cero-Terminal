@@ -191,7 +191,7 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
               try {
                 const osascriptRes = await invoke<{ code?: number; stderr?: string }>('execute_command', {
                   command: 'osascript',
-                  args: ['-e', `tell application "${target}" to quit`]
+                  args: ['-e', 'on run argv', '-e', 'tell application (item 1 of argv) to quit', '-e', 'end run', target]
                 });
                 // Ignore osascript errors
               } catch {

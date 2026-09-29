@@ -67,7 +67,7 @@ export class DeveloperCapability extends BaseCapability {
       success: true,
       verifiedOutputs: {
         ideStatus: 'active',
-        verifiedWorkspace: String(execResult.outputs.workspace || ctx.actionNode.inputs.path || '/Users/pranav/Project Folder/AI Terminal'),
+        verifiedWorkspace: String(execResult.outputs.workspace || ctx.actionNode.inputs.path || '/home/user/project'),
         activeEditor: 'Cursor AI',
       },
       durationMs: 2,

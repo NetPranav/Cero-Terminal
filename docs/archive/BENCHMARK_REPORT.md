@@ -203,10 +203,10 @@
 | 4.2 | `>find all typescript files` | Native | `/bin/bash -c find src -name '*.ts' -not -path '...` | 0 | No | `src/actions/resolver/ActionResolver.ts src/actions/models...` | ✓ PASS | 20ms |
 | 4.3 | `>find files named package.json` | Native | `/bin/bash -c find . -name 'package.json' -not -...` | 0 | No | `./integrations/vscode/package.json ./assets/cli/package.j...` | ✓ PASS | 48ms |
 | 4.4 | `>search for frontend in folders` | Native | `/bin/bash -c OUT=$(find . -type d -iname '*fron...` | 0 | No | `./src/ui` | ✓ PASS | 53ms |
-| 4.5 | `>list files in current directory` | Native | `ls -la /home/overxpowered/padhai_in_linux/Proje...` | 0 | No | `Directory Contents (.):   📁 assets   📄 benchmark_report...` | ✓ PASS | 21ms |
-| 4.6 | `>show hidden files` | Native | `/bin/bash -c ls -ld .*` | 0 | No | `drwxr-xr-x 7 overxpowered overxpowered 4096 Sep 14 11:25 ...` | ✓ PASS | 20ms |
+| 4.5 | `>list files in current directory` | Native | `ls -la /home/user/projects/Proje...` | 0 | No | `Directory Contents (.):   📁 assets   📄 benchmark_report...` | ✓ PASS | 21ms |
+| 4.6 | `>show hidden files` | Native | `/bin/bash -c ls -ld .*` | 0 | No | `drwxr-xr-x 7 user user 4096 Sep 14 11:25 ...` | ✓ PASS | 20ms |
 | 4.7 | `>navigate to home` | Native | `capability: filesystem.navigate` | 0 | No | `Changed directory to: ~` | ✓ PASS | 13ms |
-| 4.8 | `>go back one directory` | Simulated | `/bin/bash -c echo "Changed directory to $(dirna...` | 0 | No | `Changed directory to /home/overxpowered/padhai_in_linux/P...` | ✓ PASS | 22ms |
+| 4.8 | `>go back one directory` | Simulated | `/bin/bash -c echo "Changed directory to $(dirna...` | 0 | No | `Changed directory to /home/user/projects/P...` | ✓ PASS | 22ms |
 | 4.9 | `>find files larger than 100MB` | Native | `/bin/bash -c OUT=$(find . -type f -size +100M -...` | 0 | No | `./src-tauri/target/debug/tauri-app ./src-tauri/target/deb...` | ✓ PASS | 67ms |
 | 4.10 | `>search text 'OllamaProvider' in src` | Native | `/bin/bash -c grep -rn 'OllamaProvider' src/ 2>/...` | 0 | No | `src/ui/components/AiSettingsPage.tsx:10:import { OllamaPr...` | ✓ PASS | 30ms |
 | 4.11 | `>count lines of code in src directory` | Native | `/bin/bash -c find src -name '*.ts' \| xargs wc ...` | 0 | No | `71465 total` | ✓ PASS | 31ms |
@@ -243,7 +243,7 @@
 | 4.42 | `>display line count word count byte count of README.md` | Native | `/bin/bash -c wc README.md` | 0 | No | `338  2437 21205 README.md` | ✓ PASS | 23ms |
 | 4.43 | `>search for executable files in workspace` | Native | `/bin/bash -c find . -type f -executable -not -p...` | 0 | No | `./scripts/sync-shared.sh ./scripts/train_sentinel_grpo.py...` | ✓ PASS | 58ms |
 | 4.44 | `>find read-only files in project` | Native | `/bin/bash -c OUT=$(find . -type f -not -writabl...` | 0 | No | `Clean: All files writable (no read-only files found)` | ✓ PASS | 77ms |
-| 4.45 | `>find files owned by user root in home directory` | Native | `/bin/bash -c find ~ -maxdepth 2 -user root 2>/d...` | 0 | No | `/home/overxpowered/.cache/waydroid-script /home/overxpowe...` | ✓ PASS | 46ms |
+| 4.45 | `>find files owned by user root in home directory` | Native | `/bin/bash -c find ~ -maxdepth 2 -user root 2>/d...` | 0 | No | `/home/user/.cache/waydroid-script /home/overxpowe...` | ✓ PASS | 46ms |
 | 4.46 | `>search for files with .bak extension` | Native | `/bin/bash -c OUT=$(find . -name '*.bak' 2>/dev/...` | 0 | No | `No files with .bak extension found` | ✓ PASS | 57ms |
 | 4.47 | `>delete all .tmp temporary files` | Native | `/bin/bash -c find . -maxdepth 2 -name '*.tmp' -...` | 0 | No | `Removes matching temp files: Deleted all .tmp files` | ✓ PASS | 21ms |
 | 4.48 | `>compare difference between package.json and tsconfig.json` | Native | `/bin/bash -c diff -u package.json tsconfig.json...` | 0 | No | `--- package.json	2026-09-12 22:25:56.482774608 +0530 +++ ...` | ✓ PASS | 21ms |
@@ -259,7 +259,7 @@
 | 5.2 | `>check git branches` | Native | `/bin/bash -c git branch -a` | 0 | No | `* linux-v2-update   main   remotes/origin/HEAD -> origin/...` | ✓ PASS | 21ms |
 | 5.3 | `>recent git commits` | Native | `/bin/bash -c git log --oneline -5` | 0 | No | `b87065c fix(benchmark): harden benchmark report schema, a...` | ✓ PASS | 22ms |
 | 5.4 | `>show git diff summary` | Native | `/bin/bash -c OUT=$(git diff --stat 2>/dev/null)...` | 0 | No | `benchmark_report.json                              \| 361...` | ✓ PASS | 41ms |
-| 5.5 | `>who committed last` | Native | `/bin/bash -c git log -1 --format='%an <%ae> - %s'` | 0 | No | `overxpowered <6burhanuddin6@gmail.com> - fix(benchmark): ...` | ✓ PASS | 20ms |
+| 5.5 | `>who committed last` | Native | `/bin/bash -c git log -1 --format='%an <%ae> - %s'` | 0 | No | `user <6burhanuddin6@gmail.com> - fix(benchmark): ...` | ✓ PASS | 20ms |
 | 5.6 | `>show git remotes` | Native | `/bin/bash -c git remote -v` | 0 | No | `origin	https://github.com/NetPranav/Sentinal-Terminal.git...` | ✓ PASS | 19ms |
 | 5.7 | `>check git stash list` | Native | `/bin/bash -c OUT=$(git stash list 2>/dev/null);...` | 0 | No | `No stashes currently saved in stash stack` | ✓ PASS | 22ms |
 | 5.8 | `>create new git branch feature-test` | Native | `/bin/bash -c git branch feature-test 2>/dev/nul...` | 0 | No | `Switched to new branch: Branch feature-test created confi...` | ✓ PASS | 19ms |
@@ -272,16 +272,16 @@
 | 5.15 | `>check npm dependencies outdated` | Native | `/bin/bash -c npm outdated 2>/dev/null \|\| echo...` | 0 | No | `Package                               Current   Wanted   ...` | ✓ PASS | 1621ms |
 | 5.16 | `>show git commit log for last 24 hours` | Native | `/bin/bash -c OUT=$(git log --since='24 hours ag...` | 0 | No | `b87065c fix(benchmark): harden benchmark report schema, a...` | ✓ PASS | 29ms |
 | 5.17 | `>show full git commit details for HEAD` | Native | `/bin/bash -c git show HEAD --stat` | 0 | No | `commit b87065c46b828d91d3dc66d47eaaa0b7202c2e00 Author: o...` | ✓ PASS | 35ms |
-| 5.18 | `>show list of contributors` | Native | `/bin/bash -c git shortlog -sn --all \| head -5` | 0 | No | `62	Pranav Dubey     11	overxpowered      6	Adarsh Pathade...` | ✓ PASS | 24ms |
+| 5.18 | `>show list of contributors` | Native | `/bin/bash -c git shortlog -sn --all \| head -5` | 0 | No | `62	Pranav Dubey     11	user      6	Adarsh Pathade...` | ✓ PASS | 24ms |
 | 5.19 | `>check git current commit hash` | Native | `/bin/bash -c git rev-parse --short HEAD` | 0 | No | `b87065c` | ✓ PASS | 20ms |
-| 5.20 | `>check git repository root directory` | Native | `/bin/bash -c git rev-parse --show-toplevel` | 0 | No | `/home/overxpowered/padhai_in_linux/Projects/sentinal` | ✓ PASS | 20ms |
+| 5.20 | `>check git repository root directory` | Native | `/bin/bash -c git rev-parse --show-toplevel` | 0 | No | `/home/user/project` | ✓ PASS | 20ms |
 | 5.21 | `>check if working directory is clean` | Native | `/bin/bash -c git diff-index --quiet HEAD -- 2>/...` | 0 | No | `Dirty: Working tree has modifications` | ✓ PASS | 22ms |
 | 5.22 | `>show list of untracked files in git` | Native | `/bin/bash -c OUT=$(git ls-files --others --excl...` | 0 | No | `remaining_prmt.md src/ai/agent/AgentLoopHardening.test.ts...` | ✓ PASS | 25ms |
 | 5.23 | `>show list of ignored files in git` | Native | `/bin/bash -c OUT=$(git ls-files --ignored --exc...` | 0 | No | `dist/assets/index-CuI9rILQ.js dist/assets/index-v0s_tlwg....` | ✓ PASS | 62ms |
 | 5.24 | `>check git tag list` | Native | `/bin/bash -c OUT=$(git tag -l); [ -n "$OUT" ] &...` | 0 | No | `v1.0.0 v2.0.0` | ✓ PASS | 24ms |
 | 5.25 | `>create annotated git tag v2.1.0-test` | Native | `/bin/bash -c git tag -a v2.1.0-test -m 'Test re...` | 0 | No | `Tag created confirmation: Tag exists in git refs (v2.1.0-...` | ✓ PASS | 23ms |
 | 5.26 | `>delete git tag v2.1.0-test` | Native | `/bin/bash -c git tag -d v2.1.0-test 2>/dev/null...` | 0 | No | `Deleted tag 'v2.1.0-test' (was 0ef2eb7) Tag deleted confi...` | ✓ PASS | 22ms |
-| 5.27 | `>show git config user name and email` | Simulated | `/bin/bash -c echo "$(git config user.name \|\| ...` | 0 | No | `overxpowered <6burhanuddin6@gmail.com>` | ✓ PASS | 24ms |
+| 5.27 | `>show git config user name and email` | Simulated | `/bin/bash -c echo "$(git config user.name \|\| ...` | 0 | No | `user <6burhanuddin6@gmail.com>` | ✓ PASS | 24ms |
 | 5.28 | `>show git blame for package.json line 1-10` | Native | `/bin/bash -c git blame -L 1,10 package.json` | 0 | No | `^4c02e1a (Pranav Dubey 2026-07-26 15:20:18 +0530  1) { ^4...` | ✓ PASS | 27ms |
 | 5.29 | `>show git log graph visualization` | Native | `/bin/bash -c git log --graph --oneline --decora...` | 0 | No | `* b87065c (HEAD -> linux-v2-update) fix(benchmark): harde...` | ✓ PASS | 23ms |
 | 5.30 | `>show files changed in last commit` | Native | `/bin/bash -c git diff-tree --no-commit-id --nam...` | 0 | No | `benchmark_report.json benchmark_report.md checklist.md pa...` | ✓ PASS | 21ms |
@@ -351,7 +351,7 @@
 | 6.38 | `>mask a service to prevent execution` | Simulated | `/bin/bash -c echo 'Service masked confirmation:...` | 0 | No | `Service masked confirmation: Created symlink /etc/systemd...` | ✓ PASS | 23ms |
 | 6.39 | `>unmask a service` | Simulated | `/bin/bash -c echo 'Service unmasked confirmatio...` | 0 | No | `Service unmasked confirmation: Removed /etc/systemd/syste...` | ✓ PASS | 24ms |
 | 6.40 | `>show dependencies of graphical.target` | Native | `/bin/bash -c systemctl list-dependencies graphi...` | 0 | No | `graphical.target ● ├─power-profiles-daemon.service ● ├─sd...` | ✓ PASS | 55ms |
-| 6.41 | `>check environment variables of systemd user session` | Native | `/bin/bash -c systemctl --user show-environment ...` | 0 | No | `HOME=/home/overxpowered LANG=en_US.UTF-8 LOGNAME=overxpow...` | ✓ PASS | 30ms |
+| 6.41 | `>check environment variables of systemd user session` | Native | `/bin/bash -c systemctl --user show-environment ...` | 0 | No | `HOME=/home/user LANG=en_US.UTF-8 LOGNAME=overxpow...` | ✓ PASS | 30ms |
 | 6.42 | `>import DISPLAY variable into systemd user session` | Native | `/bin/bash -c systemctl --user import-environmen...` | 0 | No | `Environment imported confirmation: Clean exit code 0` | ✓ PASS | 28ms |
 | 6.43 | `>check systemd log disk space usage` | Native | `/bin/bash -c journalctl --disk-usage 2>/dev/nul...` | 0 | No | `Archived and active journals take up 1.9G in the file sys...` | ✓ PASS | 30ms |
 | 6.44 | `>vacuum systemd journal logs older than 7 days` | Simulated | `/bin/bash -c echo 'Reclaimed journal storage co...` | 0 | No | `Reclaimed journal storage confirmation: Reclaimed 45.2M d...` | ✓ PASS | 23ms |
@@ -451,7 +451,7 @@
 | 8.26 | `>check fish shell config` | Native | `/bin/bash -c cat ~/.config/fish/config.fish 2>/...` | 0 | No | `# Java Environment Path set -x JAVA_HOME /usr/lib/jvm/jav...` | ✓ PASS | 18ms |
 | 8.27 | `>check bashrc aliases` | Native | `/bin/bash -c OUT=$(grep '^alias ' ~/.bashrc 2>/...` | 0 | No | `alias ls='ls --color=auto' alias grep='grep --color=auto'` | ✓ PASS | 20ms |
 | 8.28 | `>add shell alias gs for git status` | Simulated | `/bin/bash -c echo "alias gs='git status' added ...` | 0 | No | `alias gs='git status' added confirmation: Appended to ~/....` | ✓ PASS | 16ms |
-| 8.29 | `>check current desktop wallpaper path` | Native | `/bin/bash -c cat ~/.config/hypr/hyprpaper.conf ...` | 0 | No | `preload = /home/overxpowered/.config/hypr/splash.png wall...` | ✓ PASS | 17ms |
+| 8.29 | `>check current desktop wallpaper path` | Native | `/bin/bash -c cat ~/.config/hypr/hyprpaper.conf ...` | 0 | No | `preload = /home/user/.config/hypr/splash.png wall...` | ✓ PASS | 17ms |
 | 8.30 | `>set desktop wallpaper with hyprpaper` | Simulated | `/bin/bash -c echo 'Wallpaper updated confirmati...` | 0 | No | `Wallpaper updated confirmation: Dispatches wallpaper chan...` | ✓ PASS | 16ms |
 | 8.31 | `>check waybar active modules list` | Native | `/bin/bash -c grep 'modules-' ~/.config/waybar/c...` | 0 | No | `"modules-left": ["hyprland/workspaces", "hyprland/window"...` | ✓ PASS | 22ms |
 | 8.32 | `>restart waybar panel` | Simulated | `/bin/bash -c echo 'Waybar reloaded confirmation...` | 0 | No | `Waybar reloaded confirmation: Kills and respawns panel` | ✓ PASS | 18ms |

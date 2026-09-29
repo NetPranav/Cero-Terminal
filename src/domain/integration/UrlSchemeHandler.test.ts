@@ -5,9 +5,9 @@ describe('UrlSchemeHandler', () => {
   const handler = UrlSchemeHandler.getInstance();
 
   it('parses sentinel://open with encoded file system paths', () => {
-    const action = handler.parse('sentinel://open?path=%2FUsers%2Fpranav%2FProjects');
+    const action = handler.parse('sentinel://open?path=%2FUsers%2Fdev%2FProjects');
     expect(action.type).toBe('open');
-    expect(action.path).toBe('/Users/pranav/Projects');
+    expect(action.path).toBe('/Users/dev/Projects');
   });
 
   it('parses sentinel://workspace URI correctly', () => {
@@ -24,9 +24,9 @@ describe('UrlSchemeHandler', () => {
   });
 
   it('parses direct POSIX paths from Finder Quick Actions and open -a arguments', () => {
-    const action = handler.parse('/Users/pranav/Downloads');
+    const action = handler.parse('/Users/dev/Downloads');
     expect(action.type).toBe('open');
-    expect(action.path).toBe('/Users/pranav/Downloads');
+    expect(action.path).toBe('/Users/dev/Downloads');
   });
 
   it('parses sentinel://new-tab and sentinel://split commands', () => {

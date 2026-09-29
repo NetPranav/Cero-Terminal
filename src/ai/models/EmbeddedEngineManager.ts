@@ -787,7 +787,7 @@ export class EmbeddedEngineManager {
           if (check.valid) {
             await invoke('execute_command', {
               command: 'sh',
-              args: ['-c', `mv "${tmpFile}" "${finalFile}"`]
+              args: ['-c', 'mv -- "$1" "$2"', 'sh', tmpFile, finalFile]
             });
             onProgress?.({
               percent: 100,
@@ -803,7 +803,7 @@ export class EmbeddedEngineManager {
           );
           await invoke('execute_command', {
             command: 'sh',
-            args: ['-c', `rm -f "${tmpFile}"`]
+            args: ['-c', 'rm -f -- "$1"', 'sh', tmpFile]
           });
         }
       } catch (err) {

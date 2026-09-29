@@ -191,3 +191,14 @@ describe('DiskWorkflowStorage (Schema-Versioned Persistence)', () => {
   });
 });
 
+
+describe('DiskWorkflowStorage.toShellPath', () => {
+  it('single-quotes paths so a name like $(cmd) or `cmd` is never expanded', () => {
+    const storage = new DiskWorkflowStorage('/tmp/wf');
+    expect(storage.toShellPath('/tmp/wf/a.flow')).toBe("'/tmp/wf/a.flow'");
+    expect(storage.toShellPath('/tmp/wf/$(touch x)`id`.flow')).toBe("'/tmp/wf/$(touch x)`id`.flow'");
+    expect(storage.toShellPath("/tmp/it's.flow")).toBe("'/tmp/it'\\''s.flow'");
+    expect(storage.toShellPath('~/.sentinel/w$(x).flow')).toBe(`"$HOME"/'.sentinel/w$(x).flow'`);
+    expect(storage.toShellPath('~')).toBe('"$HOME"');
+  });
+});

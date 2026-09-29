@@ -72,8 +72,12 @@ export class BrowserCapability extends BaseCapabilityDriver<BrowserInput, any> {
       else targetUrl = `https://www.google.com/search?q=${q}`;
     } else if (input.url) {
       let u = input.url;
-      if (!u.startsWith('http://') && !u.startsWith('https://') && !u.startsWith('file://')) u = `https://${u}`;
+      if (!u.startsWith('http://') && !u.startsWith('https://')) u = `https://${u}`;
       targetUrl = u;
+    }
+    // Only web pages: `open` would also launch apps and documents, and xdg-open many other schemes
+    if (!/^https?:\/\/[^\s'"`\\]+$/i.test(targetUrl)) {
+      return { success: false, error: { code: 'INVALID_URL', message: 'Only http and https links can be opened in a browser' } };
     }
 
     // Resolve target browser application name if specified (e.g., "safari" -> "Safari", "chrome" -> "Google Chrome")
@@ -127,7 +131,7 @@ export class BrowserCapability extends BaseCapabilityDriver<BrowserInput, any> {
         if (platform === 'linux') {
           if (resolvedBrowser) {
             command = 'sh';
-            cmdArgs = ['-c', `which "${resolvedBrowser.toLowerCase()}" >/dev/null 2>&1 && "${resolvedBrowser.toLowerCase()}" "${targetUrl}" & || xdg-open "${targetUrl}"`];
+            cmdArgs = ['-c', 'if which -- "$1" >/dev/null 2>&1; then "$1" "$2" >/dev/null 2>&1 & else xdg-open "$2"; fi', 'sh', resolvedBrowser.toLowerCase(), targetUrl];
           } else {
             command = 'xdg-open';
             cmdArgs = [targetUrl];

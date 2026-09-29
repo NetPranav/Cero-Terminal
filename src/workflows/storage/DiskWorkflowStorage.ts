@@ -60,13 +60,15 @@ export class DiskWorkflowStorage {
    * Convert path to a shell-safe path expanding ~/ to $HOME/ inside quotes
    */
   public toShellPath(p: string): string {
+    // Single quotes: nothing inside is expanded ($(...), backticks, $VAR), whatever the file is called
+    const quote = (v: string) => `'${v.replace(/'/g, `'\\''`)}'`;
     if (p.startsWith('~/') || p.startsWith('~\\')) {
-      return `"$HOME/${p.slice(2).replace(/\\/g, '/')}"`;
+      return `"$HOME"/${quote(p.slice(2).replace(/\\/g, '/'))}`;
     }
     if (p === '~') {
       return '"$HOME"';
     }
-    return `"${p}"`;
+    return quote(p);
   }
 
   /**

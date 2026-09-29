@@ -167,7 +167,7 @@ export class ProcessPortManager {
       // Direct fallback kill by port
       const res = await invoke<{ code: number }>('execute_command', {
         command: 'sh',
-        args: ['-c', `kill -9 $(lsof -t -i:${port})`]
+        args: ['-c', 'kill -9 $(lsof -t -i:"$1")', 'sh', String(Math.trunc(Number(port)))]
       });
       return res.code === 0;
     } catch {

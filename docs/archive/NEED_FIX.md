@@ -25,17 +25,17 @@ This document provides technical root-cause analyses, architectural impact asses
 ### 1.1 Problem Statement
 When attaching an API key (OpenAI, Groq, Anthropic, DeepSeek, OpenRouter, or Custom) and clicking **"Test Connection"**, the request frequently fails with a red error badge for the first 2-3 attempts before succeeding on the 3rd or 4th attempt. This misleads users into believing their API key or base URL is invalid.
 
-**Status: RESOLVED & VERIFIED** (Commit: `5daff74` — Full resolution log in [FIXED.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/FIXED.md#issue-1-cloud-api-test-connection-transient-failures))
+**Status: RESOLVED & VERIFIED** (Commit: `5daff74` — Full resolution log in [FIXED.md](file:///home/user/project/docs/FIXED.md#issue-1-cloud-api-test-connection-transient-failures))
 
 ### 1.2 Code Locations
-- [src/ui/components/AiSettingsPage.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/AiSettingsPage.tsx#L249-L269) (`handleTestConnection`)
-- [src/ai/provider/CloudApiProvider.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/provider/CloudApiProvider.ts#L77-L122) (`normalizeEndpointUrl`, `httpFetch`)
-- [src/ai/provider/CloudApiProvider.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/provider/CloudApiProvider.ts#L225-L283) (`testConnection`)
-- [src/ai/provider/CloudApiProvider.test.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/provider/CloudApiProvider.test.ts) (Automated test coverage)
+- [src/ui/components/AiSettingsPage.tsx](file:///home/user/project/src/ui/components/AiSettingsPage.tsx#L249-L269) (`handleTestConnection`)
+- [src/ai/provider/CloudApiProvider.ts](file:///home/user/project/src/ai/provider/CloudApiProvider.ts#L77-L122) (`normalizeEndpointUrl`, `httpFetch`)
+- [src/ai/provider/CloudApiProvider.ts](file:///home/user/project/src/ai/provider/CloudApiProvider.ts#L225-L283) (`testConnection`)
+- [src/ai/provider/CloudApiProvider.test.ts](file:///home/user/project/src/ai/provider/CloudApiProvider.test.ts) (Automated test coverage)
 
 ### 1.3 Technical Root Causes
 1. **Zero-Retry Single-Shot Network Probe:**
-   - In [CloudApiProvider.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/provider/CloudApiProvider.ts#L225), `testConnection()` executes a single, un-retried HTTP POST request.
+   - In [CloudApiProvider.ts](file:///home/user/project/src/ai/provider/CloudApiProvider.ts#L225), `testConnection()` executes a single, un-retried HTTP POST request.
    - Initial connections to cloud endpoints encounter cold TCP/TLS handshakes, DNS resolution latency, proxy route establishment, or transient server-side cold starts (e.g. Groq/OpenRouter rate limiter spikes, 429 concurrency blips, 502/503/504 gateway timeouts).
    - Any single transient error immediately surfaces as an error in the UI. When the user clicks the button again after 2-3 seconds, the socket/TLS session is warm and DNS is cached, leading to a delayed success.
 2. **Missing Request Timeout Budget:**
@@ -53,7 +53,7 @@ When attaching an API key (OpenAI, Groq, Anthropic, DeepSeek, OpenRouter, or Cus
 
 ### 1.4 Implemented Resolution
 1. **Built-in Auto-Retry with Progressive Backoff:**
-   - [CloudApiProvider.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/provider/CloudApiProvider.ts) executes up to 3 automatic attempts with progressive backoff (350ms, 700ms) before reporting failure to the UI.
+   - [CloudApiProvider.ts](file:///home/user/project/src/ai/provider/CloudApiProvider.ts) executes up to 3 automatic attempts with progressive backoff (350ms, 700ms) before reporting failure to the UI.
    - Fast abort on non-retryable 401 Unauthorized / 403 Forbidden errors (verified API key errors return immediately).
 2. **Robust URL Normalization:**
    - Expanded `normalizeEndpointUrl` to handle root domains for OpenAI (`api.openai.com`), Groq (`api.groq.com`, `api.groq.com/openai`), OpenRouter (`openrouter.ai`, `openrouter.ai/api`), Anthropic (`api.anthropic.com`), and DeepSeek.
@@ -90,16 +90,16 @@ Execution failed with:
 - Terminal error: `✗ Workflow plan failed: Command string required for shell.execute; Command string required for shell.execute`
 - No directories or files were created, and the workflow was not saved.
 
-**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/FIXED.md#issue-2-workflow-plan-failure-on-complex-multi-step-prompt))
+**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/user/project/docs/FIXED.md#issue-2-workflow-plan-failure-on-complex-multi-step-prompt))
 
 ### 2.2 Code Locations
-- [src/sdk/capabilities/drivers/ShellSDKCapability.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/sdk/capabilities/drivers/ShellSDKCapability.ts#L41-L43) (`Command string required for shell.execute`)
-- [src/ai/agent/AdaptivePlanEngine.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/AdaptivePlanEngine.ts#L112-L139) (`createPlan`)
-- [src/ai/agent/AdaptivePlanEngine.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/AdaptivePlanEngine.ts#L255-L310) (`executeSinglePhase`)
-- [src/ai/agent/AdaptivePlanEngine.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/AdaptivePlanEngine.ts#L848-L896) (`resolveShellCommandForPhase`)
-- [src/ai/agent/AdaptivePlanEngine.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/AdaptivePlanEngine.ts#L898-L936) (`buildPhasePlanningPrompt`, `parsePlanResponse`)
-- [src/ai/models/IntentModel.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/models/IntentModel.ts#L274-L277) (`classifyHeuristic` workflow regex)
-- [src/ai/agent/AgentLoop.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/agent/AgentLoop.ts#L2110-L2160) (`requiresExecutionPlan`)
+- [src/sdk/capabilities/drivers/ShellSDKCapability.ts](file:///home/user/project/src/sdk/capabilities/drivers/ShellSDKCapability.ts#L41-L43) (`Command string required for shell.execute`)
+- [src/ai/agent/AdaptivePlanEngine.ts](file:///home/user/project/src/ai/agent/AdaptivePlanEngine.ts#L112-L139) (`createPlan`)
+- [src/ai/agent/AdaptivePlanEngine.ts](file:///home/user/project/src/ai/agent/AdaptivePlanEngine.ts#L255-L310) (`executeSinglePhase`)
+- [src/ai/agent/AdaptivePlanEngine.ts](file:///home/user/project/src/ai/agent/AdaptivePlanEngine.ts#L848-L896) (`resolveShellCommandForPhase`)
+- [src/ai/agent/AdaptivePlanEngine.ts](file:///home/user/project/src/ai/agent/AdaptivePlanEngine.ts#L898-L936) (`buildPhasePlanningPrompt`, `parsePlanResponse`)
+- [src/ai/models/IntentModel.ts](file:///home/user/project/src/ai/models/IntentModel.ts#L274-L277) (`classifyHeuristic` workflow regex)
+- [src/ai/agent/AgentLoop.ts](file:///home/user/project/src/ai/agent/AgentLoop.ts#L2110-L2160) (`requiresExecutionPlan`)
 
 ### 2.3 Technical Root Causes
 1. **Flawed LLM Planning Prompt and Schema in `AdaptivePlanEngine`:**
@@ -136,12 +136,12 @@ Execution failed with:
    - For `"Create the workspace directory"`, `directory` is at the end of the string with no trailing argument. The regex match fails (`null`), and the target `/tmp/sentinel-workflow-test` is in `goal`, not `phase.title`.
    - Because `resolvedCmd` evaluates to `null`, `phase.params` remains `{}`.
    - `options.toolExecutor.execute('shell.execute', {})` is called with an empty command object.
-   - [ShellSDKCapability.ts:42](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/sdk/capabilities/drivers/ShellSDKCapability.ts#L42) returns:
+   - [ShellSDKCapability.ts:42](file:///home/user/project/src/sdk/capabilities/drivers/ShellSDKCapability.ts#L42) returns:
      `{ success: false, error: { code: 'MISSING_SHELL_CMD', message: 'Command string required for shell.execute' } }`
    - This failure occurs for both Phase 1 and Phase 2, producing:
      `✗ Workflow plan failed: Command string required for shell.execute; Command string required for shell.execute`.
 3. **Keyword Overlap in Intent Classification:**
-   - [IntentModel.ts:275](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ai/models/IntentModel.ts#L275) checks:
+   - [IntentModel.ts:275](file:///home/user/project/src/ai/models/IntentModel.ts#L275) checks:
      `if (/\b(?:workflow|save\s+workflow|run\s+workflow)\b/i.test(clean))`
    - Because the user ended their instruction with "save the verified execution as a workflow", the regex routed the prompt to the `workflow` domain rather than `developer` / multi-step workspace execution.
 4. **Missing Workflow Auto-Save on Completion:**
@@ -171,12 +171,12 @@ When a workflow plan fails (or finishes), a floating HUD card remains stuck on t
 3. Lacks configuration options in Settings to adjust timing or disable floating notifications.
 4. Uses saturated purple colors (`#d8b4fe`, `rgba(192, 132, 252, 0.28)`), violating the project's strict grayscale / matte-dark design standard.
 
-**Status: RESOLVED & VERIFIED** (Commit: `8613aca` — Full resolution log in [FIXED.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/FIXED.md#issue-3-persistent-execution-plan-hud-notification-overlay))
+**Status: RESOLVED & VERIFIED** (Commit: `8613aca` — Full resolution log in [FIXED.md](file:///home/user/project/docs/FIXED.md#issue-3-persistent-execution-plan-hud-notification-overlay))
 
 ### 3.2 Code Locations
-- [src/presentation/TerminalView.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx) (Floating HUD overlay, auto-dismiss timers, manual dismiss, and hover pause)
-- [src/ui/components/AiSettingsPage.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/AiSettingsPage.tsx) (Execution Plan HUD & notification duration configuration in General tab)
-- [src/ui/__tests__/SettingsCenter.test.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/__tests__/SettingsCenter.test.ts) (Automated test coverage for settings and event propagation)
+- [src/presentation/TerminalView.tsx](file:///home/user/project/src/presentation/TerminalView.tsx) (Floating HUD overlay, auto-dismiss timers, manual dismiss, and hover pause)
+- [src/ui/components/AiSettingsPage.tsx](file:///home/user/project/src/ui/components/AiSettingsPage.tsx) (Execution Plan HUD & notification duration configuration in General tab)
+- [src/ui/__tests__/SettingsCenter.test.ts](file:///home/user/project/src/ui/__tests__/SettingsCenter.test.ts) (Automated test coverage for settings and event propagation)
 
 ### 3.3 Technical Root Causes
 1. **Unconditional State Persistence on Error:**
@@ -201,7 +201,7 @@ When a workflow plan fails (or finishes), a floating HUD card remains stuck on t
 
 ### 3.4 Implemented Remediation
 1. **Manual Dismiss & Collapse Header Actions:**
-   - Replaced `<details>` with a floating HUD card component in [TerminalView.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx).
+   - Replaced `<details>` with a floating HUD card component in [TerminalView.tsx](file:///home/user/project/src/presentation/TerminalView.tsx).
    - Added a monochrome `X` dismiss button that immediately cancels any pending dismiss timer and sets `latestPlan(null)`.
    - Added a `ChevronUp` / `ChevronDown` button with click-to-expand/collapse on the header row.
 2. **Configurable Auto-Dismiss Timer with Hover Pausing:**
@@ -209,7 +209,7 @@ When a workflow plan fails (or finishes), a floating HUD card remains stuck on t
    - Automatically scheduled dismiss on `done`, `error`, and `agentLoop.run` promise resolution/rejection according to user settings (default: 8 seconds).
    - Attached `onMouseEnter` / `onMouseLeave` handlers to pause dismissal when the user hovers over the card to inspect details, and resume dismissal when the mouse leaves.
 3. **User Preferences in Settings Center:**
-   - In [AiSettingsPage.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/AiSettingsPage.tsx) under the **General** tab, added a dedicated "Workflow Execution Plan HUD & Notifications" card.
+   - In [AiSettingsPage.tsx](file:///home/user/project/src/ui/components/AiSettingsPage.tsx) under the **General** tab, added a dedicated "Workflow Execution Plan HUD & Notifications" card.
    - Added toggle to enable/disable the HUD overlay (`sentinel_hud_plan_enabled`).
    - Added segmented pill selector for duration (`5s`, `8s (Default)`, `15s`, `Persistent / Manual Close Only`) backed by `sentinel_hud_plan_duration`.
    - Dispatches `sentinel:hud-settings-changed` CustomEvents so all open terminal panes update dynamically without reload.
@@ -229,15 +229,15 @@ On the onboarding screen, the option titled **"Linux Desktop / File Manager Acti
 
 We need to ensure this option functions across graphical file managers and that clicking "Open in Sentinel" launches the terminal directly within the selected target directory.
 
-**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/FIXED.md#issue-4-linux-desktop--file-manager-context-actions-integration))
+**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/user/project/docs/FIXED.md#issue-4-linux-desktop--file-manager-context-actions-integration))
 
 ### 4.2 Code Locations
-- [src/domain/integration/InstallerService.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.ts#L152-L186) (`enableFinderIntegration`)
-- [src/ui/components/InstallerWizard.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/InstallerWizard.tsx#L520-L577) (Onboarding option)
-- [src/presentation/TerminalView.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx#L344-L352) (`createSession`)
-- [src/App.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx#L104-L106), [src/App.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx#L705) (`panePaths` initialization)
-- [src-tauri/src/process_cmds.rs](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src-tauri/src/process_cmds.rs#L120-L123) (`get_launch_args`)
-- [packaging/desktop/com.pranav.sentinel-terminal.desktop](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/desktop/com.pranav.sentinel-terminal.desktop)
+- [src/domain/integration/InstallerService.ts](file:///home/user/project/src/domain/integration/InstallerService.ts#L152-L186) (`enableFinderIntegration`)
+- [src/ui/components/InstallerWizard.tsx](file:///home/user/project/src/ui/components/InstallerWizard.tsx#L520-L577) (Onboarding option)
+- [src/presentation/TerminalView.tsx](file:///home/user/project/src/presentation/TerminalView.tsx#L344-L352) (`createSession`)
+- [src/App.tsx](file:///home/user/project/src/App.tsx#L104-L106), [src/App.tsx](file:///home/user/project/src/App.tsx#L705) (`panePaths` initialization)
+- [src-tauri/src/process_cmds.rs](file:///home/user/project/src-tauri/src/process_cmds.rs#L120-L123) (`get_launch_args`)
+- [packaging/desktop/com.pranav.sentinel-terminal.desktop](file:///home/user/project/packaging/desktop/com.pranav.sentinel-terminal.desktop)
 
 ### 4.3 Technical Root Causes
 1. **Incomplete File Manager Coverage:**
@@ -275,11 +275,11 @@ The onboarding screen includes:
 
 We need to ensure this option is functional, reliable, and provides a proper shell environment inside the editor.
 
-**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/FIXED.md#issue-5-vs-code--cursor-ide-profiles-usability))
+**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/user/project/docs/FIXED.md#issue-5-vs-code--cursor-ide-profiles-usability))
 
 ### 5.2 Code Locations
-- [src/domain/integration/InstallerService.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.ts#L242-L302) (`updateIdeSettings`, `configureVsCodeIntegration`, `configureCursorIntegration`)
-- [src/ui/components/InstallerWizard.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/InstallerWizard.tsx#L580-L640)
+- [src/domain/integration/InstallerService.ts](file:///home/user/project/src/domain/integration/InstallerService.ts#L242-L302) (`updateIdeSettings`, `configureVsCodeIntegration`, `configureCursorIntegration`)
+- [src/ui/components/InstallerWizard.tsx](file:///home/user/project/src/ui/components/InstallerWizard.tsx#L580-L640)
 
 ### 5.3 Technical Root Causes
 1. **VS Code Integrated Terminals Expect a Shell / PTY Executable, Not a GUI Window:**
@@ -316,12 +316,12 @@ We need to ensure this option is functional, reliable, and provides a proper she
 ### 6.1 Problem Statement
 The onboarding screen allows users to install the Sentinel command-line launcher (`sentinel`). We must ensure that the installation succeeds, the binary is placed in PATH, and the command functions properly without errors or recursive loops.
 
-**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/FIXED.md#issue-6-sentinel-cli-launcher-installation--execution))
+**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/user/project/docs/FIXED.md#issue-6-sentinel-cli-launcher-installation--execution))
 
 ### 6.2 Code Locations
-- [src/domain/integration/InstallerService.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/integration/InstallerService.ts#L70-L145) (`installCli`)
-- [src/ui/components/InstallerWizard.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/InstallerWizard.tsx#L418-L515)
-- [packaging/desktop/com.pranav.sentinel-terminal.desktop](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/packaging/desktop/com.pranav.sentinel-terminal.desktop)
+- [src/domain/integration/InstallerService.ts](file:///home/user/project/src/domain/integration/InstallerService.ts#L70-L145) (`installCli`)
+- [src/ui/components/InstallerWizard.tsx](file:///home/user/project/src/ui/components/InstallerWizard.tsx#L418-L515)
+- [packaging/desktop/com.pranav.sentinel-terminal.desktop](file:///home/user/project/packaging/desktop/com.pranav.sentinel-terminal.desktop)
 
 ### 6.3 Technical Root Causes
 1. **Dangerous Recursive Fallback Loop in Launcher Script:**
@@ -361,14 +361,14 @@ The onboarding screen allows users to install the Sentinel command-line launcher
 When opening the Workflows drawer in the terminal, users see 17 pre-existing workflows stored in `~/.sentinel/workflows/` (e.g. `desktop-reset.json`, `cargo-build.json`, `dry-run-pipeline.json`, `db-sync.json`, etc.). Many of these are incomplete stubs left behind from benchmark and CLI test runs.
 Users should have an onboarding screen option allowing them to select which starter workflows they want to keep; only the chosen workflows should be installed and displayed.
 
-**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/FIXED.md#issue-7-workflows-section-cleanup--onboarding-selection))
+**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/user/project/docs/FIXED.md#issue-7-workflows-section-cleanup--onboarding-selection))
 
 ### 7.2 Code Locations
 - Current disk workflows: `~/.sentinel/workflows/*.json`
-- [src/workflows/templates/StarterWorkflows.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/templates/StarterWorkflows.ts) (Curated blueprints)
-- [src/workflows/storage/DiskWorkflowStorage.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/workflows/storage/DiskWorkflowStorage.ts) (`purgeTestStubs`, `purgeAllWorkflows`, `initializeStarterWorkflows`)
-- [src/ui/components/InstallerWizard.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/InstallerWizard.tsx) (Curated Starter Workflows onboarding section)
-- [src/ui/components/WorkflowManagerDrawer.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/ui/components/WorkflowManagerDrawer.tsx) (Clean Stubs & Seed Starters header actions and stubs banner)
+- [src/workflows/templates/StarterWorkflows.ts](file:///home/user/project/src/workflows/templates/StarterWorkflows.ts) (Curated blueprints)
+- [src/workflows/storage/DiskWorkflowStorage.ts](file:///home/user/project/src/workflows/storage/DiskWorkflowStorage.ts) (`purgeTestStubs`, `purgeAllWorkflows`, `initializeStarterWorkflows`)
+- [src/ui/components/InstallerWizard.tsx](file:///home/user/project/src/ui/components/InstallerWizard.tsx) (Curated Starter Workflows onboarding section)
+- [src/ui/components/WorkflowManagerDrawer.tsx](file:///home/user/project/src/ui/components/WorkflowManagerDrawer.tsx) (Clean Stubs & Seed Starters header actions and stubs banner)
 
 ### 7.3 Technical Root Causes
 1. **Test and Benchmark Artifact Pollution:**
@@ -409,12 +409,12 @@ Users should have an onboarding screen option allowing them to select which star
 ### 8.1 Problem Statement
 When typing an AI prompt starting with `>` (or typing any command) in the terminal and attempting to paste text (such as an instruction, code snippet, or prompt) using `Ctrl+Shift+V` or `Ctrl+V`, nothing is pasted into the terminal buffer. The keystroke is swallowed silently without error feedback or output.
 
-**Status: RESOLVED & VERIFIED** (Commit: `224a50e` — See full resolution post-mortem in [FIXED.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/FIXED.md#issue-8-clipboard-paste-failure-on-prompt-entry-ctrlshiftv--ctrlv))
+**Status: RESOLVED & VERIFIED** (Commit: `224a50e` — See full resolution post-mortem in [FIXED.md](file:///home/user/project/docs/FIXED.md#issue-8-clipboard-paste-failure-on-prompt-entry-ctrlshiftv--ctrlv))
 
 ### 8.2 Code Locations
-- [src/presentation/TerminalView.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx#L310-L320) (`term.attachCustomKeyEventHandler` paste handler)
-- [src/presentation/TerminalView.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx#L372) (`currentSessionId` vs `sessionId` scope)
-- [src/domain/capabilities/ClipboardCapability.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/capabilities/ClipboardCapability.ts) (`@tauri-apps/plugin-clipboard-manager`)
+- [src/presentation/TerminalView.tsx](file:///home/user/project/src/presentation/TerminalView.tsx#L310-L320) (`term.attachCustomKeyEventHandler` paste handler)
+- [src/presentation/TerminalView.tsx](file:///home/user/project/src/presentation/TerminalView.tsx#L372) (`currentSessionId` vs `sessionId` scope)
+- [src/domain/capabilities/ClipboardCapability.ts](file:///home/user/project/src/domain/capabilities/ClipboardCapability.ts) (`@tauri-apps/plugin-clipboard-manager`)
 
 ### 8.3 Technical Root Causes
 1. **Stale Closure Bug on `sessionId` in `attachCustomKeyEventHandler`:**
@@ -459,12 +459,12 @@ When typing an AI prompt starting with `>` (or typing any command) in the termin
 ### 9.1 Problem Statement
 When a user enters a multi-step or long prompt (e.g. `> Create a temporary testing workspace...`) that wraps across multiple terminal rows, moving the cursor backwards into the text using Left/Right arrow keys and subsequently pressing Up Arrow (`↑`) does not move the cursor to the line above in the prompt. Instead, the underlying shell triggers `previous-history`, obliterating the draft prompt and replacing it with the last executed shell command from history (e.g., `git status` or `ls`).
 
-**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/FIXED.md#issue-9-arrow-key-in-buffer-line-navigation-vs-history-ingestion-in-long-prompts))
+**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/user/project/docs/FIXED.md#issue-9-arrow-key-in-buffer-line-navigation-vs-history-ingestion-in-long-prompts))
 
 ### 9.2 Code Locations
-- [src/presentation/TerminalView.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx#L481-L509) (`term.onData` key routing)
-- [src/presentation/TerminalView.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx#L280-L330) (`attachCustomKeyEventHandler`)
-- [src/domain/terminal/PtyStateTracker.ts](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/domain/terminal/PtyStateTracker.ts)
+- [src/presentation/TerminalView.tsx](file:///home/user/project/src/presentation/TerminalView.tsx#L481-L509) (`term.onData` key routing)
+- [src/presentation/TerminalView.tsx](file:///home/user/project/src/presentation/TerminalView.tsx#L280-L330) (`attachCustomKeyEventHandler`)
+- [src/domain/terminal/PtyStateTracker.ts](file:///home/user/project/src/domain/terminal/PtyStateTracker.ts)
 
 ### 9.3 Technical Root Causes
 1. **Direct Unchecked Forwarding of Escape Sequences:**
@@ -492,12 +492,12 @@ When a user enters a multi-step or long prompt (e.g. `> Create a temporary testi
 ### 10.1 Problem Statement
 The close button on terminal tabs is barely visible, appearing as a tiny, faint dot or blurry smudge instead of a distinct 'X' vector icon. Users struggle to click it because the hit-target is undersized and visually imperceptible.
 
-**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/FIXED.md#issue-10-diminutive-tab-close-button-hit-target-and-sub-pixel-dot-artifact))
+**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/user/project/docs/FIXED.md#issue-10-diminutive-tab-close-button-hit-target-and-sub-pixel-dot-artifact))
 
 ### 10.2 Code Locations
-- [src/App.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx#L819-L822) (`<X size={13} strokeWidth={2} />` in `.pill-close-btn`)
-- [src/App.css](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.css#L85-L120) (`.tab-pill` styles)
-- [src/App.css](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.css#L130-L153) (`.pill-close-btn` styles)
+- [src/App.tsx](file:///home/user/project/src/App.tsx#L819-L822) (`<X size={13} strokeWidth={2} />` in `.pill-close-btn`)
+- [src/App.css](file:///home/user/project/src/App.css#L85-L120) (`.tab-pill` styles)
+- [src/App.css](file:///home/user/project/src/App.css#L130-L153) (`.pill-close-btn` styles)
 
 ### 10.3 Technical Root Causes
 1. **Microscopic Vector Dimensions:**
@@ -516,10 +516,10 @@ The close button on terminal tabs is barely visible, appearing as a tiny, faint 
 
 ### 10.4 Implemented Remediation
 1. **Expanded Vector Icon Dimensions & Stroke Width:**
-   - Upgraded tab close vector icon from `<X size={10} />` to `<X size={13} strokeWidth={2} />` in [`src/App.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx).
+   - Upgraded tab close vector icon from `<X size={10} />` to `<X size={13} strokeWidth={2} />` in [`src/App.tsx`](file:///home/user/project/src/App.tsx).
    - Also upgraded split pane close button from `<X size={11} />` to `<X size={12} strokeWidth={2} />`.
 2. **Enlarged Container Hit-Target:**
-   - Resized `.pill-close-btn` in [`src/App.css`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.css) from `16px × 16px` to a generous `20px × 20px` target with flex centering and a 4px rounded radius.
+   - Resized `.pill-close-btn` in [`src/App.css`](file:///home/user/project/src/App.css) from `16px × 16px` to a generous `20px × 20px` target with flex centering and a 4px rounded radius.
 3. **Enhanced Base Opacity & Grayscale Contrast:**
    - Increased base button opacity to `0.65`, ramping to `0.85` on `.tab-pill:hover`.
    - On `.pill-close-btn:hover`, applied `background-color: rgba(255, 255, 255, 0.12)`, `color: #ffffff`, and `opacity: 1`. Eliminated saturated red accents in strict accordance with grayscale design rules.
@@ -531,13 +531,13 @@ The close button on terminal tabs is barely visible, appearing as a tiny, faint 
 ### 11.1 Problem Statement
 When closing a terminal tab (or closing a split pane), the shell prompt (`username@hostname:~$`) displayed in front of all commands on screen momentarily balloons or magnifies abnormally before snapping back to normal size, creating a jarring visual UI glitch.
 
-**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/docs/FIXED.md#issue-11-prompt-abnormally-magnifying--canvas-scaling-glitch-on-tab-close))
+**Status: RESOLVED & VERIFIED** (Full resolution log in [FIXED.md](file:///home/user/project/docs/FIXED.md#issue-11-prompt-abnormally-magnifying--canvas-scaling-glitch-on-tab-close))
 
 ### 11.2 Code Locations
-- [src/presentation/TerminalView.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx#L1057-L1095) (Immediate refit, requestAnimationFrame sync, and visibility control)
-- [src/App.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx#L284-L291) (`closeTab` adjacent tab selection)
-- [src/App.tsx](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx#L1107-L1128) (`terminal-container` tab preservation with `visibility: hidden; position: absolute; inset: 0`)
-- [src/App.css](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.css#L192-L195) (Crisp canvas bitmap rendering)
+- [src/presentation/TerminalView.tsx](file:///home/user/project/src/presentation/TerminalView.tsx#L1057-L1095) (Immediate refit, requestAnimationFrame sync, and visibility control)
+- [src/App.tsx](file:///home/user/project/src/App.tsx#L284-L291) (`closeTab` adjacent tab selection)
+- [src/App.tsx](file:///home/user/project/src/App.tsx#L1107-L1128) (`terminal-container` tab preservation with `visibility: hidden; position: absolute; inset: 0`)
+- [src/App.css](file:///home/user/project/src/App.css#L192-L195) (Crisp canvas bitmap rendering)
 
 ### 11.3 Technical Root Causes
 1. **HTML5 Canvas Bitmap Stretch During Container Relayout:**
@@ -563,14 +563,14 @@ When closing a terminal tab (or closing a split pane), the shell prompt (`userna
 
 ### 11.4 Implemented Remediation
 1. **Preserve Viewport Geometry with Visibility Toggling:**
-   - In [`src/App.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx) and [`src/presentation/TerminalView.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/presentation/TerminalView.tsx), replaced `display: activeTabId === tab.id ? 'flex' : 'none'` with `visibility: isTabActive ? 'visible' : 'hidden'`, `position: isTabActive ? 'relative' : 'absolute'`, `inset: 0`, and `pointerEvents: isTabActive ? 'auto' : 'none'`.
+   - In [`src/App.tsx`](file:///home/user/project/src/App.tsx) and [`src/presentation/TerminalView.tsx`](file:///home/user/project/src/presentation/TerminalView.tsx), replaced `display: activeTabId === tab.id ? 'flex' : 'none'` with `visibility: isTabActive ? 'visible' : 'hidden'`, `position: isTabActive ? 'relative' : 'absolute'`, `inset: 0`, and `pointerEvents: isTabActive ? 'auto' : 'none'`.
    - Inactive tabs remain fully mounted with exact viewport dimensions in the background DOM, preventing canvas resolution collapse to 0x0.
 2. **Immediate Synchronous Refit with RequestAnimationFrame Follow-up:**
    - Removed the 50ms `setTimeout` completely. When a tab becomes active, `TerminalView` executes `fitAddon.fit()` synchronously on the current thread, followed by an immediate `requestAnimationFrame` pass to guarantee zero-latency raster synchronization.
 3. **Smooth Adjacent Tab Selection:**
-   - Updated `closeTab` in [`src/App.tsx`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.tsx) to select the neighbor tab at the closing index (`newTabs[Math.min(closingIndex, newTabs.length - 1)]`) rather than jumping unconditionally to the end of the tab strip.
+   - Updated `closeTab` in [`src/App.tsx`](file:///home/user/project/src/App.tsx) to select the neighbor tab at the closing index (`newTabs[Math.min(closingIndex, newTabs.length - 1)]`) rather than jumping unconditionally to the end of the tab strip.
 4. **Crisp Canvas Rendering:**
-   - Added `image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;` to `.terminal-container .xterm-screen canvas` in [`src/App.css`](file:///home/overxpowered/padhai_in_linux/Projects/sentinal/src/App.css) to eliminate GPU bilinear interpolation blur during container transitions.
+   - Added `image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;` to `.terminal-container .xterm-screen canvas` in [`src/App.css`](file:///home/user/project/src/App.css) to eliminate GPU bilinear interpolation blur during container transitions.
 
 ---
 

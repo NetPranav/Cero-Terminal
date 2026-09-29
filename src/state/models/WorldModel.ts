@@ -156,7 +156,7 @@ export function createDefaultWorldModel(snapshotId = `snap-${Date.now()}`): Worl
     applications: createDefaultMetadata({ runningApps: [{ name: 'Cursor', bundleId: 'com.cursor.app', pid: 4510, isForeground: true }], installedApps: ['Cursor', 'Safari', 'Xcode', 'Terminal'] }, 'collector:application'),
     processes: createDefaultMetadata({ processes: [{ pid: 4510, name: 'Cursor', cpuUsage: 2.1, memoryUsage: 412 }], listeningPorts: [{ port: 3000, pid: 4510, protocol: 'TCP' }, { port: 8080, pid: 8812, protocol: 'TCP' }] }, 'collector:process'),
     windows: createDefaultMetadata({ activeWindows: [{ title: 'AI Terminal — Cursor', appName: 'Cursor', bounds: { x: 0, y: 0, w: 1440, h: 900 } }] }, 'collector:window'),
-    filesystem: createDefaultMetadata({ knownDirectories: { '/Users/pranav/Project Folder/AI Terminal': { exists: true, isEmpty: false, lastModified: Date.now() }, '/tmp/empty_test_folder': { exists: true, isEmpty: true, lastModified: Date.now() } } }, 'collector:filesystem'),
+    filesystem: createDefaultMetadata({ knownDirectories: { '/home/user/project': { exists: true, isEmpty: false, lastModified: Date.now() }, '/tmp/empty_test_folder': { exists: true, isEmpty: true, lastModified: Date.now() } } }, 'collector:filesystem'),
     network: createDefaultMetadata({ activeInterfaces: [{ interface: 'en0', ip: '192.168.1.105', isOnline: true }] }, 'collector:network'),
     wifi: createDefaultMetadata({ connectedSSID: 'Sentinel_5G_Network', powered: true, interface: 'en0' }, 'collector:wifi'),
     bluetooth: createDefaultMetadata({ powered: true, connectedDevices: [{ name: 'Magic Keyboard', address: '00:1A:7D:DA:71:13', connected: true }, { name: 'AirPods Pro', address: '00:1A:7D:EE:22:91', connected: true }] }, 'collector:bluetooth'),
@@ -165,11 +165,11 @@ export function createDefaultWorldModel(snapshotId = `snap-${Date.now()}`): Worl
     audio: createDefaultMetadata({ outputVolume: 65, isMuted: false, inputVolume: 80 }, 'collector:system'),
     battery: createDefaultMetadata({ batteryLevel: 92, isCharging: true, timeRemainingMinutes: null }, 'collector:system'),
     docker: createDefaultMetadata({ daemonRunning: true, containers: [{ id: 'c8f2d910a30b', name: 'dev-db', image: 'postgres:15', status: 'Up 4 hours', ports: [5432] }] }, 'collector:docker'),
-    git: createDefaultMetadata({ knownRepositories: { '/Users/pranav/Project Folder/AI Terminal': { currentBranch: 'main', isClean: true, aheadBehind: '0/0' } } }, 'collector:git'),
+    git: createDefaultMetadata({ knownRepositories: { '/home/user/project': { currentBranch: 'main', isClean: true, aheadBehind: '0/0' } } }, 'collector:git'),
     node: createDefaultMetadata({ version: 'v20.11.0', globalNpmPackages: ['npm', 'typescript', 'vitest', 'eslint'] }, 'collector:node'),
-    python: createDefaultMetadata({ version: '3.12.2', virtualEnvironments: ['/Users/pranav/.venv/default'] }, 'collector:python'),
+    python: createDefaultMetadata({ version: '3.12.2', virtualEnvironments: ['/Users/dev/.venv/default'] }, 'collector:python'),
     developerTools: createDefaultMetadata({ xcodeInstalled: true, activeIde: 'Cursor AI', simulatorRunning: false }, 'collector:developer'),
-    environmentVariables: createDefaultMetadata({ vars: { PATH: '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', SHELL: '/bin/zsh', USER: 'pranav', TERM: 'xterm-256color' } }, 'collector:terminal'),
+    environmentVariables: createDefaultMetadata({ vars: { PATH: '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', SHELL: '/bin/zsh', USER: 'user', TERM: 'xterm-256color' } }, 'collector:terminal'),
     terminalSessions: createDefaultMetadata({ sessions: [{ tty: '/dev/ttys001', shell: '/bin/zsh', activeProcess: 'node', pid: 4512 }] }, 'collector:terminal'),
   };
   return deepFreeze(model);

@@ -64,3 +64,8 @@ coverage/
 Thumbs.db
 reports/
 scripts/stress/.runs/
+
+# Machine-specific tool state and local video/demo output
+.agents/ecc-install-state.json
+brag-output*/
+scripts/stress/.runs/
