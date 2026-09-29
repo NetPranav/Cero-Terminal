@@ -17,5 +17,11 @@
   </array>
   <key>NSBluetoothAlwaysUsageDescription</key>
   <string>Sentinel Terminal requires Bluetooth access to turn on/off and connect to your Bluetooth devices on your behalf.</string>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>Sentinel Terminal saves a workflow (.flow) file to your Desktop when you choose that place, and runs commands you approve in folders you open.</string>
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>Sentinel Terminal saves a workflow (.flow) file to Documents when you choose that place, and runs commands you approve in folders you open.</string>
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>Sentinel Terminal works with files in Downloads when you ask it to (for example "find the zip in Downloads").</string>
 </dict>
 </plist>

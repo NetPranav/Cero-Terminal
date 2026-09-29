@@ -1591,3 +1591,156 @@ describe('Quitting an app the user names', () => {
     expect(d).toMatchObject({ success: false, declined: true });
   });
 });
+
+describe('Making a workflow from plain steps', () => {
+  const setup = () => {
+    const files = new Map<string, string>();
+    const io = { exists: async (p: string) => files.has(p), write: async (p: string, t: string) => { files.set(p, t); } };
+    const generate = vi.fn();
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    (loop as any).toolExecutor = { hasDriver: () => true, execute: vi.fn() };
+    loop.setFlowIO(io);
+    return { loop, files, generate };
+  };
+  const GOAL = 'make me a workflow called demo setup that installs node, opens youtube in chrome and opens vs code';
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+
+  it('asks where to save, writes a file the planner understands on every OS, and does not call the model', async () => {
+    const { setChoiceHandlerForTests } = await import('../../presentation/ChoiceRequests');
+    const { planFlowFile } = await import('../../workflows/flow/FlowPlan');
+    const { loop, files, generate } = setup();
+    const asked: any[] = [];
+    setChoiceHandlerForTests(async (req) => { asked.push(req); return { index: 0 }; });
+    try {
+      const r = await loop.run(GOAL, { os: 'macos', cwd: '/tmp/work' });
+      expect(r.success).toBe(true);
+      expect(generate).not.toHaveBeenCalled();
+      expect(asked).toHaveLength(1);
+      expect(asked[0].title).toBe('Save "demo setup" as a .flow file');
+      expect(asked[0].options.map((o: any) => o.label)).toEqual(['Desktop', 'This folder', 'Sentinel workflows']);
+      expect(asked[0].options[1].detail).toBe('/tmp/work');
+      expect(asked[0].lines.slice(0, 3)).toEqual(['1. Install node', '2. Open YouTube in Chrome', '3. Open VS Code']);
+      const [path] = [...files.keys()];
+      expect(path).toMatch(/[\\/]Desktop[\\/]demo-setup\.flow$/);
+      expect(r.summary).toContain('Saved ');
+      expect(r.summary).toContain('(3 steps)');
+      for (const os of ['macos', 'windows', 'linux'] as const) {
+        expect(planFlowFile(files.get(path)!, path, os)?.steps.length).toBe(3);
+      }
+    } finally { setChoiceHandlerForTests(null); }
+    expect(home).toBeTruthy();
+  });
+
+  it('never replaces an existing file, and saves in this folder or a typed path when asked', async () => {
+    const { setChoiceHandlerForTests } = await import('../../presentation/ChoiceRequests');
+    const { loop, files } = setup();
+    files.set('/tmp/work/demo-setup.flow', 'existing');
+    setChoiceHandlerForTests(async () => ({ index: 1 }));
+    try {
+      const r = await loop.run(GOAL, { os: 'macos', cwd: '/tmp/work' });
+      expect(r.success).toBe(true);
+      expect(files.get('/tmp/work/demo-setup.flow')).toBe('existing');
+      expect(files.has('/tmp/work/demo-setup-2.flow')).toBe(true);
+      setChoiceHandlerForTests(async () => ({ custom: '/tmp/elsewhere/mine.flow' }));
+      const r2 = await loop.run(GOAL, { os: 'macos', cwd: '/tmp/work' });
+      expect(r2.success).toBe(true);
+      expect(files.has('/tmp/elsewhere/mine.flow')).toBe(true);
+    } finally { setChoiceHandlerForTests(null); }
+  });
+
+  it('saves nothing when cancelled, and says so when there is no screen to ask on', async () => {
+    const { setChoiceHandlerForTests } = await import('../../presentation/ChoiceRequests');
+    const { loop, files } = setup();
+    setChoiceHandlerForTests(async () => null);
+    try {
+      const r = await loop.run(GOAL, { os: 'macos', cwd: '/tmp/work' });
+      expect(r).toMatchObject({ success: false, declined: true });
+    } finally { setChoiceHandlerForTests(null); }
+    const headless = await loop.run(GOAL, { os: 'macos', cwd: '/tmp/work' });
+    expect(headless.success).toBe(false);
+    expect(headless.summary).toContain('no screen to ask where to save');
+    expect(files.size).toBe(0);
+  });
+
+  it('names steps it did not understand and leaves them out of the file', async () => {
+    const { setChoiceHandlerForTests } = await import('../../presentation/ChoiceRequests');
+    const { loop, files } = setup();
+    let lines: string[] = [];
+    setChoiceHandlerForTests(async (req) => { lines = req.lines ?? []; return { index: 1 }; });
+    try {
+      const r = await loop.run('create a workflow that installs node, makes everything faster and opens youtube', { os: 'linux', cwd: '/tmp/work' });
+      expect(r.summary).toContain('1 step was left out');
+      expect(lines.join('\n')).toContain('Left out (not understood): make everything faster');
+      expect(JSON.parse([...files.values()][0]).actions).toHaveLength(2);
+      setChoiceHandlerForTests(async () => { throw new Error('should not ask'); });
+      const none = await loop.run('make a workflow that flibbers the wobble', { os: 'linux', cwd: '/tmp/work' });
+      expect(none.success).toBe(false);
+      expect(none.summary).toContain('Not understood: "flibbers the wobble"');
+    } finally { setChoiceHandlerForTests(null); }
+  });
+});
+
+describe('Closing a port', () => {
+  const setup = (lists: string[]) => {
+    const execute = vi.fn(async (_tool: string, params: any, _cwd: string, authorize?: any) => {
+      if (/^lsof /.test(params.command)) return { success: true, data: { stdout: lists.shift() ?? '', code: 0 } };
+      if (authorize && !(await authorize({ capabilityId: 'shell.execute', parameters: params }))) return { success: false, errorCode: 'USER_CANCELLED' };
+      return { success: true, data: { stdout: '', code: 0 } };
+    });
+    const generate = vi.fn();
+    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn()
+    } as any);
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+    return { loop, execute, generate };
+  };
+  const LISTENING = 'p63988\ncPython\n';
+
+  it('looks up the exact port, asks with the process named, stops it normally and checks it is free', async () => {
+    const { loop, execute, generate } = setup([LISTENING, '']);
+    const handler = vi.fn().mockResolvedValue(true);
+    loop.setAuthorizationHandler(handler);
+    const r = await loop.run('close port 8765', { os: 'macos', cwd: '/tmp' });
+    expect(execute.mock.calls.map(c => c[1].command)).toEqual([
+      'lsof -nP -iTCP:8765 -sTCP:LISTEN -Fpc 2>/dev/null || true', 'kill 63988', 'lsof -nP -iTCP:8765 -sTCP:LISTEN -Fpc 2>/dev/null || true',
+    ]);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].parameters.explanation).toBe('Stop Python (PID 63988), listening on port 8765');
+    expect(r).toMatchObject({ success: true, summary: 'Port 8765 is free. Stopped Python (PID 63988).' });
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('says so when nothing listens, and offers a forced stop only when the program stays', async () => {
+    const free = setup(['']);
+    free.loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
+    const r = await free.loop.run('free up port 3000', { os: 'linux', cwd: '/tmp' });
+    expect(r).toMatchObject({ success: true, summary: 'Port 3000 is already free: nothing is listening on it.' });
+    expect(free.execute).toHaveBeenCalledTimes(1);
+
+    const stuck = setup([LISTENING, LISTENING]);
+    stuck.loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
+    const s = await stuck.loop.run('close port 8765', { os: 'macos', cwd: '/tmp' });
+    expect(s.success).toBe(false);
+    expect(s.summary).toContain('still in use by Python (PID 63988)');
+    expect(s.summary).toContain('say "force close port 8765"');
+  });
+
+  it('a declined request stops nothing, and "force" is the only way to kill -9', async () => {
+    const declined = setup([LISTENING]);
+    declined.loop.setAuthorizationHandler(vi.fn().mockResolvedValue(false));
+    const d = await declined.loop.run('close port 8765', { os: 'macos', cwd: '/tmp' });
+    expect(d).toMatchObject({ success: false, declined: true });
+    expect(declined.execute.mock.calls.map(c => c[1].command)).toEqual(['lsof -nP -iTCP:8765 -sTCP:LISTEN -Fpc 2>/dev/null || true', 'kill 63988']);
+
+    const forced = setup([LISTENING, '']);
+    forced.loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
+    await forced.loop.run('force close port 8765', { os: 'macos', cwd: '/tmp' });
+    expect(forced.execute.mock.calls[1][1].command).toBe('kill -9 63988');
+  });
+});

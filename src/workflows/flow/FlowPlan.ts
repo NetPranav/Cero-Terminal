@@ -96,6 +96,10 @@ const APP_ALIASES: Record<string, { macos: string; linux: string; windows: strin
   notes: { macos: 'Notes', linux: 'gnome-text-editor', windows: 'notepad' },
 };
 
+/** Names the authoring code recognises without guessing (apps with a special launcher, browsers) */
+export const KNOWN_APP_NAMES = Object.keys(APP_ALIASES);
+export const KNOWN_BROWSER_NAMES = Object.keys(MAC_BROWSERS);
+
 function browserStep(action: any): FlowStep['platformCommands'] | null {
   const urls = (Array.isArray(action.urls) ? action.urls : [action.url]).filter(isWebUrl);
   if (urls.length === 0) return null;

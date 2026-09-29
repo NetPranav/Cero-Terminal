@@ -20,6 +20,10 @@
 
 import { parseSystemAction, commandFor, suggestionsFor, TOPIC_NAMES, type SystemAction, type SystemCommand } from '../../domain/system/SystemControl';
 import { parseQuitRequest, listRunningCommand, parseRunning, matchRunning, quitCommand, type QuitRequest, type RunningItem } from '../../domain/system/AppControl';
+import { parseFlowCreateRequest, draftFlow, serializeFlow, describeDraft, draftNeedsTerminal, type FlowCreateRequest } from '../../workflows/flow/FlowAuthoring';
+import { appFlowIO, flowFolders, freeFlowPath, resolveCustomTarget, type FlowIO } from '../../workflows/flow/FlowStore';
+import { askChoice } from '../../presentation/ChoiceRequests';
+import { parsePortRequest, listListenersCommand, parseListeners, stopCommand, describeListeners, type PortRequest } from '../../domain/system/PortControl';
 import { parseFixFileRequest, runCommandFor, extractCodeBlock, extractFixNote, lineDiff, FixFileRequest } from './FixFile';
 import { pathsInError, localImports, parseDiagnoseRequest, DiagnoseRequest } from './ErrorSources';
 import { referencesSecretPath } from '../../domain/security/SecretRedactor';
@@ -568,7 +572,7 @@ const FAST_PATHS: {
   { pattern: /^check\s+git\s+tag\s+list\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(git tag -l); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Check git tag list' }) },
   { pattern: /^create\s+annotated\s+git\s+tag\s+v2\.1\.0-test\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git tag -a v2.1.0-test -m 'Test release' 2>/dev/null || true; echo 'Tag created confirmation: Tag exists in git refs (v2.1.0-test)'", explanation: 'Create annotated git tag v2.1.0-test' }) },
   { pattern: /^delete\s+git\s+tag\s+v2\.1\.0-test\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git tag -d v2.1.0-test 2>/dev/null || true; echo 'Tag deleted confirmation: Tag removed from refs (v2.1.0-test)'", explanation: 'Delete git tag v2.1.0-test' }) },
-  { pattern: /^show\s+git\s+config\s+user\s+name\s+and\s+email\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo \"$(git config user.name || echo 'Pranav') <$(git config user.email || echo 'overxpowered@users.noreply.github.com')>\"", explanation: 'Show git config user name and email' }) },
+  { pattern: /^show\s+git\s+config\s+user\s+name\s+and\s+email\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo \"$(git config user.name || echo '(not set)') <$(git config user.email || echo '(not set)')>\"", explanation: 'Show git config user name and email' }) },
   { pattern: /^show\s+git\s+blame\s+for\s+package\.json\s+line\s+1-10\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git blame -L 1,10 package.json", explanation: 'Show git blame for package.json line 1-10' }) },
   { pattern: /^show\s+git\s+log\s+graph\s+visualization\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git log --graph --oneline --decorate -5", explanation: 'Show git log graph visualization' }) },
   { pattern: /^show\s+files\s+changed\s+in\s+last\s+commit\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git diff-tree --no-commit-id --name-only -r HEAD", explanation: 'Show files changed in last commit' }) },
@@ -1710,6 +1714,14 @@ export class AgentLoop {
       const handled = await this.runQuitApp(quit, context);
       if (handled) return handled;
     }
+
+    // "close port 8765": find the exact listener, ask, stop it, check the port is free
+    const portRequest = parsePortRequest(cleaned || goal);
+    if (portRequest) return this.runClosePort(portRequest, context);
+
+    // "make me a workflow that installs node and opens youtube": write a .flow file
+    const createFlow = parseFlowCreateRequest(cleaned || goal);
+    if (createFlow) return this.runCreateFlow(createFlow, context);
 
     // "run the workflow in deploy.flow", "run my nightly workflow"
     const workflowRequest = parseWorkflowRequest(cleaned || goal);
@@ -2997,6 +3009,105 @@ export class AgentLoop {
     const summary = `${cmd.title} failed: ${why}`;
     this.emit({ type: 'error', message: summary });
     return { success: false, summary, steps };
+  }
+
+  /** "close port N": look up who listens on exactly that port, ask, stop it normally, verify */
+  private async runClosePort(req: PortRequest, context: AgentRunContext): Promise<AgentResult> {
+    const os = /^win/i.test(context.os) ? 'windows' : /^(?:mac|darwin)/i.test(context.os) ? 'macos' : 'linux';
+    const steps: AgentResult['steps'] = [];
+    const finish = (success: boolean, summary: string, extra: Partial<AgentResult> = {}): AgentResult => {
+      this.emit({ type: success ? 'done' : 'error', message: summary });
+      return { success, summary, steps, ...extra };
+    };
+    const list = async () => {
+      const params = { command: listListenersCommand(req.port, os), explanation: `Who is listening on port ${req.port}` };
+      const result = await this.toolExecutor.execute('shell.execute', params, context.cwd, async () => true);
+      steps.push({ tool: 'shell.execute', params, result });
+      return result.success ? parseListeners(String(result.data?.stdout ?? ''), os) : null;
+    };
+    this.emit({ type: 'tool_start', message: `Looking for what is listening on port ${req.port}` });
+    const before = await list();
+    if (before === null) return finish(false, `Could not look up port ${req.port} on this computer.`);
+    if (before.length === 0) return finish(true, `Port ${req.port} is already free: nothing is listening on it.`);
+
+    const what = describeListeners(before);
+    const params = { command: stopCommand(before, os, req.force), explanation: `${req.force ? 'Force stop' : 'Stop'} ${what}, listening on port ${req.port}` };
+    this.emit({ type: 'tool_start', message: `Stop ${what}` });
+    const result = await this.toolExecutor.execute('shell.execute', params, context.cwd, this.authorizationHandler);
+    steps.push({ tool: 'shell.execute', params, result });
+    if (result.errorCode === 'USER_CANCELLED') return finish(false, `Not changed: you declined stopping ${what}.`, { declined: true });
+
+    await new Promise(r => setTimeout(r, process.env.NODE_ENV === 'test' ? 0 : 1000));
+    const after = await list();
+    if (after && after.length > 0) {
+      return finish(false, `Port ${req.port} is still in use by ${describeListeners(after)}${req.force ? '' : `. It did not exit when asked: say "force close port ${req.port}" to end it immediately`}.`);
+    }
+    const code = typeof result.data?.code === 'number' ? result.data.code : (result.success ? 0 : 1);
+    if (after === null && code !== 0) return finish(false, `Could not stop ${what}: ${String(result.data?.stderr || result.error || 'it failed').trim().split('\n').pop()}`);
+    return finish(true, `Port ${req.port} is free. Stopped ${what}.`);
+  }
+
+  /** File access for saving a generated flow; tests replace it */
+  private flowIO: FlowIO = appFlowIO;
+  public setFlowIO(io: FlowIO): void {
+    this.flowIO = io;
+  }
+
+  /**
+   * "make me a workflow that ...": turn the listed steps into a .flow file, ask where to keep it
+   * (Desktop, this folder, the Sentinel workflows folder, or a path), and save it without ever
+   * replacing an existing file. Steps that are not understood are named, never guessed.
+   */
+  private async runCreateFlow(req: FlowCreateRequest, context: AgentRunContext): Promise<AgentResult> {
+    const steps: AgentResult['steps'] = [];
+    const finish = (success: boolean, summary: string, extra: Partial<AgentResult> = {}): AgentResult => {
+      this.emit({ type: success ? 'done' : 'error', message: summary });
+      return { success, summary, steps, ...extra };
+    };
+    const draft = draftFlow(req.steps, { name: req.name });
+    if (draft.actions.length === 0) {
+      return finish(false, `I could not turn any of those steps into a workflow.${draft.unrecognised.length ? ` Not understood: ${draft.unrecognised.map(u => `"${u}"`).join(', ')}.` : ''} Try steps like: install node, open youtube in chrome, run npm install.`);
+    }
+
+    let folders;
+    try {
+      folders = await flowFolders();
+    } catch (e: any) {
+      return finish(false, `Could not find your folders: ${e?.message || e}`);
+    }
+    const lines = describeDraft(draft);
+    if (draft.unrecognised.length) lines.push('', `Left out (not understood): ${draft.unrecognised.join('; ')}`);
+    lines.push('', draftNeedsTerminal(draft) ? 'Opening the file installs or runs things, so it opens the terminal and asks first.' : 'Opening the file only opens apps and pages, so the terminal never appears.');
+    this.emit({ type: 'thinking', message: `Workflow "${draft.name}": ${draft.actions.length} steps` });
+    const choice = await askChoice({
+      title: `Save "${draft.name}" as a .flow file`,
+      lines,
+      options: [
+        { label: 'Desktop', detail: folders.desktop },
+        { label: 'This folder', detail: context.cwd },
+        { label: 'Sentinel workflows', detail: `${folders.workflows} (listed in the Workflow Manager)` },
+      ],
+      custom: { label: 'Somewhere else', placeholder: 'A folder or a path ending in .flow' },
+    });
+    if (choice === undefined) {
+      return finish(false, `The workflow "${draft.name}" is ready (${draft.actions.length} steps) but there is no screen to ask where to save it. Run this from the Sentinel app.`);
+    }
+    if (choice === null) return finish(false, 'Not saved: you cancelled.', { declined: true });
+
+    try {
+      const target = 'custom' in choice
+        ? await resolveCustomTarget(choice.custom, draft.name, folders, context.cwd, this.flowIO)
+        : await freeFlowPath([folders.desktop, context.cwd, folders.workflows][choice.index] ?? folders.workflows, draft.name, this.flowIO);
+      await this.flowIO.write(target, serializeFlow(draft));
+      const shown = target.startsWith(folders.home) ? `~${target.slice(folders.home.length)}` : target;
+      steps.push({ tool: '__flow__', params: { path: target }, result: { success: true } as ToolExecutionResult });
+      const left = draft.unrecognised.length ? ` ${draft.unrecognised.length} step${draft.unrecognised.length > 1 ? 's were' : ' was'} left out.` : '';
+      return finish(true, `Saved ${shown} (${draft.actions.length} steps).${left} Double-click it to run it, or say "run the workflow in ${target.split(/[\\/]/).pop()}".`);
+    } catch (e: any) {
+      const why = String(e?.message || e);
+      const macBlock = /operation not permitted|permission denied|os error 1\b/i.test(why) && /^mac|darwin/i.test(context.os);
+      return finish(false, `Could not save the file: ${why}${macBlock ? '. macOS asks before an app may use the Desktop or Documents folder: allow Sentinel Terminal in System Settings, Privacy & Security, Files and Folders.' : ''}`);
+    }
   }
 
   /**

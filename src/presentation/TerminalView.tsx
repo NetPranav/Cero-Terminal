@@ -46,6 +46,8 @@ import { TerminalSearchBar } from './TerminalSearchBar';
 import { InputLineTracker, stripPrompt, parseCdTarget } from './InputLineTracker';
 import { TerminalWorkspace } from '../domain/terminal/TerminalWorkspace';
 import { claimTerminalRequests, releaseTerminalRequests, TerminalRequest } from './TerminalRequests';
+import { claimChoiceRequests, releaseChoiceRequests, type ChoiceRequest, type ChoiceResult } from './ChoiceRequests';
+import { ChoiceDialog } from '../ui/components/ChoiceDialog';
 import { createPortal } from 'react-dom';
 
 type AgentRunner = (context: { os: string; cwd: string; paneId?: string }) => Promise<AgentResult>;
@@ -171,9 +173,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       requestAnimationFrame(() => xtermRef.current?.focus());
     }
   }, [securityModalPlan]);
-  const [authPassword, setAuthPassword] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
   const [latestPlan, setLatestPlan] = useState<AgentPlan | null>(null);
   const [isPlanOpen, setIsPlanOpen] = useState(true);
   const [planExecutionStatus, setPlanExecutionStatus] = useState<'running' | 'completed' | 'failed'>('running');
@@ -250,6 +249,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     return () => releaseTerminalRequests(paneId);
   }, [paneId, isFocused, sessionReady]);
 
+  // "Where should this file go?": the agent asks, this pane shows the dialog
+  const [choiceRequest, setChoiceRequest] = useState<{ request: ChoiceRequest; resolve: (r: ChoiceResult) => void } | null>(null);
+  useEffect(() => {
+    if (!paneId || !isFocused || !sessionReady) return;
+    claimChoiceRequests(paneId, (request) => new Promise<ChoiceResult>((resolve) => setChoiceRequest({ request, resolve })));
+    return () => releaseChoiceRequests(paneId);
+  }, [paneId, isFocused, sessionReady]);
+  useEffect(() => {
+    if (!choiceRequest) requestAnimationFrame(() => xtermRef.current?.focus());
+  }, [choiceRequest]);
+
   const lastUnresolvedGoalRef = useRef<{ goal: string; timestamp: number } | null>(null);
 
   const handleExecuteRemediation = async (rem: RemediationPrompt) => {
@@ -275,54 +285,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     }
   };
 
-  const handleAuthorize = async () => {
-    if (!authPassword.trim()) {
-      setAuthError('Password authentication is strictly required.');
-      return;
-    }
-    setIsVerifying(true);
-    setAuthError('');
-
-    let isValid = false;
-    let errorMessage = '';
-
-    try {
-      if (typeof window === 'undefined' || !(window as any).__TAURI_INTERNALS__) {
-        // Fallback for non-Tauri browser development environments
-        if (authPassword !== 'admin' && authPassword !== 'password' && authPassword !== 'sentinel') {
-          isValid = false;
-          errorMessage = 'Authentication failed: Incorrect system password. Please enter your valid macOS login password.';
-        } else {
-          isValid = true;
-        }
-      } else {
-        const escaped = authPassword.replace(/'/g, "'\\''");
-        // Securely verify system password against Linux/macOS login credentials
-        const res = await invoke<{ code?: number; stderr?: string; stdout?: string }>('execute_command', {
-          command: 'sh',
-          args: ['-c', `(which dscl >/dev/null 2>&1 && dscl . -authonly "$(whoami)" '${escaped}' 2>&1) || (echo '${escaped}' | sudo -S -k -v 2>&1)`]
-        });
-        if (res && res.code === 0) {
-          isValid = true;
-        } else {
-          isValid = false;
-          errorMessage = 'Authentication failed: Incorrect system password. Please enter your valid login password.';
-        }
-      }
-    } catch (err: any) {
-      isValid = false;
-      errorMessage = 'Authentication failed: Incorrect system password. Please enter your valid login password.';
-    }
-
-    setIsVerifying(false);
-    if (isValid && securityModalPlan) {
-      securityModalPlan.resolve(true);
-      setSecurityModalPlan(null);
-      setAuthPassword('');
-    } else {
-      setAuthError(errorMessage || 'Authentication failed: Invalid system password.');
-    }
-  };
+  // High-risk commands (stopping processes, deleting, super-user) need an explicit click on Run.
+  // Sentinel never asks for the login password: it was collected in this window and checked by putting
+  // it on a command line, where other local processes could read it, and it granted nothing (the command
+  // runs as the user either way). Super-user commands ask in the terminal itself, where sudo belongs.
+  const needsExplicitClick = (plan: any) => Boolean(plan?.requiresPassword || plan?.requiresClick);
 
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -1805,6 +1772,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         </div>
       )}
 
+      {choiceRequest && (
+        <ChoiceDialog
+          request={choiceRequest.request}
+          onResult={(result) => { choiceRequest.resolve(result); setChoiceRequest(null); }}
+        />
+      )}
+
       {/* Security & Deletion Authorization Overlay Modal: rendered on <body>, above every drawer and pane */}
       {securityModalPlan && createPortal(
         <div 
@@ -1816,18 +1790,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               consentPlanRef.current = securityModalPlan.plan;
               consentShownAtRef.current = Date.now();
             }
-            if (!securityModalPlan.plan.requiresPassword) el.focus();
+            el.focus();
           }}
           onKeyDown={(e) => {
             const now = Date.now();
             if (e.key === 'Escape') {
               securityModalPlan.resolve(false);
               setSecurityModalPlan(null);
-              setAuthPassword('');
-            } else if (e.key === 'Enter' && securityModalPlan.plan.requiresClick) {
-              // Flows opened from a file start only with a click on Run
+            } else if (e.key === 'Enter' && needsExplicitClick(securityModalPlan.plan)) {
+              // Flows opened from a file, and high-risk commands, start only with a click on Run
               consentStrayKeyAtRef.current = now;
-            } else if (e.key === 'Enter' && !securityModalPlan.plan.requiresPassword) {
+            } else if (e.key === 'Enter') {
               // Armed only after the dialog was visible for a moment with no typing going on
               const armed = now - consentShownAtRef.current > 800 && now - consentStrayKeyAtRef.current > 800 && !e.repeat;
               if (!armed) return;
@@ -1883,9 +1856,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               </div>
               <div>
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#f8fafc', letterSpacing: '-0.2px' }}>
-                  {securityModalPlan.plan.requiresPassword
-                    ? 'Administrator password required'
-                    : securityModalPlan.plan.capabilityId === 'workflow.batch' && String(securityModalPlan.plan.parameters?.command || '').includes('\n') ? 'Run these commands?' : 'Run this command?'}
+                  {securityModalPlan.plan.capabilityId === 'workflow.batch' && String(securityModalPlan.plan.parameters?.command || '').includes('\n') ? 'Run these commands?' : 'Run this command?'}
                 </h3>
                 <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginTop: '2px' }}>
                   Needs your approval · {String(securityModalPlan.plan.riskLevel || 'admin').toLowerCase()} risk
@@ -1895,7 +1866,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
             <p style={{ fontSize: '13px', lineHeight: '1.55', color: 'rgba(255, 255, 255, 0.75)', margin: '0 0 18px 0' }}>
               {securityModalPlan.plan.requiresPassword
-                ? 'This is a protected action. Enter your login password to allow it once.'
+                ? 'This can stop or change things on your computer. Sentinel will run exactly what is shown below, only after you click Run. It never asks for your password.'
                 : securityModalPlan.plan.requiresClick
                   ? 'These commands come from a file. Sentinel will run exactly what is shown below, only after you click Run.'
                   : 'Sentinel will run exactly what is shown below. Nothing runs until you approve.'}
@@ -1935,57 +1906,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               )}
             </div>
 
-            {securityModalPlan.plan.requiresPassword ? (
-              <div style={{ marginBottom: '22px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: 'rgba(255, 255, 255, 0.85)', marginBottom: '8px', fontWeight: 500 }}>
-                  Login password
-                </label>
-                <input
-                  type="password"
-                  value={authPassword}
-                  onChange={(e) => { setAuthPassword(e.target.value); setAuthError(''); }}
-                  placeholder="Password"
-                  autoFocus
-                  disabled={isVerifying}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !isVerifying) {
-                      handleAuthorize();
-                    } else if (e.key === 'Escape' && !isVerifying) {
-                      securityModalPlan.resolve(false);
-                      setSecurityModalPlan(null);
-                      setAuthPassword('');
-                    }
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: authError ? '1px solid rgba(229, 115, 115, 0.6)' : '1px solid rgba(255, 255, 255, 0.15)',
-                    backgroundColor: 'rgba(8, 9, 13, 0.75)',
-                    color: '#fff',
-                    fontSize: '13px',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    transition: 'border-color 0.2s ease'
-                  }}
-                />
-                {authError && (
-                  <div style={{ color: '#e57373', fontSize: '12px', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <AlertCircle size={14} style={{ color: '#e57373', flexShrink: 0 }} />
-                    <span>{authError}</span>
-                  </div>
-                )}
-              </div>
-            ) : null}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
-                disabled={isVerifying}
                 onClick={() => {
                   securityModalPlan.resolve(false);
                   setSecurityModalPlan(null);
-                  setAuthPassword('');
-                }}
+                    }}
                 style={{
                   padding: '9px 16px',
                   borderRadius: '8px',
@@ -2005,23 +1932,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 <span>Cancel</span> <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '4px' }}>Esc</span>
               </button>
               <button
-                disabled={isVerifying}
                 onClick={() => {
-                  if (securityModalPlan.plan.requiresPassword) {
-                    handleAuthorize();
-                  } else {
-                    securityModalPlan.resolve(true);
-                    setSecurityModalPlan(null);
-                  }
+                  securityModalPlan.resolve(true);
+                  setSecurityModalPlan(null);
                 }}
                 style={{
                   padding: '9px 18px',
                   borderRadius: '8px',
                   border: 'none',
-                  background: isVerifying ? 'rgba(255, 255, 255, 0.2)' : '#f5f5f7',
-                  color: isVerifying ? '#ffffff' : '#0b0c10',
+                  background: '#f5f5f7',
+                  color: '#0b0c10',
                   fontSize: '13px',
-                  cursor: isVerifying ? 'wait' : 'pointer',
+                  cursor: 'pointer',
                   fontWeight: 600,
                   boxShadow: 'none',
                   transition: 'all 0.2s ease',
@@ -2031,8 +1953,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 }}
               >
                 <Check size={14} />
-                <span>{isVerifying ? 'Checking...' : securityModalPlan.plan.requiresPassword ? 'Authorize' : 'Run'}</span>
-                {!isVerifying && !securityModalPlan.plan.requiresClick && <span style={{ opacity: 0.55, fontSize: '11px', background: 'rgba(0,0,0,0.08)', padding: '1px 5px', borderRadius: '4px' }}>↵</span>}
+                <span>Run</span>
+                {!needsExplicitClick(securityModalPlan.plan) && <span style={{ opacity: 0.55, fontSize: '11px', background: 'rgba(0,0,0,0.08)', padding: '1px 5px', borderRadius: '4px' }}>↵</span>}
               </button>
             </div>
           </div>

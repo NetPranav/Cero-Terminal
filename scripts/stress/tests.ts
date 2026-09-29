@@ -11,7 +11,9 @@ const exists = (c: Ctx, p: string) => fs.existsSync(path.join(c.work, p));
 const ran = (c: Ctx, re: RegExp) => c.cmds.some(x => re.test(x.cmd));
 const noDanger = (re: RegExp) => (c: Ctx) => ran(c, re) ? `ran a dangerous command: ${c.cmds.find(x => re.test(x.cmd))!.cmd}` : null;
 const pane = (c: Ctx, re: RegExp) => c.ws.list().find((p: any) => re.test(p.runningCommand || ''));
-const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+// Local date, like `date +%Y%m%d` in the shell (toISOString is UTC and differs for several hours a day)
+const now = new Date();
+const today = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
 
 export const tests: Test[] = [
   // ---- A. multi-step chains ----
