@@ -10,7 +10,7 @@
 - A flow that only opens apps and links (Chrome, YouTube, VS Code) runs without showing the terminal.
 - A flow that installs or runs things opens the terminal, lists every command, waits for you to click Run, then types each step so you can see output and answer prompts.
 
-See [FLOW_FILES.md](https://github.com/NetPranav/Sentinal-Terminal/blob/linux-v2-update/docs/FLOW_FILES.md) and the [example flows](https://github.com/NetPranav/Sentinal-Terminal/tree/linux-v2-update/examples/flows).
+See [FLOW_FILES.md](https://github.com/NetPranav/Sentinal-Terminal/blob/main/docs/FLOW_FILES.md) and the [example flows](https://github.com/NetPranav/Sentinal-Terminal/tree/main/examples/flows).
 
 **New in 2.1.0**
 - System settings by request, with the right commands for each OS: "turn wifi off", "set brightness to 60", "mute", "turn on dark mode", "show paired bluetooth devices", "open sound settings". Saying only a topic ("bluetooth") lists what Sentinel can do for it on this OS. Changes ask first.
@@ -20,6 +20,8 @@ See [FLOW_FILES.md](https://github.com/NetPranav/Sentinal-Terminal/blob/linux-v2
 - "fix buggy.py so it runs": runs the file, shows the change for approval (original kept as .bak), then re-runs it.
 - "why is npm test failing in api?": runs the command there and explains the failure from the code it points at.
 - Security: commands that read private keys or credential files always ask first, and keys and tokens are masked before anything reaches a model.
+- Quitting an app by name ("quit textedit", "terminate the claude application") checks the running apps first, matches the name in any case and asks with the exact app.
+- No separate title bar: the window buttons sit in the tab bar.
 - Command history (Ctrl+R) lists commands you actually ran, and never records a password typed into a running program.
 
 Checksums: `SHA256SUMS.txt` (Intel, from CI) and `SHA256SUMS-apple-silicon.txt`.

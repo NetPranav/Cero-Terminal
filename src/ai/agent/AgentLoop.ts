@@ -2530,8 +2530,10 @@ export class AgentLoop {
       if (panes.length === 0) return done('No terminals are open.');
       const lines = panes.map(p => {
         const state = p.alternateScreen ? 'full-screen program' : p.busy && p.runningCommand ? `running \`${p.runningCommand}\`` : 'idle';
-        // The last line with text (a trailing blank line printed "last line:" with nothing after it)
-        const last = [...p.outputTail].reverse().find(l => l.trim())?.trim();
+        // The last line with visible text: a blank line or one holding only terminal control codes
+        // (bracketed paste, cursor moves) printed "last line:" with nothing after it
+        const visible = (l: string) => l.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Za-z0-9]|\x1b[=>78DEHM]|[\x00-\x08\x0b-\x1f\x7f]/g, '').trim();
+        const last = [...p.outputTail].map(visible).reverse().find(Boolean);
         const you = p.paneId === context.paneId ? ' (this one)' : '';
         return `- ${describePane(p)}${you} in ${p.cwd || '~'}: ${state}${last && p.busy ? `\n  last line: ${last.slice(0, 120)}` : ''}`;
       });

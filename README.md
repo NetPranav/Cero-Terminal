@@ -4,7 +4,7 @@
 
 **A terminal that also takes requests in plain language, runs `.flow` setup files on any OS, and uses a model that runs on your own computer.**
 
-[![CI](https://github.com/NetPranav/Sentinal-Terminal/actions/workflows/ci.yml/badge.svg?branch=linux-v2-update)](https://github.com/NetPranav/Sentinal-Terminal/actions/workflows/ci.yml)
+[![CI](https://github.com/NetPranav/Sentinal-Terminal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NetPranav/Sentinal-Terminal/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/badge/release-2.1.0-1F222E)](https://github.com/NetPranav/Sentinal-Terminal/releases)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-1F222E)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1F222E)](LICENSE)
@@ -37,9 +37,9 @@ With the built-in model or Ollama, requests stay on your machine. With a cloud k
 <div align="center">
 <img src="docs/media/flow-demo.gif" alt="Opening new-project.flow: Sentinel lists every command, waits for a click on Run, then types each step into the terminal" width="820">
 
-**Full demo (2.5 min, 2x speed):** [docs/media/sentinel-demo.mp4](docs/media/sentinel-demo.mp4). Requests, a server in a second tab,
-"what's running in my terminals", stopping the server, a multi-step request and a `.flow` file opened with the `sentinel`
-command. Recorded in the macOS release build with the built-in 3B model.
+**Full demo (2 min, 2x speed):** [docs/media/sentinel-demo.mp4](docs/media/sentinel-demo.mp4). Requests, quitting an app by name,
+a server in a second tab, "what's running in my terminals", stopping the server, a multi-step request and a `.flow` file
+opened with the `sentinel` command. Recorded in the macOS release build with the built-in 3B model.
 </div>
 
 ## .flow files: write a setup once, run it anywhere
@@ -91,10 +91,11 @@ Type `>` followed by the request. Examples that were run in the release build:
 |---|---|
 | `>what is the total of the score column in data.csv?` | Sums the column with a tested recipe and answers "42.5 (3 rows)" |
 | `>show the last 2 errors in logs/app.log` | Prints the two lines |
-| `>create a folder demo-app, go into it, run git init, then npm init -y, then list the files` | Plans the steps, asks before the ones that change files, runs them, and leaves the shell in the new folder |
+| `>create a folder demo-app, go into it, run git init, then npm init -y, then list the files` | Plans all five steps, asks once (listing `mkdir`, `git init` and `npm init`), runs them, and leaves the shell in the new folder |
 | `>open a new tab here and run python3 -m http.server 8765` | Asks once, opens the tab, starts the server there |
 | `>what's running in my terminals` | Lists every terminal, its folder and its running command, without a model call |
 | `>stop the server` | Confirms, then sends Ctrl+C to that tab |
+| `>quit textedit`, `>terminate or stop the claude application` | Lists the running apps first, matches the name in any case ("claude" finds "Claude"), asks with the exact app, quits it normally and checks that it closed. If no running app has that name, it says so and closes nothing |
 | `>run npm test in tab 2` | Types it there, or refuses and says why when that tab is busy or at a password prompt |
 | `>why is npm test failing in api?` | Runs it there and explains the failure from the code it points to |
 | `>fix buggy.py so it runs` | Runs the file, shows the change for approval (the original is kept as `.bak`), runs it again |

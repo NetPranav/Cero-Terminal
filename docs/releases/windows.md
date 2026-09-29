@@ -10,12 +10,14 @@ The installers are not code-signed, so SmartScreen shows "Windows protected your
 - A flow that only opens apps and links (Chrome, YouTube, VS Code) runs without showing the terminal.
 - A flow that installs or runs things opens the terminal, lists every command, waits for you to click Run, then types each step so you can see output and answer prompts.
 
-See [FLOW_FILES.md](https://github.com/NetPranav/Sentinal-Terminal/blob/linux-v2-update/docs/FLOW_FILES.md) and the [example flows](https://github.com/NetPranav/Sentinal-Terminal/tree/linux-v2-update/examples/flows).
+See [FLOW_FILES.md](https://github.com/NetPranav/Sentinal-Terminal/blob/main/docs/FLOW_FILES.md) and the [example flows](https://github.com/NetPranav/Sentinal-Terminal/tree/main/examples/flows).
 
 **What works on Windows in this release**
 - The terminal (PowerShell), tabs and splits, and talking to other terminals.
 - AI requests through the built-in model, Ollama or a cloud key. The built-in engine now downloads and unpacks natively on Windows (Vulkan build when `vulkan-1.dll` is present, else CPU), with no console windows popping up.
 - The agent's shell commands (run in PowerShell), multi-step chains, workflows (including `.flow` files) and the app functions by request.
+- No separate title bar: minimize, maximize and close sit at the right of the tab bar, and the tab bar moves the window.
+- Quitting an app by name ("quit notepad") checks the running apps first and asks with the exact name.
 - System settings by request, with Windows commands:
   - Wi-Fi and Bluetooth: turn on or off (the same radio switch as the quick settings), status, nearby networks, joining a saved network, paired devices.
   - Brightness (built-in displays), volume and mute, dark mode.

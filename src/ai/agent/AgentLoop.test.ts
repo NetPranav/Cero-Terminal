@@ -1460,7 +1460,7 @@ describe('Talking to other terminals', () => {
 
   it('shows the last line with text for a busy terminal, never an empty one', async () => {
     const { ws, loop } = await setup();
-    ws.register('srv', { sessionId: 's-srv', cwd: '/home/u/web', busy: true, runningCommand: 'python3 -m http.server', outputTail: ['GET / HTTP/1.1 200', '', '   '] });
+    ws.register('srv', { sessionId: 's-srv', cwd: '/home/u/web', busy: true, runningCommand: 'python3 -m http.server', outputTail: ['\x1b[32mGET / HTTP/1.1 200\x1b[0m', '', '   ', '\x1b[?2004l\r'] });
     const r = await loop.run("what's running in my terminals", { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
     expect(r.summary).toContain('last line: GET / HTTP/1.1 200');
     expect(r.summary).not.toMatch(/last line:\s*$/m);

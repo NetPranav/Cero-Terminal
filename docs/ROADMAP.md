@@ -563,6 +563,16 @@ To fix one platform, commit to its branch and push. Only that release is rebuilt
   Re-tested in the window: switch to tab 3, back to tab 1, open the flow: it runs in tab 1.
 - "what's running in my terminals" printed an empty "last line:" when the terminal's last line was blank.
 
-**Found, not fixed yet (filed as issues):** "run git init" inside a multi-step request is sent to the model
-instead of being planned, so it asks a second time; a new window stays blank until it is focused once.
+**Then fixed in the same pass:**
+- "run git init" inside a multi-step request went to the model and asked a second time (issue #14). Known
+  programs after "run" are planned, so the one approval lists them.
+- Quitting apps by name checks what is running first (`AppControl.ts`). "terminate or stop the claude
+  application" used to run `pkill -9 -i -f claude`: a guess that failed for "Claude", and a forced kill of
+  any process whose command line contained the word. Now the running apps are listed, the name is matched
+  in any case, the approval shows the exact app, it is quit normally, and Sentinel checks that it closed.
+  The old kill driver matches exact names with SIGTERM.
+- No separate title bar on any OS: macOS traffic lights sit in the tab bar; Windows and Linux get their
+  own minimize, maximize and close buttons there, and the tab bar moves the window.
+
+**Still open (filed as issues):** a new window stays blank until it is focused once (#17).
 
