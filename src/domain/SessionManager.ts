@@ -15,7 +15,8 @@ export class SessionManager {
   private sessionBuffers: Map<string, Uint8Array[]> = new Map();
 
   private constructor() {
-    this.initListeners();
+    // Outside the desktop app (CLI, tests) there is no Tauri event bus; nothing to listen to
+    this.initListeners().catch(() => {});
   }
 
   public static getInstance(): SessionManager {
