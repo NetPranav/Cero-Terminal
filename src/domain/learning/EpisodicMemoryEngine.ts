@@ -8,6 +8,7 @@
  *    interactions to ~/.sentinel/training/sentinel_shell_dataset.jsonl in ShareGPT format.
  */
 
+import { readSentinelFile, writeSentinelFile, appendSentinelFile } from '../../infrastructure/storage/SentinelFiles';
 import { invoke } from '@tauri-apps/api/core';
 import { safeBase64Encode } from '../../utils/encodingUtils';
 import { SecretRedactor } from '../security/SecretRedactor';
@@ -244,13 +245,7 @@ export class EpisodicMemoryEngine {
         content: SecretRedactor.redact(m.content)
       }));
       const sample = JSON.stringify({ messages: sanitizedMessages });
-      const b64 = safeBase64Encode(sample + '\n');
-      const cmd = `mkdir -p "$HOME/.sentinel/training" && echo '${b64}' | base64 --decode >> "$HOME/.sentinel/training/sentinel_shell_dataset.jsonl"`;
-
-      await invoke('execute_command', {
-        command: 'sh',
-        args: ['-c', cmd]
-      });
+      appendSentinelFile('training/sentinel_shell_dataset.jsonl', sample + '\n');
     } catch {
       // Ignore file persistence errors in headless environments
     }
@@ -363,10 +358,7 @@ export class EpisodicMemoryEngine {
     }
 
     try {
-      const output = await invoke<{ stdout: string }>('execute_command', {
-        command: 'sh',
-        args: ['-c', 'cat "$HOME/.sentinel/memory/episodic_memory.json" 2>/dev/null || true']
-      });
+      const output = { stdout: readSentinelFile('memory/episodic_memory.json') ?? '' };
 
       if (output.stdout && output.stdout.trim()) {
         const parsed: EpisodicMemory[] = JSON.parse(output.stdout.trim());
@@ -389,13 +381,7 @@ export class EpisodicMemoryEngine {
     try {
       const all = Array.from(this.memories.values());
       const jsonStr = JSON.stringify(all, null, 2);
-      const b64 = safeBase64Encode(jsonStr);
-      const cmd = `mkdir -p "$HOME/.sentinel/memory" && echo '${b64}' | base64 --decode > "$HOME/.sentinel/memory/episodic_memory.json"`;
-
-      await invoke('execute_command', {
-        command: 'sh',
-        args: ['-c', cmd]
-      });
+      writeSentinelFile('memory/episodic_memory.json', jsonStr);
     } catch {
       // Ignore
     }

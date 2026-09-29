@@ -8,6 +8,7 @@
  * formatted for HuggingFace TRL, Unsloth, and Apple Silicon MLX DPO fine-tuning.
  */
 
+import { writeSentinelFile } from '../../infrastructure/storage/SentinelFiles';
 import { invoke } from '@tauri-apps/api/core';
 import { KnowledgeDeficitLogger, KnowledgeDeficitRecord } from './KnowledgeDeficitLogger';
 import * as fs from 'fs';
@@ -348,15 +349,7 @@ export class DpoDatasetEngine {
     // 2. Tauri IPC fallback via base64 encoding
     try {
       const lines = records.map(r => JSON.stringify(r)).join('\n');
-      const b64 = safeBase64Encode(lines + '\n');
-      const cmd = `mkdir -p "$HOME/.sentinel/training" && echo '${b64}' | base64 --decode > "$HOME/.sentinel/training/sentinel_dpo_pairs.jsonl"`;
-
-      invoke('execute_command', {
-        command: 'sh',
-        args: ['-c', cmd]
-      }).catch(() => {
-        // Ignore persistence errors in isolated test runners
-      });
+      writeSentinelFile('training/sentinel_dpo_pairs.jsonl', lines + '\n');
     } catch {
       // Ignore
     }

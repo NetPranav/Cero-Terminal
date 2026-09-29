@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { appendSentinelFile } from '../../infrastructure/storage/SentinelFiles';
 import { SecretRedactor } from './SecretRedactor';
 
 export interface AuditLogEntry {
@@ -107,11 +107,11 @@ export class AuditLogger implements IAuditLogger {
     }
 
     try {
-      // Append to immutable JSONL audit log via Tauri backend (segregating benchmark logs from real user history)
+      // Append to the JSONL audit log (benchmark runs kept apart from real history). Through the
+      // native store, not `sh -c "echo ..."`: that does not exist on Windows, and echo turned the
+      // \n escapes inside JSON into real line breaks
       const auditFileName = isBenchmark ? 'audit.benchmark.jsonl' : 'audit.jsonl';
-      const jsonLine = JSON.stringify(fullEntry).replace(/'/g, "'\\''");
-      const cmd = `mkdir -p "$HOME/.sentinel" && echo '${jsonLine}' >> "$HOME/.sentinel/${auditFileName}"`;
-      await invoke('execute_command', { command: 'sh', args: ['-c', cmd] });
+      if (!appendSentinelFile(auditFileName, `${JSON.stringify(fullEntry)}\n`)) throw new Error('audit store unavailable');
     } catch (err) {
       // Fallback to localStorage in web preview / browser dev mode
       if (typeof localStorage !== 'undefined') {

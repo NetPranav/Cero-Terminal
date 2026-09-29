@@ -140,13 +140,16 @@ async fn tail_file(app: AppHandle, id: u64, path: PathBuf, from_start: bool) {
 
 async fn stream_command(app: AppHandle, id: u64, program: String, args: Vec<String>) {
     use tokio::io::AsyncBufReadExt;
-    let child = tokio::process::Command::new(&program)
+    let mut command = tokio::process::Command::new(&program);
+    command
         .args(&args)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
-        .kill_on_drop(true)
-        .spawn();
+        .kill_on_drop(true);
+    #[cfg(windows)]
+    command.creation_flags(crate::embedded_server::CREATE_NO_WINDOW);
+    let child = command.spawn();
     let Ok(mut child) = child else {
         let _ = app.emit("sentinel-watch-lines", WatchLines { id, lines: vec![format!("[sentinel] could not start {}", program)] });
         return;

@@ -12,6 +12,7 @@
  * - Phase 4.4: Direct Preference Optimization (DPO) Pair Generator
  */
 
+import { writeSentinelFile } from '../../infrastructure/storage/SentinelFiles';
 import { invoke } from '@tauri-apps/api/core';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -446,15 +447,7 @@ export class KnowledgeDeficitLogger {
     // 2. Tauri IPC fallback via base64 encoding
     try {
       const lines = records.map(r => JSON.stringify(r)).join('\n');
-      const b64 = safeBase64Encode(lines + '\n');
-      const cmd = `mkdir -p "$HOME/.sentinel/learning" && echo '${b64}' | base64 --decode > "$HOME/.sentinel/learning/knowledge_deficits.jsonl"`;
-
-      invoke('execute_command', {
-        command: 'sh',
-        args: ['-c', cmd]
-      }).catch(() => {
-        // Ignore persistence errors in isolated headless test environments
-      });
+      writeSentinelFile('learning/knowledge_deficits.jsonl', lines + '\n');
     } catch {
       // Ignore
     }

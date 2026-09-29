@@ -73,6 +73,13 @@ fn sentinel_engine_dir() -> Option<PathBuf> {
     get_home_dir().map(|home| home.join(".sentinel").join("engine").join("current"))
 }
 
+/// The engine's file name: `llama-server.exe` on Windows
+const LLAMA_SERVER: &str = if cfg!(windows) { "llama-server.exe" } else { "llama-server" };
+
+/// Console programs started by a GUI app open a console window on Windows unless told not to
+#[cfg(windows)]
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 fn find_on_path(binary: &str) -> Option<PathBuf> {
     let path_var = std::env::var_os("PATH")?;
     std::env::split_paths(&path_var)
@@ -84,19 +91,19 @@ fn find_llama_server_binary() -> Option<PathBuf> {
     let mut candidates = Vec::new();
 
     if let Some(engine_dir) = sentinel_engine_dir() {
-        candidates.push(engine_dir.join("llama-server"));
+        candidates.push(engine_dir.join(LLAMA_SERVER));
     }
 
     if let Some(home) = get_home_dir() {
-        candidates.push(home.join(".sentinel").join("bin").join("llama-server"));
-        candidates.push(home.join(".local").join("bin").join("llama-server"));
+        candidates.push(home.join(".sentinel").join("bin").join(LLAMA_SERVER));
+        candidates.push(home.join(".local").join("bin").join(LLAMA_SERVER));
     }
 
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
-            candidates.push(parent.join("llama-server"));
-            candidates.push(parent.join("../MacOS/llama-server"));
-            candidates.push(parent.join("../bin/llama-server"));
+            candidates.push(parent.join(LLAMA_SERVER));
+            candidates.push(parent.join("../MacOS").join(LLAMA_SERVER));
+            candidates.push(parent.join("../bin").join(LLAMA_SERVER));
         }
     }
 
@@ -104,7 +111,7 @@ fn find_llama_server_binary() -> Option<PathBuf> {
     candidates.push(PathBuf::from("/usr/bin/llama-server"));
     candidates.push(PathBuf::from("/usr/local/bin/llama-server"));
     candidates.push(PathBuf::from("/opt/homebrew/bin/llama-server"));
-    if let Some(on_path) = find_on_path("llama-server") {
+    if let Some(on_path) = find_on_path(LLAMA_SERVER) {
         candidates.push(on_path);
     }
     candidates.push(PathBuf::from("/usr/lib/ollama/llama-server"));
@@ -265,6 +272,11 @@ pub fn start_embedded_llm(
         .unwrap_or_else(Stdio::null);
 
     let mut cmd = Command::new(&bin_path);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
     cmd.args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

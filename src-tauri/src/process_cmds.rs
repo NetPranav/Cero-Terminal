@@ -168,6 +168,9 @@ pub async fn run_command(
         .stderr(Stdio::piped());
     #[cfg(unix)]
     process.process_group(0);
+    // No console window flashing up for every command on Windows
+    #[cfg(windows)]
+    process.creation_flags(crate::embedded_server::CREATE_NO_WINDOW);
     if let Some(directory) = resolve_working_dir(cwd) {
         process.current_dir(directory);
     }
@@ -288,7 +291,7 @@ fn sentinel_dir() -> Option<std::path::PathBuf> {
 }
 
 /// Resolve a path relative to ~/.sentinel, refusing anything that escapes it.
-fn resolve_in_sentinel(relative: &str) -> Result<std::path::PathBuf, String> {
+pub(crate) fn resolve_in_sentinel(relative: &str) -> Result<std::path::PathBuf, String> {
     let rel = std::path::Path::new(relative);
     // Only plain names: a root ("\\x" or "/x" on Windows is not `is_absolute()` but `join` would
     // still leave the store), a drive prefix ("C:x") or ".." could all reach outside ~/.sentinel

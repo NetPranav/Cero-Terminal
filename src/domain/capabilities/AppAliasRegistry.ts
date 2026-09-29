@@ -6,7 +6,7 @@
  * and enables runtime user customization via the /app or /alias slash command.
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { readSentinelFile, writeSentinelFile } from '../../infrastructure/storage/SentinelFiles';
 
 export class AppAliasRegistry {
   private static instance?: AppAliasRegistry;
@@ -134,18 +134,20 @@ export class AppAliasRegistry {
       }
     }
 
-    // Try reading from ~/.sentinel/app_aliases.json asynchronously via Tauri in desktop mode
-    if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
-      invoke<{ stdout: string }>('execute_command', { command: 'sh', args: ['-c', 'cat "$HOME/.sentinel/app_aliases.json" 2>/dev/null || true'] })
-        .then(res => {
-          if (res?.stdout) {
-            const parsed = JSON.parse(res.stdout);
-            for (const [key, val] of Object.entries(parsed)) {
-              this.aliases.set(key.toLowerCase().trim(), String(val));
-            }
+    // ~/.sentinel/app_aliases.json through the native store (the desktop app has no `process`,
+    // so the old `process.env` check meant this never ran there)
+    const underTest = typeof process !== 'undefined' && process.env?.NODE_ENV === 'test';
+    if (!underTest) {
+      try {
+        const saved = readSentinelFile('app_aliases.json');
+        if (saved?.trim()) {
+          for (const [key, val] of Object.entries(JSON.parse(saved))) {
+            this.aliases.set(key.toLowerCase().trim(), String(val));
           }
-        })
-        .catch(() => { /* Ignore in environments without native backend */ });
+        }
+      } catch { /* unreadable file: keep the defaults */ }
+    }
+    if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
 
       // Scan installed desktop applications dynamically
       this.scanInstalledApplications().catch(() => { /* Ignore */ });
@@ -248,12 +250,8 @@ print(json.dumps(apps))
       }
     }
 
-    if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
-      try {
-        const jsonStr = JSON.stringify(data).replace(/'/g, "'\\''");
-        const cmd = `mkdir -p "$HOME/.sentinel" && echo '${jsonStr}' > "$HOME/.sentinel/app_aliases.json"`;
-        invoke('execute_command', { command: 'sh', args: ['-c', cmd] }).catch(() => { /* ignore */ });
-      } catch { /* ignore */ }
+    if (!(typeof process !== 'undefined' && process.env?.NODE_ENV === 'test')) {
+      writeSentinelFile('app_aliases.json', JSON.stringify(data, null, 2));
     }
   }
 

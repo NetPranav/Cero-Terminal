@@ -2,6 +2,7 @@ mod pty;
 mod process_cmds;
 mod embedded_server;
 mod watcher;
+mod downloads;
 pub mod logger;
 
 #[cfg(target_os = "macos")]
@@ -188,6 +189,10 @@ pub fn run() {
             embedded_server::cancel_session_requests,
             embedded_server::get_inference_queue_status,
             embedded_server::verify_file_checksum,
+            downloads::download_sentinel_file,
+            downloads::get_sentinel_download_status,
+            downloads::cancel_sentinel_download,
+            downloads::install_sentinel_engine,
             logger::log_diagnostic,
             logger::is_debug_active
         ])

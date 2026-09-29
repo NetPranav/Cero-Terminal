@@ -22,6 +22,15 @@ export interface EmbeddedStatus {
   queuedRequests?: number;
 }
 
+/** get_sentinel_download_status (src-tauri/src/downloads.rs) */
+interface NativeDownloadStatus {
+  active: boolean;
+  downloaded_bytes: number;
+  total_bytes: number;
+  done: boolean;
+  error?: string | null;
+}
+
 export interface DownloadProgress {
   percent: number;
   downloadedBytes: number;
@@ -106,7 +115,8 @@ export const PINNED_MANIFEST: Record<string, ArtifactManifestEntry> = Object.fro
 export const ENGINE_BUILD = 'b11227';
 
 export type EngineAssetKey =
-  | 'linux-x64-cpu' | 'linux-x64-vulkan' | 'linux-arm64-cpu' | 'linux-arm64-vulkan' | 'macos-arm64' | 'macos-x64';
+  | 'linux-x64-cpu' | 'linux-x64-vulkan' | 'linux-arm64-cpu' | 'linux-arm64-vulkan' | 'macos-arm64' | 'macos-x64'
+  | 'windows-x64-cpu' | 'windows-x64-vulkan' | 'windows-arm64-cpu';
 
 export interface EngineAsset {
   key: EngineAssetKey;
@@ -116,8 +126,8 @@ export interface EngineAsset {
   url: string;
 }
 
-const engineAsset = (key: EngineAssetKey, suffix: string, sha256: string, sizeBytes: number): EngineAsset => {
-  const fileName = `llama-${ENGINE_BUILD}-bin-${suffix}.tar.gz`;
+const engineAsset = (key: EngineAssetKey, suffix: string, sha256: string, sizeBytes: number, ext = 'tar.gz'): EngineAsset => {
+  const fileName = `llama-${ENGINE_BUILD}-bin-${suffix}.${ext}`;
   return { key, fileName, sha256, sizeBytes, url: `https://github.com/ggml-org/llama.cpp/releases/download/${ENGINE_BUILD}/${fileName}` };
 };
 
@@ -128,6 +138,9 @@ export const ENGINE_ASSETS: Record<EngineAssetKey, EngineAsset> = {
   'linux-arm64-vulkan': engineAsset('linux-arm64-vulkan', 'ubuntu-vulkan-arm64', '86ae78313c9e508f5cfca0306f7a097d92d75db32c319ab1b5e7fdea0234c458', 24667516),
   'macos-arm64': engineAsset('macos-arm64', 'macos-arm64', '82c37e40a6066047af88b6616eb232dc830efdbd64a7cafd1a9f910130a2bfe0', 11756537),
   'macos-x64': engineAsset('macos-x64', 'macos-x64', '4fd8194547b0af773c410b762883e59c80207f5218fd5d0220cb7df2a22f8513', 11310663),
+  'windows-x64-cpu': engineAsset('windows-x64-cpu', 'win-cpu-x64', '68b0f914b4a0e6fde3c557d7565e079d769679a8e32f71416609f3efe197e80e', 19156773, 'zip'),
+  'windows-x64-vulkan': engineAsset('windows-x64-vulkan', 'win-vulkan-x64', '05d3401c0611e7ef2428f8ea6ea13d502ade7d5f5a63c735c8b7acbc255e30e1', 33064929, 'zip'),
+  'windows-arm64-cpu': engineAsset('windows-arm64-cpu', 'win-cpu-arm64', 'e1a6061542b60129b0787da936a820f849bd2f6354e5598285504f3880233cef', 12043541, 'zip'),
 };
 
 for (const asset of Object.values(ENGINE_ASSETS)) {
@@ -151,6 +164,8 @@ export function selectEngineAsset(os: string, machine: string, hasVulkanLoader: 
   if (!arch) return null;
   if (kernel === 'darwin') return ENGINE_ASSETS[arch === 'arm64' ? 'macos-arm64' : 'macos-x64'];
   if (kernel === 'linux') return ENGINE_ASSETS[`linux-${arch}-${hasVulkanLoader ? 'vulkan' : 'cpu'}` as EngineAssetKey];
+  // Windows: the Vulkan build (AMD, Intel and NVIDIA drivers ship vulkan-1.dll) also carries the CPU backend
+  if (/^win/.test(kernel)) return ENGINE_ASSETS[arch === 'arm64' ? 'windows-arm64-cpu' : hasVulkanLoader ? 'windows-x64-vulkan' : 'windows-x64-cpu'];
   return null;
 }
 
@@ -736,6 +751,15 @@ export class EmbeddedEngineManager {
     const tmpFile = `$HOME/.sentinel/models/${model.fileName}.tmp`;
     const finalFile = `$HOME/.sentinel/models/${model.fileName}`;
 
+    // Native download (every OS, including Windows): resumable, SHA-256 checked, with progress
+    if (!(typeof process !== 'undefined' && process.env.NODE_ENV === 'test')) {
+      const native = await this.nativeDownload(model.url, `models/${model.fileName}`, model.sha256, model.sizeBytes, onProgress, maxRetries);
+      if (native !== null) {
+        if (!native) throw new Error(`Download of ${model.fileName} failed or did not pass its SHA-256 check.`);
+        return true;
+      }
+    }
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
         onProgress?.({
@@ -792,6 +816,68 @@ export class EmbeddedEngineManager {
     );
   }
 
+  private cachedHostOs?: string;
+
+  /** The OS the app runs on: Tauri's os plugin in the app, process.platform in Node. */
+  private async hostOs(): Promise<string> {
+    if (this.cachedHostOs) return this.cachedHostOs;
+    try {
+      const { platform } = await import('@tauri-apps/plugin-os');
+      this.cachedHostOs = platform();
+    } catch {
+      this.cachedHostOs = typeof process !== 'undefined' ? process.platform : 'unknown';
+    }
+    return this.cachedHostOs!;
+  }
+
+  /**
+   * Download into ~/.sentinel with the app's native command. Null when the command does not
+   * exist (the Node CLI), so the caller can use its shell fallback; false on failure.
+   */
+  private async nativeDownload(
+    url: string,
+    relativePath: string,
+    sha256: string,
+    sizeBytes: number,
+    onProgress?: (progress: DownloadProgress) => void,
+    maxRetries = 1
+  ): Promise<boolean | null> {
+    let lastBytes = 0;
+    let lastTime = Date.now();
+    const poll = onProgress ? setInterval(async () => {
+      const status = await invoke<NativeDownloadStatus | null>('get_sentinel_download_status', { relativePath }).catch(() => null);
+      if (!status) return;
+      const now = Date.now();
+      const bytesPerSec = ((status.downloaded_bytes - lastBytes) * 1000) / Math.max(1, now - lastTime);
+      lastBytes = status.downloaded_bytes;
+      lastTime = now;
+      const total = status.total_bytes || sizeBytes;
+      onProgress({
+        percent: total ? Math.min(100, Math.round((status.downloaded_bytes / total) * 1000) / 10) : 0,
+        downloadedBytes: status.downloaded_bytes,
+        totalBytes: total,
+        speed: `${(bytesPerSec / 1_048_576).toFixed(1)} MB/s`
+      });
+    }, 1000) : undefined;
+    try {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const path = await invoke<string | null>('download_sentinel_file', { url, relativePath, sha256 });
+          if (typeof path !== 'string') return null;
+          onProgress?.({ percent: 100, downloadedBytes: sizeBytes, totalBytes: sizeBytes, speed: 'Complete' });
+          return true;
+        } catch (err) {
+          if (/not found|unknown command/i.test(String(err))) return null;
+          if (/cancelled/i.test(String(err))) return false;
+          console.warn(`[EmbeddedEngineManager] Download attempt ${attempt + 1} of ${relativePath} failed:`, err);
+        }
+      }
+      return false;
+    } finally {
+      if (poll) clearInterval(poll);
+    }
+  }
+
   /**
    * Query real-time download progress of the recommended model.
    * Returns whether curl is running, current downloaded bytes, and percentage.
@@ -805,6 +891,20 @@ export class EmbeddedEngineManager {
     const model = EmbeddedEngineManager.RECOMMENDED_MODEL;
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
       return { isDownloading: false, downloadedBytes: 0, totalBytes: model.sizeBytes, percent: 0 };
+    }
+    const native = await invoke<NativeDownloadStatus | null>('get_sentinel_download_status', { relativePath: `models/${model.fileName}` }).catch(() => null);
+    if (native && (native.active || native.done)) {
+      const total = native.total_bytes || model.sizeBytes;
+      return {
+        isDownloading: native.active,
+        downloadedBytes: native.done ? total : native.downloaded_bytes,
+        totalBytes: total,
+        percent: native.done ? 100 : Math.min(100, Math.round((native.downloaded_bytes / total) * 1000) / 10)
+      };
+    }
+    if (/^win/i.test(await this.hostOs())) {
+      const done = await this.checkModelExists();
+      return { isDownloading: false, downloadedBytes: done ? model.sizeBytes : 0, totalBytes: model.sizeBytes, percent: done ? 100 : 0 };
     }
     try {
       const script = `
@@ -855,6 +955,8 @@ export class EmbeddedEngineManager {
       return true;
     }
     const model = EmbeddedEngineManager.RECOMMENDED_MODEL;
+    const native = await invoke<boolean | null>('cancel_sentinel_download', { relativePath: `models/${model.fileName}`, removePartial }).catch(() => null);
+    if (typeof native === 'boolean' && (native || /^win/i.test(await this.hostOs()))) return true;
     try {
       const script = `
         pgrep -x curl 2>/dev/null | while read pid; do
@@ -885,7 +987,12 @@ export class EmbeddedEngineManager {
     const model = EmbeddedEngineManager.RECOMMENDED_MODEL;
     try {
       await this.stopEngine();
-      const script = `rm -f "$HOME/.sentinel/models/${model.fileName}" "$HOME/.sentinel/models/${model.fileName}.tmp"`;
+      if (/^win/i.test(await this.hostOs())) {
+        await invoke('sentinel_store_remove', { relativePath: `models/${model.fileName}.part` }).catch(() => undefined);
+        await invoke('sentinel_store_remove', { relativePath: `models/${model.fileName}` });
+        return true;
+      }
+      const script = `rm -f "$HOME/.sentinel/models/${model.fileName}" "$HOME/.sentinel/models/${model.fileName}.tmp" "$HOME/.sentinel/models/${model.fileName}.part"`;
       const res = await invoke<{ code: number }>('execute_command', {
         command: 'sh',
         args: ['-c', script]
@@ -905,6 +1012,30 @@ export class EmbeddedEngineManager {
   public async installEngine(maxRetries = 1): Promise<boolean> {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
       return true;
+    }
+
+    // Windows has no sh, uname, curl pipeline or ln: download and unpack natively
+    if (/^win/i.test(await this.hostOs())) {
+      let machine = 'x86_64';
+      try {
+        const { arch } = await import('@tauri-apps/plugin-os');
+        machine = arch();
+      } catch {
+        // assume x64
+      }
+      const vulkan = await invoke<boolean>('check_path_exists', { path: 'C:\\Windows\\System32\\vulkan-1.dll' }).catch(() => false);
+      const asset = selectEngineAsset('windows', machine, Boolean(vulkan));
+      if (!asset) return false;
+      const archive = `engine/.download/${asset.fileName}`;
+      const downloaded = await this.nativeDownload(asset.url, archive, asset.sha256, asset.sizeBytes, undefined, maxRetries);
+      if (!downloaded) return false;
+      try {
+        await invoke<string>('install_sentinel_engine', { relativeArchive: archive });
+        return true;
+      } catch (err) {
+        console.warn('[EmbeddedEngineManager] Engine unpack failed:', err);
+        return false;
+      }
     }
 
     const shell = (script: string, timeoutMs?: number) =>

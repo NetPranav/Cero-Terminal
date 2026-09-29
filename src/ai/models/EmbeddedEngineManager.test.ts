@@ -318,3 +318,13 @@ describe('Engine asset selection and model tiers', () => {
     }
   });
 });
+
+describe('selectEngineAsset on Windows', () => {
+  it('picks the Vulkan zip when vulkan-1.dll exists, else the CPU build', async () => {
+    const { selectEngineAsset } = await import('./EmbeddedEngineManager');
+    expect(selectEngineAsset('windows', 'x86_64', true)?.fileName).toBe('llama-b11227-bin-win-vulkan-x64.zip');
+    expect(selectEngineAsset('windows', 'x86_64', false)?.fileName).toBe('llama-b11227-bin-win-cpu-x64.zip');
+    expect(selectEngineAsset('windows', 'aarch64', true)?.fileName).toBe('llama-b11227-bin-win-cpu-arm64.zip');
+    expect(selectEngineAsset('Darwin', 'arm64', false)?.fileName).toBe('llama-b11227-bin-macos-arm64.tar.gz');
+  });
+});

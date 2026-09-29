@@ -7,6 +7,7 @@
  * extracts generalized variable placeholders, and persists the learned pattern across sessions.
  */
 
+import { readSentinelFile, writeSentinelFile } from '../../infrastructure/storage/SentinelFiles';
 import { invoke } from '@tauri-apps/api/core';
 import { isClearlyMutating } from '../security/ReadOnlyCommandPolicy';
 import { safeBase64Encode } from '../../utils/encodingUtils';
@@ -361,10 +362,7 @@ export class DemonstrationLearningEngine {
     }
 
     try {
-      const output = await invoke<{ stdout: string }>('execute_command', {
-        command: 'sh',
-        args: ['-c', 'cat "$HOME/.sentinel/learned_patterns.json" 2>/dev/null || true']
-      });
+      const output = { stdout: readSentinelFile('learned_patterns.json') ?? '' };
 
       if (output.stdout && output.stdout.trim()) {
         const parsed: LearnedPattern[] = JSON.parse(output.stdout.trim());
@@ -390,13 +388,7 @@ export class DemonstrationLearningEngine {
     try {
       const all = Array.from(this.patterns.values());
       const jsonStr = JSON.stringify(all, null, 2);
-      const b64 = safeBase64Encode(jsonStr);
-      const cmd = `mkdir -p "$HOME/.sentinel" && echo '${b64}' | base64 --decode > "$HOME/.sentinel/learned_patterns.json"`;
-
-      await invoke('execute_command', {
-        command: 'sh',
-        args: ['-c', cmd]
-      });
+      writeSentinelFile('learned_patterns.json', jsonStr);
     } catch {
       // ignore persistence error in headless environments
     }
