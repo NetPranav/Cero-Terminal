@@ -1,8 +1,10 @@
 [package]
-name = "tauri-app"
+name = "sentinel-terminal"
 version = "2.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Sentinel Terminal: a terminal that takes requests in plain language and runs .flow files on any OS"
+authors = ["Pranav Dubey (NetPranav)"]
+license = "MIT"
+repository = "https://github.com/NetPranav/Sentinal-Terminal"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

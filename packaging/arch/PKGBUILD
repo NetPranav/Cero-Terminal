@@ -4,7 +4,7 @@ pkgver=2.1.0
 pkgrel=1
 pkgdesc="Autonomous AI-Native Linux Terminal Copilot"
 arch=('x86_64')
-license=('Apache-2.0')
+license=('MIT')
 depends=(
     'webkit2gtk-4.1'
     'gtk3'

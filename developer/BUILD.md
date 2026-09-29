@@ -13,7 +13,7 @@ All command invocations should be executed directly within the main repository d
 | **`npm run tauri -- build --bundles app`** | **Fast Application Build**: Compiles TypeScript definitions, optimizes Vite frontend assets, and bundles a direct native macOS application binary (`.app`). Skip lengthy disk image packaging for rapid test loops. | `src-tauri/target/release/bundle/macos/Sentinel Terminal.app` |
 | **`npm run tauri build`** | **Full Release Bundle**: Executes comprehensive compile cycles, building both standalone binaries AND distributable OS disk installers (`.dmg` for macOS, `.deb`/`.AppImage` for Linux). | `src-tauri/target/release/bundle/macos/Sentinel Terminal.app`<br>`src-tauri/target/release/bundle/dmg/Sentinel Terminal_0.1.0_aarch64.dmg` |
 | **`npm run build`** | **Frontend Assets Compiling**: Validates TypeScript typing strictness (`tsc`) and renders minified static web packages via Vite without rebuilding native Rust backend components. | `dist/` |
-| **`cargo build --release --manifest-path src-tauri/Cargo.toml`** | **Direct Rust Backend Compilation**: Bypasses web bundling tools entirely to directly verify Tauri IPC handlers and native `pty.rs` system multiplexing bridges. | `src-tauri/target/release/tauri-app` |
+| **`cargo build --release --manifest-path src-tauri/Cargo.toml`** | **Direct Rust Backend Compilation**: Bypasses web bundling tools entirely to directly verify Tauri IPC handlers and native `pty.rs` system multiplexing bridges. | `src-tauri/target/release/sentinel-terminal` |
 
 ---
 

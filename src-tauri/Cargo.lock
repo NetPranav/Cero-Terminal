@@ -3465,6 +3465,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "sentinel-terminal"
+version = "2.1.0"
+dependencies = [
+ "chrono",
+ "libc",
+ "objc",
+ "once_cell",
+ "parking_lot",
+ "portable-pty",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sysinfo",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-fs",
+ "tauri-plugin-http",
+ "tauri-plugin-opener",
+ "tauri-plugin-os",
+ "tauri-plugin-process",
+ "tauri-plugin-shell",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "serde"
 version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4071,33 +4098,6 @@ dependencies = [
  "webview2-com",
  "window-vibrancy",
  "windows 0.61.3",
-]
-
-[[package]]
-name = "tauri-app"
-version = "2.1.0"
-dependencies = [
- "chrono",
- "libc",
- "objc",
- "once_cell",
- "parking_lot",
- "portable-pty",
- "serde",
- "serde_json",
- "sha2",
- "sysinfo",
- "tauri",
- "tauri-build",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-fs",
- "tauri-plugin-http",
- "tauri-plugin-opener",
- "tauri-plugin-os",
- "tauri-plugin-process",
- "tauri-plugin-shell",
- "tokio",
- "uuid",
 ]
 
 [[package]]
