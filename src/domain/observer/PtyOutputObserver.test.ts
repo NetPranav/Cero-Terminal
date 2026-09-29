@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ERROR_SIGNAL, PtyOutputObserver } from './PtyOutputObserver';
 
 describe('PtyOutputObserver — Passive Output Stream Error Detection', () => {
@@ -136,5 +136,19 @@ describe('PtyOutputObserver error gate', () => {
     for (const line of ['Compiling serde v1.0.219', '  VITE v7.0.4  ready in 312 ms', 'Tests  1553 passed (1553)', '[##########] 100%']) {
       expect(ERROR_SIGNAL.test(line)).toBe(false);
     }
+  });
+});
+
+describe('PtyOutputObserver per pane', () => {
+  it('keeps each pane\'s errors and fixes separate', async () => {
+    const { PtyOutputObserver } = await import('./PtyOutputObserver');
+    const a = new PtyOutputObserver();
+    const b = new PtyOutputObserver();
+    const seenByB = vi.fn();
+    b.onRemediation(seenByB);
+    a.ingest("user@mac repo % git statsu\r\ngit: 'statsu' is not a git command. See 'git --help'.\r\n\r\nThe most similar command is\r\n\tstatus\r\n", '/repo');
+    expect(a.getActiveRemediation()?.params?.command).toBe('git status');
+    expect(b.getActiveRemediation()).toBeNull();
+    expect(seenByB).not.toHaveBeenCalled();
   });
 });

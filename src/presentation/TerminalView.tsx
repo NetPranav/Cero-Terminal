@@ -225,6 +225,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   const [activeRemediation, setActiveRemediation] = useState<RemediationPrompt | null>(null);
   const agentLoopRef = useRef<AgentLoop | null>(null);
   const ptyTrackerRef = useRef<PtyStateTracker>(new PtyStateTracker());
+  // One error observer per pane: a failure in one terminal must only offer its fix there
+  // (a shared observer mixed every pane's output and applied fixes in the wrong folder)
+  const outputObserverRef = useRef<PtyOutputObserver>(new PtyOutputObserver());
   const consentOpenRef = useRef(false);
   const inputLineRef = useRef<InputLineTracker>(new InputLineTracker());
   const aiBusyRef = useRef(false);
@@ -243,7 +246,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
   const handleExecuteRemediation = async (rem: RemediationPrompt) => {
     setActiveRemediation(null);
-    PtyOutputObserver.getInstance().clearRemediation();
+    outputObserverRef.current.clearRemediation();
     const activeSessionId = sessionIdRef.current || sessionId;
     if (activeSessionId) {
       await SessionManager.getInstance().write(activeSessionId, '\x03');
@@ -634,7 +637,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           // agent output follows the request directly (the final prompt is printed at the end)
           if (Date.now() < shellRedrawMuteUntil) { shellRedrawSeen = true; return; }
           writeTerm(text);
-          PtyOutputObserver.getInstance().ingest(text, currentPathRef.current);
+          outputObserverRef.current.ingest(text, currentPathRef.current);
         };
 
         // A notice that arrives while the shell sits at an empty prompt goes above a fresh prompt
@@ -649,7 +652,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           }
         };
 
-        unsubRemediation = PtyOutputObserver.getInstance().onRemediation((rem) => {
+        unsubRemediation = outputObserverRef.current.onRemediation((rem) => {
           setActiveRemediation(rem);
           if (rem) {
             writeNotice(formatRemediationNotice(rem.cause, rem.actionTitle));
@@ -921,11 +924,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
              }
 
              // If Tab is pressed and an auto-heal remediation is active
-             const activeRem = PtyOutputObserver.getInstance().getActiveRemediation();
+             const activeRem = outputObserverRef.current.getActiveRemediation();
              if (activeRem) {
                await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
                writeTerm(`\r\n  ${S.muted}›${S.reset} ${S.soft}Applying fix: ${activeRem.actionTitle}${S.reset}\r\n`);
-               PtyOutputObserver.getInstance().clearRemediation();
+               outputObserverRef.current.clearRemediation();
                if (activeRem.tool === 'shell.execute' && activeRem.params?.command) {
                  await sessionManager.write(currentSessionId!, `${activeRem.params.command}\r`);
                } else {
@@ -1060,10 +1063,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               // Intercept auto-heal remediation commands: >fix, >heal
               if (cleanCmd === '>fix' || cleanCmd === '>heal') {
                 await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
-                const rem = PtyOutputObserver.getInstance().getActiveRemediation();
+                const rem = outputObserverRef.current.getActiveRemediation();
                 if (rem) {
                   writeTerm(`\r\n  ${S.muted}›${S.reset} ${S.soft}Applying fix: ${rem.actionTitle}${S.reset}\r\n`);
-                  PtyOutputObserver.getInstance().clearRemediation();
+                  outputObserverRef.current.clearRemediation();
                   PromptProgressManager.getInstance().startPrompt(`Auto-Heal: ${rem.actionTitle}`);
                   try {
                     const res = await agentLoop.run(autoHealGoal(rem), { os: getPlatform(), cwd: currentPath || '~', attachedContext: rem.outputTail });
@@ -1609,7 +1612,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             <button
               onClick={() => {
                 setActiveRemediation(null);
-                PtyOutputObserver.getInstance().clearRemediation();
+                outputObserverRef.current.clearRemediation();
               }}
               style={{
                 background: 'none',

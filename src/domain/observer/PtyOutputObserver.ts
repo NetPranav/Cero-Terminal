@@ -56,6 +56,7 @@ export class PtyOutputObserver {
   /** Last command reported to SERL, so one failing command is logged once, not once per chunk */
   private lastReportedFailure = '';
 
+  /** Shared instance for callers outside a terminal pane; each TerminalView owns its own observer. */
   public static getInstance(): PtyOutputObserver {
     if (!PtyOutputObserver.instance) {
       PtyOutputObserver.instance = new PtyOutputObserver();

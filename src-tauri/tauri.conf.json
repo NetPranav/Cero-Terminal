@@ -38,7 +38,8 @@
     "longDescription": "High-performance AI-native Linux terminal emulator with embedded llama-server, multi-stage workflow macros, and native system diagnostics.",
     "copyright": "2026 Sentinel Terminal Contributors",
     "macOS": {
-      "minimumSystemVersion": "11.0"
+      "minimumSystemVersion": "11.0",
+      "signingIdentity": "-"
     },
     "linux": {
       "deb": {
