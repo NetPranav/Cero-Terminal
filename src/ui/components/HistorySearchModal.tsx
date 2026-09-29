@@ -174,7 +174,7 @@ export const HistorySearchModal: React.FC<HistorySearchModalProps> = ({
         <div style={{ maxHeight: '380px', overflowY: 'auto', padding: '6px 8px' }}>
           {filtered.length === 0 ? (
             <div style={{ padding: '36px 20px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.35)', fontSize: '13px' }}>
-              No matching commands found
+              {historyEntries.length === 0 ? 'No commands yet. Commands you run in any terminal appear here.' : 'No matching commands found'}
             </div>
           ) : (
             filtered.map((item, idx) => {

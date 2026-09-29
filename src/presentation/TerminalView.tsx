@@ -716,7 +716,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
         // Initialize Autocomplete with History, Demonstration, and Workspace Context providers
         const autocompleteEngine = new AutocompleteEngine();
-        const historyProvider = new HistoryProvider();
+        // Shared with the Ctrl+R history search, so commands run in any pane show up there
+        const historyProvider = HistoryProvider.getInstance();
         const demonstrationProvider = new DemonstrationProvider();
         const workspaceContextProvider = new WorkspaceContextProvider();
         autocompleteEngine.registerProvider(historyProvider);
