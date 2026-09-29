@@ -629,8 +629,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         const replayDecoder = new TextDecoder();
         outputCallback = (data: Uint8Array, replay?: boolean) => {
           if (replay) {
-            // History restored after a layout change: draw only
+            // History restored after a layout change: draw only. A new agent pane's first prompt
+            // can arrive here, so a queued command is still scheduled.
             term.write(replayDecoder.decode(data, { stream: true }));
+            if (paneId) schedulePendingCommand();
             return;
           }
           const text = decoder.decode(data, { stream: true });

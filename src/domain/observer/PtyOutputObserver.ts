@@ -138,8 +138,10 @@ export class PtyOutputObserver {
     if (diag.category === 'SOFTWARE_RECOVERABLE' && diag.remediation) {
       const fixedCmd = diag.remediation.params?.command;
       const key = `${diag.cause}|${fixedCmd ?? diag.remediation.title}`;
-      if (key === this.lastRemediationKey && this.activeRemediation) {
-        return this.activeRemediation;
+      // getActiveRemediation() expires old fixes, so the same typo later is announced again
+      const current = this.getActiveRemediation();
+      if (key === this.lastRemediationKey && current) {
+        return current;
       }
       this.lastRemediationKey = key;
       const remediation: RemediationPrompt = {
