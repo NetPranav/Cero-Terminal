@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseTerminalAction, parseTarget, resolveTarget, readyForInput } from './TerminalActions';
+import { parseTerminalAction, parseTarget, resolveTarget, readyForInput, describePane } from './TerminalActions';
 import type { PaneInfo } from './TerminalWorkspace';
 
 const pane = (p: Partial<PaneInfo> & { paneId: string }): PaneInfo => ({ busy: false, spawnedByAgent: false, outputTail: [], updatedAt: 0, ...p });
@@ -59,6 +59,17 @@ describe('resolveTarget', () => {
     expect(resolveTarget(parseTarget('the other terminal')!, panes, 'a').kind).toBe('ambiguous');
     expect(resolveTarget(parseTarget('the other pane')!, panes, 'a')).toMatchObject({ kind: 'one', pane: { paneId: 'b' } });
     expect(resolveTarget(parseTarget('the database')!, panes, 'a').kind).toBe('none');
+  });
+
+  it('matches folder names in Windows paths and accepts a PowerShell prompt', () => {
+    const win = [
+      pane({ paneId: 'me', number: 1, tabIndex: 1, cwd: 'C:\\Users\\u\\app' }),
+      pane({ paneId: 'api', number: 2, tabIndex: 2, cwd: 'C:\\Users\\u\\api', outputTail: ['PS C:\\Users\\u\\api> '] }),
+    ];
+    const r = resolveTarget(parseTarget('the api tab')!, win, 'me');
+    expect(r).toMatchObject({ kind: 'one', pane: { paneId: 'api' } });
+    expect(describePane(win[1])).toBe('terminal 2 (tab 2, api)');
+    expect(readyForInput(win[1]).ok).toBe(true);
   });
 
   it('only types into a terminal that is idle at a prompt', () => {

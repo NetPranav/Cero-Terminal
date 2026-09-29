@@ -226,7 +226,15 @@ export class TerminalWorkspace {
       ].filter(Boolean).join(', ');
       const seq = p.seq ?? 0;
       const lastSeen = seen?.get(p.paneId);
-      if (lastSeen !== undefined && lastSeen >= seq) return `${head} (no new output)`;
+      if (lastSeen !== undefined && lastSeen >= seq) {
+        // Unchanged since the last request: keep the latest error and the last line so a follow-up
+        // ("why is the server failing") still has them, without repeating the whole tail
+        const tailLines = p.outputTail;
+        const errorAt = tailLines.map(l => ERROR_LINE.test(l)).lastIndexOf(true);
+        const keep = [errorAt, tailLines.length - 1].filter((i, k, a) => i >= 0 && a.indexOf(i) === k);
+        const kept = keep.map(i => `  | ${tailLines[i].slice(0, 160)}`).join('\n');
+        return `${head} (no new output since the last request)${kept ? `\n${kept}` : ''}`;
+      }
       const fresh = lastSeen === undefined ? 5 : Math.min(5, seq - lastSeen);
       const tail = p.outputTail.slice(-fresh).map(l => `  | ${l.slice(0, 160)}`).join('\n');
       return tail ? `${head}\n${tail}` : head;
@@ -254,6 +262,9 @@ export class TerminalWorkspace {
     return true;
   }
 }
+
+/** Output lines worth keeping in the model's context after they stop being new */
+const ERROR_LINE = /\b(?:error|failed|fatal|exception|traceback|panic|refused|denied|not found|eaddrinuse|segmentation fault)\b/i;
 
 /**
  * Commands that keep running until stopped. They get their own pane; everything else runs
@@ -293,9 +304,9 @@ export function paneTitleFor(command: string): string {
   const echo = c.match(/\bros2\s+topic\s+echo\s+(\S+)/);
   if (echo) return `echo ${echo[1]}`;
   const tail = c.match(/\btail\s+\S+\s+(\S+)\s*$/);
-  if (tail) return `tail ${tail[1].split('/').pop()}`;
+  if (tail) return `tail ${tail[1].split(/[\\/]/).pop()}`;
   const npm = c.match(/\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(\w+)/);
   if (npm) return npm[1] === 'dev' || npm[1] === 'start' ? 'dev server' : npm[1];
   const first = c.replace(/^(?:cd\s+\S+\s*&&\s*)+/, '').split(/\s+/)[0] || 'task';
-  return first.split('/').pop() || 'task';
+  return first.split(/[\\/]/).pop() || 'task';
 }

@@ -122,11 +122,14 @@ export type Resolution =
   | { kind: 'ambiguous'; candidates: PaneInfo[] }
   | { kind: 'none' };
 
+/** Last folder of a path, for both / and \\ separators (Windows) */
+const baseName = (path?: string) => path?.split(/[\\/]/).filter(Boolean).pop();
+
 const SERVER_WORDS = /\b(?:serve|server|http\.server|dev|start|uvicorn|gunicorn|flask|rails|vite|next|nodemon|webpack)\b/;
 
 function nameMatches(pane: PaneInfo, name: string): boolean {
   const n = name.toLowerCase().replace(/^the\s+/, '');
-  const fields = [pane.title, pane.tabTitle, pane.runningCommand, pane.cwd?.split('/').pop()]
+  const fields = [pane.title, pane.tabTitle, pane.runningCommand, baseName(pane.cwd)]
     .filter(Boolean)
     .map(f => String(f).toLowerCase());
   if (fields.some(f => f === n || new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(f))) return true;
@@ -168,7 +171,7 @@ export function resolveTarget(spec: TargetSpec, panes: PaneInfo[], requesterPane
 
 /** "terminal 2 (tab 1, python3, running python3 -m http.server 8000)" */
 export function describePane(p: PaneInfo): string {
-  const where = [p.tabIndex ? `tab ${p.tabIndex}` : '', p.title || p.tabTitle || p.cwd?.split('/').pop()].filter(Boolean).join(', ');
+  const where = [p.tabIndex ? `tab ${p.tabIndex}` : '', p.title || p.tabTitle || baseName(p.cwd)].filter(Boolean).join(', ');
   return `terminal ${p.number ?? '?'}${where ? ` (${where})` : ''}`;
 }
 

@@ -126,13 +126,27 @@ describe('TerminalWorkspace change-only context', () => {
     const first = ws.describeForPrompt('me', undefined);
     expect(first).toContain('| ready on :5173');
     const seen = ws.snapshotSeq();
-    expect(ws.describeForPrompt('me', seen)).toContain('(no new output)');
+    const unchanged = ws.describeForPrompt('me', seen);
+    expect(unchanged).toContain('(no new output since the last request)');
+    expect(unchanged).toContain('| ready on :5173');
 
     ws.appendOutput('srv', 'GET / 200\n');
     const next = ws.describeForPrompt('me', seen);
     expect(next).toContain('| GET / 200');
     expect(next).not.toContain('ready on :5173');
     expect(ws.outputSince('srv', seen.get('srv')!)).toEqual(['GET / 200']);
+  });
+
+  it('keeps the latest error and last line of a terminal with nothing new', () => {
+    const ws = TerminalWorkspace.getInstance();
+    ws.register('me');
+    ws.register('srv', { busy: true, runningCommand: 'npm run dev' });
+    ws.appendOutput('srv', 'starting\nError: listen EADDRINUSE :5173\nretrying in 5s\nstill retrying\n');
+    const text = ws.describeForPrompt('me', ws.snapshotSeq());
+    expect(text).toContain('| Error: listen EADDRINUSE :5173');
+    expect(text).toContain('| still retrying');
+    expect(text).not.toContain('starting');
+    expect(text).not.toContain('retrying in 5s');
   });
 
   it('uses tab positions from the app layout', () => {

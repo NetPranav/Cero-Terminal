@@ -1500,14 +1500,16 @@ describe('Talking to other terminals', () => {
     expect(r.success).toBe(true);
   });
 
-  it('gives the model only terminal output it has not seen', async () => {
+  it('gives the model new terminal output, and only the last line of terminals with nothing new', async () => {
     const { ws, loop, generate } = await setup();
+    ws.appendOutput('srv', 'compiling\nGET / 200\n');
     await loop.run('summarize the project', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
     await loop.run('anything new?', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
     const second = generate.mock.calls[generate.mock.calls.length - 1];
     const prompt = String(second[0]) + JSON.stringify(second[2]?.messages ?? '');
-    expect(prompt).toContain('(no new output)');
-    expect(prompt).not.toContain('ready on :5173');
+    expect(prompt).toContain('(no new output since the last request)');
+    expect(prompt).toContain('GET / 200');
+    expect(prompt).not.toContain('compiling');
     ws.appendOutput('srv', 'GET /api 500\n');
     await loop.run('and now?', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
     const third = generate.mock.calls[generate.mock.calls.length - 1];
