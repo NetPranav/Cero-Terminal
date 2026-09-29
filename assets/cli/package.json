@@ -3,7 +3,7 @@
   "version": "2.1.0",
   "description": "Open Sentinel Terminal in a folder, or run a .flow file, from any shell (macOS, Linux, Windows)",
   "bin": {
-    "sentinel": "./sentinel.js"
+    "sentinel": "sentinel.js"
   },
   "repository": {
     "type": "git",
