@@ -132,10 +132,15 @@ jobs:
         with:
           path: assets
           merge-multiple: true
-      - name: Checksums
+      - name: Collect installers and checksums
         run: |
-          cd assets
+          mkdir -p release
+          # Only the installers, wherever the artifact download put them
+          find assets -type f \( -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \
+            -o -name '*.pkg.tar.zst' -o -name '*.msi' -o -name '*.exe' \) -exec cp {} release/ \;
+          cd release
           ls -la
+          [ -n "$(ls)" ] || { echo "No installers were built" >&2; exit 1; }
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
@@ -144,5 +149,5 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: Sentinel Terminal ${{ needs.meta.outputs.version }} for ${{ needs.meta.outputs.platform == 'macos' && 'macOS' || needs.meta.outputs.platform == 'linux' && 'Linux' || 'Windows' }}
           body_path: docs/releases/${{ needs.meta.outputs.platform }}.md
-          files: assets/*
+          files: release/*
           fail_on_unmatched_files: false
