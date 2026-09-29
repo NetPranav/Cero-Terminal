@@ -28,17 +28,13 @@ export class ConsentQueue {
   private static instance: ConsentQueue | null = null;
   private pendingRequests: Map<string, ConsentRequest> = new Map();
   private listeners: Set<ConsentQueueListener> = new Set();
-  private autoApprove: boolean = false;
-
-  constructor() {
-    // Check environment indicators for headless / CI runs
-    if (
-      (typeof process !== 'undefined' && process.env) &&
-      (process.env.CI === 'true' || process.env.HEADLESS === 'true' || process.env.SENTINEL_BENCHMARK === 'true')
-    ) {
-      this.autoApprove = true;
-    }
-  }
+  /**
+   * Approves every request without asking. Only the prompt benchmark turns this on, with the
+   * Sentinel-specific SENTINEL_BENCHMARK switch. Generic variables such as CI or HEADLESS must
+   * never do it: many shells and every CI runner export CI=true.
+   */
+  private autoApprove: boolean =
+    typeof process !== 'undefined' && !!process.env && process.env.SENTINEL_BENCHMARK === 'true';
 
   public static getInstance(): ConsentQueue {
     if (!ConsentQueue.instance) {
@@ -52,13 +48,7 @@ export class ConsentQueue {
   }
 
   public isAutoApprove(): boolean {
-    if (this.autoApprove) return true;
-    if (typeof process !== 'undefined' && process.env) {
-      if (process.env.CI === 'true' || process.env.HEADLESS === 'true' || process.env.SENTINEL_BENCHMARK === 'true') {
-        return true;
-      }
-    }
-    return false;
+    return this.autoApprove;
   }
 
   public hasListeners(): boolean {

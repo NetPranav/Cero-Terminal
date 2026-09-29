@@ -234,3 +234,20 @@ describe('ExecutionEngine + ConsentQueue Integration', () => {
   });
 });
 
+
+describe('ConsentQueue auto-approve switch', () => {
+  it('is not turned on by generic CI or HEADLESS variables', async () => {
+    const { ConsentQueue } = await import('./ConsentQueue');
+    const before = { CI: process.env.CI, HEADLESS: process.env.HEADLESS };
+    process.env.CI = 'true';
+    process.env.HEADLESS = 'true';
+    try {
+      expect(new ConsentQueue().isAutoApprove()).toBe(false);
+    } finally {
+      process.env.CI = before.CI;
+      process.env.HEADLESS = before.HEADLESS;
+      if (before.CI === undefined) delete process.env.CI;
+      if (before.HEADLESS === undefined) delete process.env.HEADLESS;
+    }
+  });
+});
