@@ -13,7 +13,7 @@ each OS, so the author writes the file once.
 | The flow contains | What you see |
 |---|---|
 | Only desktop actions (`browser`, `app`, `folder`, `file`) | The apps and pages open. The terminal never appears, and Sentinel quits afterwards if it was not already running. |
-| Anything that installs or runs something (`install`, `command`, `clone`, `download`) | Sentinel shows its terminal and **one confirmation that lists every command**. After you approve, each step is typed into the terminal, so you see the output and can answer prompts such as a `sudo` password or `[y/N]`. The flow stops at the first step that fails. |
+| Anything that installs or runs something (`install`, `command`, `clone`, `download`) | Sentinel shows its terminal and **one confirmation that lists every command**. Nothing runs until you click Run (Enter does not approve a flow from a file). Then each step is typed into the terminal, so you see the output and can answer prompts such as a `sudo` password or `[y/N]`. The flow stops at the first step that fails. |
 
 Actions Sentinel does not understand are skipped and listed; they are never guessed.
 

@@ -284,11 +284,11 @@ and fixes the ones that can be fixed safely with a command.
 
 | Task | Issues | Status |
 |---|---|---|
-| Rewrite README, architecture, codebase map, user guide, AI and troubleshooting docs from the verified state | I-40 | PARTIAL: roadmap, codebase map, index and archive done; README, ARCHITECTURE, USER_GUIDE, AI, SECURITY, TROUBLESHOOTING still describe the pre-audit state |
+| Rewrite README, architecture, codebase map, user guide, AI and troubleshooting docs from the verified state | I-40 | PARTIAL: roadmap, codebase map, index, archive and README (2.1.0, with screenshots and a demo video) done; USER_GUIDE, AI, SECURITY, TROUBLESHOOTING still describe the pre-audit state |
 | One copy of each doc (remove root duplicates) | I-40 | DONE (historical docs in docs/archive/) |
 | Replace fixed test counts and benchmark claims with how to reproduce them | I-40 | OPEN |
 | Release checklist: packaging, smoke matrix (L-06), self-update (L-17) | L-06, L-17 | OPEN |
-| Add a LICENSE file matching the declared license | I-50 | NEEDS DECISION |
+| Add a LICENSE file matching the declared license | I-50 | DONE: MIT, and the packages (Arch, Flatpak, Cargo, npm) say MIT |
 
 ---
 
@@ -542,3 +542,27 @@ package built on Arch with `packaging/arch/build-pacman.sh`.
 | `v2.1.0-windows` (`release/windows`) | `.msi`, setup `.exe` |
 
 To fix one platform, commit to its branch and push. Only that release is rebuilt.
+
+
+---
+
+## 10. README, license, CLI and two fixes found while recording the demo (2026-09-30)
+
+- README rewritten for 2.1.0 from what was run: screenshots, a GIF of a `.flow` run, a 2.5 minute demo video
+  (`docs/media`), downloads per platform, and how well each platform is tested. The false "100% offline" and
+  v2.0 claims are gone.
+- MIT `LICENSE`. The Arch package and Flatpak metadata said Apache-2.0; they now match.
+- `sentinel` command 2.1.0 (`assets/cli`), rewritten in Node for macOS, Linux and Windows: `sentinel [folder]`
+  and `sentinel file.flow`. The old script only worked on macOS and its `--run`, `--new-tab` and `--split` did
+  nothing (the app has no `sentinel://` handler). Windows folders (`C:\...`) are now accepted at launch.
+- Windows CI: the PowerShell parse check timed out (one PowerShell per script); it now parses all scripts in one.
+
+**Found in the release build, fixed:**
+- After switching tabs ("go to tab 1", a click, a shortcut), focus stayed on a pane in the hidden tab, so an
+  opened `.flow` file was typed into a terminal the user could not see. Focus now follows the visible tab.
+  Re-tested in the window: switch to tab 3, back to tab 1, open the flow: it runs in tab 1.
+- "what's running in my terminals" printed an empty "last line:" when the terminal's last line was blank.
+
+**Found, not fixed yet (filed as issues):** "run git init" inside a multi-step request is sent to the model
+instead of being planned, so it asks a second time; a new window stays blank until it is focused once.
+

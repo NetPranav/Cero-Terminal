@@ -14,7 +14,7 @@ These packages are built by CI from the `release/linux` branch. They were not ru
 
 **Open a .flow file and it runs.** A `.flow` file (from a tutorial, a teammate or you) lists what to install, run and open. Sentinel picks the commands for this OS.
 - A flow that only opens apps and links (Chrome, YouTube, VS Code) runs without showing the terminal.
-- A flow that installs or runs things opens the terminal, lists every command for one approval, then types each step so you can see output and answer prompts.
+- A flow that installs or runs things opens the terminal, lists every command, waits for you to click Run, then types each step so you can see output and answer prompts.
 
 See [FLOW_FILES.md](https://github.com/NetPranav/Sentinal-Terminal/blob/linux-v2-update/docs/FLOW_FILES.md) and the [example flows](https://github.com/NetPranav/Sentinal-Terminal/tree/linux-v2-update/examples/flows).
 

@@ -1,338 +1,216 @@
 <div align="center">
 
-# ⚡ Sentinel Terminal v2.0
+# Sentinel Terminal
 
-**The Autonomous AI-Native Terminal with Self-Evolving Reinforcement Learning (SERL), Self-Healing Execution, and 100% Offline Inference.**
+**A terminal that also takes requests in plain language, runs `.flow` setup files on any OS, and uses a model that runs on your own computer.**
 
-<br>
+[![CI](https://github.com/NetPranav/Sentinal-Terminal/actions/workflows/ci.yml/badge.svg?branch=linux-v2-update)](https://github.com/NetPranav/Sentinal-Terminal/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/badge/release-2.1.0-1F222E)](https://github.com/NetPranav/Sentinal-Terminal/releases)
+![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-1F222E)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1F222E)](LICENSE)
 
-[![Release](https://img.shields.io/badge/Release-v2.0.0%20Production-00D8A6?style=for-the-badge&logo=github&logoColor=white)](https://github.com/NetPranav/Sentinal-Terminal/releases/tag/v2.0.0)
-[![Automated Tests](https://img.shields.io/badge/Tests-983%20Passing%20%7C%20155%20Suites-7B61FF?style=for-the-badge&logo=vitest&logoColor=white)](https://github.com/NetPranav/Sentinal-Terminal/actions)
-[![Tool Ecosystem](https://img.shields.io/badge/Tool%20Ecosystem-101%20Canonical%20Tools-00B4D8?style=for-the-badge&logo=codewars&logoColor=white)](tools/)
-[![AI Engine](https://img.shields.io/badge/AI%20Engine-100%25%20Offline%20Local%20(Metal%2Fllama.cpp)-FF6B6B?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/NetPranav/Sentinal-Terminal)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-1F222E?style=for-the-badge&logo=apple&logoColor=white)](docs/CROSS_PLATFORM_SHARING.md)
-[![License](https://img.shields.io/badge/License-MIT-F5A623?style=for-the-badge)](LICENSE)
+[Download](#download) · [.flow files](#flow-files-write-a-setup-once-run-it-anywhere) · [What you can ask](#what-you-can-ask) · [System settings](#system-settings-by-request) · [Build from source](#build-from-source) · [Docs](#documentation)
 
-<br>
-
-<p align="center">
-  <a href="#-what-is-sentinel-terminal"><b>What is Sentinel?</b></a> •
-  <a href="#-what-we-developed-ourselves-core-innovations"><b>What We Developed</b></a> •
-  <a href="#-technologies-and-libraries-used"><b>Tech Stack</b></a> •
-  <a href="#-complete-features--command-reference"><b>Features & Commands</b></a> •
-  <a href="#-architecture--data-flow"><b>Architecture</b></a> •
-  <a href="#-download--installation"><b>Download v2.0</b></a> •
-  <a href="#-fine-tuning--self-improvement"><b>LoRA Fine-Tuning</b></a>
-</p>
+<img src="docs/images/requests.png" alt="Sentinel Terminal answering requests: the total of a CSV column, the last two errors in a log, and suggestions for a bare 'bluetooth'" width="820">
 
 </div>
 
----
+Sentinel Terminal is a desktop terminal (Tauri v2, Rust, React 19, xterm.js). Commands you type run in a real
+shell: zsh or bash on macOS and Linux, PowerShell on Windows. Start a line with `>` and it becomes a request:
 
-## 🌟 What is Sentinel Terminal?
-
-**Sentinel Terminal** bridges the gap between traditional raw UNIX shell performance and autonomous desktop agent orchestration. Built from the ground up on **Tauri v2**, **Rust**, **React 19**, and **xterm.js**, Sentinel delivers instantaneous sub-millisecond PTY shell responsiveness while letting you automate complex, multi-step desktop and system tasks using natural language.
-
-Sentinel operates on a dual-mode interaction model:
-1. **Raw Native Shell (Zero Latency)**: Type regular commands (`ls -la`, `git status`, `cargo build`, `npm run dev`) and Sentinel executes directly inside an ultra-fast Rust-backed pseudo-terminal (PTY) with zero overhead.
-2. **Autonomous AI Copilot (`>`)**: Prefix any command or instruction with **`>`** to invoke the autonomous Sentinel Agent Loop. Sentinel interprets your intent, searches system indexes, inspects active processes, controls network interfaces, and repairs execution errors autonomously.
-
-### 🔒 100% Offline & Zero-Cloud Guarantee
-- **Zero Cloud Data Transmission**: All prompts, command lines, system telemetry, and credentials remain strictly on your local machine.
-- **Zero API Latency & Rate Limits**: Powered by embedded llama.cpp with Apple Silicon Metal acceleration, Ollama, or local GGUF models.
-- **Zero-Trust Security Engine**: Proactive shell AST inspection blocks destructive commands (`rm -rf /`, fork bombs, unauthorized system file writes) before execution.
-
----
-
-## 🧠 What We Developed Ourselves (Core Innovations)
-
-Unlike basic AI terminal wrappers that simply pipe prompts to cloud APIs, Sentinel contains a suite of custom-engineered subsystems designed for real-world terminal autonomy:
-
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                                SENTINEL SERL ARCHITECTURE                              │
-├──────────────────────────────┬──────────────────────────┬──────────────────────────────┤
-│      TIER 1: AGENT LOOP      │   TIER 2: SELF-HEALING   │     TIER 3 & 4: EVOLUTION    │
-├──────────────────────────────┼──────────────────────────┼──────────────────────────────┤
-│ • GBNF Constrained Grammar   │ • Stderr Feedback Loop   │ • Speculative Shadow-PTY     │
-│ • Decoupled Refusal Catch    │ • 3-Strike Remediation   │ • On-Device DPO Engine       │
-│ • Referential Multi-Turn     │ • AST Shell Command Guard│ • Reflexion Self-Critique    │
-│ • Dynamic Tool Pruner        │ • Physical Action Prompt │ • Episodic Memory (Cosine)   │
-│ • Fast-Path Offline Engine   │ • 101 Canonical Tools    │ • TLDR Ground-Truth Recipes  │
-└──────────────────────────────┴──────────────────────────┴──────────────────────────────┘
+```text
+~/demo % >what is the total of the score column in data.csv?
+  ✓ The total of the score column in data.csv is 42.5 (3 rows).
 ```
 
-### 1. Decoupled Refusal Interception & Anti-Refusal Enforcer
-Cloud and open-weights models are alignment-trained to decline system access (*"I'm sorry, as an AI language model I don't have access to your operating system or network..."*).
-- **Unconditional Interception**: Sentinel intercepts all conversational refusal patterns (`isConversationalRefusal`) regardless of single-turn syntax.
-- **Terminal Execution Re-Prompting**: Re-prompts the model with strict terminal authority instructions (`SYSTEM ENFORCEMENT`), forcing real command generation.
-- **Refusal Sanitization**: Converts stubborn refusals into concrete macOS/Linux terminal solutions (e.g. automatic DHCP lease renewal instead of apologetic evasions).
-- **Multi-Turn Referential Context Resolution**: Automatically carries over preceding conversational context into referential follow-ups (e.g., *"still somehow that you can try right now"* inherits the preceding *"change the ip address without vpn"*).
+Sentinel works out the commands, shows the ones that change anything for your approval, runs them in your
+terminal and answers from their real output. Common requests run from tested recipes without a model call.
+Everything else goes to the AI you choose in Settings:
+- the built-in model (Qwen2.5-Coder 3B on llama.cpp, running on your computer, no account)
+- Ollama
+- a cloud key (OpenAI, Anthropic, Groq, DeepSeek, OpenRouter or any OpenAI-compatible endpoint)
 
-### 2. Autonomous Self-Healing Diagnostics Engine
-- **Stderr & Exit Code Feedback Loop**: Captures non-zero exit codes and error output, automatically diagnosing failure categories (syntax errors, missing binaries, permission issues, or physical device disconnection).
-- **3-Strike Autonomous Auto-Remediation**: Iteratively generates alternative syntaxes and corrected parameters.
-- **Physical Action Detection**: Identifies when a command failure requires physical hardware intervention (e.g., plugging in a cable or toggling a hardware switch) and prompts the user accordingly.
+With the built-in model or Ollama, requests stay on your machine. With a cloud key they go to that provider.
 
-### 3. Speculative Shadow-PTY Simulation Engine ("Minority Report for the Shell")
-- **Sub-Millisecond Candidate Rollout**: Evaluates $K=3$ candidate execution commands in an ephemeral, memory-isolated sandbox before touching your active terminal.
-- **Cross-Platform Auto-Translation**: Automatically detects and translates platform command mismatches on the fly:
-  - Linux `fuser 3000/tcp` $\to$ macOS `lsof -iTCP:3000 -sTCP:LISTEN -P -n`
-  - Linux `ip addr` $\to$ macOS `ifconfig` / `networksetup`
-  - GNU `sed -i` $\to$ macOS BSD `sed -i ''`
-  - GNU `grep -P` $\to$ macOS BSD `grep -E`
-  - Linux `killall <name>` $\to$ macOS `pkill -i -f "<name>"`
-- **Non-Destructive Sandbox Verification**: Pure read-only commands execute in a 1500ms safety subshell to guarantee zero side effects.
-
-### 4. Autonomous DAG Repair Graph Planner
-- **Multi-Step Failure Recovery**: When a compound workflow fails midway, Sentinel constructs a directed acyclic graph (DAG) of repair tasks.
-- **Automated Rollback Checkpoints**: Creates pre-execution file and state snapshots, enabling safe rollbacks if a repair attempt fails.
-
-### 5. On-Device DPO Preference Engine & Reflexion Self-Critique
-- **Automated Direct Preference Optimization (DPO)**: When a command fails and is subsequently self-healed, Sentinel captures the failed command as `rejected` and the working solution as `chosen`, saving preference pairs to `sentinel_dpo_dataset.jsonl`.
-- **Reflexion Engine**: Stores self-critique traces and performance logs so Sentinel learns from mistakes across sessions.
-
-### 6. Episodic & Working Memory Engine
-- **Semantic Vector Cosine Similarity**: Embeds user requests and indexes successful workflows. When you ask a similar query later, Sentinel retrieves the exact working command pattern with zero model latency.
-
-### 7. Offline TLDR Ground-Truth Recipe Knowledge Engine
-- **Instant Offline Execution**: Built-in repository of verified command-line recipes. Queries with high confidence bypass LLM inference entirely and execute instantly.
-
-### 8. Native macOS Spotlight & Process Management
-- **Spotlight Index Search**: Replaces slow recursive `find /` scans with native macOS Spotlight (`mdfind "kMDItemFSName == '*<target>*'c"`), searching millions of files in under 50ms.
-- **3-Tier Termination Driver**: Graceful termination via AppleScript (`osascript`) $\to$ `killall` $\to$ `pkill -9 -i -f`.
-- **Conditional Killing**: Handles natural language queries like `"if any app named music is running then close it"` without triggering error states if the application is not running.
-
-### 9. Google Colab Fine-Tuning & Model Training Pipeline
-- **Turnkey Training Package**: Complete automated export (`export_colab_training_package.ts`) producing ChatML-formatted datasets (`sentinel_sft_dataset.jsonl` and `sentinel_dpo_dataset.jsonl`).
-- **Free T4 Colab Notebook**: [`notebooks/sentinel_colab_finetuning.ipynb`](notebooks/sentinel_colab_finetuning.ipynb) uses Unsloth 4-bit QLoRA on Qwen 2.5 Coder to train custom LoRA adapters and merge them into quantized GGUF format ready for Sentinel.
-- **Standalone Training Script**: [`scripts/train_colab_standalone.py`](scripts/train_colab_standalone.py) for headless GPU training.
-
----
-
-## 🛠️ Technologies and Libraries Used
-
-| Subsystem | Technologies & Dependencies | Purpose |
-| :--- | :--- | :--- |
-| **Desktop Runtime** | **Tauri v2**, **Rust** (2021 edition) | Lightweight native host (~15MB bundle), native OS bridges, high performance |
-| **Frontend Framework** | **React 19**, **TypeScript 5.8**, **Vite 7** | Component state management, rapid HMR development, production bundling |
-| **Terminal Core** | **@xterm/xterm v6**, **@xterm/addon-fit**, **@xterm/addon-webgl** | Hardware-accelerated GPU terminal rendering, responsive resizing |
-| **PTY Layer** | **portable-pty**, **tokio**, **parking_lot** | Native OS pseudo-terminal session management (macOS, Windows ConPTY, Linux) |
-| **Local AI Inference** | **llama.cpp** (Metal acceleration), **Ollama API**, **GBNF Grammars** | 100% offline LLM inference, constrained JSON grammar execution |
-| **Security & AST** | Custom Shell AST Parser, **Zod 4.4**, Policy Engine | Command sanitization, Zero-Trust whitelisting, destructive execution guards |
-| **LoRA Fine-Tuning** | **Unsloth**, **PyTorch**, **Transformers**, **TRL (DPO)** | Efficient 4-bit QLoRA training on NVIDIA GPUs, GGUF export |
-| **Testing & Quality** | **Vitest 4.1**, Node.js Test Harness | 983 automated unit, integration, and security tests across 155 test suites |
-
----
-
-## ⚡ Complete Features & Command Reference
-
-Simply type regular commands for direct PTY execution, or prefix with **`>`** for autonomous AI orchestration:
-
-### 🚀 Developer & Workspace Launchers
-| Natural Language Command (`>`) | Action Taken |
-| :--- | :--- |
-| `>open this folder in vs code` | Resolves target to `.` and launches **Visual Studio Code** |
-| `>open current project in cursor` | Launches **Cursor AI** with active workspace directory |
-| `>open this folder inside antigravity` | Launches **Antigravity IDE** with current project path |
-| `>open in xcode` / `>open in android studio` | Opens native mobile development suites |
-| `>scaffold nextjs react fullstack project` | Generates boilerplate directory structure and installs dependencies |
-
-### 🌐 Network & Wireless Management
-| Natural Language Command (`>`) | Action Taken |
-| :--- | :--- |
-| `>what is my ip` / `>check my ip address` | Displays both local network IP (`ipconfig`) and public IP (`api.ipify.org`) |
-| `>change ip without vpn` / `>renew ip` | Renews local DHCP lease from router (`sudo ipconfig set en0 DHCP`) |
-| `>what port is free for my new web project` | Discovers available, unoccupied TCP development ports |
-| `>what is using port 3000` | Inspects active listening ports and maps PID to process name |
-| `>scan available wifi networks` | Scans visible wireless SSIDs and signal strengths |
-| `>turn on/off wifi` / `>turn on/off bluetooth` | Natively toggles wireless hardware power state |
-| `>show all bluetooth devices` | Lists discoverable and paired Bluetooth peripherals |
-
-### 💻 System Diagnostics & Process Control
-| Natural Language Command (`>`) | Action Taken |
-| :--- | :--- |
-| `>which process is using the most cpu` | Lists top processes sorted by CPU utilization |
-| `>top ram` / `>which app is using the most memory` | Lists top memory-consuming processes |
-| `>check battery health and cycle count` | Displays battery percentage, power source, and health state |
-| `>check available disk space` | Analyzes volume storage and free space |
-| `>tell me is there any application named music` | Directly inspects GUI applications and reports active status |
-| `>kill the Music application` | Cleanly terminates target application via 3-tier fallback driver |
-| `>if any app named music is running then close it` | Conditional termination without throwing error if application is absent |
-
-### 🔍 Search & Filesystem Administration
-| Natural Language Command (`>`) | Action Taken |
-| :--- | :--- |
-| `>find all frontend folders in my system` | Fast Spotlight search across macOS via `mdfind` in <50ms |
-| `>find all files named .env` | Searches for configuration files excluding `node_modules` and `.git` |
-| `>take me to downloads` / `>go home` | Automatically navigates terminal working directory |
-| `>check git status and branches` | Inspects working tree status and active branches |
-| `>recent commits` / `>show git log` | Formats commit history cleanly inside the terminal |
-
----
-
-## 🏗️ Architecture & Data Flow
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as Developer
-    participant UI as React 19 UI (xterm.js WebGL)
-    participant Rust as Tauri v2 Rust PTY Backend
-    participant Loop as AgentLoop & Dynamic Tool Pruner
-    participant SERL as SERL Engine (Shadow-PTY & Refusal Interceptor)
-    participant LLM as Local LLM (llama.cpp Metal / Ollama)
-    participant Driver as 101 Native Capability Drivers
-
-    alt Standard Command
-        User->>UI: ls -la, git push, cargo test
-        UI->>Rust: Raw PTY Stream
-        Rust-->>UI: Sub-millisecond stdout
-    else Autonomous AI Instruction ('>')
-        User->>UI: > renew my ip and check ports
-        UI->>Loop: User Goal & Context
-        Loop->>SERL: Check Fast-Path & Offline TLDR Recipe
-        opt TLDR / Fast Path Match
-            SERL-->>Driver: Instant Verified Command
-        end
-        Loop->>LLM: GBNF Constrained Action Prompt
-        LLM-->>Loop: {"action": "execute", "command": "..."}
-        opt Model Canned Refusal Detected
-            Loop->>SERL: Intercept Refusal & Enforce Authority
-            SERL-->>LLM: Refusal Rejected Re-prompt
-        end
-        Loop->>SERL: Speculative Shadow-PTY Simulation
-        SERL->>SERL: Validate Syntax & Safety Sandbox (K=3)
-        SERL->>Driver: Execute Safe Command
-        Driver-->>Rust: Run via /bin/zsh
-        alt Non-Zero Exit Code (Failure)
-            Rust-->>Loop: Stderr Feedback Loop
-            Loop->>SERL: Self-Healing 3-Strike Auto-Remediation
-            SERL-->>Driver: Corrected Command Execution
-        else Success
-            Rust-->>UI: Output Formatted with convertEol Normalization
-            Loop->>SERL: Record DPO (chosen/rejected) & Episodic Memory
-        end
-    end
-```
-
----
-
-## 📥 Download & Installation
-
-### Version 2.0.0 Production Release
+## Demo
 
 <div align="center">
-  <table>
-    <thead>
-      <tr>
-        <th align="center" width="280">🍏 macOS (Apple Silicon & Intel)</th>
-        <th align="center" width="280">🐧 Linux (x86_64 / ARM64)</th>
-        <th align="center" width="280">🪟 Windows (10 / 11)</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td align="center">
-          <br>
-          <b><a href="https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.0.0/Sentinel_Terminal_v2.0.0_macOS.dmg">📦 Download macOS .DMG</a></b><br>
-          <i>Universal Binary (v2.0.0)</i><br>
-          <a href="https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.0.0/Sentinel_Terminal_v2.0.0_macOS.zip">Download .ZIP Archive</a><br><br>
-        </td>
-        <td align="center">
-          <br>
-          <b><a href="https://github.com/NetPranav/Sentinal-Terminal/tree/linux">🐧 Linux Branch Active</a></b><br>
-          <i>Debian / Arch / AppImage</i><br><br>
-        </td>
-        <td align="center">
-          <br>
-          <b><a href="https://github.com/NetPranav/Sentinal-Terminal/tree/windows">🪟 Windows Branch Active</a></b><br>
-          <i>ConPTY / WinRT Driver</i><br><br>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+<img src="docs/media/flow-demo.gif" alt="Opening new-project.flow: Sentinel lists every command, waits for a click on Run, then types each step into the terminal" width="820">
+
+**Full demo (2.5 min, 2x speed):** [docs/media/sentinel-demo.mp4](docs/media/sentinel-demo.mp4). Requests, a server in a second tab,
+"what's running in my terminals", stopping the server, a multi-step request and a `.flow` file opened with the `sentinel`
+command. Recorded in the macOS release build with the built-in 3B model.
 </div>
 
-### Installing on macOS:
-1. Download **[`Sentinel_Terminal_v2.0.0_macOS.dmg`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.0.0/Sentinel_Terminal_v2.0.0_macOS.dmg)**.
-2. Open the `.dmg` and drag **Sentinel Terminal.app** to your `/Applications` directory.
-3. Launch Sentinel Terminal and begin orchestrating your desktop with `>`!
+## .flow files: write a setup once, run it anywhere
 
----
+A `.flow` file lists what to install, run and open. A tutorial, a teammate or you can write one. Double-click
+it and Sentinel runs it on macOS, Windows or Linux, choosing the right commands for that system.
 
-## 🧪 Testing & Verification
+```json
+{
+  "schemaVersion": "1.0",
+  "metadata": { "id": "node-project", "name": "Node.js project" },
+  "actions": [
+    { "type": "install", "package": "nodejs" },
+    { "type": "clone", "repo": "https://github.com/me/app.git", "into": "~/app" },
+    { "type": "command", "command": "npm install", "cwd": "~/app" },
+    { "type": "command", "command": "npm run dev", "windows": "npm.cmd run dev", "cwd": "~/app" },
+    { "type": "browser", "url": "http://localhost:3000" }
+  ]
+}
+```
 
-Sentinel is rigorously tested across all system capabilities with **983 automated unit, integration, and security tests** passing across **155 test suites**:
+| The flow contains | What happens |
+|---|---|
+| Only desktop actions: open Chrome, YouTube, VS Code, a folder | They open. **The terminal never appears**, and Sentinel quits afterwards if it was not already running. |
+| Anything that installs or runs something | The terminal opens with one dialog listing every command. **Nothing runs until you click Run** (Enter does not approve a flow from a file). Each step is then typed into the terminal, so you see the output and can answer a `sudo` password or `[y/N]`. The flow stops at the first failing step. |
+
+`install` takes one name for every OS. `nodejs` becomes `brew install node`, `winget install OpenJS.NodeJS.LTS`
+or the apt, dnf, pacman or zypper package, whichever the machine has. Values are quoted by Sentinel, so a
+flow cannot inject shell syntax through a URL, name or path. Every run is written to the audit log.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/flow-approval.png" alt="The approval dialog for a .flow file, listing five commands"></td>
+<td width="50%"><img src="docs/images/flow-run.png" alt="The same flow running step by step in the terminal and finishing"></td>
+</tr>
+<tr>
+<td align="center">One approval lists every command</td>
+<td align="center">Steps typed into the terminal, output visible</td>
+</tr>
+</table>
+
+Format, actions and the package table: [docs/FLOW_FILES.md](docs/FLOW_FILES.md). Examples: [examples/flows](examples/flows).
+
+## What you can ask
+
+Type `>` followed by the request. Examples that were run in the release build:
+
+| Request | What Sentinel does |
+|---|---|
+| `>what is the total of the score column in data.csv?` | Sums the column with a tested recipe and answers "42.5 (3 rows)" |
+| `>show the last 2 errors in logs/app.log` | Prints the two lines |
+| `>create a folder demo-app, go into it, run git init, then npm init -y, then list the files` | Plans the steps, asks before the ones that change files, runs them, and leaves the shell in the new folder |
+| `>open a new tab here and run python3 -m http.server 8765` | Asks once, opens the tab, starts the server there |
+| `>what's running in my terminals` | Lists every terminal, its folder and its running command, without a model call |
+| `>stop the server` | Confirms, then sends Ctrl+C to that tab |
+| `>run npm test in tab 2` | Types it there, or refuses and says why when that tab is busy or at a password prompt |
+| `>why is npm test failing in api?` | Runs it there and explains the failure from the code it points to |
+| `>fix buggy.py so it runs` | Runs the file, shows the change for approval (the original is kept as `.bak`), runs it again |
+| `>open settings`, `>show my command history`, `>switch to zen mode`, `>go to tab 2` | The app's own functions |
+| `>run the workflow in setup.flow` | Runs a flow from inside the terminal |
+
+Commands that change files, the system or the network ask first and show exactly what will run. Reading
+private keys or credential files always asks. Keys and tokens are masked before any output reaches a model.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/terminals.png" alt="A server started in a second tab, and the answer to 'what's running in my terminals'"></td>
+<td width="50%"><img src="docs/images/chain.png" alt="A five-step request that created a project folder, a git repository and package.json"></td>
+</tr>
+<tr>
+<td align="center">Other terminals, by request</td>
+<td align="center">A multi-step request, planned and run</td>
+</tr>
+</table>
+
+## System settings by request
+
+`>turn wifi off`, `>set brightness to 60`, `>mute`, `>turn on dark mode`, `>show paired bluetooth devices`,
+`>open sound settings`. Each request becomes the native command for your OS. Say only the topic (`>bluetooth`)
+and Sentinel lists what it can do for it on this OS. Typing `>turn blu` completes the request.
+
+| | macOS | Windows | Linux |
+|---|---|---|---|
+| Wi-Fi on/off, status, scan, join | `networksetup` | Windows radio API (same switch as Quick Settings), `netsh wlan` | `nmcli` |
+| Bluetooth on/off, status, devices | `blueutil` for on/off (else the settings page), `system_profiler` | Windows radio API, `Get-PnpDevice` | `bluetoothctl`, `rfkill` |
+| Brightness | Brightness keys; exact levels with the `brightness` tool | WMI (built-in displays) | `brightnessctl`, or GNOME over D-Bus |
+| Volume and mute | AppleScript | Core Audio | `wpctl`, `pactl` or `amixer` |
+| Dark mode | AppleScript | Registry (apps and system) | GNOME `gsettings`, KDE `plasma-apply-colorscheme` |
+| Battery, lock screen | `pmset` | `Win32_Battery`, `LockWorkStation` | `/sys/class/power_supply`, `loginctl` |
+| Open a settings page | `x-apple.systempreferences:` | `ms-settings:` | GNOME Settings or KDE System Settings |
+
+Changes ask first. When a switch is blocked (no radio, a policy, an external monitor without brightness
+control), Sentinel says why and opens the matching settings page.
+
+## Settings
+
+<div align="center">
+<img src="docs/images/settings.png" alt="Settings: choose the built-in model, Ollama or a cloud service" width="720">
+</div>
+
+One question: which AI answers your requests. The built-in model downloads its engine (llama.cpp: Metal on
+macOS, Vulkan or CPU on Windows and Linux) and the 2 GB model from here. Model size, hardware and cloud keys
+are under Advanced.
+
+## Download
+
+Version 2.1.0. Each platform has its own release, built from its own branch.
+
+| Platform | Files | Release |
+|---|---|---|
+| macOS, Apple Silicon | [`Sentinel.Terminal_2.1.0_aarch64.dmg`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-macos/Sentinel.Terminal_2.1.0_aarch64.dmg) | [v2.1.0-macos](https://github.com/NetPranav/Sentinal-Terminal/releases/tag/v2.1.0-macos) |
+| macOS, Intel | [`Sentinel.Terminal_2.1.0_x64.dmg`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-macos/Sentinel.Terminal_2.1.0_x64.dmg) | |
+| Arch, Manjaro, EndeavourOS | [`sentinel-terminal-bin-2.1.0-1-x86_64.pkg.tar.zst`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-linux/sentinel-terminal-bin-2.1.0-1-x86_64.pkg.tar.zst) | [v2.1.0-linux](https://github.com/NetPranav/Sentinal-Terminal/releases/tag/v2.1.0-linux) |
+| Ubuntu 22.04+, Debian 12, Mint, Pop!_OS | [`Sentinel.Terminal_2.1.0_amd64.deb`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-linux/Sentinel.Terminal_2.1.0_amd64.deb) | |
+| Fedora 38+, openSUSE | [`Sentinel.Terminal-2.1.0-1.x86_64.rpm`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-linux/Sentinel.Terminal-2.1.0-1.x86_64.rpm) | |
+| Other x86_64 Linux | [`Sentinel.Terminal_2.1.0_amd64.AppImage`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-linux/Sentinel.Terminal_2.1.0_amd64.AppImage) | |
+| Windows 10 (1803+) and 11 | [`Sentinel.Terminal_2.1.0_x64_en-US.msi`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-windows/Sentinel.Terminal_2.1.0_x64_en-US.msi) or [`Sentinel.Terminal_2.1.0_x64-setup.exe`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-windows/Sentinel.Terminal_2.1.0_x64-setup.exe) | [v2.1.0-windows](https://github.com/NetPranav/Sentinal-Terminal/releases/tag/v2.1.0-windows) |
+
+Each release has a `SHA256SUMS.txt`.
+
+The optional `sentinel` command opens the app in a folder or runs a `.flow` file from any shell: see [assets/cli](assets/cli).
+
+**First launch**
+- **macOS:** the app is not notarized. macOS blocks the first launch. Open System Settings, then Privacy & Security, and choose "Open Anyway".
+- **Windows:** the installers are not code-signed. SmartScreen shows "Windows protected your PC". Choose "More info", then "Run anyway".
+- **Linux:**
+  - Install the package: `sudo pacman -U ...`, `sudo apt install ./...deb` or `sudo dnf install ./...rpm`.
+  - The packages need WebKitGTK 4.1, which the package manager installs.
+  - The packages also register the `.flow` file type.
+
+### How well each platform is tested
+
+| | macOS | Linux | Windows |
+|---|---|---|---|
+| Builds and unit tests in CI | Yes | Yes | Yes |
+| Run by hand in the release build (requests, tabs, flows, settings) | Yes, Apple Silicon on macOS 26 | Not yet | Not yet |
+| System-settings commands | Read commands run on a Mac | Covered by tests | Every script parse-checked by PowerShell in CI; not yet run on a Windows PC |
+
+Please [open an issue](https://github.com/NetPranav/Sentinal-Terminal/issues) if something does not work on
+your system.
+
+## Build from source
+
+Requirements: Node.js 20+, Rust (stable), and the [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
+for your OS (WebKitGTK 4.1 on Linux, WebView2 on Windows).
 
 ```bash
-# Run the complete test suite
-npm test
-
-# Run core AgentLoop & SERL test suites
-npx vitest run src/ai/agent/AgentLoop.test.ts
-
-# Run shell AST security guard tests
-npx vitest run src/domain/security/ShellCommandGuard.test.ts
-
-# Run repair planner tests
-npx vitest run src/repair/__tests__/RepairPlanner.test.ts
+npm install
+npm run tauri dev          # run the app in development
+npm run check:triple       # tests, production build and cargo check
+npm run bundle:dmg         # macOS installer (bundle:deb, bundle:rpm, bundle:appimage on Linux)
 ```
 
----
+Other scripts:
+- `npm run cli`: the agent in a plain terminal, useful for trying requests without the window.
+- [`assets/cli`](assets/cli): the `sentinel` command (`sentinel ~/project`, `sentinel setup.flow`) for macOS, Linux and Windows.
+- `npm run stress`: the complex-request suite against a running local model.
+- `npm run smoke:engine`: checks that a llama.cpp server starts and accepts Sentinel's grammar.
 
-## 🎯 Fine-Tuning & Self-Improvement
+Releases: `scripts/release.sh macos|linux|windows|all` pushes the platform branches (`release/macos`,
+`release/linux`, `release/windows`). CI then builds and publishes each release.
 
-Sentinel can continuously self-improve using your real terminal interactions:
+## Documentation
 
-1. **Generate Dataset Package**:
-   ```bash
-   npx tsx scripts/export_colab_training_package.ts
-   ```
-   Generates `training_export/sentinel_sft_dataset.jsonl`, `sentinel_dpo_dataset.jsonl`, and `sentinel_training_package.zip`.
+| | |
+|---|---|
+| [docs/FLOW_FILES.md](docs/FLOW_FILES.md) | The `.flow` format and how each OS runs it |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Audited status, what was tested and how, and what is left |
+| [docs/releases](docs/releases) | Release notes per platform |
+| [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md) | Where things live in the code |
 
-2. **Train on Google Colab (Free T4 GPU)**:
-   - Open [`notebooks/sentinel_colab_finetuning.ipynb`](notebooks/sentinel_colab_finetuning.ipynb) in Google Colab.
-   - Upload your training package and run all cells.
-   - Automatically fine-tunes with Unsloth 4-bit QLoRA and exports quantized GGUF models.
+## License
 
-3. **Deploy Trained Model**:
-   - Place the exported `sentinel_colab_lora.gguf` into `~/.sentinel/models/` to run your customized model offline with full Metal acceleration.
-
----
-
-## 🔮 Upcoming in Version 2.1: Macro Recording & 1-Click Multi-App Workflow Automation
-
-We are actively developing the **Sentinel Macro & Workflow Automation System** for **Version 2.1**, expanding beyond single-command AI execution to full **desktop orchestration and user action recording**:
-
-### 🎬 1. "Record & Replay" Workflow Recording
-- Users will be able to start an interactive recording session (`>record workflow: <name>`).
-- Sentinel observes your actions—applications opened, web URLs navigated, commands executed, and split layouts created.
-- Outputs a clean, declarative, human-readable workflow definition saved to `~/.sentinel/workflows/`.
-
-### ⚡ 2. 1-Click Multi-App & Multi-Browser Orchestration
-Instead of manually opening multiple tools every morning, Sentinel will orchestrate your entire workspace in **1 single click or natural language trigger**:
-- **Real-World Automation Example**:
-  ```bash
-  pranav@macbook ~ % >start my daily ai dev session
-  ```
-  In **1 click**, Sentinel automatically:
-  1. Opens **Claude**, **Gemini**, and **ChatGPT** concurrently in dedicated tabs in **Safari**.
-  2. Opens **YouTube** (or your reference video/music) in **Google Chrome**.
-  3. Launches **Antigravity IDE** (or Visual Studio Code) focused on your active project directory.
-  4. Automatically positions and tiles the windows across your displays for instant productivity.
-
-### ⌨️ 3. Hotkey Binding & Quick-Trigger Dashboard
-- Bind any recorded workflow to a custom global key combination (e.g. `Cmd+Shift+1`) or trigger it via the interactive UI bar.
-- Export and share workflow templates across teams via simple JSON/YAML specifications.
-
----
-
-## 📜 License
-
-Sentinel Terminal is open-source software licensed under the **[MIT License](LICENSE)**.
-
-<div align="center">
-  <br>
-  <b>Built with visual excellence, mathematical rigor, and engineering passion. If Sentinel elevates your workflow, consider starring ⭐️ our repository!</b>
-</div>
+[MIT](LICENSE)
