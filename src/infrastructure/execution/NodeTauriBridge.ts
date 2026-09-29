@@ -129,12 +129,18 @@ export class NodeTauriBridge {
             PATH: `${process.env.PATH || ''}:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`
           };
 
+          // Same contract as the app's execute_command: `timeoutMs` bounds the run when given.
+          // SENTINEL_CMD_TIMEOUT_MS caps every command in headless test runs.
+          const cap = Number(process.env.SENTINEL_CMD_TIMEOUT_MS) || 0;
+          const requested = Number(payload.timeoutMs) || 0;
+          const timeout = [requested, cap].filter(ms => ms > 0).reduce((a, b) => Math.min(a, b), Infinity);
           const result = spawnSync(command, args, {
             cwd,
             env,
             encoding: 'utf-8',
             maxBuffer: 10 * 1024 * 1024,
-            shell: false
+            shell: false,
+            timeout: Number.isFinite(timeout) ? timeout : undefined
           });
 
           stdout = result.stdout || '';

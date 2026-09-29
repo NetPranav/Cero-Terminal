@@ -34,6 +34,21 @@ describe('parseTerminalAction', () => {
     expect(parseTerminalAction('show me the output of tab 3')).toMatchObject({ kind: 'read', target: { kind: 'tab', index: 3 } });
   });
 
+  it('opens tabs "here" and understands "run X in a new tab"', () => {
+    expect(parseTerminalAction('open a new tab here and run python3 -m http.server 8765')).toEqual({ kind: 'open', placement: 'tab', cwd: undefined, command: 'python3 -m http.server 8765' });
+    expect(parseTerminalAction('open a new split in this folder and then run npm test')).toMatchObject({ placement: 'split', command: 'npm test' });
+    expect(parseTerminalAction('run npm run dev in a new tab')).toMatchObject({ kind: 'open', placement: 'tab', command: 'npm run dev' });
+    expect(parseTerminalAction('start the server in a new split in ../api')).toMatchObject({ placement: 'split', cwd: '../api', command: 'the server' });
+    expect(parseTerminalAction('in a new tab, run htop')).toMatchObject({ placement: 'tab', command: 'htop' });
+  });
+
+  it('stops the terminal serving a port', () => {
+    expect(parseTerminalAction('stop the server on port 8766')).toEqual({ kind: 'stop', target: { kind: 'name', name: '8766' }, phrase: 'the terminal using port 8766' });
+    expect(parseTerminalAction("stop whatever's running on port 3000")).toMatchObject({ kind: 'stop', target: { name: '3000' } });
+    const panes = [pane({ paneId: 'me', number: 1 }), pane({ paneId: 's', number: 2, busy: true, runningCommand: 'python3 -m http.server 8766' })];
+    expect(resolveTarget({ kind: 'name', name: '8766' }, panes, 'me')).toMatchObject({ kind: 'one', pane: { paneId: 's' } });
+  });
+
   it('leaves ordinary requests alone', () => {
     for (const goal of ['what is using port 3000', 'run the tests', 'open safari', 'stop docker', 'kill node', 'list the files', 'why is the build failing', 'show disk usage']) {
       expect(parseTerminalAction(goal), goal).toBeNull();

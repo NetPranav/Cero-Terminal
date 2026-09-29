@@ -158,3 +158,18 @@ describe('TerminalWorkspace change-only context', () => {
     expect(ws.get('b')).toMatchObject({ tabIndex: 2, tabTitle: 'api' });
   });
 });
+
+describe('TerminalWorkspace prompt line', () => {
+  beforeEach(() => TerminalWorkspace.resetForTests());
+
+  it('keeps the unfinished line, so a prompt after Ctrl+C counts as ready', async () => {
+    const { readyForInput } = await import('./TerminalActions');
+    const ws = TerminalWorkspace.getInstance();
+    ws.register('srv', { busy: false });
+    ws.appendOutput('srv', 'Serving HTTP on :: port 8765 ...\r\n^C\r\nKeyboard interrupt received, exiting.\r\n%     \r \ruser@mac work % ');
+    expect(ws.get('srv')!.currentLine).toBe('user@mac work %');
+    expect(readyForInput(ws.get('srv')!).ok).toBe(true);
+    ws.appendOutput('srv', 'ls\r\n');
+    expect(ws.get('srv')!.currentLine).toBe('');
+  });
+});

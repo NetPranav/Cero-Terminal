@@ -59,7 +59,9 @@ export function parseTerminalAction(goal: string): TerminalAction | null {
   }
 
   // Open a tab or a split, optionally in a folder and running something
-  let m = text.match(/^(?:open|create|start|make|add)\s+(?:a\s+|another\s+)?(?:new\s+)?(tab|terminal|window|split|pane)(?:\s+(?:in|at|for)\s+(\S+))?(?:\s*(?:,|and|then)\s+(?:run\s+|start\s+)?(.+))?$/i);
+  // "here", "in this folder" and "in the current directory" mean the requester's own folder
+  const HERE = String.raw`(?:\s+(?:here|in\s+(?:this|the\s+current)\s+(?:folder|directory|dir)))`;
+  let m = text.match(new RegExp(`^(?:open|create|start|make|add)\\s+(?:a\\s+|another\\s+)?(?:new\\s+)?(tab|terminal|window|split|pane)(?:${HERE}|\\s+(?:in|at|for)\\s+(\\S+))?(?:\\s*(?:,|and|then)\\s+(?:then\\s+)?(?:run\\s+|start\\s+|execute\\s+)?(.+))?$`, 'i'));
   if (m) {
     const noun = m[1].toLowerCase();
     return {
@@ -67,6 +69,19 @@ export function parseTerminalAction(goal: string): TerminalAction | null {
       placement: noun === 'split' || noun === 'pane' ? 'split' : 'tab',
       cwd: m[2] ? unquote(m[2]) : undefined,
       command: m[3] ? unquote(m[3]) : undefined,
+    };
+  }
+  // "run npm run dev in a new tab", "start the server in a new split here"
+  m = text.match(new RegExp(`^(?:run|start|launch|execute)\\s+(.+?)\\s+in\\s+(?:a\\s+)?new\\s+(tab|terminal|window|split|pane)(?:${HERE}|\\s+(?:in|at)\\s+(\\S+))?$`, 'i'))
+    || text.match(new RegExp(`^in\\s+(?:a\\s+)?new\\s+(tab|terminal|window|split|pane)${HERE}?\\s*,?\\s*(?:run|start|launch|execute)\\s+(.+)$`, 'i'));
+  if (m) {
+    const inFirst = /^in\s/i.test(text);
+    const noun = (inFirst ? m[1] : m[2]).toLowerCase();
+    return {
+      kind: 'open',
+      placement: noun === 'split' || noun === 'pane' ? 'split' : 'tab',
+      cwd: !inFirst && m[3] ? unquote(m[3]) : undefined,
+      command: unquote(inFirst ? m[2] : m[1]),
     };
   }
   m = text.match(/^split\s+(?:the\s+)?(?:screen|terminal|this|window|pane)?\s*(vertically|horizontally|side\s+by\s+side|below|to\s+the\s+right|down)?(?:\s*(?:,|and|then)\s+(?:run\s+)?(.+))?$/i);
@@ -95,6 +110,10 @@ export function parseTerminalAction(goal: string): TerminalAction | null {
     const target = parseTarget(m[1]);
     if (target) return { kind: 'send', target, phrase: m[1].trim(), command: unquote(m[2]) };
   }
+
+  // "stop the server on port 8766": the terminal whose command mentions that port
+  m = lower.match(/^(?:stop|interrupt|end|kill)\s+(?:the\s+|whatever(?:'s|\s+is)?\s+)?(?:\w+\s+)?(?:server|process|app|service|thing)?\s*(?:running\s+|listening\s+)?on\s+port\s+(\d{2,5})$/);
+  if (m) return { kind: 'stop', target: { kind: 'name', name: m[1] }, phrase: `the terminal using port ${m[1]}` };
 
   // Stop what is running in a terminal (Ctrl+C)
   m = lower.match(/^(?:stop|interrupt|cancel|end|ctrl\+?c|kill)\s+(?:the\s+)?(?:process\s+|command\s+|job\s+)?(?:(?:that(?:'s|\s+is)\s+|what(?:'s|\s+is)\s+)?running\s+)?(?:in|on)\s+(.+)$/)
@@ -179,7 +198,8 @@ export function describePane(p: PaneInfo): string {
 export function readyForInput(p: PaneInfo): { ok: true } | { ok: false; reason: string } {
   if (p.alternateScreen) return { ok: false, reason: `${describePane(p)} is showing a full-screen program` };
   if (p.busy) return { ok: false, reason: `${describePane(p)} is busy running \`${p.runningCommand || 'a command'}\`` };
-  const last = p.outputTail[p.outputTail.length - 1] || '';
+  // The prompt is the unfinished line after the last newline; fall back to the last full line
+  const last = p.currentLine?.trim() ? p.currentLine : (p.outputTail[p.outputTail.length - 1] || '');
   if (last && !/[$%#>❯➜]\s*$/.test(last)) return { ok: false, reason: `${describePane(p)} is not at a prompt` };
   return { ok: true };
 }

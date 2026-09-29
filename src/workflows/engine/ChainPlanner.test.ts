@@ -67,6 +67,50 @@ describe('planChain', () => {
   });
 });
 
+describe('planChain: folders, git and virtual environments', () => {
+  const cmds = (goal: string, os: 'macos' | 'linux' | 'windows' = 'macos') =>
+    planChain(goal, os)!.steps.map(s => s.command ?? `(enter ${s.enter})`);
+
+  it('runs every step inside the folder named first', () => {
+    expect(cmds("in demo-repo create a branch called feature/login, switch to it, make an empty commit with the message 'start login' and show the last 3 commits")).toEqual([
+      '(enter demo-repo)',
+      'git checkout -b feature/login',
+      'git checkout feature/login',
+      "git commit --allow-empty -m 'start login'",
+      'git log --oneline -3',
+    ]);
+  });
+
+  it('uses the virtual environment it just created', () => {
+    expect(cmds('create a python virtual environment called venv-test and show the python version inside it')).toEqual([
+      'python3 -m venv venv-test',
+      'venv-test/bin/python --version',
+    ]);
+    expect(cmds('create a python virtual environment called venv-test and show the python version inside it', 'windows')).toEqual([
+      'python -m venv venv-test',
+      "& venv-test\\Scripts\\python.exe --version",
+    ]);
+  });
+
+  it('handles quoted names with spaces, several files and counting them', () => {
+    expect(cmds("make a folder named 'meeting notes', create three files called a.txt, b.txt and c.txt inside it, then tell me how many files it has")).toEqual([
+      "mkdir -p 'meeting notes'",
+      "touch -- 'meeting notes/a.txt' 'meeting notes/b.txt' 'meeting notes/c.txt'",
+      "find 'meeting notes' -maxdepth 1 -type f | wc -l | tr -d ' '",
+    ]);
+  });
+
+  it('writes PowerShell steps on Windows', () => {
+    expect(cmds('create a folder called api, go into it, create a readme and then list the files', 'windows')).toEqual([
+      'New-Item -ItemType Directory -Force -Path api | Out-Null',
+      '(enter api)',
+      "if (-not (Test-Path README.md)) { '# ' + (Split-Path -Leaf $PWD) | Out-File -Encoding utf8 README.md }",
+      'Get-ChildItem -Force',
+    ]);
+    expect(planChain('go to logs, then follow app.log', 'windows')!.steps[1].command).toBe('Get-Content -Wait -Tail 20 app.log');
+  });
+});
+
 describe('resolveFolder', () => {
   it('resolves relative, parent, absolute and home paths', () => {
     expect(resolveFolder('/tmp/a', 'b')).toBe('/tmp/a/b');

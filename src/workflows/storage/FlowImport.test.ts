@@ -31,6 +31,15 @@ describe('flowToWorkflow', () => {
     expect(wf.steps[2].command).toBe("setsid -f 'antigravity' >/dev/null 2>&1");
   });
 
+  it('maps the same actions to Windows commands', () => {
+    const wf = flowToWorkflow(MORNING, 'x', 'windows')!;
+    expect(wf.steps.map(s => s.command)).toEqual([
+      "Start-Process 'https://claude.ai'; Start-Process 'https://chatgpt.com'",
+      "Start-Process chrome -ArgumentList 'https://www.youtube.com'",
+      "Start-Process 'Antigravity'",
+    ]);
+  });
+
   it('drops non-web URLs and quotes app names so a file cannot inject commands', () => {
     const wf = flowToWorkflow({ actions: [
       { type: 'browser', urls: ['javascript:alert(1)', 'file:///etc/passwd'] },

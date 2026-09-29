@@ -257,11 +257,12 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
     it('routes git status queries via shell.execute fast-path', async () => {
       const res = await agent.run('check git status', { os: 'linux', cwd: '/home/test' });
       expect(res.success).toBe(true);
+      // The git status recipe: read-only, so it runs without a dialog
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'shell.execute',
-        expect.objectContaining({ command: expect.stringMatching(/git\s+status/i) }),
+        expect.objectContaining({ command: expect.stringMatching(/git\s+(?:-C\s+\S+\s+)?status/i) }),
         '/home/test',
-        undefined
+        expect.any(Function)
       );
     });
 

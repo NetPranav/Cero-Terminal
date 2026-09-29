@@ -63,7 +63,11 @@ export class ShellSDKCapability extends BaseCapabilityDriver<ShellDriverInput, a
       const shellBinary = isLinux() ? '/bin/bash' : (isWindows() ? 'powershell.exe' : '/bin/zsh');
       // ros2/colcon/rosdep only exist after sourcing ROS; non-interactive bash never reads ~/.bashrc
       const runnable = isLinux() ? withRosEnvironment(commandLine, this.rosDistro()) : commandLine;
-      const shellArgs = isWindows() ? ['-Command', runnable] : ['-c', runnable];
+      // Windows: no profile scripts (slow, can print into every result), never wait for input, and
+      // UTF-8 output (redirected PowerShell otherwise writes the console code page)
+      const shellArgs = isWindows()
+        ? ['-NoProfile', '-NonInteractive', '-Command', `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${runnable}`]
+        : ['-c', runnable];
 
       const output = await invoke<{ stdout: string; stderr: string; code: number; pid?: number; timed_out?: boolean }>('execute_command', {
         command: shellBinary,

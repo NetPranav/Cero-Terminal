@@ -1173,7 +1173,8 @@ describe('Questions about a file are answered from the file', () => {
 
     const result = await loop.run('explain what math.js does', { os: 'macos', cwd: '/tmp/repo' });
 
-    expect(execute).toHaveBeenCalledWith('shell.execute', expect.objectContaining({ command: "head -c 6000 -- 'math.js'" }), '/tmp/repo', undefined);
+    // Internal, read-only, quoted path: approved without a dialog
+    expect(execute).toHaveBeenCalledWith('shell.execute', expect.objectContaining({ command: "head -c 6000 -- 'math.js'" }), '/tmp/repo', expect.any(Function));
     const prompt = generate.mock.calls[0][0] + generate.mock.calls[0][1];
     expect(prompt).toContain('return a + b;');
     expect(result.summary).toContain('add');

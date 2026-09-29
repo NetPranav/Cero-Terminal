@@ -33,6 +33,8 @@ export interface PaneInfo {
   spawnedByAgent: boolean;
   outputTail: string[];
   updatedAt: number;
+  /** The line being written right now, without a newline yet: usually the shell prompt */
+  currentLine?: string;
 }
 
 export interface SpawnRequest {
@@ -167,7 +169,10 @@ export class TerminalWorkspace {
     if (!pane || !chunk) return;
     const text = (this.partialLine.get(paneId) || '') + stripAnsi(chunk).replace(/\r(?!\n)/g, '\n');
     const parts = text.split(/\r?\n/);
-    this.partialLine.set(paneId, parts.pop() || '');
+    const partial = parts.pop() || '';
+    this.partialLine.set(paneId, partial);
+    // The unfinished last line is where a shell prompt sits ("user@host app % ")
+    pane.currentLine = partial.trimEnd();
     const lines = parts.map(l => l.trimEnd()).filter(l => l.length > 0);
     if (lines.length === 0) return;
     pane.outputTail = [...pane.outputTail, ...lines].slice(-TAIL_LINES);
