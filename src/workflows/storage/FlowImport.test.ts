@@ -27,7 +27,8 @@ describe('flowToWorkflow', () => {
   it('maps the same actions to Linux commands', () => {
     const wf = flowToWorkflow(MORNING, 'x', 'linux')!;
     expect(wf.steps[0].command).toBe("xdg-open 'https://claude.ai' && xdg-open 'https://chatgpt.com'");
-    expect(wf.steps[1].command).toBe("setsid -f google-chrome 'https://www.youtube.com' >/dev/null 2>&1");
+    // Chrome when installed, otherwise the default browser
+    expect(wf.steps[1].command).toBe("(command -v google-chrome >/dev/null 2>&1 && setsid -f google-chrome 'https://www.youtube.com' >/dev/null 2>&1) || xdg-open 'https://www.youtube.com'");
     expect(wf.steps[2].command).toBe("setsid -f 'antigravity' >/dev/null 2>&1");
   });
 

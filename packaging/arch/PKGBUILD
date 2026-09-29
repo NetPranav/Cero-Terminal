@@ -30,8 +30,10 @@ source=(
     "icon.png"
     "128x128.png"
     "32x32.png"
+    "sentinel-terminal-mime.xml"
 )
 sha256sums=(
+    'SKIP'
     'SKIP'
     'SKIP'
     'SKIP'
@@ -53,6 +55,9 @@ package() {
 
     # Install Dolphin KIO service menu
     install -Dm644 "${srcdir}/sentinel_open.desktop" "${pkgdir}/usr/share/kio/servicemenus/sentinel_open.desktop"
+
+    # .flow files open with Sentinel (pacman's shared-mime-info hook updates the database)
+    install -Dm644 "${srcdir}/sentinel-terminal-mime.xml" "${pkgdir}/usr/share/mime/packages/sentinel-terminal.xml"
 
     # Install icons
     install -Dm644 "${srcdir}/icon.png" "${pkgdir}/usr/share/icons/hicolor/512x512/apps/sentinel-terminal.png"

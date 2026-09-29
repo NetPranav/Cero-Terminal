@@ -8,10 +8,13 @@
  */
 
 import type { SavedWorkflowDefinition } from '../workflows/models/WorkflowTypes';
+import type { FlowPlan } from '../workflows/flow/FlowPlan';
 
 export type TerminalRequest =
   | { kind: 'goal'; goal: string }
-  | { kind: 'workflow'; definition: SavedWorkflowDefinition; source?: string };
+  | { kind: 'workflow'; definition: SavedWorkflowDefinition; source?: string }
+  /** A .flow file that needs the terminal: its steps are typed into the shell one by one */
+  | { kind: 'flow'; plan: FlowPlan; source?: string };
 
 type Handler = (request: TerminalRequest) => void;
 

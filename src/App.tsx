@@ -38,7 +38,9 @@ import {
 import { isLinux, getShortcutModifier, formatShortcut } from "./shared/platform";
 import { TerminalWorkspace, MAX_PANES_PER_TAB } from "./domain/terminal/TerminalWorkspace";
 import { submitTerminalRequest } from "./presentation/TerminalRequests";
-import { parseWorkflowFile, isWorkflowFilePath } from "./workflows/storage/FlowImport";
+import { isWorkflowFilePath } from "./workflows/storage/FlowImport";
+import { planFlowFile, flowOsOf } from "./workflows/flow/FlowPlan";
+import { runDesktopSteps } from "./workflows/flow/FlowRunner";
 import { getPlatform } from "./shared/platform";
 import "./App.css";
 
@@ -76,9 +78,11 @@ interface Tab {
 
 export interface AppProps {
   initialPath?: string;
+  /** .flow files the app was opened with that need the terminal (main.tsx ran desktop-only ones) */
+  initialFlowFiles?: string[];
 }
 
-export function App({ initialPath }: AppProps = {}) {
+export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
   const getUniqueId = (prefix = 'id') => `${prefix}_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36)}`;
 
   const splitContainerRefs = useRef<Record<string, HTMLDivElement>>({});
@@ -152,24 +156,34 @@ export function App({ initialPath }: AppProps = {}) {
   /** file:///x/y.flow or a plain path -> /x/y.flow */
   const toLocalPath = (value: string): string => {
     if (value.startsWith('file://')) {
-      try { return decodeURIComponent(new URL(value).pathname); } catch { return value; }
+      try {
+        const local = decodeURIComponent(new URL(value).pathname);
+        return /^\/[A-Za-z]:/.test(local) ? local.slice(1) : local; // file:///C:/Users/... on Windows
+      } catch { return value; }
     }
     return value;
   };
 
-  // A workflow file opened with Sentinel (Finder, `open -a`, `sentinel file.flow`) runs in the
-  // focused terminal after the usual confirmation, which lists every command first. It never
-  // runs unseen, even when the file came from someone else.
+  // A .flow (or workflow) file opened with Sentinel: Finder, Explorer, a file manager, `sentinel x.flow`.
+  // Only desktop actions (open Chrome, a link, VS Code): they run right away, no terminal needed.
+  // Anything that installs or runs commands: typed into the focused terminal after one approval
+  // that lists every command, so a flow from someone else never runs unseen.
   const openWorkflowFiles = async (paths: string[]) => {
     for (const filePath of paths) {
       try {
-        const res = await invoke<{ stdout: string; code: number }>('execute_command', { command: 'cat', args: [filePath] });
-        const definition = res.code === 0 ? parseWorkflowFile(res.stdout, filePath, getPlatform() === 'linux' ? 'linux' : 'macos') : null;
-        if (!definition) {
-          console.warn('[Sentinel] Not a workflow file:', filePath);
+        const text = await invoke<string>('read_system_file', { path: filePath });
+        const plan = planFlowFile(text, filePath, flowOsOf(getPlatform()));
+        if (!plan) {
+          console.warn('[Sentinel] Not a flow or workflow file:', filePath);
           continue;
         }
-        submitTerminalRequest({ kind: 'workflow', definition, source: filePath });
+        if (!plan.needsTerminal) {
+          const res = await runDesktopSteps(plan.steps, flowOsOf(getPlatform()), (command, args) =>
+            invoke<{ code: number; stdout: string; stderr: string }>('execute_command', { command, args, timeoutMs: 30000 }));
+          if (!res.ok) console.warn('[Sentinel] Flow steps failed:', res.failed);
+          continue;
+        }
+        submitTerminalRequest({ kind: 'flow', plan, source: filePath });
       } catch (err) {
         console.warn('[Sentinel] Could not open workflow file:', filePath, err);
       }
@@ -382,6 +396,8 @@ export function App({ initialPath }: AppProps = {}) {
     // Process CLI launch arguments on initial application mount
     if (!startupArgsProcessedRef.current) {
       startupArgsProcessedRef.current = true;
+      // Flows that need the terminal wait in the request queue until a pane is ready
+      if (initialFlowFiles?.length) void openWorkflowFiles(initialFlowFiles);
       (async () => {
         try {
           const args = await invoke<string[]>('get_launch_args');
@@ -389,11 +405,8 @@ export function App({ initialPath }: AppProps = {}) {
 
           const candidateArgs = args.slice(1).filter(arg => arg && !arg.startsWith('-'));
           if (candidateArgs.length === 0) return;
-          const workflowArgs = candidateArgs.map(toLocalPath).filter(isWorkflowFilePath);
-          if (workflowArgs.length > 0) {
-            void openWorkflowFiles(workflowArgs);
-            return;
-          }
+          // .flow files in the arguments were collected by main.tsx (initialFlowFiles)
+          if (candidateArgs.map(toLocalPath).some(isWorkflowFilePath)) return;
 
           const actions = UrlSchemeHandler.getInstance().parseMany(candidateArgs);
           if (actions.length === 0) return;

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "metadata": {
+    "id": "python-data",
+    "name": "Python data notebook",
+    "description": "Installs Python if missing, creates a virtual environment with pandas and Jupyter, and opens the folder."
+  },
+  "actions": [
+    { "type": "install", "package": "python" },
+    { "type": "command", "name": "Create the project folder", "command": "mkdir -p ~/sentinel-demo/data", "windows": "New-Item -ItemType Directory -Force -Path (Join-Path $HOME 'sentinel-demo/data') | Out-Null" },
+    { "type": "command", "name": "Create a virtual environment", "command": "python3 -m venv .venv", "windows": "python -m venv .venv", "cwd": "~/sentinel-demo/data" },
+    { "type": "command", "name": "Install pandas and Jupyter", "command": ".venv/bin/pip install pandas jupyter", "windows": ".venv\\Scripts\\pip.exe install pandas jupyter", "cwd": "~/sentinel-demo/data" },
+    { "type": "folder", "name": "Open the folder", "path": "~/sentinel-demo/data" }
+  ]
+}

@@ -3,6 +3,7 @@ mod process_cmds;
 mod embedded_server;
 mod watcher;
 mod downloads;
+mod launch;
 pub mod logger;
 
 #[cfg(target_os = "macos")]
@@ -41,6 +42,8 @@ pub fn run() {
             request_bluetooth_permission();
             // A previous instance that crashed or was killed can leave its model server running
             std::thread::spawn(|| embedded_server::reap_orphaned_server(8847));
+            // The window starts hidden: shown now, unless the app was opened to run a .flow file
+            launch::show_unless_flow(app.handle());
 
             use tauri::Manager;
             if let Some(main_win) = app.get_webview_window("main") {
@@ -148,6 +151,7 @@ pub fn run() {
         .manage(process_cmds::SystemState(std::sync::Mutex::new(sysinfo::System::new())))
         .manage(embedded_server::EmbeddedLlmState::default())
         .manage(watcher::WatchState::default())
+        .manage(launch::OpenedFiles::default())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
@@ -193,6 +197,9 @@ pub fn run() {
             downloads::get_sentinel_download_status,
             downloads::cancel_sentinel_download,
             downloads::install_sentinel_engine,
+            launch::take_opened_files,
+            launch::show_main_window,
+            launch::is_main_window_visible,
             logger::log_diagnostic,
             logger::is_debug_active
         ])
@@ -230,6 +237,7 @@ pub fn run() {
                     use tauri::Emitter;
                     let url_strings: Vec<String> = urls.into_iter().map(|u| u.to_string()).collect();
                     logger::log_info("URL", &format!("Opened via protocol handler: {:?}", url_strings));
+                    launch::remember_opened(app_handle, &url_strings);
                     let _ = app_handle.emit("sentinel-url", url_strings);
                 }
                 _ => {}

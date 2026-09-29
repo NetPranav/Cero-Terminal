@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lets file managers open .flow files with Sentinel Terminal (installed to /usr/share/mime/packages) -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-sentinel-workflow">
+    <comment>Sentinel Terminal flow</comment>
+    <sub-class-of type="application/json"/>
+    <glob pattern="*.flow"/>
+    <glob pattern="*.workflow.json" weight="60"/>
+  </mime-type>
+</mime-info>

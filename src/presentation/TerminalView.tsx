@@ -1,3 +1,5 @@
+import { runFlowInTerminal, parseStepMarker, flowApprovalPlan, type ShellFamily } from '../workflows/flow/FlowRunner';
+import { flowOsOf, type FlowPlan } from '../workflows/flow/FlowPlan';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -327,6 +329,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     const currentTheme = themeManager.getTheme();
 
     const isPreviewMode = typeof window !== 'undefined' && (window.location.search.includes('preview') || window.location.search.includes('large_preview'));
+    /** Resolves the running .flow step when its end-of-step report arrives */
+    let flowStepWaiter: ((code: number | null) => void) | null = null;
     const term = new Terminal({
       cursorBlink: true,
       allowTransparency: true,
@@ -543,6 +547,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     window.addEventListener('sentinel:find-in-terminal', handleFindRequest);
 
     term.open(terminalRef.current);
+
+    // End-of-step reports from .flow runs (OSC 777 "sentinel-step;<code>"): invisible, never drawn
+    term.parser.registerOscHandler(777, (payload) => {
+      const code = parseStepMarker(payload);
+      if (code === null) return false;
+      flowStepWaiter?.(code);
+      return true;
+    });
     
     try {
       const webglAddon = new WebglAddon();
@@ -920,10 +932,81 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           });
         };
 
+        // .flow files that install or run things: typed into this terminal step by step
+        const runFlow = async (plan: FlowPlan, source?: string) => {
+          aiBusyRef.current = true;
+          const os = flowOsOf(getPlatform());
+          try {
+            let shell: ShellFamily = 'powershell';
+            if (os !== 'windows') {
+              const probe = await invoke<{ stdout: string }>('execute_command', { command: '/bin/sh', args: ['-c', 'printf %s "$SHELL"'], timeoutMs: 5000 }).catch(() => ({ stdout: '' }));
+              shell = /fish$/.test((probe.stdout || '').trim()) ? 'fish' : 'posix';
+            }
+            // A pane opened for this flow may still be starting its shell
+            for (let waited = 0; waited < 15000 && !ptyTrackerRef.current.isIdleAtPrompt(); waited += 250) {
+              await new Promise(r => setTimeout(r, 250));
+            }
+            await runFlowInTerminal(plan, {
+              os,
+              shell,
+              type: async (text) => {
+                if (!text.startsWith('__sentinel_step') && !text.startsWith('function __sentinel_step')) ptyTrackerRef.current.notifyCommandStarted(text);
+                await sessionManager.write(currentSessionId!, text);
+              },
+              nextStepResult: () => new Promise<number | null>((resolve) => {
+                let settled = false;
+                const started = Date.now();
+                let idleSince = 0;
+                const finish = (code: number | null) => {
+                  if (settled) return;
+                  settled = true;
+                  clearInterval(watch);
+                  if (flowStepWaiter === finish) flowStepWaiter = null;
+                  resolve(code);
+                };
+                flowStepWaiter = finish;
+                // No marker and the prompt has been back for 8 s: the step was interrupted (Ctrl+C)
+                const watch = setInterval(() => {
+                  if (Date.now() - started < 2000) return;
+                  if (ptyTrackerRef.current.isIdleAtPrompt()) {
+                    idleSince = idleSince || Date.now();
+                    if (Date.now() - idleSince > 8000) finish(null);
+                  } else {
+                    idleSince = 0;
+                  }
+                }, 500);
+              }),
+              approve: (p) => ConsentQueue.getInstance().enqueue(flowApprovalPlan(p, os, source), currentSessionId!),
+              execute: (command, args) => invoke<{ code: number; stdout: string; stderr: string }>('execute_command', { command, args, timeoutMs: 30000 }),
+              notice: (text, tone) => {
+                const color = tone === 'error' ? S.err : tone === 'ok' ? S.ok : S.muted;
+                writeTerm(`\r\n  ${color}${tone === 'error' ? '✗' : tone === 'ok' ? '✓' : '›'}${S.reset} ${S.text}${text}${S.reset}\r\n`);
+              },
+            }, source);
+          } catch (err: any) {
+            writeTerm(`\r\n  ${S.err}✗${S.reset} Flow "${plan.name}" failed: ${err?.message || err}\r\n`);
+          } finally {
+            // The result line was written below the last prompt: ask the shell for a fresh one
+            if (currentSessionId) void sessionManager.write(currentSessionId, '\r');
+            aiBusyRef.current = false;
+            const next = aiQueueRef.current.shift();
+            if (next) setTimeout(() => runAiGoal(next.goal, next.runner), 150);
+          }
+        };
+
         submitRef.current = (request: TerminalRequest) => {
+          if (request.kind === 'flow') {
+            writeTerm(`\r\n  ${S.muted}›${S.reset} ${S.text}Flow "${request.plan.name}"${request.source ? ` from ${request.source.split(/[\\/]/).pop()}` : ''}${S.reset}`);
+            if (aiBusyRef.current) {
+              writeTerm(`\r\n  ${S.muted}Another request is running; open the flow again when it is done.${S.reset}\r\n`);
+              return;
+            }
+            void runFlow(request.plan, request.source);
+            return;
+          }
           const label = request.kind === 'goal'
             ? request.goal
-            : `Run workflow "${request.definition.name}"${request.source ? ` from ${request.source.split('/').pop()}` : ''}`;
+            : `Run workflow "${request.definition.name}"${request.source ? ` from ${request.source.split(/[\\/]/).pop()}` : ''}`;
           writeTerm(`\r\n  ${S.muted}›${S.reset} ${S.text}${label}${S.reset}`);
           const runner: AgentRunner | undefined = request.kind === 'workflow'
             ? (ctx) => agentLoop.runWorkflow(request.definition, {}, ctx)

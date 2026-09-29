@@ -10,7 +10,7 @@ StartupNotify=true
 StartupWMClass=sentinel-terminal
 Categories=Development;System;TerminalEmulator;Utility;
 Keywords=terminal;shell;copilot;prompt;pty;ai;
-MimeType=inode/directory;x-scheme-handler/sentinel;
+MimeType=inode/directory;x-scheme-handler/sentinel;application/x-sentinel-workflow;
 Actions=NewWindow;
 
 [Desktop Action NewWindow]

@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Sentinel Terminal",
         "width": 1024,
-        "height": 768
+        "height": 768,
+        "visible": false
       }
     ],
     "security": {
@@ -45,11 +47,19 @@
       "deb": {
         "depends": [
           "libwebkit2gtk-4.1-0",
-          "libappindicator3-1 | libayatana-appindicator3-1"]
+          "libappindicator3-1 | libayatana-appindicator3-1"
+        ],
+        "files": {
+          "/usr/share/mime/packages/sentinel-terminal.xml": "../packaging/linux/sentinel-terminal-mime.xml"
+        }
       },
       "rpm": {
         "depends": [
-          "webkit2gtk4.1"]
+          "webkit2gtk4.1"
+        ],
+        "files": {
+          "/usr/share/mime/packages/sentinel-terminal.xml": "../packaging/linux/sentinel-terminal-mime.xml"
+        }
       },
       "appimage": {
         "bundleMediaFramework": false

@@ -47,6 +47,7 @@ cp "${SCRIPT_DIR}/sentinel-terminal.desktop" "${BUILD_DIR}/"
 cp "${REPO_ROOT}/src-tauri/icons/icon.png" "${BUILD_DIR}/icon.png"
 cp "${REPO_ROOT}/src-tauri/icons/128x128.png" "${BUILD_DIR}/128x128.png"
 cp "${REPO_ROOT}/src-tauri/icons/32x32.png" "${BUILD_DIR}/32x32.png"
+cp "${REPO_ROOT}/packaging/linux/sentinel-terminal-mime.xml" "${BUILD_DIR}/"
 cp "${SCRIPT_DIR}/PKGBUILD" "${BUILD_DIR}/"
 
 # Build package using makepkg
