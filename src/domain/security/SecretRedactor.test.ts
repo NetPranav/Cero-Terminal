@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SecretRedactor } from './SecretRedactor';
+import { referencesSecretPath, redactSecrets } from './SecretRedactor';
+import { isReadOnlyCommandLine } from './ReadOnlyCommandPolicy';
 
 describe('SecretRedactor', () => {
   describe('AWS keys', () => {
@@ -168,5 +170,42 @@ b3BlbnNzaC1rZXktdjEAAAAA
       expect(SecretRedactor.redactObject(123)).toBe(123);
       expect(SecretRedactor.redactObject(true)).toBe(true);
     });
+  });
+});
+
+describe('referencesSecretPath', () => {
+  it('flags credential files and stores', () => {
+    for (const cmd of [
+      'cat ~/.ssh/id_rsa', 'head -5 ~/.ssh/id_ed25519', 'cat ~/.aws/credentials', 'cat .env', 'grep KEY .env.local',
+      'cat ~/.netrc', 'cat server.pem', 'security find-generic-password -s x -w', 'cat /etc/shadow',
+      'type %USERPROFILE%\\.ssh\\id_rsa', 'cat ~/.kube/config', 'ls ~/.gnupg',
+    ]) expect(referencesSecretPath(cmd), cmd).toBe(true);
+  });
+
+  it('leaves ordinary reads alone', () => {
+    for (const cmd of ['cat README.md', 'cat ~/.ssh/id_rsa.pub', 'cat ~/.ssh/known_hosts', 'ls -la', 'cat environment.txt', 'grep env src/app.ts', 'cat .envrc.example.md']) {
+      expect(referencesSecretPath(cmd), cmd).toBe(false);
+    }
+  });
+
+  it('makes reading a key ask for consent', () => {
+    expect(isReadOnlyCommandLine('cat ~/.ssh/id_rsa').readOnly).toBe(false);
+    expect(isReadOnlyCommandLine('cat README.md').readOnly).toBe(true);
+  });
+});
+
+describe('redactSecrets', () => {
+  it('masks keys, tokens and secret assignments but keeps the rest', () => {
+    const text = [
+      '-----BEGIN OPENSSH PRIVATE KEY-----', 'b3BlbnNzaC1rZXktdjEAAAA', '-----END OPENSSH PRIVATE KEY-----',
+      'AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE', 'aws_secret_access_key = wJalrXUtnFEMI/K7MDENG',
+      'token: ghp_abcdefghijklmnopqrstuvwxyz0123456789', '"apiKey": "sk-ant-api03-abcdefghijklmnopqrstuv"',
+      'PORT=3000',
+    ].join('\n');
+    const out = redactSecrets(text);
+    expect(out).not.toMatch(/b3BlbnNzaC1rZXktdjEAAAA|AKIAIOSFODNN7EXAMPLE|wJalrXUtnFEMI|ghp_abc|sk-ant-api03/);
+    expect(out).toMatch(/aws_secret_access_key = \[REDACTED/);
+    expect(out).toContain('PORT=3000');
+    expect(out).toMatch(/\[REDACTED:AWS_KEY\]\naws_secret_access_key/);
   });
 });

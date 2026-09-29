@@ -13,6 +13,7 @@
  */
 
 import { ShellAstParser, ProgramNode, PipelineNode, CommandNode, SimpleCommandNode, RedirectNode } from './ShellAstParser';
+import { referencesSecretPath } from './SecretRedactor';
 
 export interface ReadOnlyVerdict {
   readOnly: boolean;
@@ -261,6 +262,8 @@ function collect(node: ProgramNode | PipelineNode | CommandNode, out: { cmds: Si
 export function isReadOnlyCommandLine(commandLine: string): ReadOnlyVerdict {
   const trimmed = (commandLine || '').trim();
   if (!trimmed) return { readOnly: false, reason: 'empty command' };
+  // Reading a private key or a credentials file changes nothing, but it must never happen unasked
+  if (referencesSecretPath(trimmed)) return { readOnly: false, reason: 'reads credentials or private keys' };
 
   let ast: ProgramNode;
   try {

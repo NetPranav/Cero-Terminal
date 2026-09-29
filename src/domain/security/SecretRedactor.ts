@@ -33,7 +33,17 @@ export class SecretRedactor {
     { regex: /\b(glpat-[A-Za-z0-9\-_]{20,})\b/g, label: 'GITLAB_TOKEN' },
 
     // SSH private key blocks
-    { regex: /-----BEGIN\s+(RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----[\s\S]*?-----END\s+(RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g, label: 'SSH_PRIVATE_KEY' },
+    // (any type, including PKCS#8 "PRIVATE KEY" and "ENCRYPTED PRIVATE KEY"; a truncated block counts too)
+    { regex: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)/g, label: 'SSH_PRIVATE_KEY' },
+
+    // OpenAI / Anthropic API keys
+    { regex: /\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}/g, label: 'API_KEY' },
+
+    // Google API keys
+    { regex: /\bAIza[0-9A-Za-z_-]{35}\b/g, label: 'GOOGLE_API_KEY' },
+
+    // Slack tokens
+    { regex: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g, label: 'SLACK_TOKEN' },
 
     // JWT tokens (three dot-separated base64 segments)
     { regex: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, label: 'JWT_TOKEN' },
@@ -56,7 +66,7 @@ export class SecretRedactor {
     // Matches: TOKEN=abc123, api_key: "xyz", password = 's3cret', etc.
     // This runs LAST so specific token formats (GitHub, GitLab, JWT) are already redacted.
     {
-      regex: /(?:^|[^a-zA-Z0-9_])((?:api[_-]?key|api[_-]?secret|auth[_-]?token|access[_-]?token|secret[_-]?key|password|passwd|token|private[_-]?key|client[_-]?secret|app[_-]?secret)\s*[=:]\s*['"]?)([^\s'"}{,\]]+)/gim,
+      regex: /(?:^|[^a-zA-Z0-9_])((?:[A-Za-z0-9]+[_-])*(?:api[_-]?key|api[_-]?secret|auth[_-]?token|access[_-]?token|access[_-]?key|secret[_-]?access[_-]?key|secret[_-]?key|password|passwd|token|private[_-]?key|client[_-]?secret|app[_-]?secret)\s*[=:]\s*['"]?)([^\s'"}{,\]]+)/gim,
       label: 'SECRET_VALUE'
     },
   ];
@@ -81,7 +91,9 @@ export class SecretRedactor {
           const value = groups[1] || '';
           // Skip if the value was already redacted by a more specific pattern
           if (value.includes('[REDACTED:')) return fullMatch;
-          return keyword + `[REDACTED:${label}]`;
+          // Keep the boundary character matched before the name (a newline, space or quote)
+          const lead = fullMatch.slice(0, fullMatch.indexOf(keyword));
+          return lead + keyword + `[REDACTED:${label}]`;
         }
         if (label === 'BEARER_TOKEN') {
           return `Bearer [REDACTED:${label}]`;
@@ -131,4 +143,38 @@ export class SecretRedactor {
     }
     return obj;
   }
+}
+
+// ---- Credential files: commands that name one always ask first -------------------------------
+// `cat ~/.ssh/id_rsa` looks read-only, so it used to run without asking and its output went to the
+// model (a cloud model, when one is configured).
+
+/** Files and stores that hold credentials; any command that names one needs consent. */
+const SECRET_PATH = new RegExp([
+  String.raw`\.ssh[\\/](?![\w.-]*\.pub\b)(?!known_hosts\b)`,
+  String.raw`\bid_(?:rsa|dsa|ecdsa|ed25519)(?!\.pub)\b`,
+  String.raw`\.gnupg\b`,
+  String.raw`\.aws[\\/](?:credentials|config)\b`,
+  String.raw`\.config[\\/](?:gcloud|gh)\b`,
+  String.raw`\.azure\b`,
+  String.raw`\.kube[\\/]config\b`,
+  String.raw`\.docker[\\/]config\.json\b`,
+  String.raw`\.(?:netrc|npmrc|pypirc|git-credentials|pgpass|my\.cnf)\b`,
+  String.raw`(?:^|[\s'"=\\/])\.env(?:\.[\w-]+)?(?=$|[\s'";|&)])`,
+  String.raw`\.(?:pem|key|p12|pfx|keystore|jks)\b`,
+  String.raw`/etc/(?:shadow|gshadow|sudoers)\b`,
+  String.raw`\bKeychains?\b`,
+  String.raw`\bsecurity\s+(?:find|dump)-(?:generic|internet)-password\b|\bsecurity\s+dump-keychain\b`,
+  String.raw`\bsecret-tool\s+lookup\b`,
+  String.raw`\.password-store\b`,
+  String.raw`\.terraform\.d[\\/]credentials`,
+].join('|'), 'i');
+
+export function referencesSecretPath(commandLine: string): boolean {
+  return SECRET_PATH.test(commandLine || '');
+}
+
+/** Text handed to a model (command output, pane output, file contents): keys and tokens masked */
+export function redactSecrets(text: string): string {
+  return SecretRedactor.redact(text);
 }
