@@ -6,7 +6,8 @@ export interface PtyOutputEvent {
   data: number[]; // Sent as array of u8 from Rust
 }
 
-export type TerminalOutputCallback = (data: Uint8Array) => void;
+/** `replay` is true for buffered history re-sent to a remounted pane (not new output) */
+export type TerminalOutputCallback = (data: Uint8Array, replay?: boolean) => void;
 
 export class SessionManager {
   private static instance: SessionManager;
@@ -92,10 +93,12 @@ export class SessionManager {
     if (callbacks && !callbacks.includes(callback)) {
       callbacks.push(callback);
     }
-    // Replay existing buffered output immediately so screen contents restore on component mount/split
+    // Replay existing buffered output immediately so screen contents restore on component mount/split.
+    // Marked as replay: the pane draws it but must not record it again (history would double on
+    // every layout change) or diagnose it as new output.
     const existingBuffer = this.sessionBuffers.get(sessionId);
     if (existingBuffer && existingBuffer.length > 0) {
-      existingBuffer.forEach(chunk => callback(chunk));
+      [...existingBuffer].forEach(chunk => callback(chunk, true));
     }
   }
 

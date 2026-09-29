@@ -451,3 +451,11 @@ describe('git subcommand typos', () => {
     expect(oracle.diagnose({ command: 'git statsu', output, exitCode: 1 })?.explanation).toBe("'statsu' is not a command; did you mean 'status'?");
   });
 });
+
+describe('did-you-mean suggestions', () => {
+  it('strips quotes around the suggested name', () => {
+    const oracle = DeterministicRuleOracle.getInstance();
+    const s = oracle.diagnose({ command: 'gti status', output: "zsh: command not found: gti\nDid you mean 'git'?", exitCode: 127 });
+    expect(s?.fixedCommand).toBe('git status');
+  });
+});

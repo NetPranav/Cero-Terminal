@@ -1334,8 +1334,9 @@ export class DeterministicRuleOracle {
         const match =
           ctx.output.match(/Did you mean (.*)\?/i) ||
           ctx.output.match(/The most similar command is\s+([a-zA-Z0-9_\-]+)/i);
-        const suggestion = match ? match[1].trim() : '';
-        if (!suggestion) return null;
+        // Quotes are not part of the name ("did you mean 'status'?")
+        const suggestion = match ? match[1].trim().replace(/^['"`]+|['"`]+$/g, '') : '';
+        if (!suggestion || /\s/.test(suggestion)) return null;
 
         // git's hint names a subcommand ("git statsu" -> "status"); zsh's names the command
         const gitTypo = ctx.output.match(/git: '([^']+)' is not a git command/i)?.[1];

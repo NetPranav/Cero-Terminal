@@ -555,7 +555,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     };
     
     // We must define the callback here so we can remove it later
-    let outputCallback: ((data: Uint8Array) => void) | null = null;
+    let outputCallback: ((data: Uint8Array, replay?: boolean) => void) | null = null;
     let shellRedrawMuteUntil = 0;
     let unsubPaneState: (() => void) | null = null;
     let shellRedrawSeen = false;
@@ -626,7 +626,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
         // One decoder in streaming mode: a UTF-8 character can be split across PTY reads
         const decoder = new TextDecoder();
-        outputCallback = (data: Uint8Array) => {
+        const replayDecoder = new TextDecoder();
+        outputCallback = (data: Uint8Array, replay?: boolean) => {
+          if (replay) {
+            // History restored after a layout change: draw only
+            term.write(replayDecoder.decode(data, { stream: true }));
+            return;
+          }
           const text = decoder.decode(data, { stream: true });
           ptyTrackerRef.current.feedOutput(text);
           if (paneId) {
