@@ -17,6 +17,19 @@ each OS, so the author writes the file once.
 
 Actions Sentinel does not understand are skipped and listed; they are never guessed.
 
+## Make a flow by asking
+
+In Sentinel, describe the steps and it writes the file:
+
+```text
+>make me a workflow called morning that opens gmail, opens spotify and opens ~/projects/api
+```
+
+The steps must be ones Sentinel understands: install a package, open a site or an app, open a folder by path,
+clone, download, make a folder and go into it, or `run <command>` (or a developer command such as `npm install`).
+Anything else is named and left out, never guessed. Then choose where to save: Desktop, this folder,
+`~/.sentinel/workflows`, or a path. An existing file is never replaced (`name-2.flow`).
+
 ## Format
 
 ```json

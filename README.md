@@ -35,11 +35,12 @@ With the built-in model or Ollama, requests stay on your machine. With a cloud k
 ## Demo
 
 <div align="center">
-<img src="docs/media/flow-demo.gif" alt="Opening new-project.flow: Sentinel lists every command, waits for a click on Run, then types each step into the terminal" width="820">
+<img src="docs/media/flow-demo.gif" alt="Double-clicking dev-setup.flow: Sentinel lists every command, waits for a click on Run, then types each step into the terminal" width="820">
 
-**Full demo (2 min, 2x speed):** [docs/media/sentinel-demo.mp4](docs/media/sentinel-demo.mp4). Requests, quitting an app by name,
-a server in a second tab, "what's running in my terminals", stopping the server, a multi-step request and a `.flow` file
-opened with the `sentinel` command. Recorded in the macOS release build with the built-in 3B model.
+**Watch the demo (2.5 min):** [docs/media/sentinel-demo.mp4](docs/media/sentinel-demo.mp4). One slide per feature, then the real
+app doing it, unedited: Wi-Fi off and on, joining a network, closing a port, quitting an app by name, then the main idea:
+telling the terminal the steps of a workflow, saving the `.flow` file, and double-clicking it to run.
+Recorded in the macOS release build. Made with the [product-demo](docs/demo/README.md) method.
 </div>
 
 ## .flow files: write a setup once, run it anywhere
@@ -81,6 +82,30 @@ flow cannot inject shell syntax through a URL, name or path. Every run is writte
 </tr>
 </table>
 
+### Make one by asking
+
+You do not have to write the JSON. Tell the terminal the steps:
+
+```text
+>make me a workflow called dev setup that makes a folder called demo-project, goes into it,
+ initializes git, creates a package.json with npm init -y, lists the files and opens textedit
+```
+
+Sentinel shows the steps in plain words, then asks where to keep the file: **1** Desktop, **2** this folder,
+**3** `~/.sentinel/workflows` (listed in the Workflow Manager), or a path you type. It never replaces an existing
+file, and a step it cannot understand is named and left out, never guessed.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/make-workflow.png" alt="The save dialog: five steps in plain words and the choice of Desktop, this folder, Sentinel workflows or another path"></td>
+<td width="50%"><img src="docs/images/run-workflow.png" alt="Double-clicking the saved file shows every command and waits for a click on Run"></td>
+</tr>
+<tr>
+<td align="center">Describe it, choose where it goes</td>
+<td align="center">Double-click it: every command, then your click</td>
+</tr>
+</table>
+
 Format, actions and the package table: [docs/FLOW_FILES.md](docs/FLOW_FILES.md). Examples: [examples/flows](examples/flows).
 
 ## What you can ask
@@ -95,6 +120,9 @@ Type `>` followed by the request. Examples that were run in the release build:
 | `>open a new tab here and run python3 -m http.server 8765` | Asks once, opens the tab, starts the server there |
 | `>what's running in my terminals` | Lists every terminal, its folder and its running command, without a model call |
 | `>stop the server` | Confirms, then sends Ctrl+C to that tab |
+| `>make me a workflow that installs node and opens youtube in safari` | Writes a `.flow` file from the steps and asks where to save it (see above) |
+| `>close port 8765` | Finds what listens on exactly that port, names it (Python, PID 70334), asks, stops that process normally and checks the port is free. `force close port 8765` for `kill -9` |
+| `>turn wifi off`, `>connect to wifi Home` | The exact `networksetup` / `nmcli` / Windows radio command, shown before it runs. Never asks the model, never invents a password |
 | `>quit textedit`, `>terminate or stop the claude application` | Lists the running apps first, matches the name in any case ("claude" finds "Claude"), asks with the exact app, quits it normally and checks that it closed. If no running app has that name, it says so and closes nothing |
 | `>run npm test in tab 2` | Types it there, or refuses and says why when that tab is busy or at a password prompt |
 | `>why is npm test failing in api?` | Runs it there and explains the failure from the code it points to |

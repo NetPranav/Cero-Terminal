@@ -576,3 +576,36 @@ To fix one platform, commit to its branch and push. Only that release is rebuilt
 
 **Still open (filed as issues):** a new window stays blank until it is focused once (#17).
 
+
+---
+
+## 11. Make a workflow by asking, security review, and a new demo (2026-09-30)
+
+**New:** "make me a workflow that ..." writes a `.flow` file (FlowAuthoring.ts), asks where to keep it (Desktop,
+this folder, ~/.sentinel/workflows or a path), and never replaces a file. "close port N" finds the exact
+listener, asks and verifies. macOS Wi-Fi on, off and join use exact commands, not the model.
+
+**Found by rehearsing in the real app, fixed:**
+- The 3B model wrote `networksetup ... Demo Network your_password` (an invented password) for "connect to wifi";
+  and `lsof | grep 8765 | xargs kill -9` for "close port" (the grep matched other ports and PIDs).
+- A generated workflow stopped at step 3: relative folders compounded once the shell had entered the folder.
+- "lists the files" was swallowed by the step before it while authoring; "make everything faster" would have
+  become `make everything faster`; "run the tests" would have become `the tests`.
+- macOS asked for Bluetooth at every launch; it now asks the first time Bluetooth is used.
+
+**Security review (see SECURITY.md):**
+- The approval dialog collected the macOS login password and checked it on a command line (visible to other
+  local processes) for no benefit. Removed: high-risk commands need a click on Run.
+- Shell injection: a folder named `$(cmd)` opened with Sentinel ran `cmd`; other drivers put model or file-name
+  text inside double quotes. Now quoted or passed as arguments (utils/shellQuote.ts, real-shell tests).
+- ~/.sentinel is owner-only. Personal paths removed from the repository. No secrets in any commit of any branch.
+- npm audit (production): 0 vulnerabilities. GitHub Dependabot alerts and private vulnerability reporting enabled.
+
+**Model stress run (real 3B model, 50 requests):** 46 passed, 28 model calls, 35 requests needed no model.
+Failures: 1 harness bug (UTC vs local date, fixed), 3 model mistakes (a truncated awk, a wrong explanation, git
+log run in the wrong folder), so the model still needs tested recipes for tricky requests.
+
+**Still open:** issues #12, #13, #15, #16, #17, #19; the first-run onboarding could not be exercised without a
+second macOS account; git history still contains two personal email addresses and a machine hostname (rewriting
+history needs the owner's decision); the demo shows the local username in paths.
+
