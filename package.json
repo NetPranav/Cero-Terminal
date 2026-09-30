@@ -57,10 +57,10 @@
     "@types/react-dom": "^19.1.6",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.6.0",
-    "@vitest/ui": "^4.1.10",
+    "@vitest/ui": "^4.1.11",
     "tsx": "^4.23.12",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
