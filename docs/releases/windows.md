@@ -12,6 +12,13 @@ The installers are not code-signed, so SmartScreen shows "Windows protected your
 
 See [FLOW_FILES.md](https://github.com/NetPranav/Sentinal-Terminal/blob/main/docs/FLOW_FILES.md) and the [example flows](https://github.com/NetPranav/Sentinal-Terminal/tree/main/examples/flows).
 
+**New in 2.1.0**
+- **Make a workflow by asking**: "make me a workflow that ..." writes a `.flow` file from the steps you list, asks where to keep it (Desktop, this folder, Sentinel workflows, or a path) and never replaces an existing file. Steps it does not understand are named and left out, never guessed.
+- **Close a port by number**: "close port 8765" finds what is listening on exactly that port, shows its name and PID, asks, stops it normally and checks that the port is free.
+- **Wi-Fi is exact**: turning Wi-Fi on or off and joining a network use the exact command, shown before it runs. The built-in model is no longer involved (it once invented a password).
+- **Fixed**: a workflow with relative folders stopped at step 3; opening Sentinel on a folder named `$(...)` could run text from the name; several drivers quoted names unsafely.
+- **Security**: Sentinel no longer asks for your login password (high-risk commands need a click on Run). `~/.sentinel` is readable by you only. See [SECURITY.md](https://github.com/NetPranav/Sentinal-Terminal/blob/main/SECURITY.md).
+
 **What works on Windows in this release**
 - The terminal (PowerShell), tabs and splits, and talking to other terminals.
 - AI requests through the built-in model, Ollama or a cloud key. The built-in engine now downloads and unpacks natively on Windows (Vulkan build when `vulkan-1.dll` is present, else CPU), with no console windows popping up.

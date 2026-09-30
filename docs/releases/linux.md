@@ -18,6 +18,13 @@ These packages are built by CI from the `release/linux` branch. They were not ru
 
 See [FLOW_FILES.md](https://github.com/NetPranav/Sentinal-Terminal/blob/main/docs/FLOW_FILES.md) and the [example flows](https://github.com/NetPranav/Sentinal-Terminal/tree/main/examples/flows).
 
-**New in 2.1.0**: see the macOS release notes; everything there applies on Linux. The window has no separate title bar: minimize, maximize and close sit at the right of the tab bar. ROS 2 pipelines ("run the ros2 talker and listener demo") open each node in its own terminal when ROS 2 is installed.
+**New in 2.1.0** (all of it applies on Linux):
+- **Make a workflow by asking**: "make me a workflow that ..." writes a `.flow` file from the steps you list, asks where to keep it (Desktop, this folder, Sentinel workflows, or a path) and never replaces an existing file. Steps it does not understand are named and left out, never guessed.
+- **Close a port by number**: "close port 8765" finds what is listening on exactly that port, shows its name and PID, asks, stops it normally and checks that the port is free.
+- **Wi-Fi is exact**: turning Wi-Fi on or off and joining a network use the exact command, shown before it runs. The built-in model is no longer involved (it once invented a password).
+- **Fixed**: a workflow with relative folders stopped at step 3; opening Sentinel on a folder named `$(...)` could run text from the name; several drivers quoted names unsafely.
+- **Security**: Sentinel no longer asks for your login password (high-risk commands need a click on Run). `~/.sentinel` is readable by you only. See [SECURITY.md](https://github.com/NetPranav/Sentinal-Terminal/blob/main/SECURITY.md).
+
+See also the macOS release notes for the rest; everything there applies on Linux. The window has no separate title bar: minimize, maximize and close sit at the right of the tab bar. ROS 2 pipelines ("run the ros2 talker and listener demo") open each node in its own terminal when ROS 2 is installed.
 
 Checksums: `SHA256SUMS.txt`.
