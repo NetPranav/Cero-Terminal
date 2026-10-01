@@ -44,6 +44,7 @@ import {
 import { SearchAddon } from '@xterm/addon-search';
 import { TerminalSearchBar } from './TerminalSearchBar';
 import { InputLineTracker, stripPrompt, parseCdTarget } from './InputLineTracker';
+import { decideGhostKey } from './ghostKeys';
 import { TerminalWorkspace } from '../domain/terminal/TerminalWorkspace';
 import { claimTerminalRequests, releaseTerminalRequests, TerminalRequest } from './TerminalRequests';
 import { claimChoiceRequests, releaseChoiceRequests, type ChoiceRequest, type ChoiceResult } from './ChoiceRequests';
@@ -1019,20 +1020,38 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             inputLineRef.current.noteKeystroke(data, { row: b.baseY + b.cursorY, col: b.cursorX }, ptyTrackerRef.current.isProcessRunning());
           }
 
-          // Handle Tab completion or Right Arrow completion
-          if (data === '\t' || data === '\x1b[C') {
-             const remaining = ghostText.getRemaining();
-             if (remaining) {
-               await sessionManager.write(currentSessionId, remaining);
-               ghostText.clear();
-               return; // Intercept key
-             }
+          // Ghost-text key decisions (Task 1.4: only Tab at end and Right at end accept)
+          const ghostAction = decideGhostKey(data, {
+            cursorAtEnd: (() => {
+              const buf = term.buffer.active;
+              const row = buf.baseY + buf.cursorY;
+              const line = buf.getLine(row);
+              if (!line) return true;
+              const lineText = line.translateToString(true);
+              return buf.cursorX >= lineText.length;
+            })(),
+            hasGhost: !!ghostText.getRemaining(),
+            acceptRight: localStorage.getItem('sentinel_ghost_accept_right') !== 'false',
+          });
 
-             // If Tab is pressed and an auto-heal remediation is active
+          if (ghostAction === 'accept-ghost') {
+            const remaining = ghostText.getRemaining();
+            if (remaining) {
+              await sessionManager.write(currentSessionId, remaining);
+              ghostText.clear();
+              return;
+            }
+          } else if (ghostAction === 'clear-ghost-and-pass') {
+            ghostText.clear();
+            // Fall through to send the key to the shell
+          }
+
+          // Tab with no ghost: check auto-heal remediation
+          if (data === '\t') {
              const activeRem = outputObserverRef.current.getActiveRemediation();
              if (activeRem) {
                await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
-               writeTerm(`\r\n  ${S.muted}›${S.reset} ${S.soft}Applying fix: ${activeRem.actionTitle}${S.reset}\r\n`);
+               writeTerm(`\r\n  ${S.muted}>${S.reset} ${S.soft}Applying fix: ${activeRem.actionTitle}${S.reset}\r\n`);
                outputObserverRef.current.clearRemediation();
                if (activeRem.tool === 'shell.execute' && activeRem.params?.command) {
                  await sessionManager.write(currentSessionId!, `${activeRem.params.command}\r`);
@@ -1282,14 +1301,21 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
           sessionManager.write(currentSessionId, data);
 
-          // Update ghost text asynchronously after terminal buffer updates
-          if (data !== '\r' && data !== '\x03') {
+          // Update ghost text asynchronously after terminal buffer updates.
+          // Task 1.4: only recompute on printable input and Backspace, and only when cursor is at end.
+          const isPrintableOrBackspace = /^[^\x00-\x1f\x7f]+$/.test(data) || data === '\x7f' || data === '\b';
+          if (data !== '\r' && data !== '\x03' && isPrintableOrBackspace) {
             setTimeout(async () => {
               const buffer = term.buffer.active;
               const lineIndex = buffer.baseY + buffer.cursorY;
               const line = buffer.getLine(lineIndex);
               if (line) {
                 const fullText = line.translateToString(true);
+                // Check cursor-at-end before recomputing
+                if (buffer.cursorX < fullText.length) {
+                  ghostText.clear();
+                  return;
+                }
                 const promptMatch = fullText.match(/.*[$%#]\s*/);
                 const commandText = promptMatch ? fullText.substring(promptMatch[0].length).trimStart() : fullText.trimStart();
                 

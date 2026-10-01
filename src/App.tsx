@@ -45,6 +45,7 @@ import { isWorkflowFilePath } from "./workflows/storage/FlowImport";
 import { planFlowFile, flowOsOf } from "./workflows/flow/FlowPlan";
 import { runDesktopSteps } from "./workflows/flow/FlowRunner";
 import { getPlatform } from "./shared/platform";
+import { shouldCloseSettings } from "./presentation/escapeKey";
 import "./App.css";
 
 // Large screens that are only shown on demand load as separate chunks, keeping them out of the
@@ -743,6 +744,25 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
     }
   }, [currentDisplayPath, panePaths, detectedShell]);
 
+  // Task 1.1: Dedicated Esc handler for the Settings screen (capture phase, runs before xterm)
+  useEffect(() => {
+    if (!showAiSettings) return;
+    const onKey = (e: KeyboardEvent) => {
+      const escOwnerOpen = !!document.querySelector('[data-esc-owner="true"]');
+      if (!shouldCloseSettings({ key: e.key, defaultPrevented: e.defaultPrevented, settingsOpen: true, escOwnerOpen })) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setShowAiSettings(false);
+      // Return focus to the terminal that was active before Settings opened
+      setTimeout(() => {
+        const xtermEl = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null;
+        xtermEl?.focus();
+      }, 50);
+    };
+    window.addEventListener('keydown', onKey, true); // capture phase: runs before xterm
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [showAiSettings]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       try {
@@ -805,11 +825,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
           }
           return;
         }
-        if (e.key === 'Escape' && showAiSettings) {
-          e.preventDefault();
-          setShowAiSettings(false);
-          return;
-        }
+        // Esc-to-close-settings is handled by the dedicated capture-phase effect above
         if ((e.metaKey || e.ctrlKey) && e.key === ',') {
           e.preventDefault();
           setShowAiSettings(prev => !prev);
@@ -841,7 +857,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('sentinel:toggle-history', handleToggleHistory);
     };
-  }, [tabs, activeTabId, activeTab, activeTerminal, addTab]);
+  }, [tabs, activeTabId, activeTab, activeTerminal, addTab, showAiSettings]);
 
   // App functions asked for in plain language ("open settings", "go to tab 2"); see AppActions.ts
   useEffect(() => {

@@ -16,6 +16,10 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { isLinux, getShortcutModifier } from '../../shared/platform';
 import { EmbeddedEngineManager, EmbeddedStatus } from '../../ai/models/EmbeddedEngineManager';
+import { ModelManager, type ActiveModelInfo } from '../../ai/management/ModelManager';
+import { CloudApiProvider } from '../../ai/provider/CloudApiProvider';
+import { describeAi, type AiBadge } from '../../ai/management/AiStatus';
+import { ShieldAlert } from 'lucide-react';
 
 export interface StatusBarProps {
   currentShell?: string;
@@ -53,6 +57,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   );
   const [aiStatus, setAiStatus] = useState<EmbeddedStatus | null>(null);
+  const [activeModel, setActiveModel] = useState<ActiveModelInfo>(() => ModelManager.getInstance().getActiveModel());
 
   useEffect(() => {
     let isMounted = true;
@@ -68,7 +73,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     fetchAiStatus();
     // Status changes are also pushed via 'sentinel:ai-status-changed'; the poll is a slow backstop
     const interval = setInterval(fetchAiStatus, 10_000);
-    const handleStatusChanged = () => fetchAiStatus();
+    const handleStatusChanged = () => {
+      fetchAiStatus();
+      setActiveModel(ModelManager.getInstance().getActiveModel());
+    };
     window.addEventListener('sentinel:ai-status-changed', handleStatusChanged);
 
     return () => {
@@ -272,20 +280,44 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             e.currentTarget.style.backgroundColor = aiStatus?.isRunning ? 'rgba(255, 255, 255, 0.05)' : (aiStatus?.isWarming ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.02)');
             e.currentTarget.style.borderColor = aiStatus?.isRunning ? '1px solid rgba(255, 255, 255, 0.16)' : (aiStatus?.isWarming ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(255, 255, 255, 0.07)');
           }}
-        >
-          <span style={{
-            width: '6px',
-            height: '6px',
-            borderRadius: '50%',
-            backgroundColor: aiStatus?.isRunning ? '#ffffff' : (aiStatus?.isWarming ? 'rgba(255, 255, 255, 0.65)' : 'rgba(255, 255, 255, 0.25)'),
-            boxShadow: aiStatus?.isRunning ? '0 0 6px rgba(255, 255, 255, 0.6)' : (aiStatus?.isWarming ? '0 0 4px rgba(255, 255, 255, 0.35)' : 'none'),
-            display: 'inline-block',
-            flexShrink: 0
-          }} />
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-            <Sparkles size={11} style={{ opacity: aiStatus?.isRunning ? 0.9 : (aiStatus?.isWarming ? 0.7 : 0.45) }} />
-            <span>{aiStatus?.isRunning ? (aiStatus.isCpuFallback ? 'AI (CPU)' : 'AI: Ready') : (aiStatus?.isWarming ? 'AI: Warming...' : 'AI: Off')}</span>
-          </span>
+        >{
+          (() => {
+            const cloudCfg = CloudApiProvider.getInstance().getActiveConfig();
+            const badge = describeAi({
+              active: activeModel,
+              embedded: aiStatus,
+              cloudConfigured: !!cloudCfg?.apiKey,
+            });
+            const dotColor = badge.state === 'ready' ? '#ffffff'
+              : badge.state === 'starting' ? 'rgba(255, 255, 255, 0.65)'
+              : 'rgba(255, 255, 255, 0.25)';
+            const dotShadow = badge.state === 'ready' ? '0 0 6px rgba(255, 255, 255, 0.6)'
+              : badge.state === 'starting' ? '0 0 4px rgba(255, 255, 255, 0.35)'
+              : 'none';
+            const iconOpacity = badge.state === 'ready' ? 0.9
+              : badge.state === 'starting' ? 0.7
+              : 0.45;
+            return (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: dotColor,
+                  boxShadow: dotShadow,
+                  display: 'inline-block',
+                  flexShrink: 0
+                }} />
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  {badge.state === 'unavailable'
+                    ? <ShieldAlert size={11} style={{ opacity: iconOpacity }} />
+                    : <Sparkles size={11} style={{ opacity: iconOpacity }} />}
+                  <span>{badge.label}</span>
+                </span>
+              </span>
+            );
+          })()
+        }
         </button>
 
         <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>

@@ -37,6 +37,8 @@ export interface ActiveModelInfo {
   digest?: string;
   isReady: boolean;
   lastVerified: number;
+  /** When set, explains why the provider is not reachable (e.g. "Ollama is not running"). */
+  unavailableReason?: string;
 }
 
 export class ModelManager {
@@ -188,7 +190,8 @@ export class ModelManager {
 
     if (savedProviderId) {
       const match = this.providers.find(p => p.providerId === savedProviderId);
-      if (match && (await match.isAvailable())) {
+      if (match) {
+        // Apply the saved choice immediately, without waiting for isAvailable()
         this.activeProvider = match;
         let displayName = savedModelId || match.providerName;
         if (savedProviderId === 'cloud_api') {
@@ -196,6 +199,9 @@ export class ModelManager {
           if (cfg) displayName = `${cfg.displayName || cfg.serviceId} (${cfg.modelId || 'default'})`;
         } else if (savedProviderId === 'embedded') {
           displayName = 'Sentinel Embedded Model (Qwen2.5-3B)';
+        } else if (savedProviderId === 'ollama' && savedModelId) {
+          const spec = this.matchCatalogSpec(savedModelId);
+          displayName = spec ? `${spec.name}` : savedModelId;
         }
         this.setActiveModel({
           providerId: match.providerId,
@@ -203,9 +209,43 @@ export class ModelManager {
           displayName,
           score: 100,
           sizeBytes: 0,
-          isReady: true,
+          isReady: false, // not verified yet
           lastVerified: Date.now()
         });
+
+        // Verify availability in the background with retries (do not block startup)
+        const verifyInBackground = async () => {
+          const MAX_RETRIES = 5;
+          const RETRY_DELAY = 2000;
+          for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            try {
+              if (await match.isAvailable()) {
+                if (this.activeModelInfo && this.activeModelInfo.providerId === savedProviderId) {
+                  this.activeModelInfo.isReady = true;
+                  this.activeModelInfo.unavailableReason = undefined;
+                }
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('sentinel:ai-status-changed'));
+                }
+                return;
+              }
+            } catch { /* ignore */ }
+            await new Promise(r => setTimeout(r, RETRY_DELAY));
+          }
+          // Provider never became available: keep the saved choice, mark unavailable
+          if (this.activeModelInfo && this.activeModelInfo.providerId === savedProviderId) {
+            this.activeModelInfo.isReady = false;
+            this.activeModelInfo.unavailableReason =
+              savedProviderId === 'ollama' ? 'Ollama is not running'
+              : savedProviderId === 'cloud_api' ? 'API provider not reachable'
+              : 'Provider not available';
+          }
+          // Do NOT clear the saved keys and do NOT silently switch to embedded
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sentinel:ai-status-changed'));
+          }
+        };
+        void verifyInBackground();
         return this.activeModelInfo!;
       }
     }
@@ -313,12 +353,7 @@ export class ModelManager {
     if (!prov) return false;
 
     this.activeProvider = prov;
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(ModelManager.PREF_PROVIDER_KEY, providerId);
-      if (modelId) {
-        localStorage.setItem(ModelManager.PREF_MODEL_KEY, modelId);
-      }
-    }
+    this.persistChoice(providerId, modelId);
 
     let displayName = modelId || prov.providerName;
     if (providerId === 'embedded') {
@@ -443,7 +478,24 @@ export class ModelManager {
       lastVerified: Date.now()
     };
     this.setActiveModel(newInfo);
+    this.persistChoice(this.activeProvider.providerId, modelId);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('sentinel:ai-status-changed'));
+    }
     return newInfo;
+  }
+
+  /**
+   * Single writer for the two localStorage preference keys.
+   * Called from setActiveProviderId and setModel.
+   */
+  private persistChoice(providerId: string, modelId?: string): void {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      localStorage.setItem(ModelManager.PREF_PROVIDER_KEY, providerId);
+      if (modelId) localStorage.setItem(ModelManager.PREF_MODEL_KEY, modelId);
+      else localStorage.removeItem(ModelManager.PREF_MODEL_KEY);
+    } catch { /* private mode or storage blocked: the choice lasts this session only */ }
   }
 
   public getActiveProvider(): ModelProvider {
