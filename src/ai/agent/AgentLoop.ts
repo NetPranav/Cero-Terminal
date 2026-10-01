@@ -43,6 +43,7 @@ import { EmbeddedEngineManager } from '../models/EmbeddedEngineManager';
 import { SentinelSerlCoordinator } from '../../domain/learning/SentinelSerlCoordinator';
 import { TldrKnowledgeEngine } from '../../domain/knowledge/TldrKnowledgeEngine';
 import { GbnfGrammarManager } from '../models/GbnfGrammarManager';
+import { buildDecisionCall } from './DecisionCall';
 import { StdinHangDetector } from '../../domain/terminal/StdinHangDetector';
 import { FailureClassifier } from './FailureClassifier';
 import { UndoLog } from '../../domain/session/UndoLog';
@@ -3502,28 +3503,16 @@ export class AgentLoop {
     for (let step = 0; step < AgentLoop.MAX_STEPS; step++) {
       throwIfAborted(context.signal);
       try {
-        // Build the full prompt with conversation history
-        const fullPrompt = this.buildConversationPrompt(systemPrompt, messages);
-        
-        // Pass structured chat messages directly to provider to preserve message roles & system prompt
-        const chatMessages: { role: string; content: string }[] = [
-          { role: 'system', content: systemPrompt },
-          ...messages
-        ];
+        // Build decision call (extracted for evaluation and determinism in Task 3.1)
+        const decisionCall = buildDecisionCall(goal, context, this.conversationHistory, {
+          systemPrompt,
+          toolSpecs: activeTools,
+          messages
+        });
 
         // Call LLM with GBNF grammar decoding. No logit bias: biasing individual tokens bans
         // ordinary words the answer may need, and the grammar already constrains structure.
-        const response = await provider.generate(fullPrompt, modelId, {
-          temperature: 0.05,
-          maxTokens: 512,
-          format: 'json',
-          messages: chatMessages,
-          grammar: GbnfGrammarManager.getGrammar('SENTINEL_ACTION'),
-          grammarJsonSchema: GbnfGrammarManager.SENTINEL_ACTION_JSON_SCHEMA,
-          sessionId: context.sessionId || 'default-session',
-          requestId: `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          signal: context.signal
-        });
+        const response = await provider.generate(decisionCall.fullPrompt, modelId, decisionCall.options);
 
         this.modelCalls++;
         this.modelMs += response.latencyMs ?? 0;

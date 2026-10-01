@@ -29,6 +29,7 @@
     "benchmark": "tsx scripts/benchmark_prompts.ts",
     "benchmark:domain": "tsx scripts/benchmark_prompts.ts --domain",
     "smoke:engine": "tsx scripts/engine_smoke.ts",
+    "eval:model": "tsx scripts/eval/reliability.mts",
     "stress": "bash scripts/stress/run.sh"
   },
   "dependencies": {

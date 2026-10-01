@@ -20,6 +20,10 @@ export interface GenerateOptions {
   timeoutMs?: number;
   /** Set by the caller; aborting it stops inference immediately */
   signal?: AbortSignal;
+  /** Decision vs conversational mode (Task 3.2 determinism) */
+  mode?: 'decision' | 'chat';
+  seed?: number;
+  topK?: number;
 }
 
 export interface ProviderResponse {
