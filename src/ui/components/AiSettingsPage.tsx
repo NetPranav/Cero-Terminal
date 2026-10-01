@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Info,
   ShieldCheck,
+  ShieldAlert,
   Compass
 } from 'lucide-react';
 import { OllamaProvider as OllamaModelManager, OllamaModel } from '../../ai/models/OllamaProvider';
@@ -74,6 +75,19 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
   const [activeProviderId, setActiveProviderId] = useState<string>(() => ModelManager.getInstance().getActiveProviderId());
   const [activeModelInfo, setActiveModelInfo] = useState<ActiveModelInfo>(() => ModelManager.getInstance().getActiveModel());
   const [selectedOllamaModel, setSelectedOllamaModel] = useState<string>('');
+
+  // Task 1.4: Ghost text Right-arrow preference (on by default)
+  const [ghostAcceptRight, setGhostAcceptRight] = useState<boolean>(() => {
+    if (typeof localStorage === 'undefined') return true;
+    return localStorage.getItem('sentinel_ghost_accept_right') !== 'false';
+  });
+
+  const handleToggleGhostAcceptRight = (val: boolean) => {
+    setGhostAcceptRight(val);
+    try {
+      localStorage.setItem('sentinel_ghost_accept_right', String(val));
+    } catch {}
+  };
 
   // Recommendation Engine State
   const [recommendation, setRecommendation] = useState<TierRecommendationResult | null>(null);
@@ -424,6 +438,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
           {onClose && (
             <button
               onClick={onClose}
+              aria-label="Close settings (Esc)"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -597,22 +612,89 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                   </p>
                 </div>
 
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '5px 12px',
+                    borderRadius: '6px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    fontSize: '11.5px',
+                    fontWeight: 600,
+                    color: '#ffffff'
+                  }}>
+                    <Check size={13} strokeWidth={2.5} />
+                    <span>{activeProviderId === 'embedded' ? `Built-in: ${embeddedModelName}` : activeProviderId === 'cloud_api' ? `Cloud: ${cloudProvider.getActiveConfig()?.displayName || 'service'}` : `Ollama: ${activeModelInfo.displayName || activeModelInfo.modelId}`}</span>
+                  </div>
+
+                  {activeProviderId !== 'embedded' && (
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchActiveProvider('embedded', 'sentinel-embedded')}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: '6px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        color: 'rgba(255, 255, 255, 0.85)',
+                        fontSize: '11px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                        e.currentTarget.style.color = '#ffffff';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.04)';
+                        e.currentTarget.style.color = 'rgba(255, 255, 255, 0.85)';
+                      }}
+                    >
+                      Use the built-in model instead
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {activeModelInfo.unavailableReason && (
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px',
-                  padding: '5px 12px',
-                  borderRadius: '6px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  fontSize: '11.5px',
-                  fontWeight: 600,
-                  color: '#ffffff'
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.16)',
+                  color: 'rgba(255, 255, 255, 0.9)',
+                  fontSize: '12px',
+                  gap: '12px'
                 }}>
-                  <Check size={13} strokeWidth={2.5} />
-                  <span>{activeProviderId === 'embedded' ? `Built-in: ${embeddedModelName}` : activeProviderId === 'cloud_api' ? `Cloud: ${cloudProvider.getActiveConfig()?.displayName || 'service'}` : `Ollama: ${activeModelInfo.displayName || activeModelInfo.modelId}`}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ShieldAlert size={15} style={{ color: '#ffffff', flexShrink: 0 }} />
+                    <span>{activeModelInfo.unavailableReason}. Requests will fail until the service starts.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchActiveProvider('embedded', 'sentinel-embedded')}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '5px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                      border: '1px solid rgba(255, 255, 255, 0.25)',
+                      color: '#ffffff',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    Use the built-in model instead
+                  </button>
                 </div>
-              </div>
+              )}
 
               {/* 3-Column Provider Selector */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
@@ -2056,6 +2138,55 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                 <ExternalLink size={13} />
                 <span>Launch Wizard</span>
               </button>
+            </div>
+
+            {/* Task 1.4: Ghost Text & Autocomplete Preferences */}
+            <div style={{
+              padding: '18px 20px',
+              borderRadius: '10px',
+              backgroundColor: 'rgba(255, 255, 255, 0.025)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '20px'
+            }}>
+              <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ffffff',
+                  flexShrink: 0
+                }}>
+                  <Terminal size={18} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '13.5px', color: '#ffffff' }}>
+                    Accept suggestion with Right arrow
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginTop: '3px', lineHeight: 1.45 }}>
+                    When enabled, pressing Right arrow at the end of the input line accepts the grey ghost suggestion. Tab always accepts.
+                  </div>
+                </div>
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none', flexShrink: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={ghostAcceptRight}
+                  onChange={(e) => handleToggleGhostAcceptRight(e.target.checked)}
+                  style={{ accentColor: '#ffffff', cursor: 'pointer', width: '16px', height: '16px' }}
+                />
+                <span style={{ fontSize: '12px', color: ghostAcceptRight ? '#ffffff' : 'rgba(255, 255, 255, 0.5)', fontWeight: 500 }}>
+                  {ghostAcceptRight ? 'Enabled' : 'Disabled'}
+                </span>
+              </label>
             </div>
 
             {/* Workflow Execution Plan HUD & Notifications Card */}

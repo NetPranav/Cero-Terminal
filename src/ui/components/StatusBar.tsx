@@ -18,7 +18,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { isLinux, getShortcutModifier } from '../../shared/platform';
 import { EmbeddedEngineManager, EmbeddedStatus } from '../../ai/models/EmbeddedEngineManager';
 import { ModelManager, type ActiveModelInfo } from '../../ai/management/ModelManager';
-import { CloudApiProvider } from '../../ai/provider/CloudApiProvider';
+import { CloudApiProvider, CLOUD_CATALOG } from '../../ai/provider/CloudApiProvider';
 import { describeAi, type AiBadge } from '../../ai/management/AiStatus';
 import { PromptQueue } from '../../presentation/PromptQueue';
 import { ShieldAlert } from 'lucide-react';
@@ -124,6 +124,23 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       return () => clearInterval(interval);
     }
   }, []);
+
+  const cloudCfg = CloudApiProvider.getInstance().getActiveConfig();
+  let cloudHost = '';
+  if (cloudCfg) {
+    try {
+      const url = cloudCfg.baseUrl || (cloudCfg.serviceId && CLOUD_CATALOG[cloudCfg.serviceId]?.defaultUrl) || '';
+      cloudHost = url ? new URL(url).host : (cloudCfg.baseUrl || '');
+    } catch {
+      cloudHost = cloudCfg.baseUrl || '';
+    }
+  }
+  const aiBadge = describeAi({
+    active: activeModel,
+    embedded: aiStatus,
+    cloudConfigured: !!cloudCfg?.apiKey,
+    cloudHost,
+  });
 
   // "7.0 / 8 GB" from megabytes; the total comes from the backend, never assumed
   const formatMemory = (mb?: number, totalMb?: number) => {
@@ -263,18 +280,22 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           </div>
         )}
 
-        {/* Embedded AI Inference Engine Status */}
+        {/* AI Inference Engine Status */}
         <button
           onClick={onOpenAiSettings}
-          title={aiStatus?.isRunning 
-            ? `Sentinel Embedded AI: Running (Port ${aiStatus.port})\nModel: ${aiStatus.activeModel || 'Qwen 2.5 Coder 3B'}${aiStatus.isCpuFallback ? ' (CPU Mode)' : ' (GPU Acceleration)'}\nClick to configure AI settings`
-            : `Sentinel Embedded AI: Offline\nClick to open AI settings and start engine`}
+          title={aiBadge.detail}
           style={{
-            background: aiStatus?.isRunning ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
-            border: aiStatus?.isRunning ? '1px solid rgba(255, 255, 255, 0.16)' : '1px solid rgba(255, 255, 255, 0.07)',
+            background: aiBadge.state === 'ready' ? 'rgba(255, 255, 255, 0.08)' 
+              : aiBadge.state === 'starting' ? 'rgba(255, 255, 255, 0.04)' 
+              : 'rgba(255, 255, 255, 0.02)',
+            border: aiBadge.state === 'ready' ? '1px solid rgba(255, 255, 255, 0.2)' 
+              : aiBadge.state === 'starting' ? '1px solid rgba(255, 255, 255, 0.12)' 
+              : '1px solid rgba(255, 255, 255, 0.07)',
             borderRadius: '4px',
             padding: '1px 7px',
-            color: aiStatus?.isRunning ? '#ffffff' : 'rgba(255, 255, 255, 0.55)',
+            color: aiBadge.state === 'ready' ? '#ffffff' 
+              : aiBadge.state === 'starting' ? 'rgba(255, 255, 255, 0.75)' 
+              : 'rgba(255, 255, 255, 0.45)',
             fontSize: '11px',
             fontFamily: 'inherit',
             cursor: 'pointer',
@@ -284,51 +305,39 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             transition: 'all 0.15s ease'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.09)';
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.12)';
+            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = aiStatus?.isRunning ? 'rgba(255, 255, 255, 0.05)' : (aiStatus?.isWarming ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.02)');
-            e.currentTarget.style.borderColor = aiStatus?.isRunning ? '1px solid rgba(255, 255, 255, 0.16)' : (aiStatus?.isWarming ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(255, 255, 255, 0.07)');
+            e.currentTarget.style.backgroundColor = aiBadge.state === 'ready' ? 'rgba(255, 255, 255, 0.08)' 
+              : aiBadge.state === 'starting' ? 'rgba(255, 255, 255, 0.04)' 
+              : 'rgba(255, 255, 255, 0.02)';
+            e.currentTarget.style.borderColor = aiBadge.state === 'ready' ? '1px solid rgba(255, 255, 255, 0.2)' 
+              : aiBadge.state === 'starting' ? '1px solid rgba(255, 255, 255, 0.12)' 
+              : '1px solid rgba(255, 255, 255, 0.07)';
           }}
-        >{
-          (() => {
-            const cloudCfg = CloudApiProvider.getInstance().getActiveConfig();
-            const badge = describeAi({
-              active: activeModel,
-              embedded: aiStatus,
-              cloudConfigured: !!cloudCfg?.apiKey,
-            });
-            const dotColor = badge.state === 'ready' ? '#ffffff'
-              : badge.state === 'starting' ? 'rgba(255, 255, 255, 0.65)'
-              : 'rgba(255, 255, 255, 0.25)';
-            const dotShadow = badge.state === 'ready' ? '0 0 6px rgba(255, 255, 255, 0.6)'
-              : badge.state === 'starting' ? '0 0 4px rgba(255, 255, 255, 0.35)'
-              : 'none';
-            const iconOpacity = badge.state === 'ready' ? 0.9
-              : badge.state === 'starting' ? 0.7
-              : 0.45;
-            return (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  backgroundColor: dotColor,
-                  boxShadow: dotShadow,
-                  display: 'inline-block',
-                  flexShrink: 0
-                }} />
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  {badge.state === 'unavailable'
-                    ? <ShieldAlert size={11} style={{ opacity: iconOpacity }} />
-                    : <Sparkles size={11} style={{ opacity: iconOpacity }} />}
-                  <span>{badge.label}</span>
-                </span>
-              </span>
-            );
-          })()
-        }
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: aiBadge.state === 'ready' ? '#ffffff'
+                : aiBadge.state === 'starting' ? 'rgba(255, 255, 255, 0.65)'
+                : 'rgba(255, 255, 255, 0.25)',
+              boxShadow: aiBadge.state === 'ready' ? '0 0 6px rgba(255, 255, 255, 0.6)'
+                : aiBadge.state === 'starting' ? '0 0 4px rgba(255, 255, 255, 0.35)'
+                : 'none',
+              display: 'inline-block',
+              flexShrink: 0
+            }} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              {aiBadge.state === 'unavailable'
+                ? <ShieldAlert size={11} style={{ opacity: 0.45 }} />
+                : <Sparkles size={11} style={{ opacity: aiBadge.state === 'ready' ? 0.9 : (aiBadge.state === 'starting' ? 0.7 : 0.45) }} />}
+              <span>{aiBadge.label}</span>
+            </span>
+          </span>
         </button>
 
         <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>

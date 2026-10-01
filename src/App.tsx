@@ -47,6 +47,8 @@ import { planFlowFile, flowOsOf } from "./workflows/flow/FlowPlan";
 import { runDesktopSteps } from "./workflows/flow/FlowRunner";
 import { getPlatform } from "./shared/platform";
 import { shouldCloseSettings } from "./presentation/escapeKey";
+import { CloudApiProvider } from "./ai/provider/CloudApiProvider";
+import { ModelManager } from "./ai/management/ModelManager";
 import "./App.css";
 
 // Large screens that are only shown on demand load as separate chunks, keeping them out of the
@@ -752,6 +754,27 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
     }
   }, [currentDisplayPath, panePaths, detectedShell]);
 
+  // Task 1.2: Restore saved AI provider & model choice on startup
+  useEffect(() => {
+    try {
+      CloudApiProvider.getInstance().getActiveConfig();
+      ModelManager.getInstance().initialize().catch(err => {
+        console.warn('[Sentinel] ModelManager initialization error:', err);
+      });
+    } catch (err) {
+      console.warn('[Sentinel] AI Provider startup error:', err);
+    }
+  }, []);
+
+  // Task 1.1: Return focus to the terminal when closing settings
+  const closeSettings = useCallback(() => {
+    setShowAiSettings(false);
+    setTimeout(() => {
+      const xtermEl = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null;
+      xtermEl?.focus();
+    }, 50);
+  }, []);
+
   // Task 1.1: Dedicated Esc handler for the Settings screen (capture phase, runs before xterm)
   useEffect(() => {
     if (!showAiSettings) return;
@@ -760,16 +783,11 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
       if (!shouldCloseSettings({ key: e.key, defaultPrevented: e.defaultPrevented, settingsOpen: true, escOwnerOpen })) return;
       e.preventDefault();
       e.stopPropagation();
-      setShowAiSettings(false);
-      // Return focus to the terminal that was active before Settings opened
-      setTimeout(() => {
-        const xtermEl = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null;
-        xtermEl?.focus();
-      }, 50);
+      closeSettings();
     };
     window.addEventListener('keydown', onKey, true); // capture phase: runs before xterm
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [showAiSettings]);
+  }, [showAiSettings, closeSettings]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -836,7 +854,11 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
         // Esc-to-close-settings is handled by the dedicated capture-phase effect above
         if ((e.metaKey || e.ctrlKey) && e.key === ',') {
           e.preventDefault();
-          setShowAiSettings(prev => !prev);
+          if (showAiSettings) {
+            closeSettings();
+          } else {
+            setShowAiSettings(true);
+          }
           return;
         }
         if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key && e.key.toLowerCase() === 'w') {
@@ -1564,12 +1586,12 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
           <div style={{ flex: 1, minHeight: 0 }}>
           <Suspense fallback={null}>
           <AiSettingsPage 
-            onClose={() => setShowAiSettings(false)} 
+            onClose={closeSettings} 
             initialTab={settingsTab}
             currentUiMode={uiMode}
             onSelectUiMode={handleToggleUiMode}
             onLaunchOnboarding={() => {
-              setShowAiSettings(false);
+              closeSettings();
               setShowWizard(true);
             }}
           />

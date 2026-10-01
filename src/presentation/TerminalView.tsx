@@ -1108,15 +1108,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           }
 
           // Ghost-text key decisions (Task 1.4: only Tab at end and Right at end accept)
+          const cursorEndInfo = inputLineRef.current.getCursorEndInfo(term);
           const ghostAction = decideGhostKey(data, {
-            cursorAtEnd: (() => {
-              const buf = term.buffer.active;
-              const row = buf.baseY + buf.cursorY;
-              const line = buf.getLine(row);
-              if (!line) return true;
-              const lineText = line.translateToString(true);
-              return buf.cursorX >= lineText.length;
-            })(),
+            cursorAtEnd: cursorEndInfo.atEnd,
             hasGhost: !!ghostText.getRemaining(),
             acceptRight: localStorage.getItem('sentinel_ghost_accept_right') !== 'false',
           });
@@ -1430,12 +1424,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               const lineIndex = buffer.baseY + buffer.cursorY;
               const line = buffer.getLine(lineIndex);
               if (line) {
-                const fullText = line.translateToString(true);
+                const endInfo = inputLineRef.current.getCursorEndInfo(term);
                 // Check cursor-at-end before recomputing
-                if (buffer.cursorX < fullText.length) {
+                if (!endInfo.atEnd) {
                   ghostText.clear();
                   return;
                 }
+                const fullText = line.translateToString(true);
                 const promptMatch = fullText.match(/.*[$%#]\s*/);
                 const commandText = promptMatch ? fullText.substring(promptMatch[0].length).trimStart() : fullText.trimStart();
                 
@@ -1447,7 +1442,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                     os: getPlatform() === 'linux' ? 'linux' : 'macos'
                   });
                   if (suggestions.length > 0) {
-                     ghostText.render(suggestions[0].value, commandText);
+                     ghostText.render(suggestions[0].value, commandText, endInfo.endCol, endInfo.atEnd);
                   } else {
                      ghostText.clear();
                   }

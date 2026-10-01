@@ -26,8 +26,27 @@ export class GhostTextRenderer {
     container.appendChild(this.overlayElement);
   }
 
-  public render(suggestion: string, currentInput: string) {
+  public setOverlayElement(element: HTMLDivElement | null) {
+    this.overlayElement = element;
+  }
+
+  public render(suggestion: string, currentInput: string, endCol?: number, cursorAtEnd: boolean = true) {
+    if (!cursorAtEnd) {
+      this.clear();
+      return;
+    }
+
     if (!this.overlayElement || !suggestion || !currentInput) {
+      this.clear();
+      return;
+    }
+
+    const buffer = this.terminal?.buffer?.active;
+    const cursorX = buffer?.cursorX ?? 0;
+    const cursorY = buffer?.cursorY ?? 0;
+
+    // If endCol is passed, cursor must be at end
+    if (endCol !== undefined && cursorX < endCol) {
       this.clear();
       return;
     }
@@ -47,14 +66,9 @@ export class GhostTextRenderer {
     const ghostPart = suggestion.substring(cleanInput.length);
     this.currentGhostPart = ghostPart;
 
-    // Calculate cursor position from active xterm buffer
-    const buffer = this.terminal.buffer.active;
-    const cursorX = buffer.cursorX;
-    const cursorY = buffer.cursorY;
-
     // Retrieve precise rendering dimensions from xterm v6 internals or fallback to mathematical element division
-    const core = (this.terminal as any)._core;
-    const dims = core._renderService?.dimensions || core._renderService?.dimensions?.css || {};
+    const core = (this.terminal as any)?._core;
+    const dims = core?._renderService?.dimensions || core?._renderService?.dimensions?.css || {};
     
     const cellWidth = dims.actualCellWidth || dims.css?.cell?.width || dims.scaledCellWidth || 
       (this.terminal.element ? this.terminal.element.clientWidth / this.terminal.cols : 9);
@@ -62,7 +76,7 @@ export class GhostTextRenderer {
       (this.terminal.element ? this.terminal.element.clientHeight / this.terminal.rows : 17);
 
     // Calculate exact pixel offset relative to positioned container
-    const screenEl = this.terminal.element?.querySelector('.xterm-screen') as HTMLElement | null;
+    const screenEl = this.terminal.element?.querySelector?.('.xterm-screen') as HTMLElement | null;
     let offsetTop = 0;
     let offsetLeft = 0;
     if (screenEl && this.overlayElement.parentElement) {
@@ -72,8 +86,9 @@ export class GhostTextRenderer {
       offsetLeft = screenRect.left - containerRect.left;
     }
 
+    const targetCol = endCol !== undefined ? endCol : cursorX;
     const top = offsetTop + (cursorY * cellHeight);
-    const left = offsetLeft + (cursorX * cellWidth);
+    const left = offsetLeft + (targetCol * cellWidth);
 
     this.overlayElement.style.top = `${top}px`;
     this.overlayElement.style.left = `${left}px`;

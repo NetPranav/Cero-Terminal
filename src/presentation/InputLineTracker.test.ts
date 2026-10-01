@@ -146,3 +146,75 @@ describe('parseCdTarget', () => {
     expect(parseCdTarget(cmd)).toBeNull();
   });
 });
+
+describe('InputLineTracker isCursorAtEnd', () => {
+  it('returns true when cursor is at the end of the typed line', () => {
+    const t = new InputLineTracker();
+    const buf = bufferOf([{ text: 'user@mac % git status' }], 40);
+    const mockTerm = {
+      buffer: {
+        active: {
+          baseY: 0,
+          cursorY: 0,
+          cursorX: 21, // length of 'user@mac % git status'
+          getLine: buf.getLine
+        }
+      }
+    };
+    expect(t.isCursorAtEnd(mockTerm)).toBe(true);
+    expect(t.getCursorEndInfo(mockTerm)).toEqual({ atEnd: true, endCol: 21, endRow: 0 });
+  });
+
+  it('returns false when cursor is mid-line', () => {
+    const t = new InputLineTracker();
+    const buf = bufferOf([{ text: 'user@mac % git status' }], 40);
+    const mockTerm = {
+      buffer: {
+        active: {
+          baseY: 0,
+          cursorY: 0,
+          cursorX: 15,
+          getLine: buf.getLine
+        }
+      }
+    };
+    expect(t.isCursorAtEnd(mockTerm)).toBe(false);
+    expect(t.getCursorEndInfo(mockTerm)).toEqual({ atEnd: false, endCol: 21, endRow: 0 });
+  });
+
+  it('handles wrapped lines correctly: false on first row, true at end of wrapped row', () => {
+    const t = new InputLineTracker();
+    const buf = bufferOf([
+      { text: '$ % >list ', wrapped: false },
+      { text: 'big files', wrapped: true }
+    ], 10);
+    
+    // Cursor on row 0 while wrapped onto row 1
+    const termOnRow0 = {
+      buffer: {
+        active: {
+          baseY: 0,
+          cursorY: 0,
+          cursorX: 10,
+          getLine: buf.getLine
+        }
+      }
+    };
+    expect(t.isCursorAtEnd(termOnRow0)).toBe(false);
+
+    // Cursor on row 1 at the end of 'big files' (col 9)
+    const termOnRow1End = {
+      buffer: {
+        active: {
+          baseY: 0,
+          cursorY: 1,
+          cursorX: 9,
+          getLine: buf.getLine
+        }
+      }
+    };
+    expect(t.isCursorAtEnd(termOnRow1End)).toBe(true);
+    expect(t.getCursorEndInfo(termOnRow1End)).toEqual({ atEnd: true, endCol: 9, endRow: 1 });
+  });
+});
+

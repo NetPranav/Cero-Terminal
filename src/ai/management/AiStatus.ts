@@ -29,8 +29,9 @@ export function describeAi(input: {
   active: ActiveModelInfo;
   embedded: EmbeddedStatus | null;
   cloudConfigured: boolean;
+  cloudHost?: string;
 }): AiBadge {
-  const { active, embedded, cloudConfigured } = input;
+  const { active, embedded, cloudConfigured, cloudHost } = input;
   const providerId = active.providerId;
 
   // --- Embedded provider ---
@@ -41,30 +42,31 @@ export function describeAi(input: {
       return {
         state: 'ready',
         label: `AI: ${truncateModel(modelName)}${cpuSuffix}`,
-        detail: `Provider: Sentinel Embedded\nModel: ${modelName}${cpuSuffix}\nPort: ${embedded.port || 8847}\nStatus: Running`,
+        detail: `Provider: Sentinel Embedded\nModel: ${modelName}${cpuSuffix}\nHost: 127.0.0.1:${embedded.port || 8847}\nStatus: Running`,
       };
     }
     if (embedded?.isWarming) {
       return {
         state: 'starting',
         label: 'AI: Starting...',
-        detail: 'Provider: Sentinel Embedded\nStatus: Warming up the model',
+        detail: 'Provider: Sentinel Embedded\nHost: 127.0.0.1:8847\nStatus: Warming up the model',
       };
     }
     return {
       state: 'off',
       label: 'AI: Off',
-      detail: 'Provider: Sentinel Embedded\nStatus: Built-in AI is stopped. Click to start it.',
+      detail: 'Provider: Sentinel Embedded\nHost: 127.0.0.1:8847\nStatus: Built-in AI is stopped. Click to start it.',
     };
   }
 
   // --- Cloud API provider ---
   if (providerId === 'cloud_api') {
+    const hostLine = cloudHost ? `\nHost: ${cloudHost}` : '';
     if (!cloudConfigured) {
       return {
         state: 'unavailable',
         label: 'AI: unavailable',
-        detail: 'Provider: Cloud API\nStatus: No API key set',
+        detail: `Provider: Cloud API${hostLine}\nStatus: No API key set`,
       };
     }
     if (active.isReady) {
@@ -72,14 +74,14 @@ export function describeAi(input: {
       return {
         state: 'ready',
         label: `AI: ${truncateModel(modelName)} (API)`,
-        detail: `Provider: Cloud API\nModel: ${modelName}\nStatus: Ready`,
+        detail: `Provider: Cloud API\nModel: ${modelName}${hostLine}\nStatus: Ready`,
       };
     }
     const reason = (active as any).unavailableReason || 'Provider not reachable';
     return {
       state: 'unavailable',
       label: 'AI: unavailable',
-      detail: `Provider: Cloud API\nModel: ${active.displayName || active.modelId}\nStatus: ${reason}`,
+      detail: `Provider: Cloud API\nModel: ${active.displayName || active.modelId}${hostLine}\nStatus: ${reason}`,
     };
   }
 

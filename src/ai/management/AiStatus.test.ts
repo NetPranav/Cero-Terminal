@@ -117,4 +117,32 @@ describe('describeAi', () => {
       }
     }
   });
+
+  it('tooltip detail lists host and never exposes API key', () => {
+    const secretKey = 'sk-proj-secret-1234567890';
+    const badge = describeAi({
+      active: makeActive({ providerId: 'cloud_api', modelId: 'gpt-4o', displayName: 'GPT-4o' }),
+      embedded: null,
+      cloudConfigured: true,
+      cloudHost: 'api.openai.com',
+    });
+    expect(badge.detail).toContain('Host: api.openai.com');
+    expect(badge.detail).toContain('Provider: Cloud API');
+    expect(badge.detail).toContain('Model: GPT-4o');
+    expect(badge.detail).not.toContain(secretKey);
+  });
+
+  it('truncates model names longer than 24 characters in label with ellipsis', () => {
+    const longName = 'claude-3-5-sonnet-20241022-extra-long';
+    const badge = describeAi({
+      active: makeActive({ providerId: 'cloud_api', modelId: longName, displayName: longName }),
+      embedded: null,
+      cloudConfigured: true,
+      cloudHost: 'api.anthropic.com',
+    });
+    expect(badge.label.length).toBeLessThan(longName.length);
+    expect(badge.label).toContain('...');
+    expect(badge.detail).toContain(longName);
+  });
 });
+
