@@ -64,6 +64,8 @@ export interface AgentRunContext {
   attachedContext?: string;
   /** Terminal pane the request came from; long-running commands open next to it */
   paneId?: string;
+  /** Set by the caller; aborting it stops the request at the next safe point */
+  signal?: AbortSignal;
 }
 
 export type AgentAuthorizationHandler = (plan: ExecutionPreviewPlan) => Promise<boolean>;
@@ -76,6 +78,8 @@ export interface AgentResult {
   awaitingInput?: boolean;
   /** The user declined a command in the confirmation dialog */
   declined?: boolean;
+  /** True when the run was stopped early by an abort signal */
+  cancelled?: boolean;
   /** Where the time went for this request */
   metrics?: AgentRunMetrics;
 }
@@ -87,6 +91,7 @@ export interface AgentRunMetrics {
   modelMs: number;
 }
 
+import { CancelledError, throwIfAborted } from './Cancelled';
 import { AdaptivePlanEngine, AgentPlan, PlanPhase, PhaseStatus } from './AdaptivePlanEngine';
 import { ProjectDiscoveryEngine } from '../../domain/discovery/ProjectDiscoveryEngine';
 import { ToolParameterValidator } from './ToolParameterValidator';
@@ -102,6 +107,7 @@ import { approveBatch } from '../../domain/security/BatchApproval';
 import { planRosPipeline, RosPipeline } from '../../domain/ros/RosPipelinePlanner';
 import { parseTerminalAction, resolveTarget, describePane, readyForInput, TerminalAction } from '../../domain/terminal/TerminalActions';
 import { TerminalWorkspace, isLongRunningCommand, paneTitleFor } from '../../domain/terminal/TerminalWorkspace';
+import { SessionManager } from '../../domain/SessionManager';
 import { SecurityEngine } from '../../domain/security/SecurityEngine';
 import { chooseRosDistro, withRosEnvironmentForPane } from '../../domain/ros/RosEnvironment';
 import * as fs from 'fs';
@@ -1334,6 +1340,7 @@ export class AgentLoop {
     }
     this.runDepth++;
     try {
+      throwIfAborted(context.signal);
       const result = await this.runRequest(goal, context);
       if (this.runDepth === 1) {
         result.metrics = {
@@ -1349,6 +1356,16 @@ export class AgentLoop {
         }
       }
       return result;
+    } catch (err: any) {
+      if (context.signal?.aborted || err instanceof CancelledError || err?.isCancelled) {
+        return {
+          success: false,
+          cancelled: true,
+          summary: 'Stopped.',
+          steps: []
+        };
+      }
+      throw err;
     } finally {
       this.runDepth--;
     }
@@ -2325,6 +2342,7 @@ export class AgentLoop {
    * opened before). Goes through the same risk analysis and confirmation as any command.
    */
   public async runInPane(command: string, explanation: string | undefined, context: AgentRunContext, preApproved = false): Promise<ToolExecutionResult> {
+    throwIfAborted(context.signal);
     const risk = new SecurityEngine().analyzeCommand(command, [], explanation);
     if (!preApproved && (risk.level !== 'SAFE' || risk.requiresConsent)) {
       const plan: ExecutionPreviewPlan = {
@@ -2340,6 +2358,7 @@ export class AgentLoop {
       const approved = this.authorizationHandler ? await this.authorizationHandler(plan) : false;
       if (!approved) return { success: false, error: 'Declined in the confirmation dialog.', errorCode: 'USER_CANCELLED' };
     }
+    throwIfAborted(context.signal);
     try {
       const title = paneTitleFor(command);
       const { paneId, reused } = TerminalWorkspace.getInstance().spawn({
@@ -2348,6 +2367,13 @@ export class AgentLoop {
         title,
         requesterPaneId: context.paneId
       });
+      if (context.signal) {
+        context.signal.addEventListener('abort', () => {
+          try {
+            SessionManager.getInstance().write(paneId, '\x03');
+          } catch { /* ignore */ }
+        }, { once: true });
+      }
       return {
         success: true,
         data: { stdout: `Running \`${command}\` in ${reused ? 'the' : 'a new'} terminal pane "${title}".`, code: 0, paneId },
@@ -2380,76 +2406,86 @@ export class AgentLoop {
     const doneLines: string[] = [];
     const answers: string[] = [];
 
-    for (let i = 0; i < total; i++) {
-      const s = plan.steps[i];
-      const label = `Step ${i + 1}/${total}: ${s.clause}`;
+    try {
+      for (let i = 0; i < total; i++) {
+        throwIfAborted(context.signal);
+        const s = plan.steps[i];
+        const label = `Step ${i + 1}/${total}: ${s.clause}`;
 
-      if (s.enter) {
-        const target = resolveFolder(cwd, s.enter);
-        this.emit({ type: 'tool_start', message: label });
-        const check = await this.toolExecutor.execute('shell.execute', { command: `${cdCommand(target)} && pwd`, explanation: `Enter ${s.enter}` }, cwd, handler);
-        steps.push({ tool: 'shell.execute', params: { command: `cd ${target}` }, result: check });
-        const pwd = typeof check.data?.stdout === 'string' ? check.data.stdout.trim().split('\n').pop() : '';
-        if (!check.success || !pwd) {
-          const summary = `Stopped at step ${i + 1}: could not enter "${s.enter}" (${String(check.error || check.data?.stderr || 'no such folder').trim().split('\n')[0]}).`;
-          this.emit({ type: 'error', message: summary });
-          return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
+        if (s.enter) {
+          const target = resolveFolder(cwd, s.enter);
+          this.emit({ type: 'tool_start', message: label });
+          const check = await this.toolExecutor.execute('shell.execute', { command: `${cdCommand(target)} && pwd`, explanation: `Enter ${s.enter}` }, cwd, handler, undefined, context.signal);
+          steps.push({ tool: 'shell.execute', params: { command: `cd ${target}` }, result: check });
+          const pwd = typeof check.data?.stdout === 'string' ? check.data.stdout.trim().split('\n').pop() : '';
+          if (!check.success || !pwd) {
+            const summary = `Stopped at step ${i + 1}: could not enter "${s.enter}" (${String(check.error || check.data?.stderr || 'no such folder').trim().split('\n')[0]}).`;
+            this.emit({ type: 'error', message: summary });
+            return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
+          }
+          cwd = pwd;
+          this.emit({ type: 'tool_done', message: `✓ ${s.clause}  (now in ${cwd})` });
+          doneLines.push(`cd ${cwd}`);
+          continue;
         }
-        cwd = pwd;
-        this.emit({ type: 'tool_done', message: `✓ ${s.clause}  (now in ${cwd})` });
-        doneLines.push(`cd ${cwd}`);
-        continue;
-      }
 
-      let command = s.command ?? planRecipe(s.clause, context.os)?.command;
-      if (!command) {
-        this.emit({ type: 'thinking', message: `Working out: ${s.clause}` });
-        command = (await this.commandForClause(s.clause, cwd, context, doneLines)) ?? undefined;
+        let command = s.command ?? planRecipe(s.clause, context.os)?.command;
         if (!command) {
-          const summary = `Stopped at step ${i + 1}: could not work out a command for "${s.clause}".`;
+          this.emit({ type: 'thinking', message: `Working out: ${s.clause}` });
+          command = (await this.commandForClause(s.clause, cwd, context, doneLines)) ?? undefined;
+          if (!command) {
+            const summary = `Stopped at step ${i + 1}: could not work out a command for "${s.clause}".`;
+            this.emit({ type: 'error', message: summary });
+            return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
+          }
+        }
+
+        if (s.longRunning || isLongRunningCommand(command)) {
+          this.emit({ type: 'tool_start', message: label });
+          const paneResult = await this.runInPane(command, s.clause, { ...context, cwd }, batch.approvedCommands.has(command));
+          steps.push({ tool: 'terminal.spawn', params: { command }, result: paneResult });
+          if (!paneResult.success) {
+            const declined = paneResult.errorCode === 'USER_CANCELLED';
+            const summary = declined ? `Not run: you declined \`${command}\`.` : `Stopped at step ${i + 1}: ${paneResult.error}`;
+            this.emit({ type: declined ? 'tool_done' : 'error', message: declined ? `✗ ${summary}` : summary });
+            return { success: false, summary, steps, declined, cdPath: cwd !== startCwd ? cwd : undefined };
+          }
+          this.emit({ type: 'tool_done', message: `✓ ${paneResult.data.stdout}` });
+          doneLines.push(`${command}  (running in its own pane)`);
+          continue;
+        }
+
+        this.emit({ type: 'tool_start', message: `${label}  (${command})` });
+        const result = await this.toolExecutor.execute('shell.execute', { command, explanation: s.clause }, cwd, handler, undefined, context.signal);
+        steps.push({ tool: 'shell.execute', params: { command }, result });
+        if (result.errorCode === 'USER_CANCELLED') {
+          const summary = `Not run: you declined \`${command}\`. Steps before it were completed.`;
+          this.emit({ type: 'tool_done', message: `✗ ${summary}` });
+          return { success: false, summary, steps, declined: true, cdPath: cwd !== startCwd ? cwd : undefined };
+        }
+        const failed = !result.success || (typeof result.data?.code === 'number' && result.data.code !== 0)
+          || hiddenFailure(String(result.data?.stderr || ''), String(result.data?.stdout || ''));
+        if (failed) {
+          const why = String(result.error || result.data?.stderr || 'failed').trim().split('\n').filter(Boolean).pop() || 'failed';
+          const summary = `Stopped at step ${i + 1} (${s.clause}): \`${command}\` failed: ${why}`;
           this.emit({ type: 'error', message: summary });
           return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
         }
-      }
-
-      if (s.longRunning || isLongRunningCommand(command)) {
-        this.emit({ type: 'tool_start', message: label });
-        const paneResult = await this.runInPane(command, s.clause, { ...context, cwd }, batch.approvedCommands.has(command));
-        steps.push({ tool: 'terminal.spawn', params: { command }, result: paneResult });
-        if (!paneResult.success) {
-          const declined = paneResult.errorCode === 'USER_CANCELLED';
-          const summary = declined ? `Not run: you declined \`${command}\`.` : `Stopped at step ${i + 1}: ${paneResult.error}`;
-          this.emit({ type: declined ? 'tool_done' : 'error', message: declined ? `✗ ${summary}` : summary });
-          return { success: false, summary, steps, declined, cdPath: cwd !== startCwd ? cwd : undefined };
+        this.emit({ type: 'tool_done', message: `✓ ${s.clause}`, data: result.data });
+        doneLines.push(command);
+        // Steps that answer something ("show the python version", "tell me how many files")
+        const printed = typeof result.data?.stdout === 'string' ? result.data.stdout.trim() : '';
+        if (printed && /^(?:show|list|display|print|tell|check|count|how\s+many|what|which|get|find)\b/i.test(s.clause)) {
+          answers.push(`${s.clause}:\n${AgentLoop.truncateObservation(printed).slice(0, 1500)}`);
         }
-        this.emit({ type: 'tool_done', message: `✓ ${paneResult.data.stdout}` });
-        doneLines.push(`${command}  (running in its own pane)`);
-        continue;
       }
-
-      this.emit({ type: 'tool_start', message: `${label}  (${command})` });
-      const result = await this.toolExecutor.execute('shell.execute', { command, explanation: s.clause }, cwd, handler);
-      steps.push({ tool: 'shell.execute', params: { command }, result });
-      if (result.errorCode === 'USER_CANCELLED') {
-        const summary = `Not run: you declined \`${command}\`. Steps before it were completed.`;
-        this.emit({ type: 'tool_done', message: `✗ ${summary}` });
-        return { success: false, summary, steps, declined: true, cdPath: cwd !== startCwd ? cwd : undefined };
+    } catch (err: any) {
+      if (err instanceof CancelledError || err?.name === 'CancelledError' || context.signal?.aborted) {
+        const summary = 'Stopped.';
+        this.emit({ type: 'done', message: summary });
+        return { success: false, cancelled: true, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
       }
-      const failed = !result.success || (typeof result.data?.code === 'number' && result.data.code !== 0)
-        || hiddenFailure(String(result.data?.stderr || ''), String(result.data?.stdout || ''));
-      if (failed) {
-        const why = String(result.error || result.data?.stderr || 'failed').trim().split('\n').filter(Boolean).pop() || 'failed';
-        const summary = `Stopped at step ${i + 1} (${s.clause}): \`${command}\` failed: ${why}`;
-        this.emit({ type: 'error', message: summary });
-        return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
-      }
-      this.emit({ type: 'tool_done', message: `✓ ${s.clause}`, data: result.data });
-      doneLines.push(command);
-      // Steps that answer something ("show the python version", "tell me how many files")
-      const printed = typeof result.data?.stdout === 'string' ? result.data.stdout.trim() : '';
-      if (printed && /^(?:show|list|display|print|tell|check|count|how\s+many|what|which|get|find)\b/i.test(s.clause)) {
-        answers.push(`${s.clause}:\n${AgentLoop.truncateObservation(printed).slice(0, 1500)}`);
-      }
+      throw err;
     }
 
     const done = `Done: ${total} steps${cwd !== startCwd ? `; now in ${cwd}` : ''}.`;
@@ -2478,7 +2514,8 @@ export class AgentLoop {
       cwd: context.cwd,
       authorizationHandler: this.authorizationHandler,
       executor: async (cmd: string, cwd?: string, authorize?: AgentAuthorizationHandler) => {
-        const res = await this.toolExecutor.execute('shell.execute', { command: cmd, cwd: cwd || context.cwd }, cwd || context.cwd, authorize ?? this.authorizationHandler);
+        throwIfAborted(context.signal);
+        const res = await this.toolExecutor.execute('shell.execute', { command: cmd, cwd: cwd || context.cwd }, cwd || context.cwd, authorize ?? this.authorizationHandler, undefined, context.signal);
         return {
           code: res.success ? (res.data?.code ?? 0) : (res.data?.code ?? 1),
           stdout: res.data?.stdout || '',
@@ -2486,6 +2523,7 @@ export class AgentLoop {
         };
       },
       onLongRunning: async (cmd, cwd) => {
+        throwIfAborted(context.signal);
         const r = await this.runInPane(cmd, `Workflow "${name}"`, { ...context, cwd: cwd || context.cwd }, true);
         return { ok: r.success, message: r.success ? r.data.stdout : (r.error || 'Could not open a terminal pane.') };
       },
@@ -3414,6 +3452,7 @@ export class AgentLoop {
           const adaptiveResult = await adaptiveEngine.executePlan(goal, plan, {
             cwd: context.cwd,
             os: context.os,
+            signal: context.signal,
             onPlanUpdate: (updatedPlan) => {
               this.emit({ type: 'plan', message: updatedPlan.summary, data: updatedPlan });
             },
@@ -3455,6 +3494,7 @@ export class AgentLoop {
     }
 
     for (let step = 0; step < AgentLoop.MAX_STEPS; step++) {
+      throwIfAborted(context.signal);
       try {
         // Build the full prompt with conversation history
         const fullPrompt = this.buildConversationPrompt(systemPrompt, messages);
@@ -3475,7 +3515,8 @@ export class AgentLoop {
           grammar: GbnfGrammarManager.getGrammar('SENTINEL_ACTION'),
           grammarJsonSchema: GbnfGrammarManager.SENTINEL_ACTION_JSON_SCHEMA,
           sessionId: context.sessionId || 'default-session',
-          requestId: `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+          requestId: `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          signal: context.signal
         });
 
         this.modelCalls++;
@@ -3875,7 +3916,7 @@ export class AgentLoop {
           this.emit({ type: 'tool_start', message: this.getToolDisplayName(toolId, params) });
 
           // Execute the tool
-          const result = await this.toolExecutor.execute(toolId, params, context.cwd, this.authorizationHandler);
+          const result = await this.toolExecutor.execute(toolId, params, context.cwd, this.authorizationHandler, undefined, context.signal);
 
           steps.push({ tool: toolId, params, result });
 
@@ -4071,6 +4112,17 @@ Output JSON:
 
         }
       } catch (err: any) {
+        if (err instanceof CancelledError || err?.name === 'CancelledError' || context.signal?.aborted) {
+          const summary = 'Stopped.';
+          this.emit({ type: 'done', message: summary });
+          return {
+            success: false,
+            cancelled: true,
+            summary,
+            steps,
+            cdPath
+          };
+        }
         this.emit({ type: 'error', message: `Error: ${err.message}` });
         return {
           success: false,
@@ -4095,12 +4147,13 @@ Output JSON:
   private async executeIntentSteps(
     steps: IntentStep[],
     overallGoal: string,
-    context: { os: string; cwd: string; sessionId?: string }
+    context: { os: string; cwd: string; sessionId?: string; signal?: AbortSignal }
   ): Promise<AgentResult> {
     const executedSteps: AgentResult['steps'] = [];
     let allSuccess = true;
 
     for (let i = 0; i < steps.length; i++) {
+      throwIfAborted(context.signal);
       const step = steps[i];
 
       // 1. Evaluate precondition if present
@@ -4113,7 +4166,9 @@ Output JSON:
           'shell.execute',
           { command: step.precondition_check, explanation: `Precondition check for ${step.goal}` },
           context.cwd,
-          this.authorizationHandler
+          this.authorizationHandler,
+          undefined,
+          context.signal
         );
 
         const prePassed = preResult.success && (preResult.data?.code === 0 || preResult.data?.code === undefined);
@@ -4783,9 +4838,9 @@ User request: ${goal}`;
     return null;
   }
 
-  private async executeFallback(fallback: { tool: string; params: Record<string, any> }, context: { os: string; cwd: string }): Promise<AgentResult> {
+  private async executeFallback(fallback: { tool: string; params: Record<string, any> }, context: { os: string; cwd: string; signal?: AbortSignal }): Promise<AgentResult> {
     this.emit({ type: 'tool_start', message: this.getToolDisplayName(fallback.tool, fallback.params) });
-    const result = await this.toolExecutor.execute(fallback.tool, fallback.params, context.cwd, this.authorizationHandler);
+    const result = await this.toolExecutor.execute(fallback.tool, fallback.params, context.cwd, this.authorizationHandler, undefined, context.signal);
     const cdPath = this.extractCdPath(fallback.tool, fallback.params, result);
     const summary = result.success
       ? this.formatSuccessSummary(fallback.tool, fallback.params, result)

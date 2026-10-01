@@ -18,6 +18,8 @@ export interface GenerateOptions {
   sessionId?: string; // Phase 0.5 item 11: Request isolation per-tab / PTY session
   requestId?: string; // Phase 0.5 item 11: Unique request tracking ID
   timeoutMs?: number;
+  /** Set by the caller; aborting it stops inference immediately */
+  signal?: AbortSignal;
 }
 
 export interface ProviderResponse {

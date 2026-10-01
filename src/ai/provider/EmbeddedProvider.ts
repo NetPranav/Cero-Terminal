@@ -15,6 +15,7 @@
 
 import { ModelProvider, ModelMetadata, GenerateOptions, ProviderResponse } from './Provider';
 import { EmbeddedEngineManager } from '../models/EmbeddedEngineManager';
+import { CancelledError, throwIfAborted } from '../agent/Cancelled';
 
 const EMBEDDED_PORT = 8847;
 const EMBEDDED_BASE_URL = `http://localhost:${EMBEDDED_PORT}`;
@@ -153,6 +154,7 @@ export class EmbeddedProvider implements ModelProvider {
     options?: GenerateOptions,
     allowOomRecovery = true
   ): Promise<ProviderResponse> {
+    throwIfAborted(options?.signal);
     const startTime = performance.now();
 
     let messages: { role: string; content: string }[];
@@ -209,6 +211,7 @@ export class EmbeddedProvider implements ModelProvider {
       const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
         method: 'POST',
         headers,
+        signal: options?.signal,
         body: JSON.stringify({
           messages,
           max_tokens: options?.maxTokens ?? 256,
@@ -246,6 +249,10 @@ export class EmbeddedProvider implements ModelProvider {
         latencyMs
       };
     } catch (chatError) {
+      if (options?.signal?.aborted || (chatError as any)?.name === 'AbortError' || chatError instanceof CancelledError) {
+        throw new CancelledError();
+      }
+
       // If error was caused by grammar parsing failure, retry immediately without grammar constraint
       if (options?.grammar && String(chatError).toLowerCase().includes('grammar')) {
         console.warn('[EmbeddedProvider] Grammar rejected by llama-server, falling back to unconstrained inference:', chatError);
@@ -266,6 +273,7 @@ export class EmbeddedProvider implements ModelProvider {
         const response = await fetch(`${this.baseUrl}/completion`, {
           method: 'POST',
           headers,
+          signal: options?.signal,
           body: JSON.stringify({
             prompt,
             n_predict: options?.maxTokens ?? 256,
@@ -297,6 +305,10 @@ export class EmbeddedProvider implements ModelProvider {
           latencyMs
         };
       } catch (completionError) {
+        if (options?.signal?.aborted || (completionError as any)?.name === 'AbortError' || completionError instanceof CancelledError) {
+          throw new CancelledError();
+        }
+
         if (allowOomRecovery && EmbeddedEngineManager.getInstance().isVramExhaustionError(completionError)) {
           const recovered = await EmbeddedEngineManager.getInstance().handleOomCrash(String(completionError));
           if (recovered) {

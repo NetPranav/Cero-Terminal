@@ -185,6 +185,7 @@ pub fn run() {
             process_cmds::kill_process,
             process_cmds::get_system_stats,
             process_cmds::execute_command,
+            process_cmds::cancel_command,
             request_bluetooth_access,
             process_cmds::get_launch_args,
             process_cmds::get_app_binary_path,

@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ErrorDiagnosticsEngine, DiagnosticResult } from './ErrorDiagnosticsEngine';
 import { ProjectDiscoveryEngine, DiscoveredProject, FileSystemScanner } from '../../domain/discovery/ProjectDiscoveryEngine';
+import { throwIfAborted } from './Cancelled';
 
 export type PhaseStatus = 'pending' | 'running' | 'completed' | 'skipped' | 'failed' | 'awaiting_action';
 
@@ -76,10 +77,11 @@ export interface AdaptiveExecutionOptions {
   onStepOutput?: (output: string) => void;
   onPhysicalActionRequired?: (action: { prompt: string; cause: string; phaseId: string }) => Promise<boolean>;
   toolExecutor: {
-    execute: (toolId: string, params: any, cwd?: string, authHandler?: any) => Promise<any>;
+    execute: (toolId: string, params: any, cwd?: string, authHandler?: any, timeoutMs?: number, signal?: AbortSignal) => Promise<any>;
     hasDriver: (toolId: string) => boolean;
   };
   authorizationHandler?: any;
+  signal?: AbortSignal;
 }
 
 export interface PlannerModelProvider {
@@ -192,6 +194,7 @@ export class AdaptivePlanEngine {
     options.onPlanUpdate?.(plan);
 
     for (let i = 0; i < plan.phases.length; i++) {
+      throwIfAborted(options.signal);
       const phase = plan.phases[i];
 
       // If phase was already skipped or completed, continue
@@ -297,6 +300,7 @@ export class AdaptivePlanEngine {
     options: AdaptiveExecutionOptions,
     executedSteps: PhaseExecutionStep[]
   ): Promise<{ success: boolean; cdPath?: string }> {
+    throwIfAborted(options.signal);
     let phaseCdPath: string | undefined;
 
     // Resolve tool and parameters if not already assigned
@@ -354,7 +358,9 @@ export class AdaptivePlanEngine {
           phase.tool,
           phase.params || {},
           options.cwd,
-          options.authorizationHandler
+          options.authorizationHandler,
+          undefined,
+          options.signal
         );
 
         const stepRecord: PhaseExecutionStep = {

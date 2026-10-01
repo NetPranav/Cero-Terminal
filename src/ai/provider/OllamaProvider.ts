@@ -5,6 +5,7 @@
  */
 
 import { ModelProvider, ModelMetadata, GenerateOptions, ProviderResponse } from './Provider';
+import { CancelledError, throwIfAborted } from '../agent/Cancelled';
 
 export class OllamaProvider implements ModelProvider {
   readonly providerId = 'ollama';
@@ -94,10 +95,16 @@ export class OllamaProvider implements ModelProvider {
   }
 
   public async generate(prompt: string, modelId: string = 'qwen2.5:1.5b', options?: GenerateOptions): Promise<ProviderResponse> {
+    throwIfAborted(options?.signal);
     const startTime = performance.now();
     const timeoutMs = options?.timeoutMs ?? 180000;
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+    const onAbort = () => controller.abort();
+    if (options?.signal) {
+      options.signal.addEventListener('abort', onAbort, { once: true });
+    }
 
     const isChat = Array.isArray(options?.messages) && options.messages.length > 0;
     const endpoint = isChat ? `${this.baseUrl}/api/chat` : `${this.baseUrl}/api/generate`;
@@ -143,12 +150,21 @@ export class OllamaProvider implements ModelProvider {
       });
     } catch (err: any) {
       clearTimeout(timeoutHandle);
+      if (options?.signal) {
+        options.signal.removeEventListener('abort', onAbort);
+      }
+      if (options?.signal?.aborted) {
+        throw new CancelledError();
+      }
       if (err.name === 'AbortError' || controller.signal.aborted) {
         throw new Error(`[OllamaProvider] Model inference timed out after ${Math.round(timeoutMs / 1000)}s.`);
       }
       throw err;
     } finally {
       clearTimeout(timeoutHandle);
+      if (options?.signal) {
+        options.signal.removeEventListener('abort', onAbort);
+      }
     }
 
     const latencyMs = performance.now() - startTime;

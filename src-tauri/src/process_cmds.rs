@@ -1,8 +1,81 @@
 use sysinfo::{System, Signal, ProcessesToUpdate};
 use serde::Serialize;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
+use std::collections::{HashMap, HashSet};
 
 pub struct SystemState(pub Mutex<System>);
+
+static RUNNING: OnceLock<Mutex<HashMap<String, u32>>> = OnceLock::new();
+static CANCELLED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+
+struct RunningGuard {
+    run_id: Option<String>,
+}
+
+impl RunningGuard {
+    fn new(run_id: Option<String>, pid: Option<u32>) -> Self {
+        if let (Some(ref id), Some(pid)) = (&run_id, pid) {
+            if let Ok(mut map) = RUNNING.get_or_init(Default::default).lock() {
+                map.insert(id.clone(), pid);
+            }
+        }
+        Self { run_id }
+    }
+}
+
+impl Drop for RunningGuard {
+    fn drop(&mut self) {
+        if let Some(ref id) = self.run_id {
+            if let Ok(mut map) = RUNNING.get_or_init(Default::default).lock() {
+                map.remove(id);
+            }
+            if let Ok(mut set) = CANCELLED.get_or_init(Default::default).lock() {
+                set.remove(id);
+            }
+        }
+    }
+}
+
+fn kill_group(pid: u32) {
+    #[cfg(unix)]
+    {
+        unsafe {
+            libc::killpg(pid as libc::pid_t, libc::SIGTERM);
+        }
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+            unsafe {
+                libc::killpg(pid as libc::pid_t, libc::SIGKILL);
+            }
+        });
+    }
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .spawn();
+    }
+}
+
+#[tauri::command]
+pub async fn cancel_command(run_id: String) -> Result<bool, String> {
+    let pid = RUNNING
+        .get_or_init(Default::default)
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get(&run_id)
+        .copied();
+    match pid {
+        Some(pid) => {
+            if let Ok(mut set) = CANCELLED.get_or_init(Default::default).lock() {
+                set.insert(run_id);
+            }
+            kill_group(pid);
+            Ok(true)
+        }
+        None => Ok(false),
+    }
+}
 
 #[derive(Serialize)]
 pub struct SystemStats {
@@ -74,6 +147,8 @@ pub struct CommandOutput {
     pub code: i32,
     /// True when the command exceeded `timeout_ms` and was killed.
     pub timed_out: bool,
+    /// True when the command was cancelled by cancel_command.
+    pub cancelled: bool,
 }
 
 /// Per-stream capture cap. Output beyond this is drained and discarded so a runaway command
@@ -155,6 +230,7 @@ pub async fn run_command(
     args: Vec<String>,
     cwd: Option<String>,
     timeout_ms: Option<u64>,
+    run_id: Option<String>,
 ) -> Result<CommandOutput, String> {
     use std::process::Stdio;
     use std::sync::{Arc, Mutex};
@@ -179,6 +255,7 @@ pub async fn run_command(
         .spawn()
         .map_err(|e| format!("Failed to execute {}: {}", command, e))?;
     let pid = child.id();
+    let _guard = RunningGuard::new(run_id.clone(), pid);
 
     let stdout_buf = Arc::new(Mutex::new(Vec::new()));
     let stderr_buf = Arc::new(Mutex::new(Vec::new()));
@@ -216,15 +293,24 @@ pub async fn run_command(
         ));
     }
 
+    let was_cancelled = if let Some(ref id) = run_id {
+        CANCELLED.get_or_init(Default::default).lock().map(|mut s| s.remove(id)).unwrap_or(false)
+    } else {
+        false
+    };
+
     Ok(CommandOutput {
         stdout,
         stderr,
-        code: if timed_out {
+        code: if was_cancelled {
+            130
+        } else if timed_out {
             TIMEOUT_EXIT_CODE
         } else {
             status.and_then(|s| s.code()).unwrap_or(-1)
         },
         timed_out,
+        cancelled: was_cancelled,
     })
 }
 
@@ -236,8 +322,9 @@ pub async fn execute_command(
     args: Vec<String>,
     cwd: Option<String>,
     timeout_ms: Option<u64>,
+    run_id: Option<String>,
 ) -> Result<CommandOutput, String> {
-    run_command(command, args, cwd, timeout_ms).await
+    run_command(command, args, cwd, timeout_ms, run_id).await
 }
 
 #[tauri::command]
@@ -444,11 +531,12 @@ mod tests {
     #[tokio::test]
     async fn captures_output_and_exit_code() {
         let (cmd, args) = sh("echo hello; echo oops 1>&2; exit 3");
-        let out = run_command(cmd, args, Some("/tmp".into()), Some(5_000)).await.unwrap();
+        let out = run_command(cmd, args, Some("/tmp".into()), Some(5_000), None).await.unwrap();
         assert_eq!(out.stdout.trim(), "hello");
         assert_eq!(out.stderr.trim(), "oops");
         assert_eq!(out.code, 3);
         assert!(!out.timed_out);
+        assert!(!out.cancelled);
     }
 
     #[cfg(unix)]
@@ -456,7 +544,7 @@ mod tests {
     async fn timeout_kills_the_whole_process_group() {
         let started = std::time::Instant::now();
         let (cmd, args) = sh("sleep 30 & sleep 30; wait");
-        let out = run_command(cmd, args, None, Some(300)).await.unwrap();
+        let out = run_command(cmd, args, None, Some(300), None).await.unwrap();
         assert!(out.timed_out);
         assert_eq!(out.code, TIMEOUT_EXIT_CODE);
         assert!(started.elapsed() < std::time::Duration::from_secs(5));
@@ -468,7 +556,7 @@ mod tests {
         // `sleep` inherits the stdout pipe; waiting for EOF would take 5 seconds.
         let started = std::time::Instant::now();
         let (cmd, args) = sh("sleep 5 & echo launched");
-        let out = run_command(cmd, args, None, None).await.unwrap();
+        let out = run_command(cmd, args, None, None, None).await.unwrap();
         assert_eq!(out.stdout.trim(), "launched");
         assert_eq!(out.code, 0);
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
@@ -478,8 +566,45 @@ mod tests {
     #[tokio::test]
     async fn stdin_is_closed_so_prompts_do_not_hang() {
         let (cmd, args) = sh("read answer; echo \"got:$answer\"");
-        let out = run_command(cmd, args, None, Some(5_000)).await.unwrap();
+        let out = run_command(cmd, args, None, Some(5_000), None).await.unwrap();
         assert!(!out.timed_out);
         assert_eq!(out.stdout.trim(), "got:");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cancel_command_stops_running_process() {
+        let started = std::time::Instant::now();
+        let (cmd, args) = sh("sleep 30");
+        let run_id = "test-cancel-run-1".to_string();
+        let run_id_clone = run_id.clone();
+        let handle = tokio::spawn(async move {
+            run_command(cmd, args, None, None, Some(run_id_clone)).await.unwrap()
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let cancelled = cancel_command(run_id.clone()).await.unwrap();
+        assert!(cancelled);
+        let out = handle.await.unwrap();
+        assert!(out.cancelled);
+        assert_eq!(out.code, 130);
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+        assert!(RUNNING.get_or_init(Default::default).lock().unwrap().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cancel_command_kills_grandchildren() {
+        let (cmd, args) = sh("sh -c 'sleep 30 & wait'");
+        let run_id = "test-cancel-run-2".to_string();
+        let run_id_clone = run_id.clone();
+        let handle = tokio::spawn(async move {
+            run_command(cmd, args, None, None, Some(run_id_clone)).await.unwrap()
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let cancelled = cancel_command(run_id).await.unwrap();
+        assert!(cancelled);
+        let out = handle.await.unwrap();
+        assert!(out.cancelled);
+        assert_eq!(out.code, 130);
     }
 }

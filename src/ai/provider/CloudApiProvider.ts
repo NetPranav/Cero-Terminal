@@ -16,6 +16,7 @@
  */
 
 import { ModelProvider, ModelMetadata, GenerateOptions, ProviderResponse } from './Provider';
+import { CancelledError, throwIfAborted } from '../agent/Cancelled';
 
 export type CloudServiceId = 'openai' | 'anthropic' | 'groq' | 'deepseek' | 'openrouter' | 'custom';
 
@@ -445,6 +446,7 @@ export class CloudApiProvider implements ModelProvider {
   }
 
   public async generate(prompt: string, modelId?: string, options?: GenerateOptions): Promise<ProviderResponse> {
+    throwIfAborted(options?.signal);
     const active = this.getActiveConfig();
     if (!active || !active.apiKey) {
       throw new Error('No active Cloud API key configured. Please configure an API key in AI Settings.');
@@ -460,26 +462,108 @@ export class CloudApiProvider implements ModelProvider {
       { role: 'user', content: prompt }
     ];
 
-    if (active.serviceId === 'anthropic') {
-      const systemMsg = messages.find(m => m.role === 'system')?.content;
-      const nonSystemMessages = messages.filter(m => m.role !== 'system');
+    try {
+      if (active.serviceId === 'anthropic') {
+        const systemMsg = messages.find(m => m.role === 'system')?.content;
+        const nonSystemMessages = messages.filter(m => m.role !== 'system');
 
-      const body: any = {
+        const body: any = {
+          model,
+          max_tokens: options?.maxTokens || 1024,
+          messages: nonSystemMessages
+        };
+        if (systemMsg) body.system = systemMsg;
+
+        const res = await httpFetch(url, {
+          method: 'POST',
+          signal: options?.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': active.apiKey.trim(),
+            'anthropic-version': '2023-06-01'
+          },
+          body: JSON.stringify(body)
+        });
+
+        const latencyMs = Math.round(performance.now() - start);
+        if (!res.ok) {
+          const errMessage = await extractErrorMessage(res);
+          throw new Error(errMessage);
+        }
+
+        const json = await res.json();
+        const content = json.content?.[0]?.text || '';
+        return {
+          content,
+          raw: json,
+          usage: {
+            promptTokens: json.usage?.input_tokens || 0,
+            completionTokens: json.usage?.output_tokens || 0,
+            totalTokens: (json.usage?.input_tokens || 0) + (json.usage?.output_tokens || 0)
+          },
+          latencyMs
+        };
+      }
+
+      // Standard OpenAI-compatible execution
+      const isReasoningModel = model.startsWith('o1') || model.startsWith('o3') || model.includes('reasoner');
+      const requestBody: any = {
         model,
-        max_tokens: options?.maxTokens || 1024,
-        messages: nonSystemMessages
+        messages,
+        ...(isReasoningModel
+          ? { max_completion_tokens: options?.maxTokens || 1024 }
+          : {
+              temperature: options?.temperature ?? 0.2,
+              max_tokens: options?.maxTokens || 1024
+            })
       };
-      if (systemMsg) body.system = systemMsg;
+      if (options?.format === 'json') {
+        requestBody.response_format = { type: 'json_object' };
+      }
 
-      const res = await httpFetch(url, {
+      let res = await httpFetch(url, {
         method: 'POST',
+        signal: options?.signal,
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': active.apiKey.trim(),
-          'anthropic-version': '2023-06-01'
+          'Authorization': `Bearer ${active.apiKey.trim()}`
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(requestBody)
       });
+
+      // If endpoint rejects response_format (e.g. 400 Bad Request on some models), retry once without it
+      if (!res.ok && res.status === 400 && requestBody.response_format) {
+        throwIfAborted(options?.signal);
+        delete requestBody.response_format;
+        res = await httpFetch(url, {
+          method: 'POST',
+          signal: options?.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${active.apiKey.trim()}`
+          },
+          body: JSON.stringify(requestBody)
+        });
+      }
+
+      // If endpoint rejects temperature or max_tokens for reasoning models, retry with sanitized payload
+      if (!res.ok && res.status === 400 && (requestBody.temperature !== undefined || requestBody.max_tokens !== undefined)) {
+        throwIfAborted(options?.signal);
+        delete requestBody.temperature;
+        if (requestBody.max_tokens) {
+          requestBody.max_completion_tokens = requestBody.max_tokens;
+          delete requestBody.max_tokens;
+        }
+        res = await httpFetch(url, {
+          method: 'POST',
+          signal: options?.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${active.apiKey.trim()}`
+          },
+          body: JSON.stringify(requestBody)
+        });
+      }
 
       const latencyMs = Math.round(performance.now() - start);
       if (!res.ok) {
@@ -488,91 +572,22 @@ export class CloudApiProvider implements ModelProvider {
       }
 
       const json = await res.json();
-      const content = json.content?.[0]?.text || '';
+      const content = json.choices?.[0]?.message?.content || '';
       return {
         content,
         raw: json,
         usage: {
-          promptTokens: json.usage?.input_tokens || 0,
-          completionTokens: json.usage?.output_tokens || 0,
-          totalTokens: (json.usage?.input_tokens || 0) + (json.usage?.output_tokens || 0)
+          promptTokens: json.usage?.prompt_tokens || 0,
+          completionTokens: json.usage?.completion_tokens || 0,
+          totalTokens: json.usage?.total_tokens || 0
         },
         latencyMs
       };
-    }
-
-    // Standard OpenAI-compatible execution
-    const isReasoningModel = model.startsWith('o1') || model.startsWith('o3') || model.includes('reasoner');
-    const requestBody: any = {
-      model,
-      messages,
-      ...(isReasoningModel
-        ? { max_completion_tokens: options?.maxTokens || 1024 }
-        : {
-            temperature: options?.temperature ?? 0.2,
-            max_tokens: options?.maxTokens || 1024
-          })
-    };
-    if (options?.format === 'json') {
-      requestBody.response_format = { type: 'json_object' };
-    }
-
-    let res = await httpFetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${active.apiKey.trim()}`
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    // If endpoint rejects response_format (e.g. 400 Bad Request on some models), retry once without it
-    if (!res.ok && res.status === 400 && requestBody.response_format) {
-      delete requestBody.response_format;
-      res = await httpFetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${active.apiKey.trim()}`
-        },
-        body: JSON.stringify(requestBody)
-      });
-    }
-
-    // If endpoint rejects temperature or max_tokens for reasoning models, retry with sanitized payload
-    if (!res.ok && res.status === 400 && (requestBody.temperature !== undefined || requestBody.max_tokens !== undefined)) {
-      delete requestBody.temperature;
-      if (requestBody.max_tokens) {
-        requestBody.max_completion_tokens = requestBody.max_tokens;
-        delete requestBody.max_tokens;
+    } catch (err: any) {
+      if (options?.signal?.aborted || err?.name === 'AbortError' || err instanceof CancelledError) {
+        throw new CancelledError();
       }
-      res = await httpFetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${active.apiKey.trim()}`
-        },
-        body: JSON.stringify(requestBody)
-      });
+      throw err;
     }
-
-    const latencyMs = Math.round(performance.now() - start);
-    if (!res.ok) {
-      const errMessage = await extractErrorMessage(res);
-      throw new Error(errMessage);
-    }
-
-    const json = await res.json();
-    const content = json.choices?.[0]?.message?.content || '';
-    return {
-      content,
-      raw: json,
-      usage: {
-        promptTokens: json.usage?.prompt_tokens || 0,
-        completionTokens: json.usage?.completion_tokens || 0,
-        totalTokens: json.usage?.total_tokens || 0
-      },
-      latencyMs
-    };
   }
 }
