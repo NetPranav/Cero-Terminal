@@ -6,7 +6,7 @@ graph (entry points: `src/main.tsx` for the app, `scripts/*.ts` for the CLI and 
 Regenerate after large refactors; see "Regenerating" at the end.
 
 Status: **app** = loaded by the desktop app; **cli** = only used by scripts; **unreachable** = imported by
-nothing that runs (candidates for removal, see docs/ROADMAP.md I-38).
+nothing that runs (candidates for removal).
 
 Totals: 137 app, 1 cli-only, 251 unreachable.
 

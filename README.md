@@ -236,7 +236,7 @@ Releases: `scripts/release.sh macos|linux|windows|all` pushes the platform branc
 | | |
 |---|---|
 | [docs/FLOW_FILES.md](docs/FLOW_FILES.md) | The `.flow` format and how each OS runs it |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Audited status, what was tested and how, and what is left |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | The current fix plan: step-by-step tasks for the problems found on Linux |
 | [docs/releases](docs/releases) | Release notes per platform |
 | [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md) | Where things live in the code |
 

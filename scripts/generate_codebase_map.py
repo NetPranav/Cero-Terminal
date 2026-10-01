@@ -58,7 +58,7 @@ out=['# Codebase map','',
 'graph (entry points: `src/main.tsx` for the app, `scripts/*.ts` for the CLI and benchmark tools).',
 'Regenerate after large refactors; see "Regenerating" at the end.','',
 'Status: **app** = loaded by the desktop app; **cli** = only used by scripts; **unreachable** = imported by',
-'nothing that runs (candidates for removal, see docs/ROADMAP.md I-38).','',
+'nothing that runs (candidates for removal).','',
 f"Totals: {stats['app']} app, {stats['cli']} cli-only, {stats['unreachable']} unreachable.",'']
 for group in sorted(rows):
     items=rows[group]

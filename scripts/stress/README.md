@@ -19,4 +19,4 @@ npm run stress
 TESTS=tests2.ts npm run stress
 ```
 
-Results from the 2026-09-29 pass are in `docs/ROADMAP.md`, section 8.
+Results from the 2026-09-29 pass are in git history (`git show 4c5fff9:docs/ROADMAP.md`, section 8). Task 8.2 of the current `docs/ROADMAP.md` extends this suite.

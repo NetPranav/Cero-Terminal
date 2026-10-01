@@ -5,7 +5,7 @@ Extracted unchanged from the v6 roadmap (`docs/archive/ROADMAP_v6_legacy.md`, se
 
 Caveat: before September 2026 the offline fast-path table contained one hardcoded regex per
 prompt in this file, many returning canned text, so historical "450/450" results measured
-that table rather than the model. See docs/ROADMAP.md (I-43).
+that table rather than the model. See the earlier audit in git history (`git show 4c5fff9:docs/ROADMAP.md`, issue I-43).
 
 ## 6. Master Domain Benchmark: Detailed Prompts, Verification & Fix Harness
 
