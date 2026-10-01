@@ -59,6 +59,24 @@ fn kill_group(pid: u32) {
 
 #[tauri::command]
 pub async fn cancel_command(run_id: String) -> Result<bool, String> {
+    if run_id == "*" {
+        let pids: Vec<(String, u32)> = RUNNING
+            .get_or_init(Default::default)
+            .lock()
+            .map_err(|e| e.to_string())?
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect();
+        if let Ok(mut set) = CANCELLED.get_or_init(Default::default).lock() {
+            for (k, _) in &pids {
+                set.insert(k.clone());
+            }
+        }
+        for (_, pid) in pids {
+            kill_group(pid);
+        }
+        return Ok(true);
+    }
     let pid = RUNNING
         .get_or_init(Default::default)
         .lock()

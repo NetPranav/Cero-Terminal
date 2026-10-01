@@ -45,13 +45,14 @@ import { SearchAddon } from '@xterm/addon-search';
 import { TerminalSearchBar } from './TerminalSearchBar';
 import { InputLineTracker, stripPrompt, parseCdTarget } from './InputLineTracker';
 import { decideGhostKey } from './ghostKeys';
+import { decideStopKey } from './stopKeys';
 import { TerminalWorkspace } from '../domain/terminal/TerminalWorkspace';
 import { claimTerminalRequests, releaseTerminalRequests, TerminalRequest } from './TerminalRequests';
 import { claimChoiceRequests, releaseChoiceRequests, type ChoiceRequest, type ChoiceResult } from './ChoiceRequests';
 import { ChoiceDialog } from '../ui/components/ChoiceDialog';
 import { createPortal } from 'react-dom';
 
-type AgentRunner = (context: { os: string; cwd: string; paneId?: string }) => Promise<AgentResult>;
+type AgentRunner = (context: { os: string; cwd: string; paneId?: string; signal?: AbortSignal }) => Promise<AgentResult>;
 import { readClipboardText, writeClipboardText, formatTerminalPastePayload } from '../utils/clipboard';
 
 /** Goal text for an auto-heal request: the failing command and diagnosis, not just a title. */
@@ -240,6 +241,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   const inputLineRef = useRef<InputLineTracker>(new InputLineTracker());
   const aiBusyRef = useRef(false);
   const aiQueueRef = useRef<Array<{ goal: string; runner?: AgentRunner }>>([]);
+  const activeRunAbortControllerRef = useRef<AbortController | null>(null);
+  const lastInterruptTimeRef = useRef<number>(0);
   // Runs a request handed over by the app (Workflow Manager, opened workflow file)
   const submitRef = useRef<((request: TerminalRequest) => void) | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
@@ -773,6 +776,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         const runAiGoal = async (aiGoal: string, runner?: AgentRunner) => {
           // Busy before the first await, so a second Enter is queued rather than run alongside
           aiBusyRef.current = true;
+          const abortController = new AbortController();
+          activeRunAbortControllerRef.current = abortController;
           const cwd = (await syncCwd()) || currentPathRef.current || currentPath || '~';
           // Initiate live progress tracking in the bottom bar
           PromptProgressManager.getInstance().startPrompt(aiGoal);
@@ -781,6 +786,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
           // Set up event listener for live output
           agentLoop.onEvent((event) => {
+            if (abortController.signal.aborted) return;
             if (event.type === 'thinking') {
               PromptProgressManager.getInstance().updateStage(event.message || 'Thinking...', 30);
             } else if (event.type === 'plan') {
@@ -851,7 +857,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           });
 
           // Run the agent loop
-          (runner ? runner({ os: getPlatform(), cwd, paneId }) : agentLoop.run(aiGoal, { os: getPlatform(), cwd, paneId })).then(result => {
+          (runner ? runner({ os: getPlatform(), cwd, paneId, signal: abortController.signal }) : agentLoop.run(aiGoal, { os: getPlatform(), cwd, paneId, signal: abortController.signal })).then(result => {
+            if (abortController.signal.aborted || result.cancelled) {
+              return;
+            }
             const leftover = renderer.finish();
             if (leftover) writeTerm(leftover);
             PromptProgressManager.getInstance().completePrompt(result.success, result.summary);
@@ -886,6 +895,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
             }
           }).catch(err => {
+            if (abortController.signal.aborted) {
+              return;
+            }
             const leftover = renderer.finish();
             if (leftover) writeTerm(leftover);
             PromptProgressManager.getInstance().completePrompt(false, err?.message || 'Error');
@@ -896,6 +908,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             writeTerm(`\r\n${formatAgentEvent({ type: 'error', message: err.message || 'Something went wrong' })}\r\n`);
             afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
           }).finally(() => {
+            if (activeRunAbortControllerRef.current === abortController) {
+              activeRunAbortControllerRef.current = null;
+            }
             aiBusyRef.current = false;
             activeRenderer = null;
             const next = aiQueueRef.current.shift();
@@ -906,6 +921,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         // .flow files that install or run things: typed into this terminal step by step
         const runFlow = async (originalPlan: FlowPlan, source?: string) => {
           aiBusyRef.current = true;
+          const abortController = new AbortController();
+          activeRunAbortControllerRef.current = abortController;
           const os = flowOsOf(getPlatform());
           let plan = originalPlan;
           try {
@@ -919,6 +936,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             }
             // A pane opened for this flow may still be starting its shell
             for (let waited = 0; waited < 15000 && !ptyTrackerRef.current.isIdleAtPrompt(); waited += 250) {
+              if (abortController.signal.aborted) break;
               await new Promise(r => setTimeout(r, 250));
             }
             await runFlowInTerminal(plan, {
@@ -942,6 +960,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 flowStepWaiter = finish;
                 // No marker and the prompt has been back for 8 s: the step was interrupted (Ctrl+C)
                 const watch = setInterval(() => {
+                  if (abortController.signal.aborted) {
+                    finish(null);
+                    return;
+                  }
                   if (Date.now() - started < 2000) return;
                   if (ptyTrackerRef.current.isIdleAtPrompt()) {
                     idleSince = idleSince || Date.now();
@@ -972,10 +994,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 const color = tone === 'error' ? S.err : tone === 'ok' ? S.ok : S.muted;
                 writeTerm(`\r\n  ${color}${tone === 'error' ? '✗' : tone === 'ok' ? '✓' : '›'}${S.reset} ${S.text}${text}${S.reset}\r\n`);
               },
+              signal: abortController.signal
             }, source);
           } catch (err: any) {
-            writeTerm(`\r\n  ${S.err}✗${S.reset} Flow "${plan.name}" failed: ${err?.message || err}\r\n`);
+            if (!abortController.signal.aborted) {
+              writeTerm(`\r\n  ${S.err}✗${S.reset} Flow "${plan.name}" failed: ${err?.message || err}\r\n`);
+            }
           } finally {
+            if (activeRunAbortControllerRef.current === abortController) {
+              activeRunAbortControllerRef.current = null;
+            }
             // The result line was written below the last prompt: ask the shell for a fresh one
             if (currentSessionId) void sessionManager.write(currentSessionId, '\r');
             aiBusyRef.current = false;
@@ -1013,6 +1041,65 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         term.onData(async (data) => {
           if (!currentSessionId) return;
           SentinelSerlCoordinator.getInstance().markActivity();
+
+          // Stop key decision (Task 2.2: Ctrl+C stops a running task or copies selection)
+          const stopAction = decideStopKey({
+            data,
+            hasSelection: term.hasSelection(),
+            isAiBusy: aiBusyRef.current,
+            lastInterruptTime: lastInterruptTimeRef.current,
+          });
+
+          if (stopAction === 'copy-selection') {
+            const selection = term.getSelection();
+            if (selection) {
+              try {
+                await navigator.clipboard.writeText(selection);
+              } catch { /* ignore clipboard write failure */ }
+            }
+            return;
+          }
+
+          if (stopAction === 'abort-ai-task') {
+            lastInterruptTimeRef.current = Date.now();
+            activeRunAbortControllerRef.current?.abort();
+            if (currentSessionId) {
+              await sessionManager.write(currentSessionId, '\x03');
+            }
+            const leftover = activeRenderer?.finish() ?? '';
+            writeTerm(`${leftover}\r\n  ${S.muted}Stopped.${S.reset}\r\n`);
+            PromptProgressManager.getInstance().completePrompt(false, 'Stopped.');
+            setPlanExecutionStatus('failed');
+            planExecutionStatusRef.current = 'failed';
+            schedulePlanDismiss();
+            aiBusyRef.current = false;
+            activeRunAbortControllerRef.current = null;
+            afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+            return;
+          }
+
+          if (stopAction === 'force-kill-ai-task') {
+            lastInterruptTimeRef.current = 0;
+            activeRunAbortControllerRef.current?.abort();
+            if (currentSessionId) {
+              await sessionManager.write(currentSessionId, '\x03');
+              await sessionManager.write(currentSessionId, '\x03');
+            }
+            try {
+              await invoke('cancel_command', { runId: '*' }).catch(() => {});
+            } catch { /* ignore */ }
+            const leftover = activeRenderer?.finish() ?? '';
+            writeTerm(`${leftover}\r\n  ${S.err}Force killed.${S.reset}\r\n`);
+            PromptProgressManager.getInstance().completePrompt(false, 'Killed.');
+            setPlanExecutionStatus('failed');
+            planExecutionStatusRef.current = 'failed';
+            schedulePlanDismiss();
+            aiBusyRef.current = false;
+            activeRunAbortControllerRef.current = null;
+            aiQueueRef.current = [];
+            afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+            return;
+          }
 
           // Remember where this input line starts so Enter can read exactly what was typed
           if (!(data.includes('\r') || data === '\n') && term.buffer.active.type !== 'alternate') {
