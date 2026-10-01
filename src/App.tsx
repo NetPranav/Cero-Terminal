@@ -11,6 +11,7 @@ import { UrlSchemeHandler } from "./domain/integration/UrlSchemeHandler";
 import { SessionPersistenceEngine } from "./domain/session/SessionPersistenceEngine";
 import { HistorySearchModal } from "./ui/components/HistorySearchModal";
 import { KeyboardShortcutsModal } from "./ui/components/KeyboardShortcutsModal";
+import { QueuePanel } from "./ui/components/QueuePanel";
 import { ZenModeHelpCallout } from "./ui/components/ZenModeHelpCallout";
 import { AuditLogger } from "./domain/security/AuditLogger";
 import { DotfileSyncEngine } from "./domain/rice/DotfileSyncEngine";
@@ -211,6 +212,13 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
     return !localStorage.getItem('sentinel_onboarded');
   });
   const [detectedShell, setDetectedShell] = useState<string>(() => isLinux() ? 'bash' : 'zsh');
+  const [showQueuePanel, setShowQueuePanel] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleOpenQueue = () => setShowQueuePanel(true);
+    window.addEventListener('sentinel:open-queue', handleOpenQueue);
+    return () => window.removeEventListener('sentinel:open-queue', handleOpenQueue);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -1424,8 +1432,13 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
         onOpenWorkflows={() => setShowWorkflowManager(true)}
         onOpenHelp={() => setShowHelpModal(true)}
         onOpenAiSettings={() => setShowAiSettings(true)}
+        onOpenQueue={() => setShowQueuePanel(true)}
         uiMode={uiMode}
         highlightHelp={showZenCallout}
+      />
+      <QueuePanel
+        isOpen={showQueuePanel}
+        onClose={() => setShowQueuePanel(false)}
       />
       {showWorkflowManager && (
         <Suspense fallback={null}>

@@ -11,7 +11,8 @@ import {
   GitBranch,
   Globe,
   HelpCircle,
-  Sparkles
+  Sparkles,
+  ListOrdered
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { isLinux, getShortcutModifier } from '../../shared/platform';
@@ -19,6 +20,7 @@ import { EmbeddedEngineManager, EmbeddedStatus } from '../../ai/models/EmbeddedE
 import { ModelManager, type ActiveModelInfo } from '../../ai/management/ModelManager';
 import { CloudApiProvider } from '../../ai/provider/CloudApiProvider';
 import { describeAi, type AiBadge } from '../../ai/management/AiStatus';
+import { PromptQueue } from '../../presentation/PromptQueue';
 import { ShieldAlert } from 'lucide-react';
 
 export interface StatusBarProps {
@@ -28,6 +30,7 @@ export interface StatusBarProps {
   onOpenWorkflows?: () => void;
   onOpenHelp?: () => void;
   onOpenAiSettings?: () => void;
+  onOpenQueue?: () => void;
   uiMode?: 'zen' | 'visual';
   memoryUsage?: number;
   cpuUsage?: number;
@@ -42,6 +45,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   onOpenWorkflows,
   onOpenHelp,
   onOpenAiSettings,
+  onOpenQueue,
   uiMode = 'zen',
   memoryUsage: initialMemory,
   cpuUsage: initialCpu,
@@ -49,6 +53,13 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   highlightHelp = false
 }) => {
   const displayShell = currentShell || (isLinux() ? 'bash' : 'zsh');
+  const [queueCount, setQueueCount] = useState<number>(() => PromptQueue.getInstance().size());
+
+  useEffect(() => {
+    return PromptQueue.getInstance().subscribe(items => {
+      setQueueCount(items.length);
+    });
+  }, []);
   // Unknown until the first real reading; never show placeholder numbers
   const [memoryUsage, setMemoryUsage] = useState<number | undefined>(initialMemory);
   const [memoryTotal, setMemoryTotal] = useState<number | undefined>(undefined);
@@ -352,7 +363,43 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           <span>UTF-8</span>
         </span>
 
-        <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>
+        {/* Queue indicator (only when N > 0) */}
+        {queueCount > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={onOpenQueue}
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: '4px',
+                padding: '1px 7px',
+                color: '#ffffff',
+                fontSize: '11px',
+                fontFamily: 'inherit',
+                fontWeight: 500,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.14)';
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.35)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+              }}
+              title="View queued prompts (/queue)"
+            >
+              <ListOrdered size={11} style={{ opacity: 0.8 }} />
+              <span>Queue: {queueCount} {queueCount === 1 ? 'item' : 'items'}</span>
+            </button>
+            <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>
+          </>
+        )}
 
         {/* [F1 help] button / pill */}
         <button

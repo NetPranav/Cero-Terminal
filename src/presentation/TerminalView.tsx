@@ -46,6 +46,7 @@ import { TerminalSearchBar } from './TerminalSearchBar';
 import { InputLineTracker, stripPrompt, parseCdTarget } from './InputLineTracker';
 import { decideGhostKey } from './ghostKeys';
 import { decideStopKey } from './stopKeys';
+import { PromptQueue, parseQueueCommand } from './PromptQueue';
 import { TerminalWorkspace } from '../domain/terminal/TerminalWorkspace';
 import { claimTerminalRequests, releaseTerminalRequests, TerminalRequest } from './TerminalRequests';
 import { claimChoiceRequests, releaseChoiceRequests, type ChoiceRequest, type ChoiceResult } from './ChoiceRequests';
@@ -240,7 +241,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   const consentOpenRef = useRef(false);
   const inputLineRef = useRef<InputLineTracker>(new InputLineTracker());
   const aiBusyRef = useRef(false);
-  const aiQueueRef = useRef<Array<{ goal: string; runner?: AgentRunner }>>([]);
   const activeRunAbortControllerRef = useRef<AbortController | null>(null);
   const lastInterruptTimeRef = useRef<number>(0);
   // Runs a request handed over by the app (Workflow Manager, opened workflow file)
@@ -913,7 +913,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             }
             aiBusyRef.current = false;
             activeRenderer = null;
-            const next = aiQueueRef.current.shift();
+            const next = PromptQueue.getInstance().dequeue();
             if (next) setTimeout(() => runAiGoal(next.goal, next.runner), 150);
           });
         };
@@ -1007,7 +1007,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             // The result line was written below the last prompt: ask the shell for a fresh one
             if (currentSessionId) void sessionManager.write(currentSessionId, '\r');
             aiBusyRef.current = false;
-            const next = aiQueueRef.current.shift();
+            const next = PromptQueue.getInstance().dequeue();
             if (next) setTimeout(() => runAiGoal(next.goal, next.runner), 150);
           }
         };
@@ -1030,8 +1030,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             ? (ctx) => agentLoop.runWorkflow(request.definition, {}, ctx)
             : undefined;
           if (aiBusyRef.current) {
-            aiQueueRef.current.push({ goal: label, runner });
-            writeTerm(`\r\n  ${S.muted}Queued${S.reset}\r\n`);
+            PromptQueue.getInstance().enqueue(label, runner);
+            writeTerm(`\r\n  ${S.muted}Queued: ${label}${S.reset}\r\n`);
             return;
           }
           runAiGoal(request.kind === 'goal' ? request.goal : label, runner);
@@ -1096,7 +1096,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             schedulePlanDismiss();
             aiBusyRef.current = false;
             activeRunAbortControllerRef.current = null;
-            aiQueueRef.current = [];
+            PromptQueue.getInstance().clear();
             afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
             return;
           }
@@ -1352,6 +1352,39 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 return;
               }
 
+              // Queue management slash and natural language commands (Task 2.3)
+              const queueCmd = parseQueueCommand(cleanCmd);
+              if (queueCmd) {
+                await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
+                if (queueCmd.type === 'open-panel') {
+                  window.dispatchEvent(new CustomEvent('sentinel:open-queue'));
+                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  return;
+                }
+                if (queueCmd.type === 'show') {
+                  const list = PromptQueue.getInstance().formatQueueList();
+                  writeTerm(`\r\n  ${S.soft}${list.replace(/\n/g, '\r\n  ')}${S.reset}\r\n\r\n`);
+                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  return;
+                }
+                if (queueCmd.type === 'clear') {
+                  PromptQueue.getInstance().clear();
+                  writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Queue cleared.${S.reset}\r\n\r\n`);
+                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  return;
+                }
+                if (queueCmd.type === 'remove') {
+                  const ok = PromptQueue.getInstance().remove(queueCmd.index);
+                  if (ok) {
+                    writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Removed item ${queueCmd.index} from queue.${S.reset}\r\n\r\n`);
+                  } else {
+                    writeTerm(`\r\n  ${S.err}✗${S.reset} ${S.text}Item ${queueCmd.index} not found in queue.${S.reset}\r\n\r\n`);
+                  }
+                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  return;
+                }
+              }
+
               if (cleanCmd.startsWith('>') || answeringAgentQuestion) {
                 const aiGoal = answeringAgentQuestion ? cleanCmd : cleanCmd.substring(1).trim();
                 if (!aiGoal) {
@@ -1367,7 +1400,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
                 // One request at a time: the agent keeps a single transcript and event listener
                 if (aiBusyRef.current) {
-                  aiQueueRef.current.push({ goal: aiGoal });
+                  PromptQueue.getInstance().enqueue(aiGoal);
                   const settled = activeRenderer?.finish() ?? '';
                   const newline = !settled && term.buffer.active.cursorX > 0 ? '\r\n' : '';
                   writeTerm(`${settled}${newline}  ${S.muted}Queued: ${aiGoal}${S.reset}\r\n`);
