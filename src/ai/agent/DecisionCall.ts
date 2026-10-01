@@ -76,8 +76,12 @@ export function buildDecisionCall(
     ...conversationMessages
   ];
 
+  const isChat = extra?.mode === 'chat';
   const options: GenerateOptions = {
-    temperature: 0.05,
+    temperature: isChat ? 0.4 : 0,
+    topK: isChat ? 20 : 1,
+    topP: isChat ? 0.9 : 1,
+    seed: isChat ? undefined : 42,
     maxTokens: 512,
     format: 'json',
     messages: chatMessages,

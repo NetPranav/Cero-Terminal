@@ -2890,8 +2890,9 @@ export class AgentLoop {
     const prompt = `\`${request.command}\` fails${where} (exit ${code}). Its output:\n${AgentLoop.formatToolObservation('shell.execute', AgentLoop.truncateObservation(`${stdout}\n${stderr}`.trim()).slice(-3500))}\n${sources ? `Source files named in the error:\n${AgentLoop.formatToolObservation('filesystem.read', sources)}\n` : ''}Explain in two or three sentences why it fails (name the file and line) and how to fix it. Answer only from the output and files above.`;
     try {
       const response = await provider.generate(prompt, this.modelManager.getActiveModel().modelId, {
-        temperature: 0.1,
+        temperature: 0.4,
         maxTokens: 400,
+        mode: 'chat',
         messages: [
           { role: 'system', content: 'You explain why a command fails, from its output and the source code shown. Be specific and brief.' },
           { role: 'user', content: prompt }
@@ -3250,8 +3251,10 @@ export class AgentLoop {
     const user = `This is one step of a longer task.${done.length ? `\nSteps already done:\n${done.map(d => `- ${d}`).join('\n')}` : ''}\nCurrent folder: ${cwd}\nGive the single shell command for this step: "${clause}". Respond with {"action": "execute", "command": "<command>", "explanation": "<one line>"}.`;
     try {
       const response = await provider.generate(user, this.modelManager.getActiveModel().modelId, {
-        temperature: 0.05,
+        temperature: 0,
         maxTokens: 256,
+        mode: 'decision',
+        seed: 42,
         format: 'json',
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
         grammar: GbnfGrammarManager.getGrammar('SENTINEL_ACTION'),

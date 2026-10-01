@@ -507,14 +507,19 @@ export class CloudApiProvider implements ModelProvider {
 
       // Standard OpenAI-compatible execution
       const isReasoningModel = model.startsWith('o1') || model.startsWith('o3') || model.includes('reasoner');
+      const isDecision = options?.mode === 'decision';
+      const isChat = options?.mode === 'chat';
+      const temperature = options?.temperature ?? (isDecision ? 0 : (isChat ? 0.4 : 0.2));
+
       const requestBody: any = {
         model,
         messages,
         ...(isReasoningModel
           ? { max_completion_tokens: options?.maxTokens || 1024 }
           : {
-              temperature: options?.temperature ?? 0.2,
-              max_tokens: options?.maxTokens || 1024
+              temperature,
+              max_tokens: options?.maxTokens || 1024,
+              ...(options?.seed !== undefined || isDecision ? { seed: options?.seed ?? 42 } : {})
             })
       };
       if (options?.format === 'json') {

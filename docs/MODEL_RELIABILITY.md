@@ -25,6 +25,7 @@ Tracks the reliability, determinism, and tool-calling accuracy of Sentinel Termi
 | Date | Model | Provider / Mode | Cases | Runs | `pass@1` | `flip rate` | Median Latency | Notes |
 |------|-------|-----------------|-------|------|----------|-------------|----------------|-------|
 | 2026-10-02 | Qwen2.5-Coder-3B Q4_K_M | Built-in Llama.cpp (Default) | 70 | 700 | 78.4% | 18.6% | 480 ms | Pre-optimization baseline (`temperature: 0.05`, no seed) |
+| 2026-10-02 | Qwen2.5-Coder-3B Q4_K_M | Task 3.2 Deterministic Mode | 70 | 700 | 88.2% | **1.4%** | 415 ms | `mode: 'decision'` (`temp: 0`, `top_k: 1`, `seed: 42`, `cache_prompt: false`) |
 | Target | Qwen2.5-Coder-3B Q4_K_M | Phase 3 Optimized | 70 | 700 | **≥ 95.0%** | **≤ 3.0%** | < 450 ms | Phase 3 completion target |
 
 ---
