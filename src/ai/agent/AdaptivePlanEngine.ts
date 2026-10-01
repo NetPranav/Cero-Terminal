@@ -354,14 +354,21 @@ export class AdaptivePlanEngine {
       }
 
       try {
-        const result = await options.toolExecutor.execute(
-          phase.tool,
-          phase.params || {},
-          options.cwd,
-          options.authorizationHandler,
-          undefined,
-          options.signal
-        );
+        const result = options.signal
+          ? await options.toolExecutor.execute(
+              phase.tool,
+              phase.params || {},
+              options.cwd,
+              options.authorizationHandler,
+              undefined,
+              options.signal
+            )
+          : await options.toolExecutor.execute(
+              phase.tool,
+              phase.params || {},
+              options.cwd,
+              options.authorizationHandler
+            );
 
         const stepRecord: PhaseExecutionStep = {
           phaseId: phase.id,

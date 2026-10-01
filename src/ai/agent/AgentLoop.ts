@@ -2415,7 +2415,9 @@ export class AgentLoop {
         if (s.enter) {
           const target = resolveFolder(cwd, s.enter);
           this.emit({ type: 'tool_start', message: label });
-          const check = await this.toolExecutor.execute('shell.execute', { command: `${cdCommand(target)} && pwd`, explanation: `Enter ${s.enter}` }, cwd, handler, undefined, context.signal);
+          const check = context.signal
+            ? await this.toolExecutor.execute('shell.execute', { command: `${cdCommand(target)} && pwd`, explanation: `Enter ${s.enter}` }, cwd, handler, undefined, context.signal)
+            : await this.toolExecutor.execute('shell.execute', { command: `${cdCommand(target)} && pwd`, explanation: `Enter ${s.enter}` }, cwd, handler);
           steps.push({ tool: 'shell.execute', params: { command: `cd ${target}` }, result: check });
           const pwd = typeof check.data?.stdout === 'string' ? check.data.stdout.trim().split('\n').pop() : '';
           if (!check.success || !pwd) {
@@ -2456,7 +2458,9 @@ export class AgentLoop {
         }
 
         this.emit({ type: 'tool_start', message: `${label}  (${command})` });
-        const result = await this.toolExecutor.execute('shell.execute', { command, explanation: s.clause }, cwd, handler, undefined, context.signal);
+        const result = context.signal
+          ? await this.toolExecutor.execute('shell.execute', { command, explanation: s.clause }, cwd, handler, undefined, context.signal)
+          : await this.toolExecutor.execute('shell.execute', { command, explanation: s.clause }, cwd, handler);
         steps.push({ tool: 'shell.execute', params: { command }, result });
         if (result.errorCode === 'USER_CANCELLED') {
           const summary = `Not run: you declined \`${command}\`. Steps before it were completed.`;
@@ -2515,7 +2519,9 @@ export class AgentLoop {
       authorizationHandler: this.authorizationHandler,
       executor: async (cmd: string, cwd?: string, authorize?: AgentAuthorizationHandler) => {
         throwIfAborted(context.signal);
-        const res = await this.toolExecutor.execute('shell.execute', { command: cmd, cwd: cwd || context.cwd }, cwd || context.cwd, authorize ?? this.authorizationHandler, undefined, context.signal);
+        const res = context.signal
+          ? await this.toolExecutor.execute('shell.execute', { command: cmd, cwd: cwd || context.cwd }, cwd || context.cwd, authorize ?? this.authorizationHandler, undefined, context.signal)
+          : await this.toolExecutor.execute('shell.execute', { command: cmd, cwd: cwd || context.cwd }, cwd || context.cwd, authorize ?? this.authorizationHandler);
         return {
           code: res.success ? (res.data?.code ?? 0) : (res.data?.code ?? 1),
           stdout: res.data?.stdout || '',
@@ -3916,7 +3922,9 @@ export class AgentLoop {
           this.emit({ type: 'tool_start', message: this.getToolDisplayName(toolId, params) });
 
           // Execute the tool
-          const result = await this.toolExecutor.execute(toolId, params, context.cwd, this.authorizationHandler, undefined, context.signal);
+          const result = context.signal
+            ? await this.toolExecutor.execute(toolId, params, context.cwd, this.authorizationHandler, undefined, context.signal)
+            : await this.toolExecutor.execute(toolId, params, context.cwd, this.authorizationHandler);
 
           steps.push({ tool: toolId, params, result });
 
@@ -4162,14 +4170,21 @@ Output JSON:
           type: 'thinking',
           message: `Evaluating precondition for step ${i + 1}: ${step.precondition_check}`
         });
-        const preResult = await this.toolExecutor.execute(
-          'shell.execute',
-          { command: step.precondition_check, explanation: `Precondition check for ${step.goal}` },
-          context.cwd,
-          this.authorizationHandler,
-          undefined,
-          context.signal
-        );
+        const preResult = context.signal
+          ? await this.toolExecutor.execute(
+              'shell.execute',
+              { command: step.precondition_check, explanation: `Precondition check for ${step.goal}` },
+              context.cwd,
+              this.authorizationHandler,
+              undefined,
+              context.signal
+            )
+          : await this.toolExecutor.execute(
+              'shell.execute',
+              { command: step.precondition_check, explanation: `Precondition check for ${step.goal}` },
+              context.cwd,
+              this.authorizationHandler
+            );
 
         const prePassed = preResult.success && (preResult.data?.code === 0 || preResult.data?.code === undefined);
 
@@ -4840,7 +4855,9 @@ User request: ${goal}`;
 
   private async executeFallback(fallback: { tool: string; params: Record<string, any> }, context: { os: string; cwd: string; signal?: AbortSignal }): Promise<AgentResult> {
     this.emit({ type: 'tool_start', message: this.getToolDisplayName(fallback.tool, fallback.params) });
-    const result = await this.toolExecutor.execute(fallback.tool, fallback.params, context.cwd, this.authorizationHandler, undefined, context.signal);
+    const result = context.signal
+      ? await this.toolExecutor.execute(fallback.tool, fallback.params, context.cwd, this.authorizationHandler, undefined, context.signal)
+      : await this.toolExecutor.execute(fallback.tool, fallback.params, context.cwd, this.authorizationHandler);
     const cdPath = this.extractCdPath(fallback.tool, fallback.params, result);
     const summary = result.success
       ? this.formatSuccessSummary(fallback.tool, fallback.params, result)
