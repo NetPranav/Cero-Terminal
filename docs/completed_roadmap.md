@@ -160,6 +160,45 @@ All four tasks specified in `docs/roadmap.md` under Phase 1 (Tasks 1.1 through 1
 - **Unit Tests:** `npm test` passed with 243/243 test files passing, 2,097 tests passed, 1 skipped.
 - **Frontend Build:** `npm run build` compiled clean with zero TypeScript or Vite bundle errors.
 - **Backend Cargo Check:** `cargo check --manifest-path src-tauri/Cargo.toml` exited with code 0.
+- **Desktop Application Bundle:** Successfully built and packaged at `src-tauri/target/debug/bundle/macos/Sentinel Terminal.app`.
+
+### Manual Testing Guide for the Built Application
+To test the built desktop application directly on macOS:
+1. **Launch the Application:**
+   - Double-click `src-tauri/target/debug/bundle/macos/Sentinel Terminal.app`, or run:
+     ```bash
+     open "src-tauri/target/debug/bundle/macos/Sentinel Terminal.app"
+     ```
+   - Alternatively, for hot-reloading development mode, run:
+     ```bash
+     npm run tauri dev
+     ```
+
+2. **Verify Task 1.1 (Esc Closes Settings & Focus Restoration):**
+   - Press `Cmd+,` or click the AI status badge in the bottom status bar to open Settings.
+   - Press `Esc`: the Settings full-screen view must immediately close, and focus must return to the terminal buffer so typing works without clicking.
+   - Re-open Settings, click the top-right `X` close button: Settings closes and terminal focus is restored.
+   - Re-open Settings, press `Cmd+,`: Settings closes and terminal focus is restored.
+
+3. **Verify Task 1.2 (Provider & Model Choice Persistence Across Restart):**
+   - Open Settings, select a Cloud Provider (e.g. Anthropic, OpenAI, or Ollama) and select a model.
+   - Completely quit the application (`Cmd+Q`).
+   - Re-launch the application: open Settings and verify that the selected provider and model are immediately restored without resetting to the embedded model.
+   - If Ollama is selected but not running, verify that the status badge shows `AI: unavailable` with the reason in the tooltip, and Settings shows the "Use the built-in model instead" fallback button without wiping your selection.
+
+4. **Verify Task 1.3 (Honest AI Status Bar):**
+   - When an external API or Ollama provider is selected and ready, verify the status bar displays `AI: <model> (API)` or `AI: <model> (local)`.
+   - Verify it NEVER displays "AI: Off" while an external provider is selected.
+   - Hover over the AI status badge: verify the tooltip lists provider name, model identifier, host/port, and operational status without exposing secrets or API keys.
+   - Check that model names longer than 24 characters are truncated cleanly with an ellipsis.
+
+5. **Verify Task 1.4 (Arrow Keys and Ghost Text):**
+   - Type a command prefix (e.g. `git sta`) until a grey ghost suggestion appears (`tus`).
+   - Press Left Arrow twice to navigate the cursor into the middle of the typed text (`git |sta`):
+     - The ghost suggestion must immediately disappear.
+     - Pressing Right Arrow or Left Arrow must only move the cursor, and must NEVER insert the suggestion text into the command line.
+   - Press Right Arrow to navigate back to the end of the line: the ghost suggestion reappears. Pressing Tab or Right Arrow at the end accepts the suggestion.
+   - In Settings under "General Settings", toggle "Accept suggestion with Right arrow" OFF: verify that Right Arrow now only moves cursor even at line end, and only Tab accepts suggestions.
 
 ---
 
