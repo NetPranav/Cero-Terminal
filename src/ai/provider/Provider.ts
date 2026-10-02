@@ -35,6 +35,7 @@ export interface ProviderResponse {
     totalTokens: number;
   };
   latencyMs: number;
+  finishReason?: string;
 }
 
 export interface ModelMetadata {

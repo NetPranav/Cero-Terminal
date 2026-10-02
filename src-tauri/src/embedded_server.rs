@@ -57,6 +57,8 @@ pub struct EmbeddedLlmStatus {
     pub model_downloaded: bool,
     /// Whether any llama-server binary can be found
     pub engine_installed: bool,
+    /// Memory-aware context window size (12288 if >= 8GB RAM, else 8192)
+    pub context_size: u32,
 }
 
 fn get_home_dir() -> Option<PathBuf> {
@@ -135,13 +137,27 @@ pub fn llama_server_log_path() -> Option<PathBuf> {
 ///   slots that share (and split) the context.
 /// - `--cache-reuse 256`: reuse cached KV chunks across requests; together with the stable
 ///   system-prompt prefix this skips re-processing ~1.8k prompt tokens per request.
+/// Resolve memory-aware context window:
+/// 12288 tokens on machines with >= 8 GB RAM, otherwise 8192 tokens.
+pub fn resolve_context_size() -> u32 {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_memory();
+    let total_bytes = sys.total_memory();
+    if total_bytes >= 8 * 1024 * 1024 * 1024 {
+        12288
+    } else {
+        8192
+    }
+}
+
 pub fn build_server_args(model: &str, port: u16, gpu_layers: &str, lora: Option<&str>) -> Vec<String> {
+    let ctx_size = resolve_context_size();
     let mut args = vec![
         "--host".to_string(), "127.0.0.1".to_string(),
         "--port".to_string(), port.to_string(),
         "-m".to_string(), model.to_string(),
         "-ngl".to_string(), gpu_layers.to_string(),
-        "-c".to_string(), "8192".to_string(),
+        "-c".to_string(), ctx_size.to_string(),
         "-np".to_string(), "1".to_string(),
         "--cache-reuse".to_string(), "256".to_string(),
     ];
@@ -388,6 +404,7 @@ pub fn get_embedded_llm_status(
         queued_requests: total_queued,
         model_downloaded,
         engine_installed,
+        context_size: resolve_context_size(),
     })
 }
 
@@ -573,7 +590,7 @@ mod tests {
         assert!(!joined.contains("flash-attn"));
         assert!(!args.iter().any(|a| a == "-t"));
         assert!(joined.contains("-np 1"));
-        assert!(joined.contains("-c 8192"));
+        assert!(joined.contains("-c 8192") || joined.contains("-c 12288"));
         assert!(joined.contains("--cache-reuse 256"));
         assert!(joined.contains("--port 8847"));
         assert!(!joined.contains("--lora"));

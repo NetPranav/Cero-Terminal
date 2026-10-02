@@ -44,11 +44,33 @@ import { SentinelSerlCoordinator } from '../../domain/learning/SentinelSerlCoord
 import { TldrKnowledgeEngine } from '../../domain/knowledge/TldrKnowledgeEngine';
 import { GbnfGrammarManager } from '../models/GbnfGrammarManager';
 import { buildDecisionCall } from './DecisionCall';
+import { getContextTokens } from './ContextBudget';
 import { StdinHangDetector } from '../../domain/terminal/StdinHangDetector';
 import { FailureClassifier } from './FailureClassifier';
 import { UndoLog } from '../../domain/session/UndoLog';
 import { IntentRouter } from '../router/IntentRouter';
 import { IntentStep } from '../schemas/IntentSchema';
+import { PromptQueue, parseQueueCommand, type QueueCommand } from '../../presentation/PromptQueue';
+
+export interface QueueIO {
+  list: () => readonly { id: string; label: string; kind?: string }[];
+  clear: () => void;
+  remove: (indexOrId: number | string) => boolean;
+  setPaused?: (paused: boolean) => void;
+  openPanel?: () => void;
+}
+
+export const defaultQueueIO: QueueIO = {
+  list: () => PromptQueue.getInstance().list(),
+  clear: () => PromptQueue.getInstance().clear(),
+  remove: (indexOrId) => PromptQueue.getInstance().remove(indexOrId),
+  setPaused: (paused) => PromptQueue.getInstance().setPaused(paused),
+  openPanel: () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('sentinel:open-queue'));
+    }
+  },
+};
 
 export interface AgentEvent {
   type: 'thinking' | 'plan' | 'question' | 'tool_start' | 'tool_done' | 'done' | 'error' | 'step_output';
@@ -1170,6 +1192,7 @@ export class AgentLoop {
   private shadowSimulator: ShadowPtySimulator;
 
   private static readonly MAX_STEPS = 8;
+  private static readonly highContextWarnedSessions = new Set<string>();
   public static readonly MAX_OBSERVATION_CHARS = 4000;
   public static readonly OBSERVATION_HEAD_LINES = 60;
   public static readonly OBSERVATION_TAIL_LINES = 20;
@@ -1718,6 +1741,12 @@ export class AgentLoop {
     // The app's own screens and controls ("open settings", "go to tab 2"): no model, no shell
     const appAction = parseAppAction(cleaned || goal);
     if (appAction) return this.runAppAction({ ...appAction, paneId: context.paneId });
+
+    // Queue management commands ("show the queue", "clear the queue", "cancel the second queued request")
+    const queueCmd = parseQueueCommand(cleaned || goal);
+    if (queueCmd) {
+      return this.runQueueCommand(queueCmd, context);
+    }
 
     // System settings: Wi-Fi, Bluetooth, brightness, volume, dark mode, settings pages
     const systemAction = parseSystemAction(cleaned || goal);
@@ -3105,6 +3134,62 @@ export class AgentLoop {
     this.flowIO = io;
   }
 
+  /** Queue access for queue management commands; tests replace it */
+  private queueIO: QueueIO = defaultQueueIO;
+  public setQueueIO(io: QueueIO): void {
+    this.queueIO = io;
+  }
+
+  /**
+   * Deterministic route for queue commands: "show the queue", "cancel the second queued request", "clear the queue".
+   */
+  private async runQueueCommand(cmd: QueueCommand, _context: AgentRunContext): Promise<AgentResult> {
+    const steps: AgentResult['steps'] = [];
+    const finish = (success: boolean, summary: string): AgentResult => {
+      this.emit({ type: success ? 'done' : 'error', message: summary });
+      return { success, summary, steps };
+    };
+
+    if (cmd.type === 'show') {
+      const items = this.queueIO.list();
+      if (!items || items.length === 0) {
+        return finish(true, 'The queue is empty.');
+      }
+      const lines = items.map((it, idx) => `  ${idx + 1}. [${it.kind || 'goal'}] ${it.label}`);
+      return finish(true, `Queue (${items.length}):\n${lines.join('\n')}`);
+    }
+
+    if (cmd.type === 'clear') {
+      this.queueIO.clear();
+      return finish(true, 'Queue cleared.');
+    }
+
+    if (cmd.type === 'remove') {
+      const ok = this.queueIO.remove(cmd.index);
+      if (ok) {
+        return finish(true, `Removed item ${cmd.index} from queue.`);
+      }
+      return finish(false, `Item ${cmd.index} not found in queue.`);
+    }
+
+    if (cmd.type === 'pause') {
+      this.queueIO.setPaused?.(true);
+      return finish(true, 'Queue paused.');
+    }
+
+    if (cmd.type === 'resume') {
+      this.queueIO.setPaused?.(false);
+      return finish(true, 'Queue resumed.');
+    }
+
+    if (cmd.type === 'open-panel') {
+      this.queueIO.openPanel?.();
+      return finish(true, 'Opened queue panel.');
+    }
+
+    return finish(false, 'Unknown queue command.');
+  }
+
   /**
    * "make me a workflow that ...": turn the listed steps into a .flow file, ask where to keep it
    * (Desktop, this folder, the Sentinel workflows folder, or a path), and save it without ever
@@ -3503,6 +3588,7 @@ export class AgentLoop {
       }
     }
 
+    let retriedForLength = false;
     for (let step = 0; step < AgentLoop.MAX_STEPS; step++) {
       throwIfAborted(context.signal);
       try {
@@ -3519,6 +3605,26 @@ export class AgentLoop {
 
         this.modelCalls++;
         this.modelMs += response.latencyMs ?? 0;
+
+        if (response.usage?.promptTokens) {
+          console.debug(`[AgentLoop] Prompt tokens: ${response.usage.promptTokens} / ${getContextTokens()}`);
+          const sessId = context.sessionId || 'default';
+          if (response.usage.promptTokens > getContextTokens() * 0.9 && !AgentLoop.highContextWarnedSessions.has(sessId)) {
+            AgentLoop.highContextWarnedSessions.add(sessId);
+            console.warn(`[AgentLoop] Prompt token usage (${response.usage.promptTokens}) is above 90% of context window (${getContextTokens()}).`);
+          }
+        }
+
+        const isTruncated = response.finishReason === 'length' || response.raw?.choices?.[0]?.finish_reason === 'length' || response.raw?.finish_reason === 'length';
+        if (isTruncated && !retriedForLength) {
+          retriedForLength = true;
+          console.warn('[AgentLoop] Response truncated due to token limit; retrying once requesting a shorter answer.');
+          messages.push({
+            role: 'user',
+            content: 'Your last answer was truncated because it exceeded the output token limit. Please provide a shorter, more concise answer.'
+          });
+          continue;
+        }
 
         // Resolve multi-turn context (e.g. referential follow-ups)
         const effectiveGoal = this.resolveEffectiveGoal(goal);

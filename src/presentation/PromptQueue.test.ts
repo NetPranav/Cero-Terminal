@@ -71,16 +71,63 @@ describe('PromptQueue (Task 2.3)', () => {
     unsubscribe();
   });
 
+  it('moves items within the queue for reordering and run next', () => {
+    const item1 = queue.enqueue('task 1');
+    const item2 = queue.enqueue('task 2');
+    const item3 = queue.enqueue('task 3');
+
+    // Move task 3 to top (run next)
+    expect(queue.move(item3.id, 0)).toBe(true);
+    expect(queue.getItems().map(it => it.id)).toEqual([item3.id, item1.id, item2.id]);
+
+    // Move task 3 to end
+    expect(queue.move(item3.id, 2)).toBe(true);
+    expect(queue.getItems().map(it => it.id)).toEqual([item1.id, item2.id, item3.id]);
+
+    // Invalid index
+    expect(queue.move(item1.id, 99)).toBe(false);
+    expect(queue.move('non-existent', 0)).toBe(false);
+  });
+
+  it('pauses and resumes queue execution via takeNext', () => {
+    queue.enqueue('task 1');
+    queue.enqueue('task 2');
+
+    expect(queue.isPaused()).toBe(false);
+    queue.setPaused(true);
+    expect(queue.isPaused()).toBe(true);
+
+    // When paused, takeNext does not dequeue anything
+    expect(queue.takeNext()).toBeUndefined();
+    expect(queue.size()).toBe(2);
+
+    // Unpause resumes execution
+    queue.setPaused(false);
+    const next = queue.takeNext();
+    expect(next?.goal).toBe('task 1');
+    expect(queue.size()).toBe(1);
+  });
+
+  it('tracks the currently running item', () => {
+    expect(queue.getRunningItem()).toBeNull();
+    const item = queue.enqueue('current active prompt');
+    queue.setRunningItem(item);
+    expect(queue.getRunningItem()?.id).toBe(item.id);
+
+    queue.setRunningItem(null);
+    expect(queue.getRunningItem()).toBeNull();
+  });
+
   it('formats human-readable queue list without emojis', () => {
-    expect(queue.formatQueueList()).toBe('The queue is empty.');
+    expect(queue.formatQueueList()).toContain('The queue is empty.');
 
     queue.enqueue('inspect ports');
     queue.enqueue('run tests');
 
     const formatted = queue.formatQueueList();
     expect(formatted).toContain('Queue (2 items):');
-    expect(formatted).toContain('1. inspect ports');
-    expect(formatted).toContain('2. run tests');
+    expect(formatted).toContain('1. [goal] inspect ports');
+    expect(formatted).toContain('2. [goal] run tests');
     expect(/[\u{1F300}-\u{1F9FF}]/u.test(formatted)).toBe(false);
   });
 });
@@ -109,11 +156,22 @@ describe('parseQueueCommand (Task 2.3)', () => {
     expect(parseQueueCommand('empty queue')).toEqual({ type: 'clear' });
   });
 
-  it('parses remove from queue commands', () => {
+  it('parses remove from queue commands including ordinals', () => {
     expect(parseQueueCommand('/queue remove 2')).toEqual({ type: 'remove', index: 2 });
     expect(parseQueueCommand('>remove 2 from queue')).toEqual({ type: 'remove', index: 2 });
     expect(parseQueueCommand('delete 1 from the queue')).toEqual({ type: 'remove', index: 1 });
     expect(parseQueueCommand('remove item 3 from queue')).toEqual({ type: 'remove', index: 3 });
+    expect(parseQueueCommand('cancel the second queued request')).toEqual({ type: 'remove', index: 2 });
+    expect(parseQueueCommand('cancel the 1st queued prompt')).toEqual({ type: 'remove', index: 1 });
+  });
+
+  it('parses pause and resume queue commands', () => {
+    expect(parseQueueCommand('/queue pause')).toEqual({ type: 'pause' });
+    expect(parseQueueCommand('pause queue')).toEqual({ type: 'pause' });
+    expect(parseQueueCommand('pause the queue')).toEqual({ type: 'pause' });
+    expect(parseQueueCommand('/queue resume')).toEqual({ type: 'resume' });
+    expect(parseQueueCommand('resume queue')).toEqual({ type: 'resume' });
+    expect(parseQueueCommand('unpause queue')).toEqual({ type: 'resume' });
   });
 
   it('returns null for unrelated commands', () => {

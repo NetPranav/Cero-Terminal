@@ -11,6 +11,7 @@ import { GbnfGrammarManager } from '../models/GbnfGrammarManager';
 import { TldrKnowledgeEngine } from '../../domain/knowledge/TldrKnowledgeEngine';
 import { GenerateOptions } from '../provider/Provider';
 import { AgentRunContext } from './AgentLoop';
+import { fitMessages, getContextTokens, RESERVED_FOR_REPLY } from './ContextBudget';
 
 export interface DecisionCallResult {
   systemPrompt: string;
@@ -26,6 +27,8 @@ export function formatConversationPrompt(systemPrompt: string, messages: { role:
       prompt += `User: ${msg.content}\n`;
     } else if (msg.role === 'assistant') {
       prompt += `Assistant: ${msg.content}\n`;
+    } else if (msg.role === 'tool') {
+      prompt += `<TOOL_OUTPUT>\n${msg.content}\n</TOOL_OUTPUT>\n`;
     }
   }
   prompt += 'Assistant: ';
@@ -42,6 +45,8 @@ export function buildDecisionCall(
     stageContext?: string;
     mode?: 'decision' | 'chat';
     messages?: { role: string; content: string }[];
+    isPlanner?: boolean;
+    maxTokens?: number;
   }
 ): DecisionCallResult {
   let systemPrompt = extra?.systemPrompt;
@@ -64,25 +69,25 @@ export function buildDecisionCall(
     }
   }
 
-  const conversationMessages: { role: string; content: string }[] = extra?.messages || [
+  const rawConversationMessages: { role: string; content: string }[] = extra?.messages || [
     ...history,
     { role: 'user', content: goal }
   ];
 
-  const fullPrompt = formatConversationPrompt(systemPrompt, conversationMessages);
-
-  const chatMessages: { role: string; content: string }[] = [
-    { role: 'system', content: systemPrompt },
-    ...conversationMessages
-  ];
+  // Fit messages strictly into token budget to prevent context overflow (Task 3.3)
+  const fitted = fitMessages(systemPrompt, rawConversationMessages, getContextTokens() - RESERVED_FOR_REPLY);
+  const chatMessages = fitted.messages;
+  const conversationForPrompt = chatMessages.filter(m => m.role !== 'system');
+  const fullPrompt = formatConversationPrompt(systemPrompt, conversationForPrompt);
 
   const isChat = extra?.mode === 'chat';
+  const defaultMaxTokens = isChat ? 512 : (extra?.isPlanner ? 1024 : 400);
   const options: GenerateOptions = {
     temperature: isChat ? 0.4 : 0,
     topK: isChat ? 20 : 1,
     topP: isChat ? 0.9 : 1,
     seed: isChat ? undefined : 42,
-    maxTokens: 512,
+    maxTokens: extra?.maxTokens ?? defaultMaxTokens,
     format: 'json',
     messages: chatMessages,
     grammar: GbnfGrammarManager.getGrammar('SENTINEL_ACTION'),

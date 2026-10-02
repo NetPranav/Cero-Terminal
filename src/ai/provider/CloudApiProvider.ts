@@ -501,7 +501,8 @@ export class CloudApiProvider implements ModelProvider {
             completionTokens: json.usage?.output_tokens || 0,
             totalTokens: (json.usage?.input_tokens || 0) + (json.usage?.output_tokens || 0)
           },
-          latencyMs
+          latencyMs,
+          finishReason: json.stop_reason === 'max_tokens' ? 'length' : json.stop_reason
         };
       }
 
@@ -586,7 +587,8 @@ export class CloudApiProvider implements ModelProvider {
           completionTokens: json.usage?.completion_tokens || 0,
           totalTokens: json.usage?.total_tokens || 0
         },
-        latencyMs
+        latencyMs,
+        finishReason: json.choices?.[0]?.finish_reason
       };
     } catch (err: any) {
       if (options?.signal?.aborted || err?.name === 'AbortError' || err instanceof CancelledError) {

@@ -53,10 +53,12 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 }) => {
   const displayShell = currentShell || (isLinux() ? 'bash' : 'zsh');
   const [queueCount, setQueueCount] = useState<number>(() => PromptQueue.getInstance().size());
+  const [hasRunningTask, setHasRunningTask] = useState<boolean>(() => PromptQueue.getInstance().getRunningItem() !== null);
 
   useEffect(() => {
     return PromptQueue.getInstance().subscribe(items => {
       setQueueCount(items.length);
+      setHasRunningTask(PromptQueue.getInstance().getRunningItem() !== null);
     });
   }, []);
   // Unknown until the first real reading; never show placeholder numbers
@@ -397,6 +399,34 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               <ListOrdered size={11} style={{ opacity: 0.8 }} />
               <span>Queue: {queueCount} {queueCount === 1 ? 'item' : 'items'}</span>
             </button>
+            <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>
+          </>
+        )}
+
+        {/* Task 2.2: Footer hint while a task runs */}
+        {hasRunningTask && (
+          <>
+            <span
+              style={{
+                color: 'rgba(255, 255, 255, 0.75)',
+                fontSize: '11px',
+                fontFamily: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+              title="Press Ctrl+C to stop running task"
+            >
+              <kbd style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: '3px',
+                padding: '0 4px',
+                fontSize: '10px',
+                color: '#ffffff'
+              }}>Ctrl+C</kbd>
+              <span>to stop</span>
+            </span>
             <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>
           </>
         )}

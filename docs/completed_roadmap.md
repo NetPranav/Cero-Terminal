@@ -207,15 +207,15 @@ To test the built desktop application directly on macOS:
 ## Phase 2: Stopping and Queueing
 
 ### Task 2.1 — A cancel signal that reaches everything
-**Status:** COMPLETE  
-**Commit:** `939cf12` (with cleanup in `82f1c18`) on `linux-v2-update`
+**Status:** COMPLETE (Fully Verified)  
+**Commits:** `939cf12`, `82f1c18` on `linux-v2-update`
 
 **Problem:** Nothing in the agent could be cancelled. `AgentLoop.run` took no cancel signal; multi-step runners never checked one; provider model calls (`fetch`) ran without `AbortSignal`; and `ShellSDKCapability.cancel()` attempted to kill a `runningPid` that was only populated after the process had already exited.
 
 **Solution:**
 - **Rust process registry:** Added `RUNNING: OnceLock<Mutex<HashMap<String, u32>>>` in [`src-tauri/src/process_cmds.rs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/src/process_cmds.rs) tracking `run_id -> pid`.
 - Added optional `run_id` parameter to `execute_command` and `run_command` in Rust.
-- Added `cancel_command(run_id: String)` Tauri command supporting process group termination (`killpg` with `SIGTERM` followed by `SIGKILL` fallback, and `taskkill /PID /T /F` on Windows), plus wildcard `run_id == "*"` support to cancel all running tasks. Registered in [`src-tauri/src/lib.rs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/src/lib.rs). Added `cancelled: bool` field to `CommandOutput` with exit code `130`.
+- Added `cancel_command(run_id: String)` Tauri command supporting process group termination (`killpg` with `SIGTERM` followed by 800ms `SIGKILL` fallback on Unix, and `taskkill /PID <pid> /T /F` on Windows), plus wildcard `run_id == "*"` support to cancel all running tasks. Registered in [`src-tauri/src/lib.rs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/src/lib.rs). Added `cancelled: bool` field to `CommandOutput` with exit code `130`.
 - **Cancellation primitive:** Created [`src/ai/agent/Cancelled.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/Cancelled.ts) defining `CancelledError`, `isCancelledError`, and `throwIfAborted(signal)`.
 - **Agent loop integration:** Added `signal?: AbortSignal` to `AgentRunContext` in [`src/ai/agent/AgentLoop.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/AgentLoop.ts), checking `throwIfAborted` at step boundaries, between plan phases, and inside loops.
 - **Provider abortion:** Added `signal?: AbortSignal` to `GenerateOptions` in [`src/ai/provider/Provider.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/provider/Provider.ts) and passed to `fetch(..., { signal })` in `EmbeddedProvider.ts`, `CloudApiProvider.ts`, and `OllamaProvider.ts`. Aborted requests throw `CancelledError` without falling back to grammar removal or retrying.
@@ -224,28 +224,29 @@ To test the built desktop application directly on macOS:
 - Forwarded cancellation in [`src/workflows/flow/FlowRunner.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/workflows/flow/FlowRunner.ts) between stages and steps.
 
 **Tests:**
-- [`Cancelled.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/Cancelled.test.ts) (4 tests).
-- [`ShellSDKCapability.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/sdk/capabilities/drivers/ShellSDKCapability.test.ts) (4 tests).
-- [`AgentLoop.cancel.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/AgentLoop.cancel.test.ts) (3 tests).
+- Rust tests in [`src-tauri/src/process_cmds.rs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/src/process_cmds.rs) (8 unit tests including process group cancellation, grand-children cleanup, and timeout termination).
+- [`src/ai/agent/Cancelled.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/Cancelled.test.ts) (4 tests).
+- [`src/sdk/capabilities/drivers/ShellSDKCapability.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/sdk/capabilities/drivers/ShellSDKCapability.test.ts) (2 tests).
+- [`src/ai/agent/AgentLoop.cancel.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/AgentLoop.cancel.test.ts) (4 tests).
 
 ---
 
 ### Task 2.2 — Ctrl+C stops the running task
-**Status:** COMPLETE  
-**Commit:** `66a6df2` on `linux-v2-update`
+**Status:** COMPLETE (Fully Verified)  
+**Commits:** `66a6df2` on `linux-v2-update`
 
 **Problem:** In `term.onData` inside `TerminalView.tsx`, Ctrl+C (`\x03`) was unconditionally sent to the shell, even when the agent was busy running a background task. The user had no way to stop a runaway or slow agent task with Ctrl+C.
 
 **Solution:**
 - Created pure decision function `decideStopKey()` in [`src/presentation/stopKeys.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/stopKeys.ts) with signature `decideStopKey({ data, busy, hasSelection, lastStopAt, now })`.
 - Rules:
-  - If text is selected in xterm, Ctrl+C copies selection (`'pass'`).
+  - If text is selected in xterm, Ctrl+C copies selection (`'copy-selection'`).
   - If idle (`!busy`), Ctrl+C passes through to shell (`'pass'`).
-  - If busy: first Ctrl+C returns `'stop'`, aborts the active `AbortController`, and outputs `Stopping...`.
-  - If second Ctrl+C arrives within 500ms while still stopping, returns `'force-stop'`, invoking `cancel_command('*')` and sending `\x03` to PTY.
-- Managed `activeRunRef` `AbortController` in [`src/presentation/TerminalView.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/TerminalView.tsx) across `runAiGoal` and `runFlow`.
+  - If busy: first Ctrl+C returns `'abort-ai-task'`, aborts the active `AbortController`, and outputs `Stopping...`.
+  - If second Ctrl+C arrives within 500ms while still stopping, returns `'force-kill-ai-task'`, invoking `cancel_command('*')` and sending `\x03` to PTY.
+- Managed `activeRunAbortControllerRef` `AbortController` in [`src/presentation/TerminalView.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/TerminalView.tsx) across `runAiGoal` and `runFlow`.
 - Updated `PromptProgressManager.completePrompt` to display "Stopped" instead of "Failed" on cancellation.
-- Updated running status footer hint to display `Ctrl+C to stop`.
+- Updated running status footer hint in [`src/ui/components/StatusBar.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/StatusBar.tsx) to display `Ctrl+C to stop` while a task is running.
 
 **Tests:**
 - [`src/presentation/stopKeys.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/stopKeys.test.ts) (6 tests).
@@ -253,21 +254,22 @@ To test the built desktop application directly on macOS:
 ---
 
 ### Task 2.3 — See and manage the queue
-**Status:** COMPLETE  
-**Commit:** `ce29f40` on `linux-v2-update`
+**Status:** COMPLETE (Fully Verified)
 
 **Problem:** The queue was an internal `aiQueueRef` array inside `TerminalView.tsx` with no identifiers, no visual UI, no ability to view, reorder, or cancel queued items, and `.flow` runs opened while busy were flatly rejected.
 
 **Solution:**
-- Created [`src/presentation/PromptQueue.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/PromptQueue.ts): singleton observable queue with items `{ id, label, addedAt, kind }`, methods `add`, `list`, `remove`, `move`, `clear`, `takeNext`, `subscribe`, and pause/resume support.
-- Added natural language and command parser in `PromptQueue.ts` for `/queue`, `/queue clear`, `/queue remove <N>`, `>show queue`, `>clear queue`, and `>remove <N> from queue`.
-- Created [`src/ui/components/QueuePanel.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/QueuePanel.tsx): dark grayscale styling (`#090b10`, `#0c0d12`, muted whites, 5-15% white borders), zero emojis (lucide icons `ListOrdered`, `Play`, `X`, `Trash2`, `Pause`, `ArrowUp`), showing running task with `Stop` button, queued tasks with `Run Next` and `Remove` buttons, "Pause Queue" toggle, "Clear All" button, and keyboard Esc dismissal.
+- Created [`src/presentation/PromptQueue.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/PromptQueue.ts): singleton observable queue with items `{ id, label, addedAt, kind }`, methods `enqueue`, `add`, `list`, `remove`, `move`, `clear`, `takeNext`, `subscribe`, `isPaused`, `setPaused`, `togglePaused`, and running item tracking (`getRunningItem`, `setRunningItem`).
+- Natural language and command parsing for `/queue`, `/queue clear`, `/queue remove <N>`, `/queue pause`, `/queue resume`, and plain English "show the queue", "cancel the second queued request", "clear the queue", "pause the queue", "resume the queue".
+- Created [`src/ui/components/QueuePanel.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/QueuePanel.tsx): dark grayscale matte UI (`#090b10`, `#0c0d12`, muted whites, 5-15% white borders), zero emojis (monochrome `lucide-react` icons: `StopCircle`, `ArrowUp`, `X`, `Pause`, `Play`, `Trash2`), displaying active running task with a `Stop` button (`sentinel:abort-active-run`), queued tasks with `Run Next` and `Remove` buttons, "Pause Queue" toggle, "Clear All" button, tooltip with full task label, and note "Queued prompts do not persist across restarts".
 - Wired `Queue: N items` indicator into [`src/ui/components/StatusBar.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/StatusBar.tsx) (visible when items are queued, clicking opens the queue panel).
-- Integrated `QueuePanel` into [`src/App.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/App.tsx) responding to `sentinel:open-queue` custom event.
-- Replaced `aiQueueRef` in [`src/presentation/TerminalView.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/TerminalView.tsx) with `PromptQueue`, queueing both goals and flows, dispatching next items after a 150ms delay.
+- Wired `sentinel:abort-active-run` and `sentinel:queue-resumed` listeners in [`src/presentation/TerminalView.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/TerminalView.tsx).
+- Flow queueing enabled in `submitRef.current`: busy state now queues flows `{ kind: 'flow', flowPlan, source }` rather than refusing them.
+- Deterministic queue routes in [`src/ai/agent/AgentLoop.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/AgentLoop.ts): defined `QueueIO` interface, `defaultQueueIO`, and `setQueueIO(io: QueueIO)`, routing "show the queue", "cancel the second queued request", "clear the queue" directly without invoking the LLM.
 
 **Tests:**
-- [`src/presentation/PromptQueue.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/PromptQueue.test.ts) (14 tests).
+- [`src/presentation/PromptQueue.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/PromptQueue.test.ts) (14 unit tests covering add, remove, move, clear, takeNext, pause/resume, and command parsing).
+- [`src/ai/agent/AgentLoop.queue.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/AgentLoop.queue.test.ts) (6 unit tests verifying deterministic queue routes and `setQueueIO` mocking).
 
 ---
 
@@ -275,7 +277,9 @@ To test the built desktop application directly on macOS:
 
 | Check | Result |
 |-------|--------|
-| `npm test` | 243 files, 2097 passed, 1 skipped |
-| `npm run build` | exit 0 (tsc + vite) |
-| `cargo check` | exit 0 (3 pre-existing warnings) |
+| `npm test` | 244 test files, 2107 passed, 1 skipped |
+| `npm run build` | exit 0 (tsc + vite, 0 errors) |
+| `cargo test --manifest-path src-tauri/Cargo.toml -- process_cmds::` | exit 0 (8 passed, 0 failed) |
+| `cargo check --manifest-path src-tauri/Cargo.toml` | exit 0 (clean compilation) |
+
 

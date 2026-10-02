@@ -255,7 +255,8 @@ export class EmbeddedProvider implements ModelProvider {
           completionTokens: data.usage?.completion_tokens || 0,
           totalTokens: data.usage?.total_tokens || 0
         },
-        latencyMs
+        latencyMs,
+        finishReason: data.choices?.[0]?.finish_reason
       };
     } catch (chatError) {
       if (options?.signal?.aborted || (chatError as any)?.name === 'AbortError' || chatError instanceof CancelledError) {
@@ -313,7 +314,8 @@ export class EmbeddedProvider implements ModelProvider {
             completionTokens: data.tokens_predicted || 0,
             totalTokens: (data.tokens_evaluated || 0) + (data.tokens_predicted || 0)
           },
-          latencyMs
+          latencyMs,
+          finishReason: data.stopped_limit ? 'length' : (data.truncated ? 'length' : undefined)
         };
       } catch (completionError) {
         if (options?.signal?.aborted || (completionError as any)?.name === 'AbortError' || completionError instanceof CancelledError) {

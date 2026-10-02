@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { setContextTokens } from '../agent/ContextBudget';
 
 export interface EmbeddedStatus {
   isRunning: boolean;
@@ -20,6 +21,7 @@ export interface EmbeddedStatus {
   isCpuFallback?: boolean;
   cpuFallbackNotice?: string;
   queuedRequests?: number;
+  contextTokens?: number;
 }
 
 /** get_sentinel_download_status (src-tauri/src/downloads.rs) */
@@ -287,10 +289,15 @@ export class EmbeddedEngineManager {
         queued_requests?: number;
         model_downloaded?: boolean;
         engine_installed?: boolean;
+        context_size?: number;
       }>('get_embedded_llm_status', { modelFileName: EmbeddedEngineManager.RECOMMENDED_MODEL.fileName });
 
       const modelExists = res.model_downloaded ?? await this.checkModelExists();
       const engineExists = res.engine_installed ?? await this.checkEngineExists();
+
+      if (res.context_size) {
+        setContextTokens(res.context_size);
+      }
 
       return {
         isRunning: res.is_running,
@@ -304,7 +311,8 @@ export class EmbeddedEngineManager {
         modelPath: res.active_model,
         isCpuFallback: res.is_cpu_fallback ?? this.isCpuFallbackMode,
         cpuFallbackNotice: this.cpuFallbackNotice || undefined,
-        queuedRequests: res.queued_requests ?? (this.inferenceQueue.length + (this.activeInferenceRequest ? 1 : 0))
+        queuedRequests: res.queued_requests ?? (this.inferenceQueue.length + (this.activeInferenceRequest ? 1 : 0)),
+        contextTokens: res.context_size
       };
     } catch {
       return defaultStatus;

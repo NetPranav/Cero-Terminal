@@ -202,7 +202,8 @@ export class OllamaProvider implements ModelProvider {
         completionTokens,
         totalTokens: promptTokens + completionTokens
       },
-      latencyMs
+      latencyMs,
+      finishReason: data.done_reason === 'length' ? 'length' : data.done_reason
     };
   }
 }

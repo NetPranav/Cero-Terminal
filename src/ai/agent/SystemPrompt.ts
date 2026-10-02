@@ -17,185 +17,9 @@ export interface ToolSpec {
   description: string;
   parameters: { name: string; type: string; required: boolean; description: string }[];
 }
+import { STANDARD_TOOL_SPECS } from './StandardToolSpecs';
+export { STANDARD_TOOL_SPECS };
 
-export const STANDARD_TOOL_SPECS: ToolSpec[] = [
-  {
-    id: 'filesystem.search',
-    name: 'Search Files & Folders',
-    description: 'Find files or folders by name, pattern, or path across the system or workspace.',
-    parameters: [
-      { name: 'pattern', type: 'string', required: true, description: 'File/folder name or glob pattern to search for' },
-      { name: 'dir', type: 'string', required: false, description: 'Starting directory (default ~ for user system)' },
-      { name: 'type', type: 'string', required: false, description: '"directory" to find folders, or "file"' }
-    ]
-  },
-  {
-    id: 'filesystem.list',
-    name: 'List Directory',
-    description: 'List contents of a directory.',
-    parameters: [
-      { name: 'path', type: 'string', required: false, description: 'Directory path (defaults to current dir)' }
-    ]
-  },
-  {
-    id: 'filesystem.read',
-    name: 'Read File',
-    description: 'Read content of a text file.',
-    parameters: [
-      { name: 'path', type: 'string', required: true, description: 'Path to file' }
-    ]
-  },
-  {
-    id: 'filesystem.navigate',
-    name: 'Navigate Directory',
-    description: 'Change current working directory (cd).',
-    parameters: [
-      { name: 'path', type: 'string', required: true, description: 'Target directory path' }
-    ]
-  },
-  {
-    id: 'network.wifi.scan',
-    name: 'Scan Wi-Fi Networks',
-    description: 'List all available and previously connected Wi-Fi networks.',
-    parameters: []
-  },
-  {
-    id: 'network.wifi.on',
-    name: 'Turn On Wi-Fi',
-    description: 'Enable the Wi-Fi interface.',
-    parameters: []
-  },
-  {
-    id: 'network.wifi.off',
-    name: 'Turn Off Wi-Fi',
-    description: 'Disable the Wi-Fi interface.',
-    parameters: []
-  },
-  {
-    id: 'network.wifi.connect',
-    name: 'Connect Wi-Fi',
-    description: 'Connect to a Wi-Fi network.',
-    parameters: [
-      { name: 'ssid', type: 'string', required: true, description: 'Wi-Fi network name' },
-      { name: 'password', type: 'string', required: false, description: 'Network password' }
-    ]
-  },
-  {
-    id: 'network.bluetooth.list',
-    name: 'List Bluetooth Devices',
-    description: 'Scan and list available or paired Bluetooth devices.',
-    parameters: []
-  },
-  {
-    id: 'network.bluetooth.on',
-    name: 'Turn On Bluetooth',
-    description: 'Enable Bluetooth adapter.',
-    parameters: []
-  },
-  {
-    id: 'network.bluetooth.off',
-    name: 'Turn Off Bluetooth',
-    description: 'Disable Bluetooth adapter.',
-    parameters: []
-  },
-  {
-    id: 'network.bluetooth.connect',
-    name: 'Connect Bluetooth Device',
-    description: 'Connect to a Bluetooth device.',
-    parameters: [
-      { name: 'device', type: 'string', required: true, description: 'Device name or MAC address' }
-    ]
-  },
-  {
-    id: 'network.ports',
-    name: 'List Open Ports or Find Free Ports',
-    description: 'Inspect active listening ports, check if a specific port is in use, or discover available free ports for web development and servers.',
-    parameters: [
-      { name: 'port', type: 'number', required: false, description: 'Specific port to check' },
-      { name: 'findFree', type: 'boolean', required: false, description: 'True to discover available free ports for web development' }
-    ]
-  },
-  {
-    id: 'network.ping',
-    name: 'Ping Host',
-    description: 'Check network connectivity to a host or IP.',
-    parameters: [
-      { name: 'host', type: 'string', required: true, description: 'Hostname or IP address' }
-    ]
-  },
-  {
-    id: 'system.processes',
-    name: 'List Processes',
-    description: 'List running processes sorted by CPU or RAM usage.',
-    parameters: [
-      { name: 'sort', type: 'string', required: false, description: '"cpu" or "ram"' }
-    ]
-  },
-  {
-    id: 'system.storage',
-    name: 'Check Storage',
-    description: 'Check available and used disk space.',
-    parameters: []
-  },
-  {
-    id: 'system.battery',
-    name: 'Check Battery',
-    description: 'Check battery percentage and charging state.',
-    parameters: []
-  },
-  {
-    id: 'system.info',
-    name: 'System Info',
-    description: 'Get OS, architecture, and hardware information.',
-    parameters: []
-  },
-  {
-    id: 'application.open',
-    name: 'Open Application',
-    description: 'Launch or open a desktop application.',
-    parameters: [
-      { name: 'app', type: 'string', required: true, description: 'Application name (e.g. "Visual Studio Code", "Chrome", "Safari")' }
-    ]
-  },
-  {
-    id: 'browser.search',
-    name: 'Web Search',
-    description: 'Search the web using default browser.',
-    parameters: [
-      { name: 'query', type: 'string', required: true, description: 'Search keywords' },
-      { name: 'engine', type: 'string', required: false, description: 'Search engine (default: "google")' }
-    ]
-  },
-  {
-    id: 'browser.navigate',
-    name: 'Open URL',
-    description: 'Open a URL in default browser.',
-    parameters: [
-      { name: 'url', type: 'string', required: true, description: 'Website URL' }
-    ]
-  },
-  {
-    id: 'git.status',
-    name: 'Git Status',
-    description: 'Show working tree status.',
-    parameters: []
-  },
-  {
-    id: 'git.log',
-    name: 'Git Log',
-    description: 'Show recent commits.',
-    parameters: []
-  },
-  {
-    id: 'shell.execute',
-    name: 'Execute Shell Command',
-    description: 'Run arbitrary shell command with explanation.',
-    parameters: [
-      { name: 'command', type: 'string', required: true, description: 'Shell command string' },
-      { name: 'explanation', type: 'string', required: false, description: 'Plain English explanation of what this command does' }
-    ]
-  }
-];
 
 /**
  * Build a compact tool listing from the registry for the LLM prompt.
@@ -269,48 +93,17 @@ User: check my ip address
 User: tell me all running ports
 {"action": "execute", "command": "ss -tulpn 2>/dev/null || lsof -iTCP -sTCP:LISTEN -n -P", "explanation": "List active listening TCP ports and associated processes"}
 
-User: which process is using the most resources
-{"action": "execute", "command": "ps -eo pid,pcpu,pmem,comm --sort=-pcpu | head -n 2", "explanation": "Display the process consuming the most system resources"}
-
 User: which process is using the most cpu
 {"action": "execute", "command": "ps -eo pid,pcpu,pmem,comm --sort=-pcpu | head -n 2", "explanation": "Display the top CPU-consuming process"}
 
-User: which process is using the most memory
-{"action": "execute", "command": "ps -eo pid,pcpu,pmem,comm --sort=-pmem | head -n 2", "explanation": "Display the top memory-consuming process"}
-
-User: list running processes
-{"action": "execute", "command": "ps -eo pid,pcpu,pmem,comm --sort=-pcpu | head -10", "explanation": "List top processes sorted by CPU utilization"}
-
-User: check memory usage
-{"action": "execute", "command": "free -h", "explanation": "Display system memory and swap usage"}
-
-User: check storage
-{"action": "execute", "command": "df -h .", "explanation": "Check available disk space on current mount"}
-
-User: check battery status
-{"action": "execute", "command": "for b in /sys/class/power_supply/BAT*; do [ -d \"$b\" ] && echo \"$b: $(cat $b/capacity 2>/dev/null)% $(cat $b/status 2>/dev/null)\"; done || upower -i $(upower -e 2>/dev/null | grep -i 'battery' | head -1) 2>/dev/null || acpi -b 2>/dev/null || echo 'AC Power / Desktop (No battery)'", "explanation": "Display Linux battery level and charging status"}
-
-User: system info
-{"action": "execute", "command": "uname -srm && cat /etc/os-release | grep PRETTY_NAME && lscpu | grep 'Model name' && free -h | grep 'Mem:' && uptime -p", "explanation": "Inspect OS release, kernel, processor model, memory, and uptime"}
+User: how much free space do I have
+{"action": "execute", "command": "df -h /", "explanation": "Show usage of the root filesystem"}
 
 User: check git status and branches
 {"action": "execute", "command": "git status --short && git branch -v", "explanation": "Inspect working tree status and active git branches"}
 
 User: open zen browser and my project folder in code
 {"action": "execute", "command": "zen-browser & code . &", "explanation": "Launch Zen Browser and open current directory in VS Code"}
-
-User: list the active ros2 topics
-{"action": "execute", "command": "ros2 topic list", "explanation": "List topics on the running ROS 2 graph"}
-
-User: build my colcon workspace
-{"action": "execute", "command": "colcon build --symlink-install", "explanation": "Build all packages in the current ROS 2 workspace"}
-
-User: how much free space do I have
-{"action": "execute", "command": "df -h /", "explanation": "Show usage of the root filesystem"}
-<TOOL_OUTPUT capability="shell.execute" readonly="true">
-{"success":true,"data":{"stdout":"Filesystem Size Used Avail Use% Mounted on\\n/dev/nvme0n1p2 234G 170G 64G 73% /","code":0}}
-</TOOL_OUTPUT>
-{"action": "done", "summary": "The root filesystem has 64G free of 234G (73% used)."}
 
 User: what can you do
 {"action": "done", "summary": "I run and explain terminal commands for you: inspecting processes, ports, disks and services, managing packages, git and ROS 2 workspaces, and fixing failed commands."}`;

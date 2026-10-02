@@ -27,9 +27,14 @@ describe('DecisionCall', () => {
     expect(call.messages[2]).toEqual({ role: 'user', content: 'check my ip' });
     expect(call.fullPrompt).toContain('User: check my ip');
     expect(call.options.format).toBe('json');
-    expect(call.options.maxTokens).toBe(512);
+    expect(call.options.maxTokens).toBe(400);
     expect(call.options.grammar).toBeDefined();
     expect(call.options.mode).toBe('decision');
+
+    const plannerCall = buildDecisionCall('make a plan', { os: 'linux', cwd: '/workspace' }, [], {
+      isPlanner: true
+    });
+    expect(plannerCall.options.maxTokens).toBe(1024);
   });
 
   it('honors custom systemPrompt and messages passed in extra', () => {
