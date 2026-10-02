@@ -9,7 +9,6 @@ import {
   Cpu, 
   Clock,
   GitBranch,
-  Globe,
   HelpCircle,
   Sparkles,
   ListOrdered
@@ -362,14 +361,6 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', opacity: 0.75 }}>
           <Clock size={11} style={{ opacity: 0.7 }} />
           <span>{currentTime}</span>
-        </span>
-
-        <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>
-
-        {/* UTF-8 indicator */}
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', opacity: 0.65 }}>
-          <Globe size={11} style={{ opacity: 0.7 }} />
-          <span>UTF-8</span>
         </span>
 
         {/* Queue indicator (only when N > 0) */}

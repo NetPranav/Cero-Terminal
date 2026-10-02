@@ -88,13 +88,14 @@ All four tasks specified in `docs/roadmap.md` under Phase 1 (Tasks 1.1 through 1
 
 **Approach & Implementation:**
 1. **Pure Status Evaluator:** Created pure function `describeAi({ active, embedded, cloudConfigured, cloudHost })` in [`src/ai/management/AiStatus.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/management/AiStatus.ts):
-   - **Embedded:** Running = `ready` ("AI: Qwen 2.5 Coder 3B" / "AI: Qwen 2.5 Coder 3B (CPU)"); Warming = `starting` ("AI: Warming..."); Stopped = `off` ("Built-in AI is stopped. Click to start it.").
-   - **Cloud API:** Configured & Ready = `ready` ("AI: <model> (API)"); Unconfigured = `unavailable` ("No API key set").
-   - **Ollama:** Ready = `ready` ("AI: <model> (local)"); Unavailable = `unavailable` with `unavailableReason`.
+   - **Embedded:** Running = `ready` with concise badge **`AI: local`**; Warming = `starting` ("AI: Starting..."); Stopped = `off` ("AI: Off").
+   - **Cloud API:** Configured & Ready = `ready` with concise badge **`AI: API`**; Unconfigured = `unavailable` ("AI: unavailable").
+   - **Ollama:** Ready = `ready` with concise badge **`AI: Ollama`**; Unavailable = `unavailable` with `unavailableReason`.
    - **Strict Invariant:** External providers NEVER return `off` ("Off" is strictly reserved for the stopped embedded engine).
-2. **Label Truncation & Host Disclosure:**
-   - Truncates status bar badge labels longer than 24 characters with an ellipsis (`...`).
-   - Detailed tooltip includes provider name, model identifier, host/port (`127.0.0.1:8847`, `localhost:11434`, or cloud host domain), and operational state. Never exposes API keys.
+2. **Compact Bar & Deep Tooltip Context:**
+   - Status bar labels are kept minimal (`AI: local`, `AI: API`, `AI: Ollama`) to prevent crowding the terminal status bar.
+   - Removed the redundant UTF-8 indicator from [`src/ui/components/StatusBar.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/StatusBar.tsx) to reclaim horizontal space.
+   - Comprehensive details (provider name, full model identifier, host/port `127.0.0.1:8847`, `localhost:11434`, or cloud host, and operational status) are preserved in the tooltip detail without exposing API keys.
 3. **Monochrome Grayscale UI Mapping:**
    - In [`src/ui/components/StatusBar.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/StatusBar.tsx), bound button `title` directly to `aiBadge.detail`.
    - Unified background (`rgba(255,255,255,0.08)` for ready, `0.04` for starting, `0.02` for dim), border, and text colors directly to `aiBadge.state`.
@@ -103,15 +104,16 @@ All four tasks specified in `docs/roadmap.md` under Phase 1 (Tasks 1.1 through 1
 
 **Automated Verification:**
 - 11 unit tests in [`src/ai/management/AiStatus.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/management/AiStatus.test.ts):
-  - Embedded running (GPU & CPU mode).
-  - Embedded warming up.
-  - Embedded stopped.
-  - Cloud API configured and ready with API host in tooltip.
-  - Cloud API unconfigured with missing key guidance.
-  - Ollama ready with `localhost:11434` host in tooltip.
-  - Ollama unreachable with custom `unavailableReason`.
+  - Embedded running shows ready with concise `AI: local` label.
+  - Embedded running with CPU fallback preserves `(CPU)` in tooltip detail.
+  - Embedded warming up shows `AI: Starting...`.
+  - Embedded stopped shows `AI: Off`.
+  - Cloud API configured and ready shows concise `AI: API` label.
+  - Cloud API unconfigured shows `AI: unavailable` with missing key guidance.
+  - Ollama ready shows concise `AI: Ollama` label.
+  - Ollama unreachable shows `AI: unavailable` with custom `unavailableReason`.
   - API keys strictly omitted from tooltip detail.
-  - Status bar label truncation to 24 characters with ellipsis.
+  - Preserves full model names in tooltip detail without crowding status bar.
   - Verification that external providers never report state as `off`.
 
 ---

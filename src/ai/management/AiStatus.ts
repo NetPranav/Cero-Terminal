@@ -41,7 +41,7 @@ export function describeAi(input: {
       const cpuSuffix = embedded.isCpuFallback ? ' (CPU)' : '';
       return {
         state: 'ready',
-        label: `AI: ${truncateModel(modelName)}${cpuSuffix}`,
+        label: 'AI: local',
         detail: `Provider: Sentinel Embedded\nModel: ${modelName}${cpuSuffix}\nHost: 127.0.0.1:${embedded.port || 8847}\nStatus: Running`,
       };
     }
@@ -73,7 +73,7 @@ export function describeAi(input: {
       const modelName = active.displayName || active.modelId || 'API model';
       return {
         state: 'ready',
-        label: `AI: ${truncateModel(modelName)} (API)`,
+        label: 'AI: API',
         detail: `Provider: Cloud API\nModel: ${modelName}${hostLine}\nStatus: Ready`,
       };
     }
@@ -91,7 +91,7 @@ export function describeAi(input: {
       const modelName = active.displayName || active.modelId || 'Ollama model';
       return {
         state: 'ready',
-        label: `AI: ${truncateModel(modelName)} (local)`,
+        label: 'AI: Ollama',
         detail: `Provider: Ollama\nModel: ${modelName}\nHost: localhost:11434\nStatus: Ready`,
       };
     }
@@ -107,7 +107,7 @@ export function describeAi(input: {
   if (active.isReady) {
     return {
       state: 'ready',
-      label: `AI: ${truncateModel(active.displayName || active.modelId)}`,
+      label: 'AI: ready',
       detail: `Provider: ${providerId}\nModel: ${active.displayName || active.modelId}\nStatus: Ready`,
     };
   }

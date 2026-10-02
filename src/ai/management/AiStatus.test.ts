@@ -17,25 +17,27 @@ function makeActive(overrides: Partial<ActiveModelInfo> = {}): ActiveModelInfo {
 
 describe('describeAi', () => {
   // --- Embedded provider ---
-  it('embedded running shows ready with model name', () => {
+  it('embedded running shows ready with concise local label', () => {
     const badge = describeAi({
       active: makeActive({ providerId: 'embedded' }),
       embedded: { isRunning: true, isWarming: false, isCpuFallback: false, port: 8847, activeModel: 'Qwen 2.5 3B', engineInstalled: true, modelDownloaded: true },
       cloudConfigured: false,
     });
     expect(badge.state).toBe('ready');
-    expect(badge.label).toContain('AI:');
+    expect(badge.label).toBe('AI: local');
+    expect(badge.detail).toContain('Model: Sentinel Embedded Model');
     expect(badge.label).not.toContain('Off');
   });
 
-  it('embedded running with CPU fallback shows (CPU)', () => {
+  it('embedded running with CPU fallback preserves detail in tooltip', () => {
     const badge = describeAi({
       active: makeActive({ providerId: 'embedded' }),
       embedded: { isRunning: true, isWarming: false, isCpuFallback: true, port: 8847, activeModel: 'Qwen 2.5 3B', engineInstalled: true, modelDownloaded: true },
       cloudConfigured: false,
     });
     expect(badge.state).toBe('ready');
-    expect(badge.label).toContain('CPU');
+    expect(badge.label).toBe('AI: local');
+    expect(badge.detail).toContain('(CPU)');
   });
 
   it('embedded warming shows starting', () => {
@@ -59,14 +61,14 @@ describe('describeAi', () => {
   });
 
   // --- Cloud API provider ---
-  it('cloud configured and ready shows ready with (API)', () => {
+  it('cloud configured and ready shows concise AI: API label', () => {
     const badge = describeAi({
       active: makeActive({ providerId: 'cloud_api', modelId: 'gpt-4o', displayName: 'GPT-4o' }),
       embedded: null,
       cloudConfigured: true,
     });
     expect(badge.state).toBe('ready');
-    expect(badge.label).toContain('API');
+    expect(badge.label).toBe('AI: API');
     expect(badge.label).not.toContain('Off');
   });
 
@@ -82,14 +84,14 @@ describe('describeAi', () => {
   });
 
   // --- Ollama provider ---
-  it('ollama ready shows ready with (local)', () => {
+  it('ollama ready shows concise AI: Ollama label', () => {
     const badge = describeAi({
       active: makeActive({ providerId: 'ollama', modelId: 'qwen3:4b', displayName: 'Qwen 3 4B' }),
       embedded: null,
       cloudConfigured: false,
     });
     expect(badge.state).toBe('ready');
-    expect(badge.label).toContain('local');
+    expect(badge.label).toBe('AI: Ollama');
     expect(badge.label).not.toContain('Off');
   });
 
@@ -132,7 +134,7 @@ describe('describeAi', () => {
     expect(badge.detail).not.toContain(secretKey);
   });
 
-  it('truncates model names longer than 24 characters in label with ellipsis', () => {
+  it('preserves full model names in tooltip detail without crowding status bar label', () => {
     const longName = 'claude-3-5-sonnet-20241022-extra-long';
     const badge = describeAi({
       active: makeActive({ providerId: 'cloud_api', modelId: longName, displayName: longName }),
@@ -140,8 +142,7 @@ describe('describeAi', () => {
       cloudConfigured: true,
       cloudHost: 'api.anthropic.com',
     });
-    expect(badge.label.length).toBeLessThan(longName.length);
-    expect(badge.label).toContain('...');
+    expect(badge.label).toBe('AI: API');
     expect(badge.detail).toContain(longName);
   });
 });
