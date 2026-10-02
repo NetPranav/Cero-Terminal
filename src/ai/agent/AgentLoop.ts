@@ -1527,6 +1527,18 @@ export class AgentLoop {
       goal = `${pending.goal}\nUser clarification: ${answer}`;
     }
 
+    // "list my workflows"
+    if (/^(?:please\s+)?(?:list|show)\s+(?:me\s+)?(?:all\s+)?(?:my\s+)?(?:saved\s+)?(?:workflows|flows|\.flow\s+files)\s*$/i.test(goal.trim().replace(/[?.!]+$/, ''))) {
+      const storage = DiskWorkflowStorage.getInstance();
+      let flows: SavedWorkflowDefinition[] = [];
+      try { flows = await storage.listWorkflows(); } catch { /* an unreadable folder reads as empty */ }
+      const summary = flows.length
+        ? `Saved workflows (${flows.length}) in ${storage.getWorkflowsDir()}:\n${flows.map(w => `- ${w.name} (${w.steps.length} step${w.steps.length === 1 ? '' : 's'})`).join('\n')}\nRun one with: run the workflow <name>`
+        : `No saved workflows yet in ${storage.getWorkflowsDir()}. Say "open something and save this as a workflow", or "make me a workflow that ...".`;
+      this.emit({ type: 'done', message: summary });
+      return { success: true, summary, steps: [] };
+    }
+
     // "what do you remember about gitbrains" / "forget gitbrains" / "forget my folder shortcuts"
     const aliasReply = this.handleAliasCommand(goal);
     if (aliasReply) return aliasReply;

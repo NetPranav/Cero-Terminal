@@ -45,7 +45,8 @@ export function parseDesktopEntries(output: string, source = 'desktop'): AppEntr
   for (const [file, rec] of files) {
     if (!rec.Name || /^true$/i.test(rec.NoDisplay || '') || /^true$/i.test(rec.Hidden || '')) continue;
     const id = file.split('/').pop()!.replace(/\.desktop$/, '');
-    const exec = (rec.Exec || '').replace(/\s%[a-zA-Z]/g, '').replace(/%[a-zA-Z]/g, '').trim();
+    // field codes (%U, %f) and Flatpak file-forwarding markers (@@u ... @@) are for file arguments we do not pass
+    const exec = (rec.Exec || '').replace(/\s@@\w*/g, '').replace(/\s%[a-zA-Z]/g, '').replace(/%[a-zA-Z]/g, '').trim();
     const aliases = [rec.GenericName, ...(rec.Keywords || '').split(';')].map(s => (s || '').trim()).filter(Boolean);
     if (!apps.has(id)) apps.set(id, { name: rec.Name, aliases, launch: { kind: 'desktop', value: id, exec }, source: /flatpak/.test(file) ? 'flatpak' : /snapd/.test(file) ? 'snap' : source });
   }
@@ -75,9 +76,10 @@ export function parseWindowsStartApps(output: string): AppEntry[] {
 }
 
 export function listCommands(os: OpenOs): string[] {
-  if (os === 'macos') return ['ls -1 /Applications ~/Applications /System/Applications /System/Applications/Utilities 2>/dev/null'];
+  // `|| true`: a folder that does not exist makes ls exit 1, and the listing is still good
+  if (os === 'macos') return ['ls -1 /Applications ~/Applications /System/Applications /System/Applications/Utilities 2>/dev/null || true'];
   if (os === 'windows') return ['Get-StartApps | ForEach-Object { \'"\' + $_.Name + \'","\' + $_.AppID + \'"\' }'];
-  return LINUX_APP_DIRS.map(d => `grep -H -E '^(Name|GenericName|Keywords|Exec|NoDisplay|Hidden)=' ${d.startsWith('~') ? `"$HOME${d.slice(1)}"` : d}/*.desktop 2>/dev/null`);
+  return LINUX_APP_DIRS.map(d => `grep -H -E '^(Name|GenericName|Keywords|Exec|NoDisplay|Hidden)=' ${d.startsWith('~') ? `"$HOME${d.slice(1)}"` : d}/*.desktop 2>/dev/null || true`);
 }
 
 let cache: { os: OpenOs; at: number; apps: AppEntry[] } | null = null;

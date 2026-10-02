@@ -41,7 +41,8 @@ const ABOUT_WORKFLOWS = /^(?:please\s+)?(?:list|show|delete|remove|run|open|rena
 export function cleanName(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
   let text = raw.replace(/[^A-Za-z0-9_\- ]+/g, ' ').replace(/\s+/g, ' ').trim();
-  text = text.replace(/\s+(?:workflow|flow)$/i, '').trim();
+  // a trailing "workflow" is filler ("morning setup workflow"); "flow" can be part of the name ("hello flow")
+  text = text.replace(/\s+workflow$/i, '').trim();
   const words = text.split(' ').filter(Boolean).slice(0, MAX_NAME_WORDS);
   text = words.join(' ').slice(0, MAX_NAME_CHARS).trim();
   return text || undefined;

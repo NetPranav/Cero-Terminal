@@ -15,6 +15,7 @@ describe('AppCatalog parsing', () => {
     expect(code.launch).toMatchObject({ kind: 'desktop', value: 'code', exec: '/usr/share/code/code --unity-launch' });
     expect(code.aliases).toContain('Text Editor');
     expect(apps.find(a => a.launch.value === 'org.mozilla.firefox')!.source).toBe('flatpak');
+    expect(apps.find(a => a.launch.value === 'org.mozilla.firefox')!.launch.exec).toBe('/usr/bin/flatpak run --branch=stable org.mozilla.firefox');
   });
 
   it('reads mac and Windows listings', () => {

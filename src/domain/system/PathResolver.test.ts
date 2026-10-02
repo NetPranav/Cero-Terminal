@@ -109,6 +109,20 @@ describe('resolvePath', () => {
     expect((await resolvePath({ name: 'gitBrains', kind: 'folder', remembered: '/gone' }, ctx, disk)).type).toBe('found');
   });
 
+  it('a place that exists under two spellings (case-insensitive disk) is searched once', async () => {
+    const real = fakeDisk(['/home/me/Projects/gitBrains']);
+    // a case-insensitive disk answers yes for both "Projects" and "projects" and lists the same folders under each
+    const disk: PathProbe = {
+      ...real,
+      exists: async (p: string) => real.exists(p.replace(/\/projects(\/|$)/, '/Projects$1')),
+      find: async (o: any) => {
+        const rows = await real.find({ ...o, roots: o.roots.map((r: string) => r.replace(/\/projects$/, '/Projects')) });
+        return rows.map(r => ({ ...r, path: o.roots[0].endsWith('/projects') ? r.path.replace('/Projects/', '/projects/') : r.path }));
+      },
+    };
+    expect(await resolvePath({ name: 'gitBrains', kind: 'folder' }, ctx, disk)).toEqual({ type: 'found', path: '/home/me/Projects/gitBrains' });
+  });
+
   it('finds a folder in the current folder first', async () => {
     const disk = fakeDisk(['/home/me/elsewhere/gitBrains', '/home/me/Projects/gitBrains']);
     expect(await resolvePath({ name: 'gitBrains', kind: 'folder' }, ctx, disk)).toEqual({ type: 'found', path: '/home/me/elsewhere/gitBrains' });

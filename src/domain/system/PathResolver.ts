@@ -111,10 +111,16 @@ export async function resolvePath(input: ResolveInput, ctx: { cwd: string }, pro
   // 3. the current folder, 4. the usual places, 5. home
   if (!hasExact()) await search(ctx.cwd, 2, false);
   if (!hasExact()) {
+    // every usual place is checked, so two folders with the same name are noticed and asked about.
+    // "Projects" and "projects" are one folder on a case-insensitive disk, so a place is searched once.
+    const searchedPlaces = new Set<string>();
     for (const place of COMMON_PLACES) {
       const dir = join(home, place);
-      // every usual place is checked, so two folders with the same name are noticed and asked about
-      if (await probe.exists(dir)) await search(dir, 2, false);
+      if (searchedPlaces.has(place.toLowerCase())) continue;
+      if (await probe.exists(dir)) {
+        searchedPlaces.add(place.toLowerCase());
+        await search(dir, 2, false);
+      }
     }
   }
   if (!hasExact()) await search(home, 3, false);

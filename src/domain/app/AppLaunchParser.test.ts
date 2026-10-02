@@ -44,4 +44,10 @@ describe('AppLaunchParser', () => {
     expect(parseAppLaunch('git status')).toBeNull();
     expect(parseAppLaunch('show the queue')).toBeNull();
   });
+
+  it('"run <command>" is a command, not an app; "run <known app>" still opens it', () => {
+    expect(parseAppLaunch('run echo hello')).toBeNull();
+    expect(parseAppLaunch('run sleep 30')).toBeNull();
+    expect(parseAppLaunch('run spotify')?.app).toBe('spotify');
+  });
 });

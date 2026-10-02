@@ -104,6 +104,7 @@ describe('helpers', () => {
   });
   it('cleans names', () => {
     expect(cleanName('Morning Setup Workflow')).toBe('Morning Setup');
+    expect(cleanName('hello flow')).toBe('hello flow');
     expect(cleanName('!!!')).toBeUndefined();
   });
 });

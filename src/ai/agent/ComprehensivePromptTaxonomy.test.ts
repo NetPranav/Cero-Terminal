@@ -337,7 +337,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
   // =========================================================================
   describe('Archetype 10: Workflow Creation Directives', () => {
     it('executes task and saves simultaneously: "<task> :: save as workflow <name>"', async () => {
-      const prompt = 'run echo hello :: save as workflow get-time-wf';
+      const prompt = 'make a folder called get-time-dir :: save as workflow get-time-wf';
       const res = await agent.run(prompt, { os: 'linux', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(res.summary).toContain('Saved workflow \"get-time-wf\"');

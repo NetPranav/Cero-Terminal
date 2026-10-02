@@ -37,7 +37,7 @@ const APP_BINARIES: Record<string, { macos: string; linux: string; windows: stri
   'obs': { macos: 'OBS', linux: 'obs', windows: 'obs64' }
 };
 
-const LAUNCH_VERBS = '(?:launch|open|start|run)';
+const LAUNCH_VERBS = '(launch|open|start|run)';
 
 export function parseAppLaunch(goal: string, os: string = 'linux'): AppLaunchRequest | null {
   const text = goal.trim().replace(/\s+/g, ' ').replace(/[.!?]+$/, '');
@@ -65,7 +65,8 @@ export function parseAppLaunch(goal: string, os: string = 'linux'): AppLaunchReq
 
   if (!match) return null;
 
-  const rawName = match[1].trim().toLowerCase();
+  const verb = match[1].toLowerCase();
+  const rawName = match[2].trim().toLowerCase();
   if (!rawName || rawName.length > 50) return null;
 
   // Reserved internal words
@@ -74,6 +75,8 @@ export function parseAppLaunch(goal: string, os: string = 'linux'): AppLaunchReq
   }
 
   const binaryInfo = APP_BINARIES[rawName];
+  // "run echo hello" and "run sleep 30" are commands, not apps: "run" only means an app for a known one
+  if (verb === 'run' && !binaryInfo) return null;
   const targetOs = os.toLowerCase().includes('darwin') || os.toLowerCase().includes('mac')
     ? 'macos'
     : os.toLowerCase().includes('win')
