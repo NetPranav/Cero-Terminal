@@ -2,12 +2,12 @@ import React from "react";
 import { TOKENS } from "../styles/tokens";
 import { CeroLogo } from "./CeroLogo";
 
-interface ProductLockupProps {
+interface CeroClosingHeroProps {
   opacity?: number;
   scale?: number;
 }
 
-export const ProductLockup: React.FC<ProductLockupProps> = ({
+export const CeroClosingHero: React.FC<CeroClosingHeroProps> = ({
   opacity = 1,
   scale = 1,
 }) => {
@@ -18,23 +18,24 @@ export const ProductLockup: React.FC<ProductLockupProps> = ({
         flexDirection: "column",
         alignItems: "center",
         textAlign: "center",
-        gap: 14,
+        gap: 16,
         opacity,
         transform: `scale(${scale})`,
         fontFamily: TOKENS.fonts.sans,
+        zIndex: 50,
       }}
     >
-      {/* Genuine CERO logo from video/assets/ */}
-      <CeroLogo size={56} opacity={opacity} />
+      {/* Real CERO Logo mark */}
+      <CeroLogo size={76} opacity={opacity} />
 
       {/* Main Wordmark */}
       <h1
         style={{
           margin: 0,
-          fontSize: 52,
+          fontSize: 56,
           fontWeight: 700,
           letterSpacing: "-0.03em",
-          color: TOKENS.colors.textPrimary,
+          color: "#FFFFFF",
           lineHeight: 1,
         }}
       >
@@ -44,9 +45,9 @@ export const ProductLockup: React.FC<ProductLockupProps> = ({
       {/* Tagline */}
       <div
         style={{
-          fontSize: 20,
+          fontSize: 22,
           fontWeight: 400,
-          color: TOKENS.colors.textSecondary,
+          color: "rgba(255, 255, 255, 0.8)",
           letterSpacing: "-0.01em",
           maxWidth: 600,
         }}
@@ -54,7 +55,19 @@ export const ProductLockup: React.FC<ProductLockupProps> = ({
         A terminal you can talk to.
       </div>
 
-      {/* Badges / Platforms */}
+      {/* Supporting Positioning */}
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 400,
+          color: "rgba(255, 255, 255, 0.45)",
+          maxWidth: 500,
+        }}
+      >
+        AI-native terminal and workflow automation for developers.
+      </div>
+
+      {/* Platform Badges */}
       <div
         style={{
           display: "flex",
@@ -64,11 +77,9 @@ export const ProductLockup: React.FC<ProductLockupProps> = ({
           fontFamily: TOKENS.fonts.mono,
           fontSize: 11,
           letterSpacing: "0.08em",
-          color: TOKENS.colors.textMuted,
+          color: "rgba(255, 255, 255, 0.4)",
         }}
       >
-        <span>AI-NATIVE TERMINAL</span>
-        <span>•</span>
         <span>MACOS</span>
         <span>•</span>
         <span>LINUX</span>
@@ -76,11 +87,11 @@ export const ProductLockup: React.FC<ProductLockupProps> = ({
         <span>WINDOWS</span>
       </div>
 
-      {/* Verified GitHub URL */}
+      {/* Verified GitHub URL Pill */}
       <div
         style={{
-          marginTop: 14,
-          padding: "8px 18px",
+          marginTop: 10,
+          padding: "8px 20px",
           borderRadius: 6,
           backgroundColor: "rgba(255, 255, 255, 0.04)",
           border: `1px solid ${TOKENS.colors.borderInteractive}`,

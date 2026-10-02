@@ -52,7 +52,6 @@ export const TerminalWindow: React.FC<TerminalWindowProps> = ({
         WebkitBackdropFilter: "blur(20px)",
         opacity,
         scale,
-        transition: "none",
         ...style,
       }}
     >

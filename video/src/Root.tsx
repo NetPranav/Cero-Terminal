@@ -1,5 +1,7 @@
 import React from "react";
 import { Composition, Folder } from "remotion";
+import { CeroLaunch30s } from "./compositions/CeroLaunch30s";
+import { CeroLaunch30sVertical } from "./compositions/CeroLaunch30sVertical";
 import { SentinelLaunch } from "./compositions/SentinelLaunch";
 import { SentinelLaunchVertical } from "./compositions/SentinelLaunchVertical";
 import { SentinelLaunchShort } from "./compositions/SentinelLaunchShort";
@@ -24,8 +26,28 @@ import { Scene12Final } from "./scenes/Scene12Final";
 export const RemotionRoot: React.FC = () => {
   return (
     <>
-      {/* 30-Second Premium Masters */}
-      <Folder name="30s-Premium">
+      {/* CERO 30-Second Product Launch Film Masters */}
+      <Folder name="CERO-Launch">
+        <Composition
+          id="CeroLaunch30s"
+          component={CeroLaunch30s}
+          durationInFrames={900}
+          fps={30}
+          width={1920}
+          height={1080}
+        />
+        <Composition
+          id="CeroLaunch30sVertical"
+          component={CeroLaunch30sVertical}
+          durationInFrames={900}
+          fps={30}
+          width={1080}
+          height={1920}
+        />
+      </Folder>
+
+      {/* 30-Second Archive */}
+      <Folder name="30s-Archive">
         <Composition
           id="SentinelLaunch30sPremium"
           component={SentinelLaunch30sPremium}

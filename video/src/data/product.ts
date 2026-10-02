@@ -1,6 +1,7 @@
 export interface ProductConfig {
   name: string;
   wordmark: string;
+  previousName: string;
   tagline: string;
   subheadline: string;
   version: string;
@@ -38,10 +39,11 @@ export interface ProductConfig {
 }
 
 export const PRODUCT: ProductConfig = {
-  name: "Sentinel Terminal",
-  wordmark: "SENTINEL",
-  tagline: "The terminal that takes requests in plain language.",
-  subheadline: "An AI-native terminal for developers. Runs .flow files on any OS.",
+  name: "CERO",
+  wordmark: "CERO",
+  previousName: "Sentinel",
+  tagline: "A terminal you can talk to.",
+  subheadline: "AI-native terminal and workflow automation for developers.",
   version: "2.1.0",
   githubUrl: "github.com/NetPranav/Sentinal-Terminal",
   author: "Pranav Dubey",
@@ -65,64 +67,55 @@ export const PRODUCT: ProductConfig = {
     },
   ],
   scenes: {
-    coldOpenLine1: "Your terminal shouldn't fight you.",
-    coldOpenLine2: "Neither should your tools.",
+    coldOpenLine1: "A terminal you can talk to.",
+    coldOpenLine2: "AI-native terminal and workflow automation for developers.",
     frictionTitle: "Context switching.",
     frictionSubtitle: "Copy. Search. Paste. Retry.",
-    revealSubtitle: "An AI-native terminal for developers.",
-    naturalLanguageCommand: ">find what is using port 3000",
-    naturalLanguageTarget: "Port 3000   PID 4190   node",
-    workspaceQuery: ">run my project",
+    revealSubtitle: "AI-native terminal and workflow automation for developers.",
+    naturalLanguageCommand: "> create a folder demo-app, initialize git, npm init, then list the files",
+    naturalLanguageTarget: "package.json  .git/",
+    workspaceQuery: "> find what's using port 3000",
     workspaceMatches: [
-      "~/projects/app",
-      "~/drone_ws",
-      "~/workspace/project",
+      "PORT 3000   PROCESS node   PID 4190",
     ],
-    selfHealingCommand: ">start the development server",
-    selfHealingError: "Error: Port 3000 is already in use (EADDRINUSE)",
-    selfHealingRemedy: "Stop PID 4190 and bind port 3000",
-    workflowPrompt: ">prepare project for release",
+    selfHealingCommand: "> close port 3000",
+    selfHealingError: "Port 3000 listening by node (PID 4190)",
+    selfHealingRemedy: "Stop PID 4190 and release port 3000",
+    workflowPrompt: "> make me a workflow for this",
     workflowSteps: [
-      { phase: "01", title: "INSPECT", status: "COMPLETE" },
-      { phase: "02", title: "INSTALL", status: "COMPLETE" },
-      { phase: "03", title: "BUILD", status: "COMPLETE" },
-      { phase: "04", title: "VERIFY", status: "COMPLETE" },
-      { phase: "05", title: "PACKAGE", status: "COMPLETE" },
+      { phase: "01", title: "create project", status: "COMPLETE" },
+      { phase: "02", title: "initialize git", status: "COMPLETE" },
+      { phase: "03", title: "install dependencies", status: "COMPLETE" },
+      { phase: "04", title: "verify", status: "COMPLETE" },
+      { phase: "05", title: "run", status: "COMPLETE" },
     ],
-    safetyWarning: "Action requires confirmation",
-    safetyAction: "remove project build artifacts",
+    safetyWarning: "Run this command?",
+    safetyAction: "kill 4190",
     safetyCommands: [
-      "rm -rf dist/",
-      "rm -rf target/release/",
-      "rm -rf .cache/",
+      "kill 4190",
     ],
-    localAiTitle: "Your terminal. Your context. Your machine.",
+    localAiTitle: "Your terminal. Your system. Your control.",
     localAiSubtitle: "Embedded local inference keeps requests private and offline.",
     ecosystemItems: [
       {
         title: "NATURAL LANGUAGE",
         subtitle: "Type > to ask anything in plain language",
-        code: ">what is the total of score column in data.csv?",
+        code: "> create a folder demo-app, initialize git, npm init, then list the files",
       },
       {
         title: ".FLOW SETUP AUTOMATION",
         subtitle: "Write once, run natively across any OS",
-        code: ">run the workflow in dev-setup.flow",
+        code: "> make me a workflow for this",
       },
       {
-        title: "PROJECT DISCOVERY",
-        subtitle: "Instant workspace resolution without directory hunting",
-        code: "Indexed 14 Git repositories and 4 ROS2 workspaces",
+        title: "SYSTEM AWARENESS",
+        subtitle: "Port and process resolution without manual PID hunting",
+        code: "> find what's using port 3000",
       },
       {
-        title: "SPLIT WORKSPACES",
-        subtitle: "High-performance xterm WebGL panes and tabs",
-        code: "Binary tree layout with real PTY concurrency",
-      },
-      {
-        title: "SAFETY & AUDIT TRAILS",
-        subtitle: "Explicit consent gates and masked credentials",
-        code: "[!] Safe execution policy enforced. Undo enabled.",
+        title: "SAFETY & CONSENT GATES",
+        subtitle: "Explicit verification before process termination",
+        code: "> close port 3000",
       },
     ],
   },
