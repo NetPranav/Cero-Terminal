@@ -4,6 +4,7 @@ mod embedded_server;
 mod watcher;
 mod downloads;
 mod launch;
+mod path_search;
 mod file_association;
 pub mod logger;
 
@@ -206,6 +207,7 @@ pub fn run() {
             process_cmds::create_system_dir,
             process_cmds::read_system_file,
             process_cmds::check_path_exists,
+            path_search::find_paths,
             process_cmds::sentinel_store_snapshot,
             process_cmds::sentinel_store_append,
             process_cmds::sentinel_store_write,

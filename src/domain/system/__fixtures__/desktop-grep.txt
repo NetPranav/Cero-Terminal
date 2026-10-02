@@ -1,0 +1,16 @@
+/usr/share/applications/code.desktop:Name=Visual Studio Code
+/usr/share/applications/code.desktop:GenericName=Text Editor
+/usr/share/applications/code.desktop:Exec=/usr/share/code/code --unity-launch %F
+/usr/share/applications/code.desktop:Keywords=vscode;
+/usr/share/applications/chromium.desktop:Name=Chromium Web Browser
+/usr/share/applications/chromium.desktop:GenericName=Web Browser
+/usr/share/applications/chromium.desktop:Exec=chromium %U
+/usr/share/applications/hidden.desktop:Name=Hidden Helper
+/usr/share/applications/hidden.desktop:NoDisplay=true
+/var/lib/flatpak/exports/share/applications/org.mozilla.firefox.desktop:Name=Firefox
+/var/lib/flatpak/exports/share/applications/org.mozilla.firefox.desktop:Exec=/usr/bin/flatpak run --branch=stable org.mozilla.firefox @@u %u @@
+/usr/share/applications/firefox.desktop:Name=Firefox
+/usr/share/applications/firefox.desktop:Exec=firefox %u
+/usr/share/applications/org.gnome.Nautilus.desktop:Name=Files
+/usr/share/applications/org.gnome.Nautilus.desktop:GenericName=File Manager
+/usr/share/applications/org.gnome.Nautilus.desktop:Exec=nautilus --new-window %U
