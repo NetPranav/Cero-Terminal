@@ -6,10 +6,10 @@ const SPACEY = "/home/me/it's a folder/git Brains";
 describe('openCommand', () => {
   it('opens a folder in VS Code on Linux without making a new window', () => {
     const c = openCommand('/home/me/Projects/gitBrains', 'linux', 'VS Code');
-    expect(c.command).toBe("setsid -f code '/home/me/Projects/gitBrains' >/dev/null 2>&1");
+    expect(c.command).toBe("command -v code >/dev/null 2>&1 && setsid -f code '/home/me/Projects/gitBrains' >/dev/null 2>&1");
     expect(c.command).not.toMatch(/ -n\b|--new-window/);
     expect(c.appName).toBe('Visual Studio Code');
-    expect(c.fallbacks.some(f => f.includes('flatpak run com.visualstudio.code'))).toBe(true);
+    expect(c.fallbacks.some(f => f.includes('flatpak info com.visualstudio.code') && f.includes('flatpak run com.visualstudio.code'))).toBe(true);
     expect(c.fallbacks.some(f => f.includes('snap run code'))).toBe(true);
     expect(c.fallbacks[c.fallbacks.length - 1]).toContain('xdg-open');
   });

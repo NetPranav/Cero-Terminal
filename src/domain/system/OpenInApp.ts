@@ -37,11 +37,12 @@ export function openCommand(path: string, os: OpenOs, withApp?: string): OpenCom
     if (os === 'windows') {
       return { command: `Start-Process -FilePath ${powershellQuote(editor.cli)} -ArgumentList ${powershellQuote(path)}`, fallbacks: [], appName: editor.app, processName: PROCESS[editor.cli] };
     }
+    // each choice first checks the program is really there, because a detached launch always "succeeds"
     const fallbacks: string[] = [];
-    if (editor.flatpak) fallbacks.push(detach(`flatpak run ${editor.flatpak} ${posixQuote(path)}`, os));
-    if (editor.cli === 'code') fallbacks.push(detach(`snap run code ${posixQuote(path)}`, os));
-    fallbacks.push(detach(`xdg-open ${posixQuote(path)}`, os));
-    return { command: detach(`${editor.cli} ${posixQuote(path)}`, os), fallbacks, appName: editor.app, processName: PROCESS[editor.cli] };
+    if (editor.flatpak) fallbacks.push(`flatpak info ${editor.flatpak} >/dev/null 2>&1 && ${detach(`flatpak run ${editor.flatpak} ${posixQuote(path)}`, os)}`);
+    if (editor.cli === 'code') fallbacks.push(`snap list code >/dev/null 2>&1 && ${detach(`snap run code ${posixQuote(path)}`, os)}`);
+    fallbacks.push(`command -v xdg-open >/dev/null 2>&1 && ${detach(`xdg-open ${posixQuote(path)}`, os)}`);
+    return { command: `command -v ${editor.cli} >/dev/null 2>&1 && ${detach(`${editor.cli} ${posixQuote(path)}`, os)}`, fallbacks, appName: editor.app, processName: PROCESS[editor.cli] };
   }
   if (withApp) {
     // some other app the person named: let the system open the path with it

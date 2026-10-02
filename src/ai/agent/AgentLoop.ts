@@ -55,7 +55,12 @@ import { IntentStep } from '../schemas/IntentSchema';
 import { PromptQueue, parseQueueCommand, type QueueCommand } from '../../presentation/PromptQueue';
 import { ActionGate } from './ActionGate';
 import { parseAppLaunch, type AppLaunchRequest } from '../../domain/app/AppLaunchParser';
-import { parseOpenFolder, type OpenFolderRequest } from '../../domain/system/FolderOpenParser';
+import { parseOpenRequest, type OpenRequest } from '../../domain/system/OpenRequest';
+import { resolvePath, type PathProbe, type Resolution } from '../../domain/system/PathResolver';
+import { resolveAppProbe } from '../../domain/system/appPathProbe';
+import { openCommand, osOf } from '../../domain/system/OpenInApp';
+import { AliasStore } from '../../domain/system/AliasStore';
+import { loadCatalog, resolveApp, launchCommand, type AppEntry } from '../../domain/system/AppCatalog';
 import { parseGitAction, type GitActionRequest } from '../../domain/git/GitActionParser';
 import { parseDirectoryAction, type DirectoryActionRequest } from '../../domain/system/DirectoryActionParser';
 
@@ -193,40 +198,6 @@ const FAST_PATHS: {
   { pattern: /^focus\s+window\s+firefox\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({window = \"firefox\"})' >/dev/null 2>&1 || hyprctl dispatch focuswindow firefox >/dev/null 2>&1 || true)", explanation: 'Focus window firefox' }) },
   { pattern: /^move\s+current\s+window\s+to\s+workspace\s+2\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.move({workspace = \"2\"})' >/dev/null 2>&1 || hyprctl dispatch movetoworkspace 2 >/dev/null 2>&1 || true)", explanation: 'Move current window to workspace 2' }) },
   { pattern: /^toggle\s+window\s+floating\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.float()' >/dev/null 2>&1 || hyprctl dispatch togglefloating >/dev/null 2>&1 || true)", explanation: 'Toggle window floating' }) },
-  {
-    pattern: /^open\s+([a-zA-Z0-9_\-\s]+?)\s+and\s+(.+?)\s+(?:folder\s+|directory\s+)?in\s+([a-zA-Z0-9_\-]+)(?:\s+(?:in|on)\s+(\d+)(?:st|nd|rd|th)?\s+workspace)?\s*$/i,
-    tool: 'shell.execute',
-    paramsFn: (matches: RegExpMatchArray) => {
-      const appRaw = (matches[1] || '').trim().toLowerCase();
-      const pathRaw = (matches[2] || '').trim().replace(/^["']|["']$/g, '');
-      const editorRaw = (matches[3] || '').trim().toLowerCase();
-      const workspaceNum = matches[4];
-
-      let appCmd = `${appRaw} &`;
-      if (appRaw.includes('zen')) appCmd = 'zen-browser --new-window &';
-      else if (appRaw.includes('chrome')) appCmd = '(google-chrome-stable --new-window & || google-chrome &)';
-      else if (appRaw.includes('firefox')) appCmd = 'firefox --new-window &';
-
-      let editorCmd = `${editorRaw} "${pathRaw}" &`;
-      if (editorRaw.includes('code') || editorRaw.includes('vscode')) {
-        editorCmd = `code "${pathRaw}" &`;
-      }
-
-      let cmd = `${appCmd} ${editorCmd}`;
-      if (workspaceNum) {
-        const zeroIdx = Math.max(0, parseInt(workspaceNum, 10) - 1);
-        const dispatcher = `(hyprctl dispatch 'hl.dsp.focus({workspace = "${workspaceNum}"})' >/dev/null 2>&1 || hyprctl dispatch workspace ${workspaceNum} >/dev/null 2>&1 || swaymsg workspace number ${workspaceNum} >/dev/null 2>&1 || i3-msg workspace number ${workspaceNum} >/dev/null 2>&1 || qdbus org.kde.KWin /KWin setCurrentDesktop ${workspaceNum} >/dev/null 2>&1 || wmctrl -s ${zeroIdx} >/dev/null 2>&1 || xdotool set_desktop ${zeroIdx} >/dev/null 2>&1 || true)`;
-        cmd = `${dispatcher} ; (${appCmd}) ; (${editorCmd})`;
-      }
-
-      return {
-        command: cmd,
-        explanation: workspaceNum
-          ? `Switch to workspace ${workspaceNum}, launch ${matches[1].trim()} and open ${pathRaw} in ${matches[3].trim()}`
-          : `Launch ${matches[1].trim()} and open ${pathRaw} in ${matches[3].trim()}`
-      };
-    }
-  },
   { pattern: /^check\s+default\s+web\s+browser\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-settings get default-web-browser 2>/dev/null", explanation: 'Check default web browser' }) },
   { pattern: /^check\s+default\s+file\s+manager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-mime query default inode/directory 2>/dev/null", explanation: 'Check default file manager' }) },
   { pattern: /^check\s+default\s+pdf\s+reader\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-mime query default application/pdf 2>/dev/null", explanation: 'Check default pdf reader' }) },
@@ -1551,6 +1522,17 @@ export class AgentLoop {
       goal = `${pending.goal}\nUser clarification: ${answer}`;
     }
 
+    // "what do you remember about gitbrains" / "forget gitbrains" / "forget my folder shortcuts"
+    const aliasReply = this.handleAliasCommand(goal);
+    if (aliasReply) return aliasReply;
+
+    // "cd gitbrains" from anywhere: the same finder as "open the folder ..." (never creates anything)
+    const navTarget = DirectoryNavigationEngine.getInstance().parseIntent(goal);
+    if (navTarget.isNavigation && navTarget.target && !/^(?:~|\/|\.{1,2}(?:[\\/]|$)|[A-Za-z]:[\\/])/.test(navTarget.target) && !/[\\/]/.test(navTarget.target)) {
+      const found = await this.resolveFolderForCd(navTarget.target, context);
+      if (found) return found;
+    }
+
     // Smart Directory Navigation & Fuzzy Matching ("Did you mean?", "Ask to create")
     const navEngine = DirectoryNavigationEngine.getInstance();
     // "go to tab 2" / "switch to the next tab" are app actions, not folders
@@ -1822,9 +1804,9 @@ export class AgentLoop {
 
     // Task 3.5: Pure domain parsers before calling the model
     // 1. Folder / project in editor ("open folder gitBrains in cursor", "open ~/Projects in vscode")
-    const folderReq = parseOpenFolder(cleaned || goal);
-    if (folderReq) {
-      return this.runOpenFolder(folderReq, context);
+    const openReq = parseOpenRequest(cleaned || goal);
+    if (openReq) {
+      return this.runOpen(openReq, context);
     }
 
     // 2. Git inspection actions ("git status", "what git branch am i on", "git log", "git diff")
@@ -3145,47 +3127,199 @@ export class AgentLoop {
     return finish(false, 'Unknown queue command.');
   }
 
-  /**
-   * Deterministic route for opening folders in code editors (Task 3.5).
-   */
-  private async runOpenFolder(req: OpenFolderRequest, context: AgentRunContext): Promise<AgentResult> {
-    const isMac = !context.os || context.os.toLowerCase().includes('darwin') || context.os.toLowerCase().includes('mac');
-    const isWin = isWindowsName(context.os);
-    const editor = req.editor || 'code';
-    let cmd = '';
+  /** Real file access for finding folders; tests replace it */
+  private pathProbe?: PathProbe;
+  public setPathProbe(probe: PathProbe): void {
+    this.pathProbe = probe;
+  }
+  /** How long to wait before checking an editor really started; tests set 0 */
+  private openVerifyDelayMs = 1500;
+  public setOpenVerifyDelay(ms: number): void {
+    this.openVerifyDelayMs = ms;
+  }
 
-    if (req.editor) {
-      if (isWin) {
-        cmd = `start ${editor} "${req.folder}"`;
-      } else {
-        cmd = `${editor} "${req.folder}" &`;
-      }
-    } else {
-      if (isMac) {
-        cmd = `open "${req.folder}"`;
-      } else if (isWin) {
-        cmd = `start "" "${req.folder}"`;
-      } else {
-        cmd = `xdg-open "${req.folder}" &`;
-      }
+  /**
+   * "open the folder gitBrains in VS Code": find the real folder (never create one), ask when it is not
+   * certain, remember the answer, and open it in one editor window. No model is involved.
+   */
+  private async runOpen(req: OpenRequest, context: AgentRunContext): Promise<AgentResult> {
+    const steps: AgentResult['steps'] = [];
+    const finish = (success: boolean, summary: string, extra: Partial<AgentResult> = {}): AgentResult => {
+      this.emit({ type: success ? 'done' : 'error', message: summary });
+      return { success, summary, steps, ...extra };
+    };
+    const noun = req.kind === 'folder' ? 'folder' : 'file';
+    this.emit({ type: 'tool_start', message: `Looking for the ${noun} "${req.name}"${req.locationHint ? ` in ${req.locationHint}` : ''}` });
+
+    let probe: PathProbe;
+    try {
+      probe = this.pathProbe ?? await resolveAppProbe();
+    } catch (e: any) {
+      return finish(false, `Could not search for "${req.name}": ${e?.message || e}`);
+    }
+    const shown = (p: string) => (probe.home && p.startsWith(probe.home) ? `~${p.slice(probe.home.length)}` : p);
+    const aliases = AliasStore.getInstance();
+    const remembered = aliases.lookup(req.name, req.kind)?.path;
+
+    let resolution: Resolution;
+    try {
+      resolution = await resolvePath({ name: req.name, kind: req.kind, locationHint: req.locationHint, remembered }, { cwd: context.cwd }, probe);
+    } catch (e: any) {
+      return finish(false, `Could not search for "${req.name}": ${e?.message || e}`);
     }
 
-    const explanation = req.editor
-      ? `Open folder "${req.folder}" in ${req.editor}`
-      : `Open folder "${req.folder}"`;
+    let target: string | undefined;
+    if (resolution.type === 'found') {
+      target = resolution.path;
+    } else if (resolution.type === 'missing') {
+      if (req.create && req.kind === 'folder') {
+        const base = req.locationHint ? shownToAbsolute(req.locationHint, probe.home) : context.cwd;
+        target = `${base.replace(/[\\/]+$/, '')}/${req.name}`;
+        const params = { command: osOf(context.os) === 'windows' ? `New-Item -ItemType Directory -Force -Path '${target.replace(/'/g, "''")}'` : `mkdir -p '${target.replace(/'/g, `'\\''`)}'`, explanation: `Create ${shown(target)}` };
+        const made = await this.toolExecutor.execute('shell.execute', params, context.cwd, this.authorizationHandler || (async () => true));
+        steps.push({ tool: 'shell.execute', params, result: made });
+        if (!made.success) return finish(false, `Could not create ${shown(target)}: ${made.error || 'it failed'}`);
+      } else {
+        const where = resolution.searched.length ? ` I looked in: ${resolution.searched.slice(0, 8).join(', ')}.` : '';
+        return finish(false, `I could not find a ${noun} called "${req.name}".${where} Tell me the full path, or say "create it". Nothing was created or opened.`);
+      }
+    } else {
+      const picked = await this.chooseCandidate(req, resolution, shown);
+      if (picked === undefined) {
+        const list = resolution.candidates.slice(0, 5).map(c => shown(c.path)).join(', ');
+        return finish(false, `Several places could be "${req.name}": ${list}. Say the full path of the one you mean. Nothing was opened.`, { awaitingInput: true });
+      }
+      if (picked === null) return finish(false, `Nothing was opened: ${resolution.reason === 'typo' ? 'you did not confirm the match' : 'you chose none of them'}.`, { declined: true });
+      target = picked;
+      aliases.remember(req.name, req.kind, picked, req.withApp);
+    }
 
-    this.emit({ type: 'tool_start', message: explanation });
+    const os = osOf(context.os);
+    const open = openCommand(target, os, req.withApp);
     const auth = this.authorizationHandler || (async () => true);
-    const params = { command: cmd, explanation };
-    const result = context.signal
-      ? await this.toolExecutor.execute('shell.execute', params, context.cwd, auth, undefined, context.signal)
-      : await this.toolExecutor.execute('shell.execute', params, context.cwd, auth);
+    const attempts = [open.command, ...open.fallbacks];
+    let result: ToolExecutionResult | undefined;
+    let used = open.command;
+    for (const command of attempts) {
+      const params = { command, explanation: `Open ${shown(target)}${open.appName ? ` in ${open.appName}` : ''}` };
+      this.emit({ type: 'tool_start', message: params.explanation });
+      result = context.signal
+        ? await this.toolExecutor.execute('shell.execute', params, context.cwd, auth, undefined, context.signal)
+        : await this.toolExecutor.execute('shell.execute', params, context.cwd, auth);
+      const flowPath = probe.home && target.startsWith(probe.home) ? `~${target.slice(probe.home.length)}` : target;
+      steps.push({
+        tool: 'shell.execute', params, result,
+        flowAction: open.appName ? { type: 'app', app: open.appName, path: flowPath } : { type: req.kind === 'folder' ? 'folder' : 'file', path: flowPath },
+      });
+      used = command;
+      if (result?.success || context.signal?.aborted) break;
+    }
+    if (!result?.success) {
+      return finish(false, `Could not open ${shown(target)}${open.appName ? ` in ${open.appName}` : ''}: ${String(result?.error || result?.data?.stderr || 'the program is not installed').split('\n')[0]}`);
+    }
+    if (open.processName && os !== 'windows' && this.openVerifyDelayMs >= 0) {
+      if (this.openVerifyDelayMs > 0) await new Promise(r => setTimeout(r, this.openVerifyDelayMs));
+      const params = { command: `pgrep -i -f ${open.processName} >/dev/null 2>&1`, explanation: `Check ${open.appName} started` };
+      const check = await this.toolExecutor.execute('shell.execute', params, context.cwd, async () => true);
+      if (check && check.success === false) {
+        return finish(true, `Ran the command to open ${shown(target)} in ${open.appName}, but ${open.appName} does not appear to be running yet. If no window shows up, check that ${open.appName} is installed.`);
+      }
+    }
+    void used;
+    return finish(true, `Opened ${shown(target)}${open.appName ? ` in ${open.appName}` : ''}.`);
+  }
 
-    const steps = [{ tool: 'shell.execute', params, result }];
-    const isSuccess = Boolean(result?.success);
-    const summary = isSuccess ? `Opened ${req.folder}${req.editor ? ` in ${req.editor}` : ''}.` : `Could not open ${req.folder}: ${result?.error || 'Failed'}`;
-    this.emit({ type: isSuccess ? 'done' : 'error', message: summary });
-    return { success: isSuccess, summary, steps };
+  /** The remembered-name commands; null when the goal is about something else */
+  private handleAliasCommand(goal: string): AgentResult | null {
+    const store = AliasStore.getInstance();
+    const text = goal.trim().replace(/[?.!]+$/, '');
+    const done = (summary: string): AgentResult => {
+      this.emit({ type: 'done', message: summary });
+      return { success: true, summary, steps: [] };
+    };
+    const about = text.match(/^what\s+(?:do\s+you\s+)?(?:remember|know)\s+about\s+(.+)$/i);
+    if (about) {
+      const rows = store.about(about[1]);
+      return done(rows.length
+        ? `For "${about[1]}" I remember: ${rows.map(r => `${r.kind} ${r.path}${r.app ? ` (opened in ${r.app})` : ''}`).join('; ')}. Say "forget ${about[1]}" to clear it.`
+        : `I do not remember anything about "${about[1]}".`);
+    }
+    if (/^forget\s+(?:all\s+)?(?:my\s+)?(?:(?:folder|app|name)\s+)?(?:shortcuts?|aliases|choices)$/i.test(text)) {
+      const n = store.forgetAll();
+      return done(n ? `Forgot ${n} remembered choice${n > 1 ? 's' : ''}.` : 'There was nothing remembered.');
+    }
+    const forget = text.match(/^forget\s+(?:about\s+)?(?:my\s+)?(?:folder\s+|app\s+)?(.+)$/i);
+    if (forget && store.about(forget[1]).length > 0) {
+      const n = store.forget(forget[1]);
+      return done(`Forgot ${n} remembered choice${n > 1 ? 's' : ''} for "${forget[1]}".`);
+    }
+    return null;
+  }
+
+  /** A bare folder name for `cd`: find it anywhere sensible. null lets the older navigation handle it. */
+  private async resolveFolderForCd(name: string, context: AgentRunContext): Promise<AgentResult | null> {
+    let probe: PathProbe;
+    try {
+      probe = this.pathProbe ?? await resolveAppProbe();
+    } catch {
+      return null;
+    }
+    const aliases = AliasStore.getInstance();
+    let resolution: Resolution;
+    try {
+      resolution = await resolvePath({ name, kind: 'folder', remembered: aliases.lookup(name, 'folder')?.path }, { cwd: context.cwd }, probe);
+    } catch {
+      return null;
+    }
+    let target: string | null | undefined;
+    if (resolution.type === 'found') target = resolution.path;
+    else if (resolution.type === 'choose') {
+      const shown = (p: string) => (probe.home && p.startsWith(probe.home) ? `~${p.slice(probe.home.length)}` : p);
+      target = await this.chooseCandidate({ kind: 'folder', name, create: false }, resolution, shown);
+      if (target === undefined) return null;
+      if (target === null) {
+        const summary = 'Did not change folder: you did not pick one.';
+        this.emit({ type: 'done', message: summary });
+        return { success: false, summary, steps: [], declined: true };
+      }
+      aliases.remember(name, 'folder', target);
+    } else return null;
+    const summary = `Navigated to ${target}`;
+    this.emit({ type: 'done', message: summary });
+    return {
+      success: true,
+      summary,
+      steps: [{ tool: 'filesystem.cd', params: { path: target }, result: { success: true, data: { path: target } } }],
+      cdPath: target,
+    };
+  }
+
+  /** Ask which path is meant. undefined: nothing can ask; null: the person declined */
+  private async chooseCandidate(req: OpenRequest, res: Extract<Resolution, { type: 'choose' }>, shown: (p: string) => string): Promise<string | null | undefined> {
+    const noun = req.kind === 'folder' ? 'folder' : 'file';
+    const baseOf = (p: string) => p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || p;
+    const dirOf = (p: string) => p.replace(/[\\/]+$/, '').replace(/[\\/][^\\/]*$/, '') || '/';
+    if (res.reason === 'typo') {
+      const top = res.candidates[0];
+      const answer = await askChoice({
+        title: `I could not find "${req.name}". Did you mean "${baseOf(top.path)}" in ${shown(dirOf(top.path))}?`,
+        options: [{ label: 'Yes, open it', detail: shown(top.path) }, { label: 'No, search again' }, { label: 'Cancel' }],
+      });
+      if (answer === undefined) return undefined;
+      return answer && 'index' in answer && answer.index === 0 ? top.path : null;
+    }
+    const shownList = res.candidates.slice(0, 5);
+    const exact = res.candidates.filter(c => c.score >= 95).length;
+    const answer = await askChoice({
+      title: exact > 1 ? `I found ${exact} ${noun}s called "${req.name}". Which one?` : `"${req.name}" could be one of these. Which one?`,
+      options: [
+        ...shownList.map(c => ({ label: shown(c.path), detail: c.inHint ? 'matches your location' : undefined })),
+        { label: 'None of these' },
+      ],
+    });
+    if (answer === undefined) return undefined;
+    if (!answer || !('index' in answer) || answer.index >= shownList.length) return null;
+    return shownList[answer.index].path;
   }
 
   /**
@@ -3243,21 +3377,76 @@ export class AgentLoop {
   private async runAppLaunch(req: AppLaunchRequest, context: AgentRunContext): Promise<AgentResult> {
     const isMac = !context.os || context.os.toLowerCase().includes('darwin') || context.os.toLowerCase().includes('mac');
     const isWin = isWindowsName(context.os);
-    let cmd = '';
+    const auth = this.authorizationHandler || (async () => true);
+    const os = osOf(context.os);
+    const flowAction = { type: 'app', app: req.app };
+    const finishApp = (success: boolean, summary: string, steps: AgentResult['steps'] = [], extra: Partial<AgentResult> = {}): AgentResult => {
+      this.emit({ type: success ? 'done' : 'error', message: summary });
+      return { success, summary, steps, ...extra };
+    };
 
-    if (isMac) {
-      cmd = `open -a "${req.executable || req.app}" &`;
-    } else if (isWin) {
-      cmd = `start "" "${req.executable || req.app}"`;
-    } else {
-      cmd = `${req.executable || req.app} &`;
+    // 1. Is this app really installed here, and which one is meant? (never run a guessed name)
+    this.emit({ type: 'tool_start', message: `Looking for ${req.app}` });
+    let apps: AppEntry[] = [];
+    try {
+      apps = await loadCatalog(os, async command => {
+        const r = await this.toolExecutor.execute('shell.execute', { command, explanation: 'List installed apps' }, context.cwd, async () => true);
+        return typeof r?.data?.stdout === 'string' ? r.data.stdout : '';
+      });
+    } catch {
+      apps = [];
+    }
+    let command: string | undefined;
+    if (apps.length > 0) {
+      const aliases = AliasStore.getInstance();
+      const remembered = aliases.lookup(req.app, 'app');
+      let picked: AppEntry | undefined = remembered ? apps.find(a => a.name === remembered.path) : undefined;
+      if (!picked) {
+        const res = resolveApp(req.app, apps);
+        if (res.type === 'found') picked = res.app;
+        else if (res.type === 'choose') {
+          const shownList = res.candidates.slice(0, 5);
+          const answer = res.reason === 'typo'
+            ? await askChoice({ title: `I could not find "${req.app}". Did you mean "${shownList[0].app.name}"?`, options: [{ label: 'Yes, open it' }, { label: 'No' }, { label: 'Cancel' }] })
+            : await askChoice({
+              title: `I found ${shownList.length} apps that could be "${req.app}". Which one?`,
+              options: [...shownList.map(c => ({ label: c.app.name, detail: c.app.source !== 'desktop' ? `from ${c.app.source}` : undefined })), { label: 'None of these' }],
+            });
+          if (answer === undefined) {
+            return finishApp(false, `"${req.app}" could mean ${shownList.map(c => c.app.name).join(', ')}. Say the exact name. Nothing was started.`, [], { awaitingInput: true });
+          }
+          if (!answer || !('index' in answer)) return finishApp(false, 'Nothing was started: you cancelled.', [], { declined: true });
+          if (res.reason === 'typo') {
+            if (answer.index !== 0) return finishApp(false, 'Nothing was started: you did not confirm the match.', [], { declined: true });
+            picked = shownList[0].app;
+          } else {
+            if (answer.index >= shownList.length) return finishApp(false, 'Nothing was started: you chose none of them.', [], { declined: true });
+            picked = shownList[answer.index].app;
+          }
+          aliases.remember(req.app, 'app', picked.name);
+        } else {
+          // not in the list: on Linux a plain program on the PATH may still exist
+          const exe = (req.executable || req.app).split('||')[0].trim();
+          if (os === 'linux' && /^[\w.+-]+$/.test(exe)) {
+            const probe = await this.toolExecutor.execute('shell.execute', { command: `command -v ${exe}`, explanation: `Check ${exe} exists` }, context.cwd, async () => true);
+            if (probe?.success && String(probe.data?.stdout || '').trim()) command = `setsid -f ${exe} >/dev/null 2>&1`;
+          }
+          if (!command) return finishApp(false, `No app called "${req.app}" is installed on this computer, so nothing was started. Say the exact name, or ask me to install it.`);
+        }
+      }
+      if (picked && !command) command = launchCommand(picked, os);
+    }
+
+    let cmd = command ?? '';
+    if (!cmd) {
+      if (isMac) cmd = `open -a "${req.executable || req.app}" &`;
+      else if (isWin) cmd = `start "" "${req.executable || req.app}"`;
+      else cmd = `${req.executable || req.app} &`;
     }
 
     const explanation = `Launch ${req.app}`;
     this.emit({ type: 'tool_start', message: explanation });
-    const auth = this.authorizationHandler || (async () => true);
-
-    const useAppOpen = this.toolExecutor.hasDriver('application.open');
+    const useAppOpen = !command && this.toolExecutor.hasDriver('application.open');
     const toolId = useAppOpen ? 'application.open' : 'shell.execute';
     const params = useAppOpen ? { app: req.app } : { command: cmd, explanation };
 
@@ -3265,11 +3454,10 @@ export class AgentLoop {
       ? await this.toolExecutor.execute(toolId, params, context.cwd, auth, undefined, context.signal)
       : await this.toolExecutor.execute(toolId, params, context.cwd, auth);
 
-    const steps = [{ tool: toolId, params, result, flowAction: { type: 'app', app: req.app } }];
+    const steps = [{ tool: toolId, params, result, flowAction }];
     const isSuccess = Boolean(result?.success);
     const summary = isSuccess ? `Launched ${req.app}.` : `Could not launch ${req.app}: ${result?.error || 'Failed'}`;
-    this.emit({ type: isSuccess ? 'done' : 'error', message: summary });
-    return { success: isSuccess, summary, steps };
+    return finishApp(isSuccess, summary, steps);
   }
 
   /**
@@ -5441,4 +5629,11 @@ User request: ${goal}`;
     }
     return truncated;
   }
+}
+
+
+/** "~/x", "/x" (under home when it is not a real top-level folder) or a plain name, as an absolute path */
+function shownToAbsolute(place: string, home: string): string {
+  if (place.startsWith('~')) return `${home}${place.slice(1)}`;
+  return place.startsWith('/') ? place : `${home}/${place}`;
 }

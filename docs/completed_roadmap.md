@@ -473,6 +473,19 @@ user did. Folder-open steps are recorded once Phase 6 lands (the mapper already 
 
 ---
 
+## Phase 6: folders and apps by name
+
+| Task | What changed | Files | Tests |
+|---|---|---|---|
+| **6.1** | One name scorer: `gitBrains`, `git-brains`, `git_brains`, `Git Brains` are the same name (95+); prefix, word, contains and typo levels (a swapped pair of letters counts as one slip). `AppControl` now shares its edit distance. | `src/domain/system/NameMatch.ts` | `NameMatch.test.ts` (7) |
+| **6.2** | `parseOpenRequest` reads the report 6 sentence (including the location in a second sentence), editor words, quoted names, files and `create it if missing`; it ignores "open the door". `PathResolver` tries the exact path, the named place (as written, under home, and by its last two parts), the current folder, the usual project folders, then home; it never creates anything. Rust `find_paths` is a bounded breadth-first search (skips `node_modules`, `.git`, hidden folders, caps entries, time and depth). `openCommand` gives the right command per editor and OS, checks the program exists before a detached launch, falls back to Flatpak, Snap, then `xdg-open`, and never passes a "new window" flag. `AgentLoop.runOpen` wires it: ask when unsure, open once, check the editor started, record an app action for "save as workflow". The old Hyprland "open X and Y in Z" fast path and `FolderOpenParser` are removed. | `OpenRequest.ts`, `PathResolver.ts`, `OpenInApp.ts`, `appPathProbe.ts`, `src-tauri/src/path_search.rs`, `AgentLoop.ts` | `OpenRequest.test.ts` (25), `PathResolver.test.ts` (13), `OpenInApp.test.ts` (6), `AgentLoopOpen.test.ts` (8 folder cases), 4 Rust tests |
+| **6.3** | `AppCatalog` lists installed apps (desktop entries on Linux, `/Applications` on macOS, `Get-StartApps` on Windows), caches for 5 minutes, and `resolveApp` scores names, generic names, keywords and a small alias table (`vs code`, `crome`, `file manager`). `runAppLaunch` now starts the real entry, asks about typos and duplicate copies (deb and Flatpak), and says plainly when an app is not installed; if the list cannot be read it behaves as before. | `AppCatalog.ts`, `appAliases.ts`, `AgentLoop.ts` | `AppCatalog.test.ts` (11, with a saved `.desktop` sample), `appAliases.test.ts`, `AgentLoopOpen.test.ts` (4 app cases) |
+| **6.4** | Fixed question wording; answers are remembered in `~/.sentinel/aliases.json` (owner-only, 200 entries) and asked once; "what do you remember about X", "forget X", "forget my folder shortcuts"; `cd gitbrains` finds the folder from anywhere. | `AliasStore.ts`, `AgentLoop.ts` | `AliasStore.test.ts` (6), `AgentLoopOpen.test.ts` (3 cd/remember cases) |
+
+Decisions that differ from the plan text: a match inside the place the person named wins over an equal match elsewhere (the plan's by-hand check expected two choices; asking would contradict "the named place wins"). Typo-level matches are collected from score 40, not 60, because a typo scores below 60 by the plan's own formula. "Show more" in the question is not built; the list shows the best five and "None of these". The 1.5 second editor check uses `pgrep` and is skipped on Windows. Not yet exercised on a real Linux desktop (see Phase 8).
+
+---
+
 ## Verification Summary
 
 | Check | Result |

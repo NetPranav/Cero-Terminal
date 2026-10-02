@@ -846,15 +846,6 @@ To push the current branch and set the remote as upstream, use
       );
       expect(sanitized).toBe(original);
     });
-
-    it('matches composite app launch regex with workspace specifier', () => {
-      const res = findFastPath('open zen browser and "/home/test/Projects" folder in vscode in 5th workspace');
-      expect(res).not.toBeNull();
-      expect(res?.tool).toBe('shell.execute');
-      expect(res?.params.command).toContain('hyprctl dispatch');
-      expect(res?.params.command).toContain('zen-browser');
-      expect(res?.params.command).toContain('code "/home/test/Projects"');
-    });
   });
 });
 
