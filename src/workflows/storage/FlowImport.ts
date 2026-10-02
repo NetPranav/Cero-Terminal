@@ -12,32 +12,49 @@ import { planFlow, withCwd, type FlowOs } from '../flow/FlowPlan';
 
 export type { FlowOs };
 
-/** A .flow document as a saved workflow (the commands come from FlowPlan), or null when empty. */
 export function flowToWorkflow(raw: unknown, fallbackName: string, os: FlowOs): SavedWorkflowDefinition | null {
   const doc = raw as any;
   if (!doc || !Array.isArray(doc.actions)) return null;
   const plan = planFlow(doc, fallbackName, os);
   if (!plan) return null;
   const meta = doc.metadata || {};
-  const steps: WorkflowStepDefinition[] = plan.steps.map((step, i) => ({
-    id: `step-${i + 1}`,
-    name: step.name,
-    command: withCwd(step, os),
-    platformCommands: {
-      macos: withCwd({ ...step, command: step.platformCommands.macos }, 'macos'),
-      linux: withCwd({ ...step, command: step.platformCommands.linux }, 'linux'),
-      windows: withCwd({ ...step, command: step.platformCommands.windows }, 'windows'),
-    },
-  }));
+  const steps: WorkflowStepDefinition[] = plan.steps.map((step, i) => {
+    const rawAction = doc.actions[i];
+    const extra = rawAction?.x && typeof rawAction.x === 'object' ? rawAction.x : {};
+    const isCommand = rawAction?.type === 'command' && typeof rawAction.command === 'string';
+    const command = isCommand ? rawAction.command : withCwd(step, os);
+    const cwd = rawAction?.cwd || step.cwd;
+    const platformCommands = isCommand && (rawAction.macos || rawAction.linux || rawAction.windows)
+      ? {
+          macos: rawAction.macos || rawAction.command,
+          linux: rawAction.linux || rawAction.command,
+          windows: rawAction.windows || rawAction.command,
+        }
+      : {
+          macos: withCwd({ ...step, command: step.platformCommands.macos }, 'macos'),
+          linux: withCwd({ ...step, command: step.platformCommands.linux }, 'linux'),
+          windows: withCwd({ ...step, command: step.platformCommands.windows }, 'windows'),
+        };
+    return {
+      id: `step-${i + 1}`,
+      name: step.name,
+      command,
+      cwd,
+      platformCommands,
+      ...extra
+    };
+  });
   return {
     schemaVersion: 1,
-    name: typeof meta.id === 'string' && meta.id ? meta.id : fallbackName,
+    name: typeof meta.name === 'string' && meta.name ? meta.name : (typeof meta.id === 'string' && meta.id ? meta.id : fallbackName),
     description: meta.description || meta.name,
     steps,
+    parameters: Array.isArray(doc.parameters) ? doc.parameters : undefined,
+    environmentPrerequisites: doc.environmentPrerequisites,
     createdAt: Number(meta.createdAt) || 0,
     updatedAt: Number(meta.updatedAt) || 0,
     author: meta.author,
-    tags: [...(Array.isArray(meta.tags) ? meta.tags : []), 'flow']
+    tags: Array.isArray(meta.tags) ? (meta.tags.includes('flow') ? meta.tags : [...meta.tags, 'flow']) : ['flow']
   };
 }
 

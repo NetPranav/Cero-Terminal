@@ -15,7 +15,7 @@ const MORNING = {
 describe('flowToWorkflow', () => {
   it('maps browser and app actions to macOS commands', () => {
     const wf = flowToWorkflow(MORNING, 'x', 'macos')!;
-    expect(wf.name).toBe('morning_ai_workspace');
+    expect(wf.name).toBe('Morning AI Workspace');
     expect(wf.steps.map(s => s.command)).toEqual([
       "open -a 'Safari' 'https://claude.ai' 'https://chatgpt.com'",
       "open -a 'Google Chrome' 'https://www.youtube.com'",

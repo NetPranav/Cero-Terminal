@@ -12,6 +12,8 @@ depends=(
     'glib2'
     'cairo'
     'pango'
+    'shared-mime-info'
+    'desktop-file-utils'
 )
 optdepends=(
     'vte3: Enhanced terminal capability support'
@@ -59,8 +61,18 @@ package() {
     # .flow files open with Sentinel (pacman's shared-mime-info hook updates the database)
     install -Dm644 "${srcdir}/sentinel-terminal-mime.xml" "${pkgdir}/usr/share/mime/packages/sentinel-terminal.xml"
 
-    # Install icons
+    # Install app icons
     install -Dm644 "${srcdir}/icon.png" "${pkgdir}/usr/share/icons/hicolor/512x512/apps/sentinel-terminal.png"
     install -Dm644 "${srcdir}/128x128.png" "${pkgdir}/usr/share/icons/hicolor/128x128/apps/sentinel-terminal.png"
     install -Dm644 "${srcdir}/32x32.png" "${pkgdir}/usr/share/icons/hicolor/32x32/apps/sentinel-terminal.png"
+
+    # Install flow mimetype icons
+    for size in 16 24 32 48 64 128 256 512; do
+        if [ -f "${srcdir}/flow-${size}.png" ]; then
+            install -Dm644 "${srcdir}/flow-${size}.png" "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/mimetypes/application-x-sentinel-workflow.png"
+        fi
+    done
+    if [ -f "${srcdir}/application-x-sentinel-workflow.svg" ]; then
+        install -Dm644 "${srcdir}/application-x-sentinel-workflow.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/mimetypes/application-x-sentinel-workflow.svg"
+    fi
 }

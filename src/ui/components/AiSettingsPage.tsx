@@ -23,8 +23,10 @@ import {
   Info,
   ShieldCheck,
   ShieldAlert,
-  Compass
+  Compass,
+  FileText
 } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { OllamaProvider as OllamaModelManager, OllamaModel } from '../../ai/models/OllamaProvider';
 import { EmbeddedModelManagerModal } from './EmbeddedModelManagerModal';
 import { EmbeddedEngineManager, EmbeddedStatus } from '../../ai/models/EmbeddedEngineManager';
@@ -87,6 +89,30 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
     try {
       localStorage.setItem('sentinel_ghost_accept_right', String(val));
     } catch {}
+  };
+
+  interface AssociationStatus {
+    is_appimage: boolean;
+    registered: boolean;
+    decision: string;
+    appimage_path?: string;
+    desktop_file?: string;
+  }
+  const [associationStatus, setAssociationStatus] = useState<AssociationStatus | null>(null);
+
+  useEffect(() => {
+    invoke<AssociationStatus>('get_association_status')
+      .then(setAssociationStatus)
+      .catch(() => {});
+  }, []);
+
+  const handleToggleAssociation = async (val: boolean) => {
+    try {
+      const updated = await invoke<AssociationStatus>('set_association_status', { enabled: val });
+      setAssociationStatus(updated);
+    } catch (err) {
+      console.error('Failed to update file association status:', err);
+    }
   };
 
   // Recommendation Engine State
@@ -2185,6 +2211,57 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                 />
                 <span style={{ fontSize: '12px', color: ghostAcceptRight ? '#ffffff' : 'rgba(255, 255, 255, 0.5)', fontWeight: 500 }}>
                   {ghostAcceptRight ? 'Enabled' : 'Disabled'}
+                </span>
+              </label>
+            </div>
+
+            {/* Task 4.6: File Association (.flow files) */}
+            <div style={{
+              padding: '18px 20px',
+              borderRadius: '10px',
+              backgroundColor: 'rgba(255, 255, 255, 0.025)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '20px'
+            }}>
+              <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ffffff',
+                  flexShrink: 0
+                }}>
+                  <FileText size={18} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '13.5px', color: '#ffffff' }}>
+                    Open .flow files with Sentinel Terminal
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginTop: '3px', lineHeight: 1.45 }}>
+                    {associationStatus?.desktop_file
+                      ? `Registered desktop handler at ${associationStatus.desktop_file}`
+                      : 'Registers Sentinel Terminal as the system handler for .flow files.'}
+                  </div>
+                </div>
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none', flexShrink: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={associationStatus?.registered ?? false}
+                  onChange={(e) => void handleToggleAssociation(e.target.checked)}
+                  style={{ accentColor: '#ffffff', cursor: 'pointer', width: '16px', height: '16px' }}
+                />
+                <span style={{ fontSize: '12px', color: associationStatus?.registered ? '#ffffff' : 'rgba(255, 255, 255, 0.5)', fontWeight: 500 }}>
+                  {associationStatus?.registered ? 'Enabled' : 'Disabled'}
                 </span>
               </label>
             </div>

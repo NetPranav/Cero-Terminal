@@ -89,15 +89,48 @@ Any other name is passed to the package manager as written.
 - **macOS:** Homebrew must be installed (<https://brew.sh>).
 - **Windows:** after `winget`, the terminal reloads `PATH`, so the next step finds the new program.
 
+## Sentinel only writes `.flow`
+
+Sentinel strictly creates and exports `.flow` files for all workflows and recorded macros. Legacy `.json` workflows located in `~/.sentinel/workflows` are automatically migrated to `.flow` (preserving the original as `.json.bak`). When both `.flow` and `.json` exist for a workflow, `.flow` is canonical.
+
 ## Opening flows
 
-- **macOS**: double-click in Finder, or `open -a "Sentinel Terminal" setup.flow`.
-- **Windows**: double-click in Explorer (the installer registers `.flow`).
-- **Linux**: double-click in the file manager (the packages install a MIME type for `*.flow`), or run
-  `sentinel-terminal setup.flow`.
+Double-clicking a `.flow` file opens it directly in Sentinel Terminal across all supported platforms:
+
+- **macOS**:
+  - Registered with UTI `com.sentinel.flow` (`public.filename-extension = flow`) conforming to `public.json` and `public.data` with handler rank `Owner`.
+  - Displays the custom grayscale document icon (`flow.icns`).
+  - Open via Finder double-click or CLI: `open -a "Sentinel Terminal" setup.flow`.
+  - *Resetting association:* If another app has hijacked `.flow`, refresh LaunchServices:
+    ```bash
+    /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -f "/Applications/Sentinel Terminal.app"
+    killall Finder
+    ```
+
+- **Windows**:
+  - Registered with ProgID `Sentinel.Flow`, Content Type `application/x-sentinel-workflow`, and default icon `flow.ico`.
+  - Open via Explorer double-click or CLI: `Sentinel.Terminal.exe setup.flow`.
+  - *User Choice:* On Windows 10 and 11, the first double-click may ask "How do you want to open this file?"; select Sentinel Terminal. To reset, right-click the file, select **Open with > Choose another app**, check "Always use this app", and pick Sentinel Terminal.
+
+- **Linux (deb, rpm, Arch, Flatpak, AppImage)**:
+  - Registered under MIME type `application/x-sentinel-workflow` (sub-class of `text/plain`, so text editors remain accessible via "Open with" while Sentinel is the default).
+  - Uses the grayscale vector mark `application-x-sentinel-workflow` icon in all standard resolutions (16px to 512px + scalable SVG).
+  - **deb / rpm / Arch / Flatpak**: Package installers install the MIME specification and run `update-mime-database` and `gtk-update-icon-cache`.
+  - **AppImage self-registration**: Because AppImages are standalone binaries without system package hooks, Sentinel detects when running as an AppImage and offers a one-time prompt:
+    > "Open .flow files with Sentinel Terminal? This adds a launcher and a file type to your user folders. [Yes] [No, never ask]"
+    Answering Yes installs the desktop launcher, icons, and MIME registration into `~/.local/share/`. If the AppImage is subsequently moved, Sentinel automatically updates the desktop `Exec` path on launch. This can also be toggled anytime in **Settings > General**.
+  - **Snap**: Snap sandbox restrictions prevent writing to `/usr/share/mime`. Snap users open flows via `sentinel-terminal setup.flow` or from inside the app.
+  - *Resetting association:*
+    ```bash
+    xdg-mime default sentinel-terminal.desktop application/x-sentinel-workflow
+    ```
+
+- **Single-instance window handling**:
+  Double-clicking any number of `.flow` files when Sentinel is already running forwards the file path to the running instance over the native IPC/mutex channel. If the terminal is currently busy executing another task, the newly opened flows are queued sequentially in FIFO order without interrupting or dropping runs.
+
 - **From inside Sentinel**:
   - Ask "run the workflow in setup.flow".
-  - Or open the Workflow Manager, which lists `.flow` files saved in `~/.sentinel/workflows`.
+  - Or open the Workflow Manager drawer, which lists all `.flow` files saved in `~/.sentinel/workflows` and provides **Import .flow** and **Export as .flow** tools.
 
 Examples: [`examples/flows`](../examples/flows).
 

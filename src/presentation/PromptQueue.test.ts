@@ -130,6 +130,41 @@ describe('PromptQueue (Task 2.3)', () => {
     expect(formatted).toContain('2. [goal] run tests');
     expect(/[\u{1F300}-\u{1F9FF}]/u.test(formatted)).toBe(false);
   });
+
+  it('queues a flow request when busy and preserves flowPlan', () => {
+    const mockPlan = {
+      name: 'Build and Test',
+      source: '/home/user/build.flow',
+      needsTerminal: true,
+      steps: [{ type: 'command' as const, name: 'Build', command: 'npm run build' }],
+    };
+
+    // First item is currently running (busy)
+    const running = queue.enqueue('active long running task');
+    queue.setRunningItem(running);
+
+    // Second flow arrives while busy
+    const queuedFlow = queue.enqueue({
+      label: `Flow: ${mockPlan.name}`,
+      kind: 'flow',
+      flowPlan: mockPlan,
+      source: mockPlan.source,
+    });
+
+    expect(queue.size()).toBe(2);
+    expect(queuedFlow.kind).toBe('flow');
+    expect(queuedFlow.flowPlan?.name).toBe('Build and Test');
+
+    // Dequeuing first gets the active/next item
+    const first = queue.dequeue();
+    expect(first?.id).toBe(running.id);
+
+    // Dequeuing next gets the flow in order
+    const nextFlow = queue.dequeue();
+    expect(nextFlow?.id).toBe(queuedFlow.id);
+    expect(nextFlow?.kind).toBe('flow');
+    expect(nextFlow?.flowPlan?.steps[0].command).toBe('npm run build');
+  });
 });
 
 describe('parseQueueCommand (Task 2.3)', () => {

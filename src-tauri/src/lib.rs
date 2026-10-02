@@ -4,6 +4,7 @@ mod embedded_server;
 mod watcher;
 mod downloads;
 mod launch;
+mod file_association;
 pub mod logger;
 
 #[cfg(target_os = "macos")]
@@ -45,9 +46,21 @@ pub fn run() {
     logger::init();
     logger::log_info("BOOT", "Initializing Sentinel Terminal runtime");
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            use tauri::Emitter;
+            logger::log_info("SINGLE_INSTANCE", &format!("Second instance launched with argv: {:?}", argv));
+            let flow_files = launch::filter_flow_argv(&argv);
+            if !flow_files.is_empty() {
+                launch::remember_opened(app, &flow_files);
+                let _ = app.emit("sentinel-url", &flow_files);
+            } else {
+                launch::show_main(app);
+            }
+        }))
         .setup(|app| {
             logger::log_info("SETUP", "Initializing core application services");
             process_cmds::ensure_private_data_dir();
+            file_association::ensure_registered(app.handle());
             // A previous instance that crashed or was killed can leave its model server running
             std::thread::spawn(|| embedded_server::reap_orphaned_server(8847));
             // The window starts hidden: shown now, unless the app was opened to run a .flow file
@@ -217,6 +230,8 @@ pub fn run() {
             launch::take_opened_files,
             launch::show_main_window,
             launch::is_main_window_visible,
+            file_association::get_association_status,
+            file_association::set_association_status,
             logger::log_diagnostic,
             logger::is_debug_active
         ])

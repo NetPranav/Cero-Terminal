@@ -46,7 +46,7 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.summary).toContain('Saved 1 step(s) to ~/.sentinel/workflows/my-ci-pipeline.json');
+    expect(result.summary).toContain('my-ci-pipeline.flow');
     expect(result.summary).toContain('schemaVersion: 1');
 
     // Verify it was actually written to disk

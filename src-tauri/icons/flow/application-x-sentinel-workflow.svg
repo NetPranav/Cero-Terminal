@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Page Background & Outer Contrast Shadow -->
+  <g id="page">
+    <!-- Outer 6px dark edge for contrast on light file-manager backgrounds -->
+    <path d="M 254 99 L 654 99 L 845 290 L 845 850 A 75 75 0 0 1 770 925 L 254 925 A 75 75 0 0 1 179 850 L 179 174 A 75 75 0 0 1 254 99 Z"
+          fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="6" />
+    
+    <!-- Main page body with 14px border -->
+    <path d="M 254 102 L 652 102 L 842 292 L 842 850 A 72 72 0 0 1 770 922 L 254 922 A 72 72 0 0 1 182 850 L 182 174 A 72 72 0 0 1 254 102 Z"
+          fill="#0c0d12" stroke="rgba(255,255,255,0.18)" stroke-width="14" stroke-linejoin="round" />
+    
+    <!-- Top inner highlight (6% white) -->
+    <path d="M 254 110 L 646 110" stroke="rgba(255,255,255,0.06)" stroke-width="4" stroke-linecap="round" />
+  </g>
+
+  <!-- Top-Right Folded Corner -->
+  <g id="fold">
+    <path d="M 652 102 L 652 292 L 842 292 Z" fill="#1a1c24" />
+    <path d="M 652 102 L 842 292" stroke="rgba(255,255,255,0.28)" stroke-width="5" stroke-linecap="round" />
+    <!-- Fold edge inner crease shadow -->
+    <path d="M 652 102 L 652 292 L 842 292" fill="none" stroke="rgba(0,0,0,0.4)" stroke-width="3" />
+  </g>
+
+  <!-- Centre Mark (The Flow: 3 stepping circles + connector + run ring) -->
+  <g id="mark">
+    <!-- Connecting path line -->
+    <path d="M 350 405 L 505 455 L 660 515"
+          fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Step 1 Circle -->
+    <circle cx="350" cy="405" r="44" fill="rgba(255,255,255,0.92)" />
+
+    <!-- Step 2 Circle -->
+    <circle cx="505" cy="455" r="44" fill="rgba(255,255,255,0.92)" />
+
+    <!-- Step 3 Circle (Execute / Run Target) -->
+    <circle cx="660" cy="515" r="44" fill="rgba(255,255,255,0.92)" />
+
+    <!-- Run Ring around Circle 3 -->
+    <circle cx="660" cy="515" r="76" fill="none" stroke="rgba(255,255,255,0.40)" stroke-width="10" />
+  </g>
+
+  <!-- Outline Monospace Text: FLOW (height 110, white at 85%) -->
+  <g id="label" fill="rgba(255,255,255,0.85)">
+    <!-- F (x: 326..386, y: 675..785) -->
+    <path d="M 326 675 L 386 675 L 386 695 L 348 695 L 348 720 L 380 720 L 380 740 L 348 740 L 348 785 L 326 785 Z" />
+
+    <!-- L (x: 418..478, y: 675..785) -->
+    <path d="M 418 675 L 440 675 L 440 765 L 478 765 L 478 785 L 418 785 Z" />
+
+    <!-- O (x: 508..578, y: 675..785, rounded box) -->
+    <path d="M 528 675 L 558 675 A 20 20 0 0 1 578 695 L 578 765 A 20 20 0 0 1 558 785 L 528 785 A 20 20 0 0 1 508 765 L 508 695 A 20 20 0 0 1 528 675 Z M 530 695 L 530 765 L 556 765 L 556 695 Z" fill-rule="evenodd" />
+
+    <!-- W (x: 608..698, y: 675..785) -->
+    <path d="M 608 675 L 626 675 L 639 745 L 653 675 L 671 675 L 651 785 L 633 785 L 620 720 L 607 785 L 589 785 Z" />
+  </g>
+</svg>

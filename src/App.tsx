@@ -17,6 +17,7 @@ import { AuditLogger } from "./domain/security/AuditLogger";
 import { DotfileSyncEngine } from "./domain/rice/DotfileSyncEngine";
 import { EmbeddedEngineManager } from "./ai/models/EmbeddedEngineManager";
 import { SystemKnowledgeScanner } from "./domain/knowledge/SystemKnowledgeScanner";
+import { FileAssociationPrompt } from "./ui/components/FileAssociationPrompt";
 import { invoke } from "@tauri-apps/api/core";
 import { 
   Terminal, 
@@ -190,6 +191,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
           if (!res.ok) console.warn('[Sentinel] Flow steps failed:', res.failed);
           continue;
         }
+        await invoke('show_main_window').catch(() => {});
         submitTerminalRequest({ kind: 'flow', plan, source: filePath });
       } catch (err) {
         console.warn('[Sentinel] Could not open workflow file:', filePath, err);
@@ -215,6 +217,17 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
   });
   const [detectedShell, setDetectedShell] = useState<string>(() => isLinux() ? 'bash' : 'zsh');
   const [showQueuePanel, setShowQueuePanel] = useState<boolean>(false);
+  const [showAssociationPrompt, setShowAssociationPrompt] = useState<boolean>(false);
+
+  useEffect(() => {
+    invoke<{ is_appimage: boolean; decision: string }>('get_association_status')
+      .then(status => {
+        if (status?.is_appimage && status?.decision === 'pending') {
+          setShowAssociationPrompt(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleOpenQueue = () => setShowQueuePanel(true);
@@ -1621,6 +1634,9 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
           localStorage.setItem('sentinel_zen_tip_shown', 'true');
         }}
       />
+      {showAssociationPrompt && (
+        <FileAssociationPrompt onComplete={() => setShowAssociationPrompt(false)} />
+      )}
     </div>
   );
 }

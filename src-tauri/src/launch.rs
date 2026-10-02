@@ -78,6 +78,44 @@ pub fn is_main_window_visible(app: AppHandle) -> bool {
     app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(true)
 }
 
+fn resolve_file_path(arg: &str) -> Option<std::path::PathBuf> {
+    if let Some(stripped) = arg.strip_prefix("file://") {
+        #[cfg(windows)]
+        let stripped = stripped.trim_start_matches('/');
+        let path = std::path::PathBuf::from(stripped);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    let path = std::path::PathBuf::from(arg);
+    if path.is_file() {
+        return Some(path);
+    }
+    None
+}
+
+/// Filters command line arguments from a launch or single-instance event:
+/// keeps only existing regular files ending in .flow or legacy workflow extensions.
+/// Drops flags, non-flow files, missing paths, and directories.
+pub fn filter_flow_argv(args: &[String]) -> Vec<String> {
+    args.iter()
+        .skip(1)
+        .filter_map(|arg| {
+            if arg.starts_with('-') {
+                return None;
+            }
+            if !is_flow_path(arg) {
+                return None;
+            }
+            if let Some(path) = resolve_file_path(arg) {
+                Some(path.to_string_lossy().to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::is_flow_path;
@@ -89,5 +127,34 @@ mod tests {
         assert!(is_flow_path("file:///tmp/deploy.workflow.json"));
         assert!(!is_flow_path("/tmp/package.json"));
         assert!(!is_flow_path("sentinel://open?path=/tmp"));
+    }
+
+    #[test]
+    fn test_filter_flow_argv() {
+        use std::fs::File;
+
+        let temp_dir = std::env::temp_dir();
+        let flow_file = temp_dir.join("test my flow with spaces.flow");
+        let txt_file = temp_dir.join("not_a_flow.txt");
+        let non_existent = temp_dir.join("does_not_exist.flow");
+
+        let _ = File::create(&flow_file);
+        let _ = File::create(&txt_file);
+
+        let argv = vec![
+            "sentinel-terminal".to_string(),
+            "--some-flag".to_string(),
+            "-f".to_string(),
+            flow_file.to_string_lossy().to_string(),
+            txt_file.to_string_lossy().to_string(),
+            non_existent.to_string_lossy().to_string(),
+        ];
+
+        let filtered = super::filter_flow_argv(&argv);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0], flow_file.to_string_lossy().to_string());
+
+        let _ = std::fs::remove_file(flow_file);
+        let _ = std::fs::remove_file(txt_file);
     }
 }

@@ -286,15 +286,7 @@ const FAST_PATHS: {
   { pattern: /^check\s+cursor\s+theme\s+and\s+size\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'gtk-cursor' ~/.config/gtk-3.0/settings.ini 2>/dev/null || echo -e 'gtk-cursor-theme-name = Bibata-Modern-Classic\\ngtk-cursor-theme-size = 24'", explanation: 'Check cursor theme and size' }) },
   { pattern: /^check\s+hyprland\s+animations\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -A 5 'animations {' ~/.config/hypr/hyprland.conf 2>/dev/null || echo -e 'animations {\\n    enabled = true\\n    bezier = myBezier, 0.05, 0.9, 0.1, 1.05\\n}'", explanation: 'Check hyprland animations configuration' }) },
 
-  // Domain 9: Multi-Stage Composite Workflows (9.1 to 9.50)
-  { pattern: /^save\s+workflow\s+release-gate\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"release-gate\", \"steps\": [\"git status\", \"npm run lint\", \"npm test\", \"npm run build\"]}' > ~/.sentinel/workflows/release-gate.json", explanation: 'Save workflow release-gate' }) },
-  { pattern: /^save\s+workflow\s+dev-boot\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"dev-boot\"}' > ~/.sentinel/workflows/dev-boot.json", explanation: 'Save workflow dev-boot' }) },
-  { pattern: /^save\s+workflow\s+desktop-reset\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"desktop-reset\"}' > ~/.sentinel/workflows/desktop-reset.json", explanation: 'Save workflow desktop-reset' }) },
-  { pattern: /^save\s+workflow\s+db-sync\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"db-sync\"}' > ~/.sentinel/workflows/db-sync.json", explanation: 'Save workflow db-sync' }) },
-  { pattern: /^save\s+workflow\s+pr-prep\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"pr-prep\"}' > ~/.sentinel/workflows/pr-prep.json", explanation: 'Save workflow pr-prep' }) },
   { pattern: /^check\s+git\s+conflict\s+markers\s+across\s+all\s+files\s+in\s+repository\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git diff --check 2>/dev/null", explanation: 'Check git conflict markers' }) },
-  { pattern: /^save\s+workflow\s+clean-rebuild\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"clean-rebuild\"}' > ~/.sentinel/workflows/clean-rebuild.json", explanation: 'Save workflow clean-rebuild' }) },
-  { pattern: /^save\s+workflow\s+ai-healthcheck\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"ai-healthcheck\"}' > ~/.sentinel/workflows/ai-healthcheck.json", explanation: 'Save workflow ai-healthcheck' }) },
 
   // Web browser navigation & URL shortcuts (with optional target browser)
   {
@@ -1462,7 +1454,8 @@ export class AgentLoop {
         }
 
         if (savedWf) {
-          const saveNotice = `Workflow "${workflowName}" saved (${savedWf.steps.length} step(s) written to ~/.sentinel/workflows/${workflowName}.json, schemaVersion: 1)`;
+          const filePath = DiskWorkflowStorage.getInstance().getWorkflowFilePath(workflowName);
+          const saveNotice = `Workflow "${workflowName}" saved (${savedWf.steps.length} step(s) written to ${filePath}, schemaVersion: 1)`;
           result.summary = `${result.summary}\n\n✓ ${saveNotice}`;
           this.emit({ type: 'done', message: saveNotice });
         }
@@ -1493,7 +1486,8 @@ export class AgentLoop {
       const { workflowName: name, maxSteps } = saveRequest;
       const recorder = WorkflowRecorder.getInstance();
       const saved = await recorder.saveFromUndoLog(name, context.sessionId || 'default', maxSteps);
-      const summary = `Workflow file written to disk: Saved ${saved.steps.length} step(s) to ~/.sentinel/workflows/${name}.json (schemaVersion: 1)`;
+      const filePath = DiskWorkflowStorage.getInstance().getWorkflowFilePath(name);
+      const summary = `Workflow file written to disk: Saved ${saved.steps.length} step(s) to ${filePath} (schemaVersion: 1)`;
       this.emit({ type: 'done', message: summary });
       return {
         success: true,
@@ -2040,7 +2034,8 @@ export class AgentLoop {
       const { workflowName: name, maxSteps } = saveRequest;
       const recorder = WorkflowRecorder.getInstance();
       const saved = await recorder.saveFromUndoLog(name, context.sessionId || 'default', maxSteps);
-      const summary = `Workflow file written to disk: Saved ${saved.steps.length} step(s) to ~/.sentinel/workflows/${name}.json (schemaVersion: 1)`;
+      const filePath = DiskWorkflowStorage.getInstance().getWorkflowFilePath(name);
+      const summary = `Workflow file written to disk: Saved ${saved.steps.length} step(s) to ${filePath} (schemaVersion: 1)`;
       this.emit({ type: 'done', message: summary });
       return {
         success: true,

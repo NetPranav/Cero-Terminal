@@ -15,6 +15,52 @@
       </array>
     </dict>
   </array>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Sentinel Flow</string>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSHandlerRank</key>
+      <string>Owner</string>
+      <key>CFBundleTypeIconFile</key>
+      <string>flow</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>flow</string>
+      </array>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>com.sentinel.flow</string>
+      </array>
+    </dict>
+  </array>
+  <key>UTExportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>com.sentinel.flow</string>
+      <key>UTTypeDescription</key>
+      <string>Sentinel Terminal workflow</string>
+      <key>UTTypeConformsTo</key>
+      <array>
+        <string>public.json</string>
+        <string>public.data</string>
+      </array>
+      <key>UTTypeIconFile</key>
+      <string>flow</string>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array>
+          <string>flow</string>
+        </array>
+        <key>public.mime-type</key>
+        <string>application/x-sentinel-workflow</string>
+      </dict>
+    </dict>
+  </array>
   <key>NSBluetoothAlwaysUsageDescription</key>
   <string>Sentinel Terminal requires Bluetooth access to turn on/off and connect to your Bluetooth devices on your behalf.</string>
   <key>NSDesktopFolderUsageDescription</key>

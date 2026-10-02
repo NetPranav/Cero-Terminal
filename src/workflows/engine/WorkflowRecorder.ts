@@ -3,7 +3,7 @@
  *
  * Captures executed session steps, commands, working directories, dynamic parameters,
  * and environment prerequisites, saving them as a schema-versioned workflow definition
- * (`~/.sentinel/workflows/<name>.json`, schemaVersion: 1).
+ * (`~/.sentinel/workflows/<name>.flow`, schemaVersion: 1).
  */
 
 import {

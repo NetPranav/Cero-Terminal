@@ -47,9 +47,20 @@
     "shortDescription": "AI-native terminal for macOS, Linux and Windows",
     "longDescription": "High-performance AI-native Linux terminal emulator with embedded llama-server, multi-stage workflow macros, and native system diagnostics.",
     "copyright": "2026 Sentinel Terminal Contributors",
+    "resources": {
+      "icons/flow/flow.ico": "flow.ico"
+    },
     "macOS": {
       "minimumSystemVersion": "11.0",
-      "signingIdentity": "-"
+      "signingIdentity": "-",
+      "files": {
+        "Resources/flow.icns": "icons/flow/flow.icns"
+      }
+    },
+    "windows": {
+      "nsis": {
+        "installerHooks": "windows/installer-hooks.nsh"
+      }
     },
     "linux": {
       "deb": {
@@ -58,18 +69,40 @@
           "libappindicator3-1 | libayatana-appindicator3-1"
         ],
         "files": {
-          "/usr/share/mime/packages/sentinel-terminal.xml": "../packaging/linux/sentinel-terminal-mime.xml"
+          "/usr/share/mime/packages/sentinel-terminal.xml": "../packaging/linux/sentinel-terminal-mime.xml",
+          "/usr/share/icons/hicolor/16x16/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-16.png",
+          "/usr/share/icons/hicolor/24x24/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-24.png",
+          "/usr/share/icons/hicolor/32x32/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-32.png",
+          "/usr/share/icons/hicolor/48x48/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-48.png",
+          "/usr/share/icons/hicolor/64x64/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-64.png",
+          "/usr/share/icons/hicolor/128x128/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-128.png",
+          "/usr/share/icons/hicolor/256x256/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-256.png",
+          "/usr/share/icons/hicolor/512x512/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-512.png",
+          "/usr/share/icons/hicolor/scalable/mimetypes/application-x-sentinel-workflow.svg": "../assets/brand/flow-icon.svg"
         },
-        "desktopTemplate": "../packaging/linux/sentinel-terminal.desktop.hbs"
+        "desktopTemplate": "../packaging/linux/sentinel-terminal.desktop.hbs",
+        "postInstallScript": "../packaging/linux/postinst.sh",
+        "postRemoveScript": "../packaging/linux/postrm.sh"
       },
       "rpm": {
         "depends": [
           "webkit2gtk4.1"
         ],
         "files": {
-          "/usr/share/mime/packages/sentinel-terminal.xml": "../packaging/linux/sentinel-terminal-mime.xml"
+          "/usr/share/mime/packages/sentinel-terminal.xml": "../packaging/linux/sentinel-terminal-mime.xml",
+          "/usr/share/icons/hicolor/16x16/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-16.png",
+          "/usr/share/icons/hicolor/24x24/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-24.png",
+          "/usr/share/icons/hicolor/32x32/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-32.png",
+          "/usr/share/icons/hicolor/48x48/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-48.png",
+          "/usr/share/icons/hicolor/64x64/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-64.png",
+          "/usr/share/icons/hicolor/128x128/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-128.png",
+          "/usr/share/icons/hicolor/256x256/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-256.png",
+          "/usr/share/icons/hicolor/512x512/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-512.png",
+          "/usr/share/icons/hicolor/scalable/mimetypes/application-x-sentinel-workflow.svg": "../assets/brand/flow-icon.svg"
         },
-        "desktopTemplate": "../packaging/linux/sentinel-terminal.desktop.hbs"
+        "desktopTemplate": "../packaging/linux/sentinel-terminal.desktop.hbs",
+        "postInstallScript": "../packaging/linux/postinst.sh",
+        "postRemoveScript": "../packaging/linux/postrm.sh"
       },
       "appimage": {
         "bundleMediaFramework": false
@@ -80,7 +113,7 @@
         "ext": [
           "flow"
         ],
-        "name": "Sentinel Workflow",
+        "name": "Sentinel Flow",
         "description": "Sentinel Terminal workflow",
         "role": "Editor",
         "mimeType": "application/x-sentinel-workflow"
