@@ -55,6 +55,8 @@ import { createPortal } from 'react-dom';
 
 type AgentRunner = (context: { os: string; cwd: string; paneId?: string; signal?: AbortSignal }) => Promise<AgentResult>;
 import { readClipboardText, writeClipboardText, formatTerminalPastePayload } from '../utils/clipboard';
+import { copyWrongAnswerToClipboard } from '../ai/agent/WrongAnswerReporter';
+import { ModelManager } from '../ai/management/ModelManager';
 
 /** Goal text for an auto-heal request: the failing command and diagnosis, not just a title. */
 function autoHealGoal(rem: RemediationPrompt): string {
@@ -181,6 +183,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   const [isPlanOpen, setIsPlanOpen] = useState(true);
   const [planExecutionStatus, setPlanExecutionStatus] = useState<'running' | 'completed' | 'failed'>('running');
   const planExecutionStatusRef = useRef<'running' | 'completed' | 'failed'>('running');
+  const lastGoalRef = useRef<string>('');
+  const [reportCopied, setReportCopied] = useState(false);
   const [hudPlanEnabled, setHudPlanEnabled] = useState<boolean>(() => localStorage.getItem('sentinel_hud_plan_enabled') !== 'false');
   const [hudPlanDuration, setHudPlanDuration] = useState<string>(() => localStorage.getItem('sentinel_hud_plan_duration') || '8');
   const planDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -777,6 +781,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
         // Runs one AI request and streams its events into the terminal
         const runAiGoal = async (aiGoal: string, runner?: AgentRunner) => {
+          lastGoalRef.current = aiGoal;
           // Busy before the first await, so a second Enter is queued rather than run alongside
           aiBusyRef.current = true;
           const abortController = new AbortController();
@@ -1905,7 +1910,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               )}
 
               {/* Status and auto-dismiss hint */}
-              {planExecutionStatus !== 'running' && hudPlanDuration !== 'persistent' && (
+              {planExecutionStatus !== 'running' && (
                 <div style={{
                   marginTop: '10px',
                   paddingTop: '6px',
@@ -1916,8 +1921,39 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                   fontSize: '10px',
                   color: 'rgba(255, 255, 255, 0.4)'
                 }}>
-                  <span>Auto-dismiss in {hudPlanDuration}s</span>
-                  <span>Hover to pause</span>
+                  {hudPlanDuration !== 'persistent' ? <span>Auto-dismiss in {hudPlanDuration}s</span> : <span />}
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const activeModel = ModelManager.getInstance().getActiveModel();
+                      const copied = await copyWrongAnswerToClipboard(
+                        lastGoalRef.current || latestPlan?.summary || 'AI task',
+                        activeModel?.displayName || activeModel?.modelId || 'built-in',
+                        latestPlan?.steps || []
+                      );
+                      if (copied) {
+                        setReportCopied(true);
+                        setTimeout(() => setReportCopied(false), 2500);
+                      }
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: reportCopied ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+                      fontSize: '10px',
+                      cursor: 'pointer',
+                      padding: '2px 4px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'all 0.15s ease'
+                    }}
+                    title="Copy prompt and chosen action to clipboard in cases.json format"
+                  >
+                    {reportCopied ? <Check size={10} style={{ color: '#ffffff' }} /> : <AlertCircle size={10} />}
+                    <span>{reportCopied ? 'Report copied to clipboard' : 'Report a wrong answer'}</span>
+                  </button>
                 </div>
               )}
             </div>

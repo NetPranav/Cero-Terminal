@@ -51,6 +51,11 @@ import { UndoLog } from '../../domain/session/UndoLog';
 import { IntentRouter } from '../router/IntentRouter';
 import { IntentStep } from '../schemas/IntentSchema';
 import { PromptQueue, parseQueueCommand, type QueueCommand } from '../../presentation/PromptQueue';
+import { ActionGate } from './ActionGate';
+import { parseAppLaunch, type AppLaunchRequest } from '../../domain/app/AppLaunchParser';
+import { parseOpenFolder, type OpenFolderRequest } from '../../domain/system/FolderOpenParser';
+import { parseGitAction, type GitActionRequest } from '../../domain/git/GitActionParser';
+import { parseDirectoryAction, type DirectoryActionRequest } from '../../domain/system/DirectoryActionParser';
 
 export interface QueueIO {
   list: () => readonly { id: string; label: string; kind?: string }[];
@@ -112,6 +117,11 @@ export interface AgentRunMetrics {
   /** Number of model round-trips (0 for instant answers, learned patterns and replays) */
   modelCalls: number;
   modelMs: number;
+  actionGate?: {
+    accepted: number;
+    repaired: number;
+    asked: number;
+  };
 }
 
 import { CancelledError, throwIfAborted } from './Cancelled';
@@ -1355,12 +1365,14 @@ export class AgentLoop {
   private transcript: { goal: string; result: AgentResult; at: number }[] = [];
   private modelCalls = 0;
   private modelMs = 0;
+  private actionGateMetrics = { accepted: 0, repaired: 0, asked: 0 };
 
   public async run(goal: string, context: AgentRunContext): Promise<AgentResult> {
     const started = performance.now();
     if (this.runDepth === 0) {
       this.modelCalls = 0;
       this.modelMs = 0;
+      this.actionGateMetrics = { accepted: 0, repaired: 0, asked: 0 };
     }
     this.runDepth++;
     try {
@@ -1370,7 +1382,8 @@ export class AgentLoop {
         result.metrics = {
           totalMs: Math.round(performance.now() - started),
           modelCalls: this.modelCalls,
-          modelMs: Math.round(this.modelMs)
+          modelMs: Math.round(this.modelMs),
+          actionGate: { ...this.actionGateMetrics }
         };
         AgentLoop.recentMetrics.push({ ...result.metrics, goal: goal.slice(0, 80), at: Date.now() });
         if (AgentLoop.recentMetrics.length > 50) AgentLoop.recentMetrics.shift();
@@ -1875,6 +1888,31 @@ export class AgentLoop {
     if (recipe) {
       const handled = await this.runRecipe(recipe, context);
       if (handled) return handled;
+    }
+
+    // Task 3.5: Pure domain parsers before calling the model
+    // 1. Folder / project in editor ("open folder gitBrains in cursor", "open ~/Projects in vscode")
+    const folderReq = parseOpenFolder(cleaned || goal);
+    if (folderReq) {
+      return this.runOpenFolder(folderReq, context);
+    }
+
+    // 2. Git inspection actions ("git status", "what git branch am i on", "git log", "git diff")
+    const gitReq = parseGitAction(cleaned || goal);
+    if (gitReq) {
+      return this.runGitAction(gitReq, context);
+    }
+
+    // 3. Directory actions ("make a folder called demo", "list files in src", "cd into src")
+    const dirReq = parseDirectoryAction(cleaned || goal);
+    if (dirReq) {
+      return this.runDirectoryAction(dirReq, context);
+    }
+
+    // 4. Application launch actions ("open firefox", "launch spotify", "start google chrome")
+    const appLaunchReq = parseAppLaunch(cleaned || goal, context.os);
+    if (appLaunchReq) {
+      return this.runAppLaunch(appLaunchReq, context);
     }
 
     // Everything else goes to the model when one is available; the older fast-path table is
@@ -3191,6 +3229,133 @@ export class AgentLoop {
   }
 
   /**
+   * Deterministic route for opening folders in code editors (Task 3.5).
+   */
+  private async runOpenFolder(req: OpenFolderRequest, context: AgentRunContext): Promise<AgentResult> {
+    const isMac = !context.os || context.os.toLowerCase().includes('darwin') || context.os.toLowerCase().includes('mac');
+    const isWin = isWindowsName(context.os);
+    const editor = req.editor || 'code';
+    let cmd = '';
+
+    if (req.editor) {
+      if (isWin) {
+        cmd = `start ${editor} "${req.folder}"`;
+      } else {
+        cmd = `${editor} "${req.folder}" &`;
+      }
+    } else {
+      if (isMac) {
+        cmd = `open "${req.folder}"`;
+      } else if (isWin) {
+        cmd = `start "" "${req.folder}"`;
+      } else {
+        cmd = `xdg-open "${req.folder}" &`;
+      }
+    }
+
+    const explanation = req.editor
+      ? `Open folder "${req.folder}" in ${req.editor}`
+      : `Open folder "${req.folder}"`;
+
+    this.emit({ type: 'tool_start', message: explanation });
+    const auth = this.authorizationHandler || (async () => true);
+    const params = { command: cmd, explanation };
+    const result = context.signal
+      ? await this.toolExecutor.execute('shell.execute', params, context.cwd, auth, undefined, context.signal)
+      : await this.toolExecutor.execute('shell.execute', params, context.cwd, auth);
+
+    const steps = [{ tool: 'shell.execute', params, result }];
+    const isSuccess = Boolean(result?.success);
+    const summary = isSuccess ? `Opened ${req.folder}${req.editor ? ` in ${req.editor}` : ''}.` : `Could not open ${req.folder}: ${result?.error || 'Failed'}`;
+    this.emit({ type: isSuccess ? 'done' : 'error', message: summary });
+    return { success: isSuccess, summary, steps };
+  }
+
+  /**
+   * Deterministic route for Git inspection actions (Task 3.5).
+   */
+  private async runGitAction(req: GitActionRequest, context: AgentRunContext): Promise<AgentResult> {
+    const explanation = `Git ${req.action}`;
+    this.emit({ type: 'tool_start', message: explanation });
+    const auth = this.authorizationHandler || (async () => true);
+    const params = { command: req.command, explanation };
+    const result = context.signal
+      ? await this.toolExecutor.execute('shell.execute', params, context.cwd, auth, undefined, context.signal)
+      : await this.toolExecutor.execute('shell.execute', params, context.cwd, auth);
+
+    const steps = [{ tool: 'shell.execute', params, result }];
+    const stdout = typeof result?.data?.stdout === 'string' ? result.data.stdout.trim() : '';
+    const isSuccess = Boolean(result?.success);
+    const summary = isSuccess ? (stdout || `Git ${req.action} completed.`) : `Git command failed: ${result?.error || result?.data?.stderr || 'Error'}`;
+    this.emit({ type: isSuccess ? 'done' : 'error', message: summary, data: result?.data });
+    return { success: isSuccess, summary, steps };
+  }
+
+  /**
+   * Deterministic route for directory creation, listing, and navigation (Task 3.5).
+   */
+  private async runDirectoryAction(req: DirectoryActionRequest, context: AgentRunContext): Promise<AgentResult> {
+    const explanation = req.kind === 'mkdir'
+      ? `Create directory ${req.targetPath}`
+      : req.kind === 'list'
+        ? `List directory contents`
+        : `Navigate to ${req.targetPath}`;
+
+    this.emit({ type: 'tool_start', message: explanation });
+    const auth = this.authorizationHandler || (async () => true);
+    const params = { command: req.command, explanation };
+    const result = context.signal
+      ? await this.toolExecutor.execute('shell.execute', params, context.cwd, auth, undefined, context.signal)
+      : await this.toolExecutor.execute('shell.execute', params, context.cwd, auth);
+
+    const steps = [{ tool: 'shell.execute', params, result }];
+    const cdPath = req.kind === 'cd' && result?.success ? req.targetPath : undefined;
+    const stdout = typeof result?.data?.stdout === 'string' ? result.data.stdout.trim() : '';
+    const isSuccess = Boolean(result?.success);
+    const summary = isSuccess
+      ? (stdout || `${explanation} succeeded.`)
+      : `Directory operation failed: ${result?.error || result?.data?.stderr || 'Error'}`;
+
+    this.emit({ type: isSuccess ? 'done' : 'error', message: summary, data: result?.data });
+    return { success: isSuccess, summary, steps, cdPath };
+  }
+
+  /**
+   * Deterministic route for launching desktop applications (Task 3.5).
+   */
+  private async runAppLaunch(req: AppLaunchRequest, context: AgentRunContext): Promise<AgentResult> {
+    const isMac = !context.os || context.os.toLowerCase().includes('darwin') || context.os.toLowerCase().includes('mac');
+    const isWin = isWindowsName(context.os);
+    let cmd = '';
+
+    if (isMac) {
+      cmd = `open -a "${req.executable || req.app}" &`;
+    } else if (isWin) {
+      cmd = `start "" "${req.executable || req.app}"`;
+    } else {
+      cmd = `${req.executable || req.app} &`;
+    }
+
+    const explanation = `Launch ${req.app}`;
+    this.emit({ type: 'tool_start', message: explanation });
+    const auth = this.authorizationHandler || (async () => true);
+
+    const useAppOpen = this.toolExecutor.hasDriver('application.open');
+    const toolId = useAppOpen ? 'application.open' : 'shell.execute';
+    const params = useAppOpen ? { app: req.app } : { command: cmd, explanation };
+
+    const result = context.signal
+      ? await this.toolExecutor.execute(toolId, params, context.cwd, auth, undefined, context.signal)
+      : await this.toolExecutor.execute(toolId, params, context.cwd, auth);
+
+    const steps = [{ tool: toolId, params, result }];
+    const isSuccess = Boolean(result?.success);
+    const summary = isSuccess ? `Launched ${req.app}.` : `Could not launch ${req.app}: ${result?.error || 'Failed'}`;
+    this.emit({ type: isSuccess ? 'done' : 'error', message: summary });
+    return { success: isSuccess, summary, steps };
+  }
+
+  /**
    * "make me a workflow that ...": turn the listed steps into a .flow file, ask where to keep it
    * (Desktop, this folder, the Sentinel workflows folder, or a path), and save it without ever
    * replacing an existing file. Steps that are not understood are named, never guessed.
@@ -3845,18 +4010,114 @@ export class AgentLoop {
         }
 
         if (parsed.action === 'tool' && parsed.tool) {
-          const toolId = parsed.tool;
-          let params = parsed.params || {};
+          // Task 3.4: ActionGate validation, single repair, and fallback
+          const gateContext = { cwd: context.cwd, os: context.os, sessionId: context.sessionId };
+          const gate1 = await ActionGate.validate(parsed, gateContext, this.toolSpecs);
 
-          // Validate and type-coerce parameters against tool schema
-          const toolSpec = this.toolSpecs.find(t => t.id === toolId);
-          const validation = ToolParameterValidator.validateAndCoerce(toolSpec, params);
-          if (!validation.valid && validation.errors) {
+          if (!gate1.ok) {
+            // One repair attempt: prompt with "Your last answer was rejected: <reason>. <hint>. Answer again." at temperature 0
+            this.emit({
+              type: 'thinking',
+              message: `Action rejected by ActionGate (${gate1.reason}). Attempting single repair...`
+            });
             messages.push({ role: 'assistant', content: JSON.stringify(parsed) });
-            messages.push({ role: 'user', content: `Parameter error: ${validation.errors.join(', ')}. Please correct parameters.` });
-            continue;
+            const hintText = gate1.hint ? ` ${gate1.hint}` : '';
+            messages.push({
+              role: 'user',
+              content: `Your last answer was rejected: ${gate1.reason}.${hintText} Answer again.`
+            });
+
+            let repairSuccess = false;
+            try {
+              const decisionCall = buildDecisionCall(goal, context, messages);
+              const repairOptions = {
+                ...decisionCall.options,
+                mode: 'decision' as const,
+                temperature: 0,
+                top_k: 1,
+                top_p: 1,
+                seed: 42,
+                signal: context.signal
+              };
+              const repairResponse = await provider.generate(
+                decisionCall.messages[decisionCall.messages.length - 1]?.content || goal,
+                modelId,
+                repairOptions
+              );
+              this.modelCalls++;
+              this.modelMs += repairResponse.latencyMs ?? 0;
+
+              const repaired = this.parseLLMResponse(repairResponse.content);
+              if (repaired && (repaired.action === 'tool' || repaired.action === 'execute')) {
+                const gate2 = await ActionGate.validate(repaired, gateContext, this.toolSpecs);
+                if (gate2.ok) {
+                  this.actionGateMetrics.repaired++;
+                  parsed = (gate2.repairedAction || repaired) as LLMResponse;
+                  repairSuccess = true;
+                } else {
+                  this.actionGateMetrics.asked++;
+                  const choice = await askChoice({
+                    title: 'Action Rejected',
+                    lines: [
+                      'Sentinel rejected the proposed action:',
+                      gate2.reason || gate1.reason || 'Safety or validation check failed.',
+                      gate2.hint || gate1.hint || 'Please clarify what to run.'
+                    ],
+                    options: [
+                      { label: 'Cancel', detail: 'Do not execute anything' },
+                      { label: 'Enter command manually', detail: 'Type a custom command to run' }
+                    ],
+                    custom: { label: 'Or enter custom command', placeholder: 'e.g. ls -la' }
+                  });
+
+                  if (choice && 'custom' in choice && choice.custom.trim()) {
+                    parsed = {
+                      action: 'tool',
+                      tool: 'shell.execute',
+                      params: { command: choice.custom.trim(), explanation: 'User manual override' }
+                    };
+                    repairSuccess = true;
+                  } else {
+                    const summary = `Action rejected: ${gate2.reason || gate1.reason}. No action was executed.`;
+                    this.emit({ type: 'error', message: summary });
+                    return { success: false, summary, steps, cdPath, declined: true };
+                  }
+                }
+              } else if (repaired && repaired.action === 'done') {
+                this.actionGateMetrics.repaired++;
+                parsed = repaired;
+                repairSuccess = true;
+              }
+            } catch (err) {
+              if (context.signal?.aborted) throw err;
+            }
+
+            if (!repairSuccess) {
+              this.actionGateMetrics.asked++;
+              const summary = `Action rejected: ${gate1.reason}. No safe action was found.`;
+              this.emit({ type: 'error', message: summary });
+              return { success: false, summary, steps, cdPath };
+            }
+          } else {
+            this.actionGateMetrics.accepted++;
+            if (gate1.repairedAction) {
+              parsed = gate1.repairedAction as LLMResponse;
+            }
           }
-          params = validation.coercedParams;
+
+          if (!parsed) {
+            const summary = 'No executable action parsed from model response';
+            this.emit({ type: 'error', message: summary });
+            return { success: false, summary, steps, cdPath };
+          }
+
+          if (parsed.action === 'done') {
+            this.emit({ type: 'done', message: parsed.summary || 'Done.' });
+            return { success: true, summary: parsed.summary || 'Done.', steps, cdPath };
+          }
+
+          const toolId = parsed.tool!;
+          let params = parsed.params || {};
 
           // Strip unnecessary sudo from diagnostic inspection commands before policy/execution
           if (toolId === 'shell.execute' && params && typeof params.command === 'string') {

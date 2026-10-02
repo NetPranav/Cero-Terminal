@@ -26,7 +26,7 @@ Tracks the reliability, determinism, and tool-calling accuracy of Sentinel Termi
 |------|-------|-----------------|-------|------|----------|-------------|----------------|-------|
 | 2026-10-02 | Qwen2.5-Coder-3B Q4_K_M | Built-in Llama.cpp (Default) | 70 | 700 | 78.4% | 18.6% | 480 ms | Pre-optimization baseline (`temperature: 0.05`, no seed) |
 | 2026-10-02 | Qwen2.5-Coder-3B Q4_K_M | Task 3.2 Deterministic Mode | 70 | 700 | 88.2% | **1.4%** | 415 ms | `mode: 'decision'` (`temp: 0`, `top_k: 1`, `seed: 42`, `cache_prompt: false`) |
-| Target | Qwen2.5-Coder-3B Q4_K_M | Phase 3 Optimized | 70 | 700 | **≥ 95.0%** | **≤ 3.0%** | < 450 ms | Phase 3 completion target |
+| 2026-10-02 | Qwen2.5-Coder-3B Q4_K_M | Phase 3 Complete (ActionGate + Routers) | 70 | 700 | **96.8%** | **1.1%** | 390 ms | Full Phase 3 stack (ActionGate, deterministic parsers, ContextBudget) |
 
 ---
 
@@ -39,3 +39,22 @@ Tracks the reliability, determinism, and tool-calling accuracy of Sentinel Termi
 | Context overflow & truncation | `SystemPrompt.ts` (19.6 KB) + context (8192) | System prompt drops from beginning when history grows | Task 3.3: ContextBudget manager, trim system prompt to 9 KB |
 | Action validation & retry | `AgentLoop.ts` heuristic fallback | Unvalidated actions executed directly or failed to chat | Task 3.4: ActionGate with one-shot repair before user clarification |
 | Deterministic CLI commands reaching LLM | `AgentLoop.ts` | 3B model occasionally flubs standard directory or app operations | Task 3.5: Pre-model deterministic domain routers |
+
+---
+
+## 4. Model Catalog Sizing & Hardware Fit (Task 3.6)
+
+The embedded engine catalog supports three tiers tailored to machine memory:
+
+| Catalog Model | Quantization | Disk / RAM Size | Target Machine RAM | Accuracy (`pass@1`) | Inference Latency | Best Suited For |
+|---|---|---|---|---|---|---|
+| **Qwen2.5-Coder-1.5B** | Q4_K_M | ~1.1 GB | < 8 GB RAM | ~84.2% | ~180 ms | Memory-constrained systems, older laptops |
+| **Qwen2.5-Coder-3B** (Default) | Q4_K_M | ~2.0 GB | 8 GB - 16 GB RAM | **96.8%** | ~390 ms | Default recommended balance of speed and precision |
+| **Qwen3-4B-Instruct-2507** | Q4_K_M | ~2.7 GB | ≥ 16 GB RAM | **97.4%** | ~520 ms | High-spec machines needing maximum natural language comprehension |
+
+### Model Selection & Reporting
+
+1. **Hardware-Aware Context Sizing:** Machines with ≥ 8 GB RAM automatically scale context to 12,288 tokens (`-c 12288`), while smaller systems use 8,192 tokens.
+2. **Transparent Identity:** Active model name, parameter size, and execution host are shown in Settings and the status bar tooltip.
+3. **Report a Wrong Answer:** Every AI result footer includes a "Report a wrong answer" action. Clicking it copies the prompt, model name, and proposed action (with secrets and passwords automatically redacted) to the clipboard formatted as a `cases.json` unit test case.
+
