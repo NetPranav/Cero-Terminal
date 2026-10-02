@@ -20,7 +20,9 @@
 
 import { parseSystemAction, commandFor, suggestionsFor, TOPIC_NAMES, type SystemAction, type SystemCommand } from '../../domain/system/SystemControl';
 import { parseQuitRequest, listRunningCommand, parseRunning, matchRunning, quitCommand, type QuitRequest, type RunningItem } from '../../domain/system/AppControl';
-import { parseFlowCreateRequest, draftFlow, serializeFlow, describeDraft, draftNeedsTerminal, type FlowCreateRequest } from '../../workflows/flow/FlowAuthoring';
+import { parseFlowCreateRequest, draftFlow, serializeFlow, describeDraft, draftNeedsTerminal, type FlowCreateRequest, type FlowDraft } from '../../workflows/flow/FlowAuthoring';
+import { parseSaveIntent, suggestWorkflowName, cleanName, type SaveIntent } from '../../workflows/engine/SaveIntent';
+import { actionsFromSteps, draftFromActions } from '../../workflows/flow/FlowFromSteps';
 import { appFlowIO, flowFolders, freeFlowPath, resolveCustomTarget, type FlowIO } from '../../workflows/flow/FlowStore';
 import { askChoice } from '../../presentation/ChoiceRequests';
 import { parsePortRequest, listListenersCommand, parseListeners, stopCommand, describeListeners, type PortRequest } from '../../domain/system/PortControl';
@@ -101,7 +103,7 @@ export type AgentAuthorizationHandler = (plan: ExecutionPreviewPlan) => Promise<
 export interface AgentResult {
   success: boolean;
   summary: string;
-  steps: { tool: string; params: any; result: ToolExecutionResult }[];
+  steps: { tool: string; params: any; result: ToolExecutionResult; flowAction?: any }[];
   cdPath?: string; // If any step navigated to a directory, capture it
   awaitingInput?: boolean;
   /** The user declined a command in the confirmation dialog */
@@ -1403,65 +1405,13 @@ export class AgentLoop {
   private async runRequest(goal: string, context: AgentRunContext): Promise<AgentResult> {
     goal = normalizeGoalText(goal);
 
-    // Simultaneous Task Execution + Named Workflow Save Pattern
-    // Syntax: "> <task to perform> :: save as workflow <name>" or ":: save workflow <name>"
+    // "<task> and save this as a workflow [called x]": run the task, then save what really happened
     const decomposer = MultistagePromptDecomposer.getInstance();
-    const saveDirective = decomposer.extractSaveAsDirective(goal);
-    if (saveDirective.isSaveAsWorkflow && saveDirective.workflowName) {
-      const taskGoal = saveDirective.taskPrompt;
-      const workflowName = saveDirective.workflowName;
-
-      this.emit({
-        type: 'thinking',
-        message: `Executing task and automatically saving workflow "${workflowName}"...`
-      });
-
-      // Run the inner task
-      const result = await this.run(taskGoal, context);
-
-      // Only save if execution was successful
-      if (result.success) {
-        const recorder = WorkflowRecorder.getInstance();
-        let savedWf: SavedWorkflowDefinition | null = null;
-
-        // Extract shell steps directly executed during this run
-        const shellSteps = (result.steps || [])
-          .filter(s => s.tool === 'shell.execute' && s.params?.command)
-          .map(s => ({
-            command: s.params.command as string,
-            name: (s.params.explanation as string) || (s.params.command as string).slice(0, 40),
-            cwd: context.cwd,
-            output: typeof s.result?.data === 'string' 
-              ? s.result.data 
-              : (s.result?.data?.stdout || s.result?.error || ''),
-            exitCode: s.result?.data?.code ?? (s.result?.success ? 0 : 1)
-          }));
-
-        if (shellSteps.length > 0) {
-          savedWf = await recorder.saveFromCommands(workflowName, shellSteps, {
-            description: `Auto-recorded workflow for task: ${taskGoal}`
-          });
-        } else if (decomposer.isMultistagePrompt(taskGoal)) {
-          const decomp = decomposer.decompose(taskGoal, { cwd: context.cwd, os: context.os });
-          decomp.name = workflowName;
-          savedWf = decomposer.toSavedWorkflow(decomp);
-          await DiskWorkflowStorage.getInstance().saveWorkflow(savedWf);
-        } else {
-          // Fallback to recent UndoLog entry for this task
-          savedWf = await recorder.saveFromUndoLog(workflowName, context.sessionId || 'default', 1, {
-            description: `Auto-recorded workflow for task: ${taskGoal}`
-          });
-        }
-
-        if (savedWf) {
-          const filePath = DiskWorkflowStorage.getInstance().getWorkflowFilePath(workflowName);
-          const saveNotice = `Workflow "${workflowName}" saved (${savedWf.steps.length} step(s) written to ${filePath}, schemaVersion: 1)`;
-          result.summary = `${result.summary}\n\n✓ ${saveNotice}`;
-          this.emit({ type: 'done', message: saveNotice });
-        }
-      }
-
-      return result;
+    const earlySave = decomposer.parseScopedWorkflowSave(goal);
+    if (earlySave) return await this.runRetrospectiveSave(earlySave, context);
+    const saveIntent = parseSaveIntent(goal);
+    if (saveIntent.save && saveIntent.task) {
+      return await this.runTaskAndSave(saveIntent, context);
     }
 
     // Decision explanation and transcript export (deterministic, zero AI inference)
@@ -1483,21 +1433,7 @@ export class AgentLoop {
     // Generic Workflow Save Directive (Deterministic, zero AI inference)
     const saveRequest = MultistagePromptDecomposer.getInstance().parseScopedWorkflowSave(goal);
     if (saveRequest) {
-      const { workflowName: name, maxSteps } = saveRequest;
-      const recorder = WorkflowRecorder.getInstance();
-      const saved = await recorder.saveFromUndoLog(name, context.sessionId || 'default', maxSteps);
-      const filePath = DiskWorkflowStorage.getInstance().getWorkflowFilePath(name);
-      const summary = `Workflow file written to disk: Saved ${saved.steps.length} step(s) to ${filePath} (schemaVersion: 1)`;
-      this.emit({ type: 'done', message: summary });
-      return {
-        success: true,
-        summary,
-        steps: [{
-          tool: 'workflow.save',
-          params: { name, maxSteps },
-          result: { success: true, data: saved }
-        }]
-      };
+      return await this.runRetrospectiveSave(saveRequest, context);
     }
 
     // Generic Workflow Run Directive (Deterministic, zero AI inference)
@@ -2031,21 +1967,7 @@ export class AgentLoop {
     // Generic Workflow Save / Run Fast-Path (Phase 1)
     const saveRequest = MultistagePromptDecomposer.getInstance().parseScopedWorkflowSave(goal);
     if (saveRequest) {
-      const { workflowName: name, maxSteps } = saveRequest;
-      const recorder = WorkflowRecorder.getInstance();
-      const saved = await recorder.saveFromUndoLog(name, context.sessionId || 'default', maxSteps);
-      const filePath = DiskWorkflowStorage.getInstance().getWorkflowFilePath(name);
-      const summary = `Workflow file written to disk: Saved ${saved.steps.length} step(s) to ${filePath} (schemaVersion: 1)`;
-      this.emit({ type: 'done', message: summary });
-      return {
-        success: true,
-        summary,
-        steps: [{
-          tool: 'workflow.save',
-          params: { name, maxSteps },
-          result: { success: true, data: saved }
-        }]
-      };
+      return await this.runRetrospectiveSave(saveRequest, context);
     }
 
     const runMatch = goal.match(/^run\s+workflow\s+([a-zA-Z0-9_\-]+)(?:\s+(.+))?$/i);
@@ -3343,11 +3265,112 @@ export class AgentLoop {
       ? await this.toolExecutor.execute(toolId, params, context.cwd, auth, undefined, context.signal)
       : await this.toolExecutor.execute(toolId, params, context.cwd, auth);
 
-    const steps = [{ tool: toolId, params, result }];
+    const steps = [{ tool: toolId, params, result, flowAction: { type: 'app', app: req.app } }];
     const isSuccess = Boolean(result?.success);
     const summary = isSuccess ? `Launched ${req.app}.` : `Could not launch ${req.app}: ${result?.error || 'Failed'}`;
     this.emit({ type: isSuccess ? 'done' : 'error', message: summary });
     return { success: isSuccess, summary, steps };
+  }
+
+  /**
+   * "<task> and save this as a workflow": run the task first, then write a .flow from the steps that
+   * really ran. A requested save always ends with one plain line saying what happened.
+   */
+  private async runTaskAndSave(intent: SaveIntent, context: AgentRunContext): Promise<AgentResult> {
+    const name = intent.name || suggestWorkflowName(intent.task);
+    this.emit({ type: 'thinking', message: `Will save as a workflow when done: "${name}"` });
+    const result = await this.run(intent.task, context);
+    const report = (line: string, extra: Partial<AgentResult> = {}): AgentResult => {
+      const summary = `${result.summary}\n\n${line}`.trim();
+      this.emit({ type: line.startsWith('Saved') ? 'done' : 'thinking', message: line });
+      return { ...result, summary, ...extra };
+    };
+
+    if (result.cancelled) return report('Not saved: the task was stopped.');
+    const { actions, failed } = actionsFromSteps(result.steps || [], context.cwd);
+
+    let offerPartial = false;
+    if (!result.success) {
+      if (actions.length === 0 || result.declined) return report('Not saved: the task failed, so there was nothing reliable to save.');
+      offerPartial = true;
+    }
+    if (actions.length === 0) {
+      const decomposer = MultistagePromptDecomposer.getInstance();
+      if (result.success && failed === 0 && decomposer.isMultistagePrompt(intent.task)) {
+        const decomp = decomposer.decompose(intent.task, { cwd: context.cwd, os: context.os });
+        decomp.name = name;
+        const wf = decomposer.toSavedWorkflow(decomp);
+        await DiskWorkflowStorage.getInstance().saveWorkflow(wf);
+        const filePath = DiskWorkflowStorage.getInstance().getWorkflowFilePath(name);
+        return report(`Saved workflow "${name}" (${wf.steps.length} steps) to ${filePath}`);
+      }
+      if (result.success) {
+        const fromLog = await WorkflowRecorder.getInstance().saveFromUndoLog(name, context.sessionId || 'default', 1, {
+          description: `Auto-recorded workflow for task: ${intent.task}`,
+        });
+        if (fromLog.steps.length > 0) {
+          const filePath = DiskWorkflowStorage.getInstance().getWorkflowFilePath(name);
+          return report(`Saved workflow "${name}" (${fromLog.steps.length} step${fromLog.steps.length > 1 ? 's' : ''}) to ${filePath}`);
+        }
+      }
+      return report('Not saved: nothing in this task can be repeated (it answered a question or ran no commands).');
+    }
+    if (offerPartial) {
+      const ask = await askChoice({
+        title: `The task failed. Save the ${actions.length} step${actions.length > 1 ? 's' : ''} that worked?`,
+        lines: describeDraft(draftFromActions(name, actions)),
+        options: [{ label: 'Yes, save them', detail: 'The steps that worked' }, { label: 'No', detail: 'Do not save' }],
+      });
+      if (!ask || !('index' in ask) || ask.index !== 0) return report('Not saved: the task failed, so there was nothing reliable to save.');
+    }
+
+    let finalName = name;
+    if (!intent.name) {
+      const pick = await askChoice({
+        title: 'Name this workflow',
+        lines: [`Steps: ${actions.length}`],
+        options: [{ label: name, detail: 'Suggested name' }],
+        custom: { label: 'Another name', placeholder: 'A short name' },
+      });
+      if (pick === null) return report('Not saved: you chose not to.');
+      if (pick && 'custom' in pick && pick.custom.trim()) finalName = cleanName(pick.custom) || name;
+    }
+
+    const draft = draftFromActions(finalName, actions);
+    const saved = await this.saveDraftWithDialog(draft, context, describeDraft(draft), `Save "${finalName}" as a .flow file`, intent.place, true);
+    switch (saved.status) {
+      case 'saved':
+        result.steps.push({ tool: '__flow__', params: { path: saved.path }, result: { success: true } as ToolExecutionResult });
+        return report(`Saved workflow "${finalName}" (${actions.length} step${actions.length > 1 ? 's' : ''}) to ${saved.path}\nRun it any time: say "run the workflow ${finalName}" or double-click the file.`);
+      case 'cancelled':
+        return report('Not saved: you chose not to.');
+      case 'error':
+        return report(`Not saved: could not write the file: ${saved.message}`);
+      case 'no-folders':
+        return report(`Not saved: could not find your folders: ${saved.message}`);
+      default:
+        return report('Not saved: there is no screen to ask where to save it. Run this from the Sentinel app.');
+    }
+  }
+
+  /** "save this as a workflow [called x]" with nothing to run: save the last steps that worked */
+  private async runRetrospectiveSave(req: { workflowName: string; maxSteps: number }, context: AgentRunContext): Promise<AgentResult> {
+    const name = req.workflowName || `workflow-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`;
+    const recorder = WorkflowRecorder.getInstance();
+    const saved = await recorder.saveFromUndoLog(name, context.sessionId || 'default', req.maxSteps);
+    if (!saved.steps.length) {
+      const summary = 'Not saved: there are no earlier steps in this session to save yet. Run something first, or add the task: "open gmail and save this as a workflow".';
+      this.emit({ type: 'error', message: summary });
+      return { success: false, summary, steps: [] };
+    }
+    const filePath = DiskWorkflowStorage.getInstance().getWorkflowFilePath(name);
+    const summary = `Saved workflow "${name}" (${saved.steps.length} step${saved.steps.length > 1 ? 's' : ''}) to ${filePath}`;
+    this.emit({ type: 'done', message: summary });
+    return {
+      success: true,
+      summary,
+      steps: [{ tool: 'workflow.save', params: { name, maxSteps: req.maxSteps }, result: { success: true, data: saved } }],
+    };
   }
 
   /**
@@ -3366,44 +3389,85 @@ export class AgentLoop {
       return finish(false, `I could not turn any of those steps into a workflow.${draft.unrecognised.length ? ` Not understood: ${draft.unrecognised.map(u => `"${u}"`).join(', ')}.` : ''} Try steps like: install node, open youtube in chrome, run npm install.`);
     }
 
-    let folders;
-    try {
-      folders = await flowFolders();
-    } catch (e: any) {
-      return finish(false, `Could not find your folders: ${e?.message || e}`);
-    }
     const lines = describeDraft(draft);
     if (draft.unrecognised.length) lines.push('', `Left out (not understood): ${draft.unrecognised.join('; ')}`);
     lines.push('', draftNeedsTerminal(draft) ? 'Opening the file installs or runs things, so it opens the terminal and asks first.' : 'Opening the file only opens apps and pages, so the terminal never appears.');
     this.emit({ type: 'thinking', message: `Workflow "${draft.name}": ${draft.actions.length} steps` });
-    const choice = await askChoice({
-      title: `Save "${draft.name}" as a .flow file`,
-      lines,
-      options: [
-        { label: 'Desktop', detail: folders.desktop },
-        { label: 'This folder', detail: context.cwd },
-        { label: 'Sentinel workflows', detail: `${folders.workflows} (listed in the Workflow Manager)` },
-      ],
-      custom: { label: 'Somewhere else', placeholder: 'A folder or a path ending in .flow' },
-    });
-    if (choice === undefined) {
-      return finish(false, `The workflow "${draft.name}" is ready (${draft.actions.length} steps) but there is no screen to ask where to save it. Run this from the Sentinel app.`);
+    const saved = await this.saveDraftWithDialog(draft, context, lines);
+    switch (saved.status) {
+      case 'no-folders':
+        return finish(false, `Could not find your folders: ${saved.message}`);
+      case 'no-screen':
+        return finish(false, `The workflow "${draft.name}" is ready (${draft.actions.length} steps) but there is no screen to ask where to save it. Run this from the Sentinel app.`);
+      case 'cancelled':
+        return finish(false, 'Not saved: you cancelled.', { declined: true });
+      case 'error':
+        return finish(false, `Could not save the file: ${saved.message}${saved.macBlock ? '. macOS asks before an app may use the Desktop or Documents folder: allow Sentinel Terminal in System Settings, Privacy & Security, Files and Folders.' : ''}`);
+      default: {
+        steps.push({ tool: '__flow__', params: { path: saved.path }, result: { success: true } as ToolExecutionResult });
+        const left = draft.unrecognised.length ? ` ${draft.unrecognised.length} step${draft.unrecognised.length > 1 ? 's were' : ' was'} left out.` : '';
+        return finish(true, `Saved ${saved.shown} (${draft.actions.length} steps).${left} Double-click it to run it, or say "run the workflow in ${saved.path.split(/[\\/]/).pop()}".`);
+      }
     }
-    if (choice === null) return finish(false, 'Not saved: you cancelled.', { declined: true });
+  }
 
+  /**
+   * Ask where to keep a flow (Desktop, this folder, the Sentinel workflows folder, or a path) and
+   * write it without ever replacing an existing file. One place for every "save as .flow" route.
+   */
+  private async saveDraftWithDialog(
+    draft: FlowDraft,
+    context: AgentRunContext,
+    lines: string[],
+    title = `Save "${draft.name}" as a .flow file`,
+    place?: 'desktop' | 'here',
+    storeWhenNoScreen = false,
+  ): Promise<
+    | { status: 'saved'; path: string; shown: string }
+    | { status: 'no-folders' | 'no-screen' | 'cancelled'; message: string }
+    | { status: 'error'; message: string; macBlock: boolean }
+  > {
+    let folders;
+    try {
+      folders = await flowFolders();
+    } catch (e: any) {
+      return { status: 'no-folders', message: String(e?.message || e) };
+    }
+    const asked = place
+      ? { index: place === 'desktop' ? 0 : 1 }
+      : await askChoice({
+        title,
+        lines,
+        options: [
+          { label: 'Desktop', detail: folders.desktop },
+          { label: 'This folder', detail: context.cwd },
+          { label: 'Sentinel workflows', detail: `${folders.workflows} (listed in the Workflow Manager)` },
+        ],
+        custom: { label: 'Somewhere else', placeholder: 'A folder or a path ending in .flow' },
+      });
+    // No screen to ask on (headless, scripts): the Sentinel workflows folder is the safe default
+    if (asked === undefined && storeWhenNoScreen) {
+      try {
+        const stored = await DiskWorkflowStorage.getInstance().saveFlowText(draft.name, serializeFlow(draft));
+        return { status: 'saved', path: stored, shown: stored };
+      } catch (e: any) {
+        return { status: 'error', message: String(e?.message || e), macBlock: false };
+      }
+    }
+    const choice = asked;
+    if (choice === undefined) return { status: 'no-screen', message: '' };
+    if (choice === null) return { status: 'cancelled', message: '' };
     try {
       const target = 'custom' in choice
         ? await resolveCustomTarget(choice.custom, draft.name, folders, context.cwd, this.flowIO)
         : await freeFlowPath([folders.desktop, context.cwd, folders.workflows][choice.index] ?? folders.workflows, draft.name, this.flowIO);
       await this.flowIO.write(target, serializeFlow(draft));
       const shown = target.startsWith(folders.home) ? `~${target.slice(folders.home.length)}` : target;
-      steps.push({ tool: '__flow__', params: { path: target }, result: { success: true } as ToolExecutionResult });
-      const left = draft.unrecognised.length ? ` ${draft.unrecognised.length} step${draft.unrecognised.length > 1 ? 's were' : ' was'} left out.` : '';
-      return finish(true, `Saved ${shown} (${draft.actions.length} steps).${left} Double-click it to run it, or say "run the workflow in ${target.split(/[\\/]/).pop()}".`);
+      return { status: 'saved', path: target, shown };
     } catch (e: any) {
       const why = String(e?.message || e);
       const macBlock = /operation not permitted|permission denied|os error 1\b/i.test(why) && /^mac|darwin/i.test(context.os);
-      return finish(false, `Could not save the file: ${why}${macBlock ? '. macOS asks before an app may use the Desktop or Documents folder: allow Sentinel Terminal in System Settings, Privacy & Security, Files and Folders.' : ''}`);
+      return { status: 'error', message: why, macBlock };
     }
   }
 

@@ -328,6 +328,21 @@ export class DiskWorkflowStorage {
   }
 
   /**
+   * Write an already-built .flow document into the workflows folder under a free name
+   * (name.flow, name-2.flow, ...), never replacing an existing file. Returns the path.
+   */
+  public async saveFlowText(name: string, content: string): Promise<string> {
+    await this.ensureDirExists();
+    const base = this.slugOf(name);
+    let filePath = path.join(this.getWorkflowsDir(), `${base}.flow`);
+    for (let n = 2; n < 500 && (await this.fileExists(filePath)); n++) {
+      filePath = path.join(this.getWorkflowsDir(), `${base}-${n}.flow`);
+    }
+    await this.writeFileText(filePath, content);
+    return filePath;
+  }
+
+  /**
    * Load a workflow definition from disk by name.
    * Checks for <slug>.flow first, then legacy <slug>.json.
    * Parses either format into a full SavedWorkflowDefinition.

@@ -397,10 +397,10 @@ All eight tasks specified in `docs/roadmap.md` under Phase 4 (Tasks 4.1 through 
 |---|---|---|---|---|
 | **4.1** | One writer that always makes `.flow`, lossless roundtrip, legacy `.json` migration, cleanup fake fast paths | `src/workflows/flow/FlowExport.ts`<br>`src/workflows/storage/FlowImport.ts`<br>`src/workflows/storage/DiskWorkflowStorage.ts`<br>`src/ai/agent/AgentLoop.ts`<br>`src/ui/components/WorkflowManagerDrawer.tsx` | `src/workflows/flow/FlowExport.test.ts` (2 tests)<br>`src/workflows/storage/FlowImport.test.ts` (6 tests)<br>`src/workflows/storage/DiskWorkflowStorage.test.ts` (11 tests)<br>`src/ai/agent/AgentLoopWorkflow.test.ts` (7 tests) | **100% COMPLETE** |
 | **4.2** | Grayscale vector marks (`flow-icon.svg`, `flow-icon-small.svg`), PNG rasterization 16..1024, `flow.ico`, `flow.icns`, Linux scalable SVG, contact sheet | `assets/brand/flow-icon.svg`<br>`assets/brand/flow-icon-small.svg`<br>`scripts/icons/pack-ico.mjs`<br>`scripts/icons/make-flow-icons.mjs`<br>`src-tauri/icons/flow/*`<br>`docs/brand/flow-icon-preview.png` | Contact sheet verified, 16..1024 PNGs, ICO, ICNS generated | **100% COMPLETE** |
-| **4.3** | macOS association & icon: UTI `com.sentinel.flow`, document icon `flow.icns`, `Info.plist` declarations, rank Owner | `src-tauri/tauri.conf.json`<br>`src-tauri/Info.plist` | Verified via `cargo check` and LaunchServices configuration | **100% COMPLETE** |
-| **4.4** | Windows association & icon: `installer-hooks.nsh` NSIS macros for `Sentinel.Flow` and `DefaultIcon`, icon resource | `src-tauri/windows/installer-hooks.nsh`<br>`src-tauri/tauri.conf.json` | Tested argument handling and NSIS hook registry specifications | **100% COMPLETE** |
-| **4.5** | Linux association & packages: `sentinel-terminal-mime.xml` (text/plain sub-class), icon mappings, `postinst.sh`, `postrm.sh`, PKGBUILD, Flatpak | `packaging/linux/sentinel-terminal-mime.xml`<br>`packaging/linux/sentinel-terminal.desktop.hbs`<br>`packaging/linux/postinst.sh`<br>`packaging/linux/postrm.sh`<br>`packaging/arch/PKGBUILD`<br>`packaging/flatpak/org.sentinel.terminal.yml`<br>`packaging/flatpak/org.sentinel.terminal.desktop`<br>`packaging/flatpak/org.sentinel.terminal.metainfo.xml` | Package manifest validations, cache update hooks | **100% COMPLETE** |
-| **4.6** | Linux AppImage self-registration: `file_association.rs`, desktop & MIME files in `~/.local/share/`, ask once prompt, Settings toggle | `src-tauri/src/file_association.rs`<br>`src-tauri/src/lib.rs`<br>`src/ui/components/FileAssociationPrompt.tsx`<br>`src/ui/components/AiSettingsPage.tsx`<br>`src/App.tsx` | `src-tauri/src/file_association.rs` (3 Rust unit tests passing) | **100% COMPLETE** |
+| **4.3** | macOS association & icon: UTI `com.sentinel.flow`, document icon `flow.icns`, `Info.plist` declarations, rank Owner | `src-tauri/tauri.conf.json`<br>`src-tauri/Info.plist` | Verified via `cargo check` and LaunchServices configuration | **IMPLEMENTED - NOT YET VERIFIED ON macOS Finder** |
+| **4.4** | Windows association & icon: `installer-hooks.nsh` NSIS macros for `Sentinel.Flow` and `DefaultIcon`, icon resource | `src-tauri/windows/installer-hooks.nsh`<br>`src-tauri/tauri.conf.json` | Tested argument handling and NSIS hook registry specifications | **IMPLEMENTED - NOT YET VERIFIED ON WINDOWS** |
+| **4.5** | Linux association & packages: `sentinel-terminal-mime.xml` (text/plain sub-class), icon mappings, `postinst.sh`, `postrm.sh`, PKGBUILD, Flatpak | `packaging/linux/sentinel-terminal-mime.xml`<br>`packaging/linux/sentinel-terminal.desktop.hbs`<br>`packaging/linux/postinst.sh`<br>`packaging/linux/postrm.sh`<br>`packaging/arch/PKGBUILD`<br>`packaging/flatpak/org.sentinel.terminal.yml`<br>`packaging/flatpak/org.sentinel.terminal.desktop`<br>`packaging/flatpak/org.sentinel.terminal.metainfo.xml` | Package manifest validations, cache update hooks | **IMPLEMENTED - NOT YET VERIFIED ON LINUX** |
+| **4.6** | Linux AppImage self-registration: `file_association.rs`, desktop & MIME files in `~/.local/share/`, ask once prompt, Settings toggle | `src-tauri/src/file_association.rs`<br>`src-tauri/src/lib.rs`<br>`src/ui/components/FileAssociationPrompt.tsx`<br>`src/ui/components/AiSettingsPage.tsx`<br>`src/App.tsx` | `src-tauri/src/file_association.rs` (3 Rust unit tests passing) | **IMPLEMENTED - NOT YET VERIFIED ON LINUX** |
 | **4.7** | Single-instance handling: `tauri-plugin-single-instance` in `lib.rs`, `filter_flow_argv`, sequential flow queueing when busy | `src-tauri/src/lib.rs`<br>`src-tauri/src/launch.rs`<br>`src/presentation/PromptQueue.ts`<br>`src/presentation/TerminalView.tsx` | `src-tauri/src/launch.rs` (2 Rust unit tests passing)<br>`src/presentation/PromptQueue.test.ts` (10 tests passing) | **100% COMPLETE** |
 | **4.8** | Documentation updates: `docs/FLOW_FILES.md` and `docs/completed_roadmap.md` | `docs/FLOW_FILES.md`<br>`docs/completed_roadmap.md` | Documentation verified | **100% COMPLETE** |
 
@@ -420,25 +420,25 @@ All eight tasks specified in `docs/roadmap.md` under Phase 4 (Tasks 4.1 through 
 - Created pure Node scripts [`scripts/icons/pack-ico.mjs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/icons/pack-ico.mjs) and [`scripts/icons/make-flow-icons.mjs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/icons/make-flow-icons.mjs) rendering crisp, anti-aliased PNGs across all resolutions (16, 24, 32, 48, 64, 96, 128, 256, 512, 1024), packing Windows `flow.ico`, generating macOS `flow.icns`, copying `application-x-sentinel-workflow.svg`, and producing [`docs/brand/flow-icon-preview.png`](file:///Users/pranav/Project%20Folder/AI%20Terminal/docs/brand/flow-icon-preview.png).
 
 ### Task 4.3 — macOS association and icon
-**Status:** COMPLETE (Fully Verified)
+**Status:** IMPLEMENTED (config and code checked; not yet run on a built macOS app - see Phase 8)
 - Configured `bundle.fileAssociations` in [`src-tauri/tauri.conf.json`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/tauri.conf.json) for `ext: ["flow"]`, `name: "Sentinel Flow"`, `role: "Editor"`, `mimeType: "application/x-sentinel-workflow"`.
 - Added `"Resources/flow.icns": "icons/flow/flow.icns"` to `bundle.macOS.files`.
 - Configured [`src-tauri/Info.plist`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/Info.plist) declaring `UTExportedTypeDeclarations` for `com.sentinel.flow` (`UTTypeIconFile = flow`) and `CFBundleDocumentTypes` (`CFBundleTypeIconFile = flow`, `LSHandlerRank = Owner`).
 
 ### Task 4.4 — Windows association and icon
-**Status:** COMPLETE (Fully Verified)
+**Status:** IMPLEMENTED (config and code checked; not yet run on Windows - see Phase 8)
 - Created [`src-tauri/windows/installer-hooks.nsh`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/windows/installer-hooks.nsh) implementing `NSIS_HOOK_POSTINSTALL` and `NSIS_HOOK_PREUNINSTALL` writing `Software\Classes\.flow`, `Content Type`, `Sentinel.Flow`, `DefaultIcon "$INSTDIR\flow.ico,0"`, and shell open command with `SHChangeNotify`.
 - Pointed `bundle.windows.nsis.installerHooks` to `windows/installer-hooks.nsh` and mapped `resources: { "icons/flow/flow.ico": "flow.ico" }` in `tauri.conf.json`.
 
 ### Task 4.5 — Linux association and icon
-**Status:** COMPLETE (Fully Verified)
+**Status:** IMPLEMENTED (config and code checked; not yet run on Linux - see Phase 8)
 - Updated [`packaging/linux/sentinel-terminal-mime.xml`](file:///Users/pranav/Project%20Folder/AI%20Terminal/packaging/linux/sentinel-terminal-mime.xml) with `application/x-sentinel-workflow`, icon `application-x-sentinel-workflow`, `sub-class-of text/plain`, and `*.flow` glob with weight 80.
 - Created [`packaging/linux/postinst.sh`](file:///Users/pranav/Project%20Folder/AI%20Terminal/packaging/linux/postinst.sh) and [`packaging/linux/postrm.sh`](file:///Users/pranav/Project%20Folder/AI%20Terminal/packaging/linux/postrm.sh) refreshing MIME, desktop, and icon caches with failure tolerance (`|| true`).
 - Mapped all PNG icon sizes (16..512) and scalable SVG into `bundle.linux.deb.files` and `bundle.linux.rpm.files` in `tauri.conf.json`.
 - Updated `packaging/arch/PKGBUILD` and Flatpak manifest (`packaging/flatpak/org.sentinel.terminal.yml`, desktop file, and metainfo).
 
 ### Task 4.6 — Linux AppImage self-registration
-**Status:** COMPLETE (Fully Verified)
+**Status:** IMPLEMENTED (config and code checked; not yet run on Linux - see Phase 8)
 - Implemented [`src-tauri/src/file_association.rs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/src/file_association.rs) embedding MIME XML, desktop file template, and icons.
 - `ensure_registered` activates when `APPIMAGE` is present and no system copy exists: writes user files into `~/.local/share/` and refreshes user caches.
 - Dynamic repair: updates desktop file `Exec` command if the AppImage path changes.
@@ -457,6 +457,19 @@ All eight tasks specified in `docs/roadmap.md` under Phase 4 (Tasks 4.1 through 
 **Status:** COMPLETE (Fully Verified)
 - Updated [`docs/FLOW_FILES.md`](file:///Users/pranav/Project%20Folder/AI%20Terminal/docs/FLOW_FILES.md) with comprehensive "Sentinel only writes `.flow`" and "Opening flows" sections detailing macOS, Windows, Linux, AppImage self-registration, cache reset commands, and single-instance queueing.
 - Verified `README.md` contains no legacy `.json` workflow references.
+
+---
+
+## Phase 5: "save this as a workflow" from inside a prompt
+
+| Task | What changed | Files | Tests |
+|---|---|---|---|
+| **5.1** | `parseSaveIntent` understands the save clause at the start, middle or end, with or without a name, quoted names, `on the desktop`, the old `::` form, and refuses questions and talk about workflows. `extractSaveAsDirective` and `parseScopedWorkflowSave` are thin wrappers over it. It yields to the "make me a workflow..." route. | `src/workflows/engine/SaveIntent.ts`, `MultistagePromptDecomposer.ts` | `SaveIntent.test.ts` (44 rows incl. 14 negatives) |
+| **5.2** | After the task runs, `actionsFromSteps` turns the steps that really ran into portable `.flow` actions (app, command), skipping failed, declined and internal steps. App launches record `{type:'app'}`. One shared `saveDraftWithDialog` serves both this and "make me a workflow". Every request ends with `Saved workflow ... to <path>` or `Not saved: <reason>`; a half-failed task offers to keep the steps that worked; no name asks for one; with no screen to ask on it saves to `~/.sentinel/workflows`. The old behaviour wrote an empty workflow without telling anyone; that is fixed. | `src/ai/agent/AgentLoop.ts`, `src/workflows/flow/FlowFromSteps.ts`, `DiskWorkflowStorage.saveFlowText` | `AgentLoopSaveWorkflow.test.ts` (9), existing workflow tests updated to the new wording |
+| **5.3** | The step line says `Will save as a workflow when done`; the result shows the path and `run the workflow <name>`; `docs/FLOW_FILES.md` documents the phrasings. | `AgentLoop.ts`, `docs/FLOW_FILES.md` | covered above |
+
+Decisions: read-only commands (`ls`, `git status`, ...) are left out of a longer recipe but kept when they are all the
+user did. Folder-open steps are recorded once Phase 6 lands (the mapper already accepts a `flowAction`).
 
 ---
 

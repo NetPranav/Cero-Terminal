@@ -337,10 +337,10 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
   // =========================================================================
   describe('Archetype 10: Workflow Creation Directives', () => {
     it('executes task and saves simultaneously: "<task> :: save as workflow <name>"', async () => {
-      const prompt = 'date :: save as workflow get-time-wf';
+      const prompt = 'run echo hello :: save as workflow get-time-wf';
       const res = await agent.run(prompt, { os: 'linux', cwd: '/home/test' });
       expect(res.success).toBe(true);
-      expect(res.summary).toContain('Workflow "get-time-wf" saved');
+      expect(res.summary).toContain('Saved workflow \"get-time-wf\"');
 
       const storage = DiskWorkflowStorage.getInstance();
       const loaded = await storage.loadWorkflow('get-time-wf');
@@ -352,7 +352,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
       const prompt = 'first clean build, then build backend with cargo :: save as workflow cargo-build';
       const res = await agent.run(prompt, { os: 'linux', cwd: '/home/test' });
       expect(res.success).toBe(true);
-      expect(res.summary).toContain('Workflow "cargo-build" saved');
+      expect(res.summary).toContain('Saved workflow \"cargo-build\"');
 
       const storage = DiskWorkflowStorage.getInstance();
       const loaded = await storage.loadWorkflow('cargo-build');
@@ -375,7 +375,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
       });
 
       expect(res.success).toBe(true);
-      expect(res.summary).toContain('Saved 2 step(s)');
+      expect(res.summary).toContain('(2 steps)');
 
       const storage = DiskWorkflowStorage.getInstance();
       const loaded = await storage.loadWorkflow('my-scoped-pipeline');

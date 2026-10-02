@@ -30,6 +30,25 @@ clone, download, make a folder and go into it, or `run <command>` (or a develope
 Anything else is named and left out, never guessed. Then choose where to save: Desktop, this folder,
 `~/.sentinel/workflows`, or a path. An existing file is never replaced (`name-2.flow`).
 
+### Save what you just did
+
+Add the save words anywhere in a request and Sentinel runs the task first, then writes a `.flow` from the
+steps that really ran:
+
+```text
+>open spotify and save this as a workflow
+>open spotify and save it as a workflow called my music on the desktop
+>install node, save this as a workflow called node setup, then open vs code
+>save this as a workflow called nightly
+>save the last 3 steps as a workflow called deploy
+```
+
+Every request to save ends with one plain line: `Saved workflow "name" (N steps) to <path>`, or
+`Not saved: <reason>` (the task failed, you cancelled, nothing in it can be repeated, or there is nothing earlier to
+save). Failed steps and your own questions are never saved. If the task fails half way, Sentinel asks whether to keep
+the steps that worked. Without a name it suggests one and lets you type another. Run it later with
+`run the workflow <name>`, or double-click the file.
+
 ## Format
 
 ```json
