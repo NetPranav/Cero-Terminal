@@ -3,6 +3,8 @@ import { Composition, Folder } from "remotion";
 import { SentinelLaunch } from "./compositions/SentinelLaunch";
 import { SentinelLaunchVertical } from "./compositions/SentinelLaunchVertical";
 import { SentinelLaunchShort } from "./compositions/SentinelLaunchShort";
+import { SentinelLaunch30sPremium } from "./compositions/SentinelLaunch30sPremium";
+import { SentinelLaunch30sPremiumVertical } from "./compositions/SentinelLaunch30sPremiumVertical";
 import { SCENES } from "./data/scenes";
 
 // Scenes for connected composition preview in Studio
@@ -22,8 +24,28 @@ import { Scene12Final } from "./scenes/Scene12Final";
 export const RemotionRoot: React.FC = () => {
   return (
     <>
-      {/* Primary Masters */}
-      <Folder name="Masters">
+      {/* 30-Second Premium Masters */}
+      <Folder name="30s-Premium">
+        <Composition
+          id="SentinelLaunch30sPremium"
+          component={SentinelLaunch30sPremium}
+          durationInFrames={900}
+          fps={30}
+          width={1920}
+          height={1080}
+        />
+        <Composition
+          id="SentinelLaunch30sPremiumVertical"
+          component={SentinelLaunch30sPremiumVertical}
+          durationInFrames={900}
+          fps={30}
+          width={1080}
+          height={1920}
+        />
+      </Folder>
+
+      {/* 75-Second Masters */}
+      <Folder name="75s-Masters">
         <Composition
           id="SentinelLaunchLandscape"
           component={SentinelLaunch}
