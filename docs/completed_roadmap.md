@@ -390,7 +390,7 @@ To test the built desktop application directly on macOS:
 
 | Check | Result |
 |---|---|
-| `npm test` | 249 test files, 2181 passed, 1 skipped (100% pass rate) |
+| `npm test` | 250 test files, 2184 passed, 1 skipped (100% pass rate) |
 | `npm run build` | exit 0 (tsc + vite, 0 errors) |
 | `cargo check --manifest-path src-tauri/Cargo.toml` | exit 0 (clean compilation) |
 
