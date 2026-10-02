@@ -486,6 +486,20 @@ Decisions that differ from the plan text: a match inside the place the person na
 
 ---
 
+## Phase 7: same prompt, same result on every provider
+
+| Task | What changed | Files | Tests |
+|---|---|---|---|
+| **7.1** | One place decides sampling: `samplingFor` / `resolveSampling` / `wireSampling`. The agent's decision call, the built-in engine, Ollama and the cloud API all read it; each provider only renames fields. Disagreeing defaults are gone (cloud `0.2` / `1024`, built-in `256`, Ollama `1024`). Anthropic now gets the same temperature. A test fails if a provider file sets its own sampling numbers. | `src/ai/provider/DecisionRequest.ts`, the three providers, `DecisionCall.ts` | `DecisionRequest.test.ts` (6) |
+| **7.2** | `npm run eval:model -- --provider embedded|ollama|cloud` (cloud reads `SENTINEL_EVAL_API_*` from the environment only, warns about cost and needs `--yes`); `--compare a.json b.json` prints the case table and the gap list. | `scripts/eval/reliability.mts`, `src/ai/eval/compareReports.ts` | `compareReports.test.ts` (3) |
+| **7.3** | One tolerant reply parser for every model: fenced blocks, prose around one object, think-tags (including an unclosed one), `tool`/`params`, `action`/`arguments`, native tool calls and whole chat replies, one repair for trailing commas, single quotes and a reply cut off by the token limit. An unusable reply is written to the local debug log only. | `src/ai/agent/ModelReply.ts`, `AgentLoop.parseLLMResponse` | `ModelReply.test.ts` (19) |
+| **7.4** | When the built-in model fails the action check twice and an API model or Ollama is available, it asks once per request: "Try it with <provider (model)>?", names that a cloud service receives the request, and never remembers "always". | `AgentLoop.offerExternalRetry` | `AgentLoopExternalRetry.test.ts` (3) |
+| **7.5** | (extra, not from the reports) API keys move to the OS keychain: macOS Keychain, Windows Credential Manager, a `0600` file `~/.sentinel/secrets.json` on Linux (the Secret Service needs system libraries a bare window manager may lack, and adding them could break the Linux build; a Secret Service backend is a possible later step). A key leaves browser storage only after the keychain was written and read back; a failing keychain loses nothing. Settings says where the key lives. | `src-tauri/src/secrets.rs`, `SecretStore.ts`, `CloudApiProvider.ts`, `App.tsx`, `AiSettingsPage.tsx` | 3 Rust tests, `CloudApiSecrets.test.ts` (6) |
+
+Not done on purpose: asking cloud APIs for a strict `json_schema` (it varies by service and a rejected schema would turn working requests into errors; JSON mode stays). The keychain path was only run through a fake keychain and the file backend; the real macOS and Windows keychains were not exercised here.
+
+---
+
 ## Verification Summary
 
 | Check | Result |

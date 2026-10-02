@@ -13,6 +13,7 @@
  * Fallback: If embedded model is unavailable, ModelManager falls back to OllamaProvider.
  */
 
+import { wireSampling, resolveSampling } from './DecisionRequest';
 import { ModelProvider, ModelMetadata, GenerateOptions, ProviderResponse } from './Provider';
 import { EmbeddedEngineManager } from '../models/EmbeddedEngineManager';
 import { CancelledError, throwIfAborted } from '../agent/Cancelled';
@@ -207,12 +208,8 @@ export class EmbeddedProvider implements ModelProvider {
     };
 
     // Task 3.2: Deterministic sampling for decisions (temp 0, top_k 1, top_p 1, seed 42, cache_prompt false)
-    const isChat = options?.mode === 'chat';
-    const temperature = options?.temperature ?? (isChat ? 0.4 : 0);
-    const top_k = options?.topK ?? (isChat ? 20 : 1);
-    const top_p = options?.topP ?? (isChat ? 0.9 : 1);
-    const seed = options?.seed ?? (isChat ? undefined : 42);
-    const cache_prompt = isChat;
+    const wire = wireSampling('embedded', options);
+    const sampled = resolveSampling(options);
 
     // Primary: OpenAI-compatible chat completions (best for instruct models)
     try {
@@ -222,17 +219,12 @@ export class EmbeddedProvider implements ModelProvider {
         signal: options?.signal,
         body: JSON.stringify({
           messages,
-          max_tokens: options?.maxTokens ?? 256,
-          temperature,
-          top_p,
-          top_k,
+          ...wire,
           stream: false,
           // Optimizations for speed
           // 1.0 = off. A repeat penalty corrupts JSON and shell syntax, which legitimately repeat
           // quotes, dashes and braces.
           repeat_penalty: 1.0,
-          cache_prompt,
-          ...(seed !== undefined ? { seed } : {}),
           ...(options?.logitBias ? { logit_bias: options.logitBias } : {}),
           ...(options?.grammar ? { grammar: options.grammar } : {})
         })
@@ -286,13 +278,13 @@ export class EmbeddedProvider implements ModelProvider {
           signal: options?.signal,
           body: JSON.stringify({
             prompt,
-            n_predict: options?.maxTokens ?? 256,
-            temperature,
-            top_p,
-            top_k,
+            n_predict: sampled.maxTokens,
+            temperature: sampled.temperature,
+            top_p: sampled.topP,
+            top_k: sampled.topK,
             stop: ['</s>', '<|im_end|>', '\n\n\n'],
-            cache_prompt,
-            ...(seed !== undefined ? { seed } : {}),
+            cache_prompt: options?.mode === 'chat',
+            ...(sampled.seed !== undefined ? { seed: sampled.seed } : {}),
             ...(options?.grammar ? { grammar: options.grammar } : {})
           })
         });

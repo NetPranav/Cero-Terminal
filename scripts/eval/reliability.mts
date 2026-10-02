@@ -10,6 +10,8 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDecisionCall } from '../../src/ai/agent/DecisionCall.js';
+import { wireSampling } from '../../src/ai/provider/DecisionRequest.js';
+import { formatComparison } from '../../src/ai/eval/compareReports.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -40,18 +42,24 @@ function parseArgs() {
   let url = 'http://127.0.0.1:8847';
   let runs = 10;
   let casesPath = resolve(__dirname, 'cases.json');
+  let provider: 'embedded' | 'ollama' | 'cloud' = 'embedded';
+  let yes = false;
+  let compare: [string, string] | null = null;
 
   for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--provider' && args[i + 1]) provider = args[++i] as typeof provider;
+    if (args[i] === '--yes') yes = true;
+    if (args[i] === '--compare' && args[i + 2]) compare = [resolve(process.cwd(), args[++i]), resolve(process.cwd(), args[++i])];
     if (args[i] === '--url' && args[i + 1]) url = args[++i];
     if (args[i] === '--runs' && args[i + 1]) runs = parseInt(args[++i], 10);
     if (args[i] === '--cases' && args[i + 1]) casesPath = resolve(process.cwd(), args[++i]);
   }
-  return { url, runs, casesPath };
+  return { url, runs, casesPath, provider, yes, compare };
 }
 
-async function checkEngineRunning(baseUrl: string): Promise<boolean> {
+async function checkEngineRunning(baseUrl: string, kind: string = 'embedded'): Promise<boolean> {
   try {
-    const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`${baseUrl}${kind === 'ollama' ? '/api/tags' : '/health'}`, { signal: AbortSignal.timeout(2000) });
     return res.ok || res.status === 200;
   } catch {
     return false;
@@ -113,62 +121,88 @@ function evaluateResult(raw: string, expectRule: TestCase['expect']): { pass: bo
   return { pass: true, answer };
 }
 
-async function queryEngine(baseUrl: string, prompt: string, options: any): Promise<string> {
-  // Use /v1/chat/completions (OpenAI format)
+interface ProviderConfig { kind: 'embedded' | 'ollama' | 'cloud'; url: string; apiUrl?: string; apiKey?: string; apiModel?: string }
+
+async function queryEngine(cfg: ProviderConfig, prompt: string, options: any): Promise<string> {
+  const sampling = wireSampling(cfg.kind, options);
+  if (cfg.kind === 'cloud' || cfg.kind === 'ollama') {
+    // OpenAI-compatible chat completions; the same sampling the app sends
+    const target = cfg.kind === 'cloud' ? cfg.apiUrl! : `${cfg.url}/v1/chat/completions`;
+    const res = await fetch(target, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {}) },
+      body: JSON.stringify({
+        model: cfg.kind === 'cloud' ? cfg.apiModel : 'default',
+        messages: options.messages,
+        stream: false,
+        response_format: { type: 'json_object' },
+        ...wireSampling('cloud', options),
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!res.ok) throw new Error(`${cfg.kind} returned HTTP ${res.status}`);
+    const data = await res.json() as any;
+    return data?.choices?.[0]?.message?.content || '';
+  }
+
+  // The built-in engine: chat completions with the grammar, then the raw completion endpoint
   try {
-    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+    const res = await fetch(`${cfg.url}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: options.messages,
-        temperature: options.temperature ?? 0,
-        max_tokens: options.maxTokens ?? 512,
-        stream: false,
-        grammar: options.grammar,
-        seed: options.seed ?? 42
-      }),
+      body: JSON.stringify({ messages: options.messages, stream: false, grammar: options.grammar, ...sampling }),
       signal: AbortSignal.timeout(30000)
     });
-
     if (res.ok) {
       const data = await res.json() as any;
       return data?.choices?.[0]?.message?.content || '';
     }
   } catch {}
 
-  // Fallback to /completion
-  const res = await fetch(`${baseUrl}/completion`, {
+  const res = await fetch(`${cfg.url}/completion`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt,
-      temperature: options.temperature ?? 0,
-      n_predict: options.maxTokens ?? 512,
-      grammar: options.grammar,
-      cache_prompt: false,
-      seed: options.seed ?? 42
-    }),
+    body: JSON.stringify({ prompt, n_predict: sampling.max_tokens, temperature: sampling.temperature, top_k: sampling.top_k, top_p: sampling.top_p, grammar: options.grammar, cache_prompt: false, seed: sampling.seed }),
     signal: AbortSignal.timeout(30000)
   });
-
-  if (!res.ok) {
-    throw new Error(`Engine returned HTTP ${res.status}`);
-  }
-
+  if (!res.ok) throw new Error(`Engine returned HTTP ${res.status}`);
   const data = await res.json() as any;
   return data?.content || '';
 }
 
 async function main() {
-  const { url, runs, casesPath } = parseArgs();
+  const { url, runs, casesPath, provider, yes, compare } = parseArgs();
 
-  const isRunning = await checkEngineRunning(url);
-  if (!isRunning) {
-    console.error('Start Sentinel first (the built-in engine must be running)');
-    process.exit(2);
+  if (compare) {
+    const [a, b] = compare.map(f => JSON.parse(readFileSync(f, 'utf-8')));
+    console.log(formatComparison({ model: a.model, results: a.results }, { model: b.model, results: b.results }));
+    return;
   }
 
-  const modelName = await getLoadedModel(url);
+  const cfg: ProviderConfig = { kind: provider, url };
+  let modelName: string;
+  if (provider === 'cloud') {
+    // Keys come from the environment only and are never written to the report
+    cfg.apiUrl = process.env.SENTINEL_EVAL_API_URL;
+    cfg.apiKey = process.env.SENTINEL_EVAL_API_KEY;
+    cfg.apiModel = process.env.SENTINEL_EVAL_API_MODEL;
+    if (!cfg.apiUrl || !cfg.apiKey || !cfg.apiModel) {
+      console.error('Set SENTINEL_EVAL_API_URL (the full chat completions URL), SENTINEL_EVAL_API_KEY and SENTINEL_EVAL_API_MODEL.');
+      process.exit(2);
+    }
+    if (!yes) {
+      console.error(`This sends every case to ${new URL(cfg.apiUrl).host} and may cost money. Add --yes to continue.`);
+      process.exit(2);
+    }
+    modelName = cfg.apiModel;
+  } else {
+    const isRunning = await checkEngineRunning(url, provider);
+    if (!isRunning) {
+      console.error(provider === 'ollama' ? 'Start Ollama first and pass --url http://127.0.0.1:11434' : 'Start Sentinel first (the built-in engine must be running)');
+      process.exit(2);
+    }
+    modelName = await getLoadedModel(url);
+  }
   console.log(`Sentinel Model Reliability Evaluation`);
   console.log(`Engine: ${url} | Model: ${modelName} | Runs per case: ${runs}`);
 
@@ -196,7 +230,7 @@ async function main() {
     for (let r = 0; r < runs; r++) {
       const startMs = performance.now();
       try {
-        const rawContent = await queryEngine(url, decision.fullPrompt, decision.options);
+        const rawContent = await queryEngine(cfg, decision.fullPrompt, decision.options);
         const elapsed = performance.now() - startMs;
         latencies.push(elapsed);
 
@@ -268,12 +302,13 @@ async function main() {
   const dateStr = now.toISOString().slice(0, 10);
   const outDir = resolve(__dirname, 'out');
   mkdirSync(outDir, { recursive: true });
-  const outFile = resolve(outDir, `${dateStr}-${modelName}.json`);
+  const outFile = resolve(outDir, `${dateStr}-${provider}-${modelName.replace(/[^\w.-]+/g, '_')}.json`);
 
   const reportData = {
     date: dateStr,
     timestamp: now.toISOString(),
     model: modelName,
+    provider,
     summary: {
       cases: cases.length,
       totalRuns: totalSingleRuns,

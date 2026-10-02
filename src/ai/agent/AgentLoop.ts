@@ -21,6 +21,8 @@
 import { parseSystemAction, commandFor, suggestionsFor, TOPIC_NAMES, type SystemAction, type SystemCommand } from '../../domain/system/SystemControl';
 import { parseQuitRequest, listRunningCommand, parseRunning, matchRunning, quitCommand, type QuitRequest, type RunningItem } from '../../domain/system/AppControl';
 import { parseFlowCreateRequest, draftFlow, serializeFlow, describeDraft, draftNeedsTerminal, type FlowCreateRequest, type FlowDraft } from '../../workflows/flow/FlowAuthoring';
+import { parseModelReply } from './ModelReply';
+import { DiagnosticLogger } from '../../infrastructure/logging/DiagnosticLogger';
 import { parseSaveIntent, suggestWorkflowName, cleanName, type SaveIntent } from '../../workflows/engine/SaveIntent';
 import { actionsFromSteps, draftFromActions } from '../../workflows/flow/FlowFromSteps';
 import { appFlowIO, flowFolders, freeFlowPath, resolveCustomTarget, type FlowIO } from '../../workflows/flow/FlowStore';
@@ -1331,6 +1333,8 @@ export class AgentLoop {
   private modelCalls = 0;
   private modelMs = 0;
   private actionGateMetrics = { accepted: 0, repaired: 0, asked: 0 };
+  /** The person said "yes, this time" for this request: later steps of the same request use it without asking again */
+  private externalConsent: string | null = null;
 
   public async run(goal: string, context: AgentRunContext): Promise<AgentResult> {
     const started = performance.now();
@@ -1338,6 +1342,7 @@ export class AgentLoop {
       this.modelCalls = 0;
       this.modelMs = 0;
       this.actionGateMetrics = { accepted: 0, repaired: 0, asked: 0 };
+      this.externalConsent = null;
     }
     this.runDepth++;
     try {
@@ -3127,6 +3132,60 @@ export class AgentLoop {
     return finish(false, 'Unknown queue command.');
   }
 
+  /**
+   * The built-in model failed the action check twice. If an API model or Ollama is set up, offer to try
+   * this one request there. Always asks; "always" is never remembered, and nothing is sent without a yes.
+   */
+  private async offerExternalRetry(
+    active: ModelProvider,
+    goal: string,
+    context: AgentRunContext,
+    messages: { role: string; content: string }[],
+    gateContext: { cwd: string; os: string; sessionId?: string },
+  ): Promise<LLMResponse | null> {
+    if (active.providerId !== 'embedded') return null;
+    let other: ModelProvider | undefined;
+    try {
+      for (const candidate of this.modelManager.getProviders?.() ?? []) {
+        if (candidate.providerId !== 'embedded' && (await candidate.isAvailable())) { other = candidate; break; }
+      }
+    } catch {
+      return null;
+    }
+    if (!other) return null;
+    const isCloud = other.providerId === 'cloud_api';
+    let modelId: string | undefined;
+    let label = other.providerName || other.providerId;
+    try {
+      const models = await other.listModels();
+      modelId = models[0]?.id;
+      if (modelId) label = `${label} (${modelId})`;
+    } catch { /* the provider picks its own default */ }
+    if (this.externalConsent !== other.providerId) {
+      const answer = await askChoice({
+        title: `The built-in model could not do this reliably. Try it with ${label}?`,
+        lines: isCloud ? ['Your request, and the recent conversation, are sent to that service.'] : undefined,
+        options: [{ label: 'Yes, this time', detail: 'Only for this request' }, { label: 'No', detail: 'Stay with the built-in model' }],
+      });
+      if (!answer || !('index' in answer) || answer.index !== 0) return null;
+      this.externalConsent = other.providerId;
+    }
+    try {
+      const call = buildDecisionCall(goal, context, messages);
+      const response = await other.generate(call.messages[call.messages.length - 1]?.content || goal, modelId, { ...call.options, signal: context.signal });
+      this.modelCalls++;
+      this.modelMs += response.latencyMs ?? 0;
+      const reply = this.parseLLMResponse(response.content, response.finishReason === 'length');
+      if (!reply) return null;
+      if (reply.action === 'done') return reply;
+      const gate = await ActionGate.validate(reply, gateContext, this.toolSpecs);
+      return gate.ok ? ((gate.repairedAction || reply) as LLMResponse) : null;
+    } catch (err) {
+      if (context.signal?.aborted) throw err;
+      return null;
+    }
+  }
+
   /** Real file access for finding folders; tests replace it */
   private pathProbe?: PathProbe;
   public setPathProbe(probe: PathProbe): void {
@@ -4042,7 +4101,7 @@ export class AgentLoop {
         const effectiveGoal = this.resolveEffectiveGoal(goal);
 
         // Parse LLM response
-        let parsed = this.parseLLMResponse(response.content);
+        let parsed = this.parseLLMResponse(response.content, response.finishReason === 'length');
         if (!parsed) {
           // Try heuristic fallback first
           const fallback = this.tryHeuristicFallback(effectiveGoal, context);
@@ -4063,6 +4122,8 @@ export class AgentLoop {
           }
 
           if (!parsed) {
+            // the raw reply goes to the local debug log only, never to the screen
+            void DiagnosticLogger.log('WARN', 'MODEL_REPLY', `Unusable model reply (${String(response.content || '').length} chars, finish=${response.finishReason ?? 'n/a'}): ${String(response.content || '').slice(0, 800)}`);
             this.emit({ type: 'error', message: 'Could not understand the instruction' });
             return {
               success: false,
@@ -4302,6 +4363,14 @@ export class AgentLoop {
                   parsed = (gate2.repairedAction || repaired) as LLMResponse;
                   repairSuccess = true;
                 } else {
+                  const external = await this.offerExternalRetry(provider, goal, context, messages, gateContext);
+                  if (external) {
+                    this.actionGateMetrics.repaired++;
+                    parsed = external;
+                    repairSuccess = true;
+                  }
+                }
+                if (!repairSuccess) {
                   this.actionGateMetrics.asked++;
                   const choice = await askChoice({
                     title: 'Action Rejected',
@@ -4339,6 +4408,14 @@ export class AgentLoop {
               if (context.signal?.aborted) throw err;
             }
 
+            if (!repairSuccess) {
+              const external = await this.offerExternalRetry(provider, goal, context, messages, gateContext);
+              if (external) {
+                this.actionGateMetrics.repaired++;
+                parsed = external;
+                repairSuccess = true;
+              }
+            }
             if (!repairSuccess) {
               this.actionGateMetrics.asked++;
               const summary = `Action rejected: ${gate1.reason}. No safe action was found.`;
@@ -5079,106 +5156,9 @@ User request: ${goal}`;
   /**
    * Parse LLM JSON response, handling malformed output, thinking tokens, and code blocks gracefully.
    */
-  private parseLLMResponse(content: string): LLMResponse | null {
-    if (!content) return null;
-    
-    // Strip thinking tags if generated by reasoning models
-    let clean = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-    // Strip markdown code fences
-    clean = clean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-
-    const normalizeParsed = (obj: any): LLMResponse | null => {
-      if (!obj || typeof obj !== 'object') return null;
-
-      // 1. Shell-native execution contract: {"action": "execute", "command": "...", "explanation": "..."}
-      if (obj.action === 'execute' || (!obj.action && obj.command)) {
-        return {
-          action: 'tool',
-          tool: 'shell.execute',
-          params: {
-            command: obj.command,
-            explanation: obj.explanation || (obj.params && obj.params.explanation) || `Executing: ${obj.command}`
-          }
-        };
-      }
-
-      // 2. Tool calls for shell.execute or with direct command property
-      if (obj.action === 'tool') {
-        if ((obj.tool === 'shell.execute' || !obj.tool) && (obj.command || (obj.params && obj.params.command))) {
-          const cmd = obj.command || obj.params.command;
-          const exp = obj.explanation || (obj.params && obj.params.explanation) || `Executing: ${cmd}`;
-          return {
-            action: 'tool',
-            tool: 'shell.execute',
-            params: { command: cmd, explanation: exp }
-          };
-        }
-        if (obj.tool && !obj.params && obj.command) {
-          obj.params = { command: obj.command, explanation: obj.explanation };
-        }
-      }
-
-      if (!obj.action) {
-        if (obj.tool) obj.action = 'tool';
-        else if (obj.summary || obj.response || obj.message || obj.result) obj.action = 'done';
-      }
-
-      if (obj.action === 'tool' || obj.action === 'done' || obj.action === 'error') {
-        return obj as LLMResponse;
-      }
-      return null;
-    };
-
-    // 1. Try direct parse
-    try {
-      const parsed = normalizeParsed(JSON.parse(clean));
-      if (parsed) return parsed;
-    } catch { /* fall through */ }
-
-    // 2. Fallback: Find the first complete JSON object using brace counting
-    const startIndex = clean.indexOf('{');
-    if (startIndex !== -1) {
-      let braceCount = 0;
-      let inString = false;
-      let escapeNext = false;
-      
-      for (let i = startIndex; i < clean.length; i++) {
-        const char = clean[i];
-        
-        if (escapeNext) {
-          escapeNext = false;
-          continue;
-        }
-        
-        if (char === '\\') {
-          escapeNext = true;
-          continue;
-        }
-        
-        if (char === '"') {
-          inString = !inString;
-          continue;
-        }
-        
-        if (!inString) {
-          if (char === '{') braceCount++;
-          else if (char === '}') braceCount--;
-          
-          if (braceCount === 0) {
-            const jsonStr = clean.substring(startIndex, i + 1);
-            try {
-              const parsed = normalizeParsed(JSON.parse(jsonStr));
-              if (parsed) return parsed;
-            } catch {
-              // Failed to parse extracted block
-            }
-            break;
-          }
-        }
-      }
-    }
-
-    return null;
+  private parseLLMResponse(content: string, finishedByLength = false): LLMResponse | null {
+    const parsed = parseModelReply(content, { finishedByLength });
+    return parsed.ok ? (parsed.value as LLMResponse) : null;
   }
 
   /**

@@ -4,6 +4,7 @@
  * Communicates cleanly with local Ollama runtime over HTTP REST endpoints.
  */
 
+import { wireSampling } from './DecisionRequest';
 import { ModelProvider, ModelMetadata, GenerateOptions, ProviderResponse } from './Provider';
 import { CancelledError, throwIfAborted } from '../agent/Cancelled';
 
@@ -111,15 +112,9 @@ export class OllamaProvider implements ModelProvider {
     // A JSON schema constrains decoding like a grammar does; plain 'json' only guarantees valid JSON.
     const format = options?.grammarJsonSchema
       ?? (options?.format === 'json' ? 'json' : options?.format);
-    const isDecision = options?.mode === 'decision';
-    const isChatMode = options?.mode === 'chat';
     const sampling: Record<string, any> = {
-      temperature: options?.temperature ?? (isDecision ? 0 : (isChatMode ? 0.4 : 0.1)),
-      top_p: options?.topP ?? (isDecision ? 1 : 0.9),
-      top_k: options?.topK ?? (isDecision ? 1 : 40),
-      num_predict: options?.maxTokens ?? 1024,
+      ...wireSampling('ollama', options),
       stop: options?.stopSequences,
-      ...(options?.seed !== undefined || isDecision ? { seed: options?.seed ?? 42 } : {})
     };
     // think:false keeps reasoning models (qwen3, deepseek-r1) from spending seconds to minutes
     // on hidden chain-of-thought per command; keep_alive avoids a model reload after 5 idle

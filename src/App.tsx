@@ -769,14 +769,19 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
 
   // Task 1.2: Restore saved AI provider & model choice on startup
   useEffect(() => {
-    try {
-      CloudApiProvider.getInstance().getActiveConfig();
-      ModelManager.getInstance().initialize().catch(err => {
-        console.warn('[Sentinel] ModelManager initialization error:', err);
-      });
-    } catch (err) {
-      console.warn('[Sentinel] AI Provider startup error:', err);
-    }
+    // API keys come from the keychain first, so the saved provider is ready when it is chosen
+    const start = async () => {
+      try {
+        await CloudApiProvider.getInstance().hydrateSecrets().catch(err => {
+          console.warn('[Sentinel] Keychain unavailable, keys stay in app storage:', err);
+        });
+        CloudApiProvider.getInstance().getActiveConfig();
+        await ModelManager.getInstance().initialize();
+      } catch (err) {
+        console.warn('[Sentinel] AI Provider startup error:', err);
+      }
+    };
+    void start();
   }, []);
 
   // Task 1.1: Return focus to the terminal when closing settings

@@ -15,6 +15,8 @@
  * - Streaming & non-streaming execution conforming to Sentinel's JSON contract
  */
 
+import { wireSampling, resolveSampling } from './DecisionRequest';
+import { getSecretBackend, storeSecretVerified } from './SecretStore';
 import { ModelProvider, ModelMetadata, GenerateOptions, ProviderResponse } from './Provider';
 import { CancelledError, throwIfAborted } from '../agent/Cancelled';
 
@@ -245,13 +247,74 @@ export class CloudApiProvider implements ModelProvider {
     const current = this.getSavedConfigs();
     current[config.serviceId] = config;
     this.inMemoryConfigs = current;
+    // until the keychain confirms the new key, keep it where it was safe before
+    this.keychainHeld.delete(config.serviceId);
+    this.persistConfigs();
+    // Move the key out of browser storage once the keychain really holds it
+    void this.moveKeyToKeychain(config.serviceId);
+  }
+
+  /** The configs as stored in the browser: keys that live in the keychain are left out */
+  private persistConfigs(): void {
     try {
       if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(CloudApiProvider.STORAGE_KEY, JSON.stringify(current));
+        const toStore: Record<string, CloudKeyConfig> = {};
+        for (const [id, cfg] of Object.entries(this.inMemoryConfigs)) {
+          toStore[id] = this.keychainHeld.has(id) ? { ...cfg, apiKey: '' } : cfg;
+        }
+        localStorage.setItem(CloudApiProvider.STORAGE_KEY, JSON.stringify(toStore));
       }
     } catch {
       // Non-fatal
     }
+  }
+
+  /** Services whose key is confirmed to be in the keychain (and so is not written to localStorage) */
+  private keychainHeld = new Set<string>();
+
+  private async moveKeyToKeychain(serviceId: string): Promise<boolean> {
+    const cfg = this.inMemoryConfigs[serviceId];
+    if (!cfg) return false;
+    if (!cfg.apiKey) {
+      // a key that was cleared must leave the keychain too
+      try { await getSecretBackend().delete(CloudApiProvider.SECRET_SERVICE, serviceId); } catch { /* nothing to remove */ }
+      this.keychainHeld.delete(serviceId);
+      this.persistConfigs();
+      return true;
+    }
+    if (!(await storeSecretVerified(CloudApiProvider.SECRET_SERVICE, serviceId, cfg.apiKey))) return false;
+    this.keychainHeld.add(serviceId);
+    this.persistConfigs();
+    return true;
+  }
+
+  private static readonly SECRET_SERVICE = 'sentinel.cloud_api';
+
+  /**
+   * Call once at startup, before the active provider is chosen. Fills keys in from the keychain and
+   * moves any key still sitting in browser storage there (write, read back, then remove the old copy).
+   * Where no keychain works, keys stay in browser storage exactly as before; nothing is lost.
+   */
+  public async hydrateSecrets(): Promise<{ migrated: number; failed: number }> {
+    const configs = this.getSavedConfigs() as Record<string, CloudKeyConfig>;
+    let migrated = 0;
+    let failed = 0;
+    for (const [id, cfg] of Object.entries(configs)) {
+      if (cfg.apiKey) {
+        if (await this.moveKeyToKeychain(id)) migrated++; else failed++;
+      } else {
+        try {
+          const stored = await getSecretBackend().get(CloudApiProvider.SECRET_SERVICE, id);
+          if (stored) {
+            this.inMemoryConfigs[id] = { ...cfg, apiKey: stored };
+            this.keychainHeld.add(id);
+          }
+        } catch {
+          // keychain unavailable: nothing to fill in
+        }
+      }
+    }
+    return { migrated, failed };
   }
 
   /**
@@ -469,7 +532,8 @@ export class CloudApiProvider implements ModelProvider {
 
         const body: any = {
           model,
-          max_tokens: options?.maxTokens || 1024,
+          max_tokens: resolveSampling(options).maxTokens,
+          temperature: resolveSampling(options).temperature,
           messages: nonSystemMessages
         };
         if (systemMsg) body.system = systemMsg;
@@ -508,20 +572,12 @@ export class CloudApiProvider implements ModelProvider {
 
       // Standard OpenAI-compatible execution
       const isReasoningModel = model.startsWith('o1') || model.startsWith('o3') || model.includes('reasoner');
-      const isDecision = options?.mode === 'decision';
-      const isChat = options?.mode === 'chat';
-      const temperature = options?.temperature ?? (isDecision ? 0 : (isChat ? 0.4 : 0.2));
+      const wire = wireSampling('cloud', options);
 
       const requestBody: any = {
         model,
         messages,
-        ...(isReasoningModel
-          ? { max_completion_tokens: options?.maxTokens || 1024 }
-          : {
-              temperature,
-              max_tokens: options?.maxTokens || 1024,
-              ...(options?.seed !== undefined || isDecision ? { seed: options?.seed ?? 42 } : {})
-            })
+        ...(isReasoningModel ? { max_completion_tokens: wire.max_tokens } : wire)
       };
       if (options?.format === 'json') {
         requestBody.response_format = { type: 'json_object' };

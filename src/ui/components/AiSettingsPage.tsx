@@ -1,3 +1,4 @@
+import { getSecretBackend } from '../../ai/provider/SecretStore';
 import React, { useEffect, useState } from 'react';
 import { 
   Cpu, 
@@ -128,6 +129,10 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
   const [testingConnection, setTestingConnection] = useState<boolean>(false);
   const [testResult, setTestResult] = useState<{ success: boolean; latencyMs?: number; error?: string } | null>(null);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [secretKind, setSecretKind] = useState<string>('');
+  useEffect(() => {
+    getSecretBackend().kind().then(setSecretKind).catch(() => setSecretKind(''));
+  }, []);
 
   // Desktop Integrations State
   const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus>({
@@ -921,6 +926,13 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                     </button>
                   </div>
                 </div>
+                {secretKind && (
+                  <span style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.4)' }}>
+                    {secretKind === 'keychain'
+                      ? 'Stored in your operating system keychain.'
+                      : 'No system keychain here: the key is kept in a private file (~/.sentinel/secrets.json) that only your account can read.'}
+                  </span>
+                )}
               </div>
             </div>
 

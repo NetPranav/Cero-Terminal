@@ -11,6 +11,7 @@ import { GbnfGrammarManager } from '../models/GbnfGrammarManager';
 import { TldrKnowledgeEngine } from '../../domain/knowledge/TldrKnowledgeEngine';
 import { GenerateOptions } from '../provider/Provider';
 import { AgentRunContext } from './AgentLoop';
+import { samplingFor } from '../provider/DecisionRequest';
 import { fitMessages, getContextTokens, RESERVED_FOR_REPLY } from './ContextBudget';
 
 export interface DecisionCallResult {
@@ -81,13 +82,13 @@ export function buildDecisionCall(
   const fullPrompt = formatConversationPrompt(systemPrompt, conversationForPrompt);
 
   const isChat = extra?.mode === 'chat';
-  const defaultMaxTokens = isChat ? 512 : (extra?.isPlanner ? 1024 : 400);
+  const sampling = samplingFor(isChat ? 'chat' : 'decision', { maxTokens: extra?.maxTokens, isPlanner: extra?.isPlanner });
   const options: GenerateOptions = {
-    temperature: isChat ? 0.4 : 0,
-    topK: isChat ? 20 : 1,
-    topP: isChat ? 0.9 : 1,
-    seed: isChat ? undefined : 42,
-    maxTokens: extra?.maxTokens ?? defaultMaxTokens,
+    temperature: sampling.temperature,
+    topK: sampling.topK,
+    topP: sampling.topP,
+    seed: sampling.seed,
+    maxTokens: sampling.maxTokens,
     format: 'json',
     messages: chatMessages,
     grammar: GbnfGrammarManager.getGrammar('SENTINEL_ACTION'),
