@@ -15,6 +15,8 @@ export interface OpenRequest {
   withApp?: string;
   /** The user said to create it if it is missing */
   create: boolean;
+  /** The user asked for a window of its own ("in a new window"); never set otherwise */
+  newWindow?: boolean;
 }
 
 /** Editors people open folders in, and the command line each one installs (lower case keys) */
@@ -60,11 +62,51 @@ function hintFromLater(sentences: string[]): string | undefined {
   return undefined;
 }
 
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, String.raw`\s+`);
+const EDITOR = `(?:${Object.keys(EDITORS).sort((a, b) => b.length - a.length).map(escapeRe).join('|')})`;
+
+/**
+ * Say the same thing in the shape the parser below understands: the place as a relative clause
+ * ("gitBrains which is located in /x"), the editor first ("in VS Code open ..."), a second sentence
+ * about the editor ("open vs code and open gitBrains in it"), other verbs, and a window of its own.
+ */
+function normalise(first: string): { text: string; newWindow: boolean } {
+  let t = first;
+  let newWindow = false;
+
+  const nw = new RegExp(String.raw`\s+(?:in|into)\s+(?:a\s+|an\s+)?(?:new|separate|another|fresh|different)\s+(?:(${EDITOR})\s+)?window(?:\s+(?:of|in)\s+(${EDITOR}))?\b`, 'i');
+  const nwMatch = t.match(nw);
+  if (nwMatch) {
+    newWindow = true;
+    const editor = nwMatch[1] || nwMatch[2];
+    t = t.replace(nw, editor ? ` in ${editor}` : '');
+  }
+
+  // "gitBrains which is located in /x", "gitBrains, it is in /x"  ->  "gitBrains inside /x"
+  t = t.replace(/\s*,?\s+(?:(?:which|that)\s+(?:is|are|sits?|lives?|stays?)|it(?:'s|\s+is)|that's)\s+(?:located\s+|stored\s+|saved\s+)?(?:in|inside|under|within|at)\s+/i, ' inside ');
+
+  t = t.replace(/^show\s+me\s+/i, 'show ');
+  const editFirst = t.match(new RegExp(String.raw`^(?:edit|work\s+on)\s+(.+?)\s+(?:in|with|using)\s+(${EDITOR})\s*$`, 'i'));
+  if (editFirst) return { text: `open ${editFirst[1]} in ${editFirst[2]}`, newWindow };
+
+  const inEditor = t.match(new RegExp(String.raw`^(?:in|with|using)\s+(${EDITOR})\s*,?\s+(?:please\s+)?(open|launch|start|load|show)\s+(.+)$`, 'i'));
+  if (inEditor) t = `${inEditor[2]} ${inEditor[3]} in ${inEditor[1]}`;
+
+  const thenOpen = t.match(new RegExp(String.raw`^(?:open|launch|start)\s+(${EDITOR})\s*(?:,\s*|\s+)(?:and\s+(?:then\s+)?|then\s+)(?:open|load)\s+(?:up\s+)?(.+)$`, 'i'));
+  if (thenOpen) t = `open ${thenOpen[2].replace(/\s+in\s+(?:it|there|that)\s*$/i, '')} in ${thenOpen[1]}`;
+
+  const withEditor = t.match(new RegExp(String.raw`^(?:open|launch|start)\s+(${EDITOR})\s+with\s+(.+)$`, 'i'));
+  if (withEditor) t = `open ${withEditor[2]} in ${withEditor[1]}`;
+
+  return { text: t, newWindow };
+}
+
 export function parseOpenRequest(goal: string): OpenRequest | null {
   const text = (goal || '').replace(/\s+/g, ' ').trim().replace(/^(?:(?:please|can you|could you|kindly|just|hey)\s+)+/i, '');
   const sentences = splitSentences(text);
   if (sentences.length === 0) return null;
-  let first = trimEnd(sentences[0]);
+  const normalised = normalise(trimEnd(sentences[0]));
+  const first = normalised.text;
   const later = sentences.slice(1);
 
   const verb = first.match(/^(?:open|launch|start|show|load|bring\s+up)\s+(.*)$/i);
@@ -133,5 +175,6 @@ export function parseOpenRequest(goal: string): OpenRequest | null {
   const out: OpenRequest = { kind, name, create };
   if (locationHint) out.locationHint = locationHint;
   if (withApp) out.withApp = withApp;
+  if (normalised.newWindow) out.newWindow = true;
   return out;
 }

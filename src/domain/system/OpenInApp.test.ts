@@ -46,3 +46,22 @@ describe('openCommand', () => {
     expect(osOf('linux')).toBe('linux');
   });
 });
+
+describe('openCommand: a window of its own only when asked', () => {
+  it('adds -n for VS Code on Linux and keeps the path quoted', () => {
+    const c = openCommand("/home/me/it's here", 'linux', 'vscode', { newWindow: true });
+    expect(c.command).toContain("setsid -f code -n '/home/me/it'\\''s here'");
+    expect(c.fallbacks.join('\n')).toContain("flatpak run com.visualstudio.code --new-window");
+  });
+  it('is unchanged without the option', () => {
+    expect(openCommand('/p', 'linux', 'vscode').command).toBe("command -v code >/dev/null 2>&1 && setsid -f code '/p' >/dev/null 2>&1");
+    expect(openCommand('/p', 'linux', 'vscode').command).not.toContain(' -n ');
+  });
+  it('uses the CLI flag on Windows; macOS keeps opening in the running app', () => {
+    expect(openCommand('C:\\p', 'windows', 'code', { newWindow: true }).command).toContain("-ArgumentList '-n','C:\\p'");
+    expect(openCommand('/p', 'macos', 'code', { newWindow: true }).command).toBe(openCommand('/p', 'macos', 'code').command);
+  });
+  it('ignores the option for editors without a new-window flag', () => {
+    expect(openCommand('/p', 'linux', 'pycharm', { newWindow: true }).command).not.toContain(' -n ');
+  });
+});

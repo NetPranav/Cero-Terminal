@@ -3512,7 +3512,7 @@ export class AgentLoop {
     }
 
     const os = osOf(context.os);
-    const open = openCommand(target, os, req.withApp);
+    const open = openCommand(target, os, req.withApp, { newWindow: req.newWindow });
     const auth = this.authorizationHandler || (async () => true);
     const attempts = [open.command, ...open.fallbacks];
     let result: ToolExecutionResult | undefined;
@@ -3723,7 +3723,9 @@ export class AgentLoop {
         if (res.type === 'found') picked = res.app;
         else if (res.type === 'choose') {
           const shownList = res.candidates.slice(0, 5);
-          const answer = res.reason === 'typo'
+          // One candidate is a confirmation, not a menu: "Which one?" with a single option reads wrong
+          const confirmOne = res.reason === 'typo' || shownList.length === 1;
+          const answer = confirmOne
             ? await askChoice({ title: `I could not find "${req.app}". Did you mean "${shownList[0].app.name}"?`, options: [{ label: 'Yes, open it' }, { label: 'No' }, { label: 'Cancel' }] })
             : await askChoice({
               title: `I found ${shownList.length} apps that could be "${req.app}". Which one?`,
@@ -3733,7 +3735,7 @@ export class AgentLoop {
             return finishApp(false, `"${req.app}" could mean ${shownList.map(c => c.app.name).join(', ')}. Say the exact name. Nothing was started.`, [], { awaitingInput: true });
           }
           if (!answer || !('index' in answer)) return finishApp(false, 'Nothing was started: you cancelled.', [], { declined: true });
-          if (res.reason === 'typo') {
+          if (confirmOne) {
             if (answer.index !== 0) return finishApp(false, 'Nothing was started: you did not confirm the match.', [], { declined: true });
             picked = shownList[0].app;
           } else {

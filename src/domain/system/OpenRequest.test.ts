@@ -46,3 +46,41 @@ describe('parseOpenRequest', () => {
     });
   }
 });
+
+describe('parseOpenRequest: other ways to say the same thing', () => {
+  const rows: Array<[string, Record<string, unknown>]> = [
+    // the place as a relative clause must not end up in the folder name
+    ['open the folder gitBrains which is located in /padhai_in_linux/Projects in vs code', { kind: 'folder', name: 'gitBrains', locationHint: '/padhai_in_linux/Projects', withApp: 'vs code' }],
+    ['open the folder gitBrains that is in ~/Projects in code', { kind: 'folder', name: 'gitBrains', locationHint: '~/Projects', withApp: 'code' }],
+    ['open the folder gitBrains, it is in /padhai_in_linux/Projects/ with vscode', { kind: 'folder', name: 'gitBrains', locationHint: '/padhai_in_linux/Projects/', withApp: 'vscode' }],
+    // the editor first
+    ['In VS Code open the gitBrains folder inside ~/padhai_in_linux/Projects', { kind: 'folder', name: 'gitBrains', locationHint: '~/padhai_in_linux/Projects', withApp: 'VS Code' }],
+    ['with vscode, open gitBrains from Projects', { kind: 'folder', name: 'gitBrains', locationHint: 'Projects', withApp: 'vscode' }],
+    ['launch vscode with the gitBrains folder, it is in /padhai_in_linux/Projects/', { kind: 'folder', name: 'gitBrains', locationHint: '/padhai_in_linux/Projects/', withApp: 'vscode' }],
+    ['open vs code and open the folder gitBrains in it', { kind: 'folder', name: 'gitBrains', withApp: 'vs code' }],
+    ['open vscode and then open gitBrains folder from Projects', { kind: 'folder', name: 'gitBrains', locationHint: 'Projects', withApp: 'vscode' }],
+    ['start code and open the gitBrains project', { kind: 'folder', name: 'gitBrains', withApp: 'code' }],
+    // other verbs
+    ['edit gitBrains project in vscode', { kind: 'folder', name: 'gitBrains', withApp: 'vscode' }],
+    ['show me the gitBrains folder', { kind: 'folder', name: 'gitBrains' }],
+    // a window of its own, only when asked
+    ['open gitBrains in a new vscode window', { kind: 'folder', name: 'gitBrains', withApp: 'vscode', newWindow: true }],
+    ['open the folder gitBrains in vs code in a separate window', { kind: 'folder', name: 'gitBrains', withApp: 'vs code', newWindow: true }],
+    ['open the folder gitBrains inside ~/Projects in a new window of code', { kind: 'folder', name: 'gitBrains', locationHint: '~/Projects', withApp: 'code', newWindow: true }],
+  ];
+  for (const [input, want] of rows) {
+    it(`reads: ${input}`, () => {
+      expect(parseOpenRequest(input)).toMatchObject(want);
+    });
+  }
+
+  it('does not ask for a new window unless the person did', () => {
+    expect(parseOpenRequest('open the folder gitBrains in vs code')?.newWindow).toBeUndefined();
+  });
+
+  it('still leaves unrelated requests alone', () => {
+    for (const input of ['edit this paragraph', 'edit the file in vim', 'open vscode', 'open code', 'start code', 'show me the weather', 'open a new window', 'launch vscode']) {
+      expect(parseOpenRequest(input), input).toBeNull();
+    }
+  });
+});
