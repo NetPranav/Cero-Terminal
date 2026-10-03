@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ConsentQueue } from '../domain/security/ConsentQueue';
 import { InputLineTracker } from './InputLineTracker';
-import { decideApprovalPresentation } from './approvalPresentation';
+import { APPROVAL_PRESENTATION } from './approvalPresentation';
 
 /**
  * Prompt A is running and asks for approval while the user is writing Prompt B.
@@ -19,10 +19,7 @@ describe('approval request from a running task while another prompt is being wri
       if (req && !shown.find(s => s.id === req.id)) {
         shown.push({
           id: req.id,
-          presentation: decideApprovalPresentation({
-            hasDraft: tracker.hasDraft(),
-            msSinceLastKeystroke: lastKeyAt ? Date.now() - lastKeyAt : Infinity,
-          }),
+          presentation: APPROVAL_PRESENTATION,
         });
       }
     });
@@ -54,9 +51,9 @@ describe('approval request from a running task while another prompt is being wri
     ConsentQueue.getInstance().deny(shown[0].id);
   });
 
-  it('user idle with nothing typed: the normal full dialog', () => {
+  it('user idle with nothing typed: the same card, never a different dialog', () => {
     const { shown } = arrive(new InputLineTracker(), 0);
-    expect(shown[0].presentation).toBe('modal');
+    expect(shown[0].presentation).toBe('dock');
     ConsentQueue.getInstance().deny(shown[0].id);
   });
 

@@ -54,8 +54,8 @@ import { TerminalWorkspace } from '../domain/terminal/TerminalWorkspace';
 import { claimTerminalRequests, releaseTerminalRequests, TerminalRequest } from './TerminalRequests';
 import { claimChoiceRequests, releaseChoiceRequests, type ChoiceRequest, type ChoiceResult } from './ChoiceRequests';
 import { ChoiceDialog } from '../ui/components/ChoiceDialog';
+import { reviveCursor } from './cursorVisibility';
 import { ApprovalDock } from '../ui/components/ApprovalDock';
-import { decideApprovalPresentation, decideModalKey } from './approvalPresentation';
 import { createPortal } from 'react-dom';
 
 type AgentRunner = (context: { os: string; cwd: string; paneId?: string; signal?: AbortSignal }) => Promise<AgentResult>;
@@ -138,6 +138,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       }
 
       await SessionManager.getInstance().write(activeSessionId, payload);
+      reviveCursor(term);
     } catch (err) {
       console.warn('[TerminalView] Clipboard paste error:', err);
     }
@@ -177,17 +178,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     plan: any;
     resolve: (approved: boolean) => void;
     requestId?: string;
-    /** Shown as a card that never takes keyboard focus (the user is writing a prompt) */
-    docked?: boolean;
   } | null>(null);
-  // Last key the user pressed here: an approval that arrives mid-typing must not take over the keyboard
-  const lastKeystrokeAtRef = useRef(0);
-  // When the dialog appeared and when the last stray keystroke hit it. A dialog that opens while
-  // the user is typing must not be approved by the Enter that finishes their command.
-  const consentShownAtRef = useRef(0);
-  const consentStrayKeyAtRef = useRef(0);
-  // The plan the timestamp belongs to: a dialog replaced by the next request starts unarmed
-  const consentPlanRef = useRef<unknown>(null);
   // Keyboard focus goes back to the terminal when the confirmation dialog closes
   useEffect(() => {
     if (securityModalPlan) {
@@ -327,11 +318,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   };
 
   // High-risk commands (stopping processes, deleting, super-user) need an explicit click on Run.
-  // Cero never asks for the login password: it was collected in this window and checked by putting
-  // it on a command line, where other local processes could read it, and it granted nothing (the command
-  // runs as the user either way). Super-user commands ask in the terminal itself, where sudo belongs.
-  const needsExplicitClick = (plan: any) => Boolean(plan?.requiresPassword || plan?.requiresClick);
-
   useEffect(() => {
     if (!terminalRef.current) return;
 
@@ -343,6 +329,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     let flowStepWaiter: ((code: number | null) => void) | null = null;
     const term = new Terminal({
       cursorBlink: true,
+      cursorInactiveStyle: 'outline',
       allowTransparency: true,
       scrollback: 100000,
       allowProposedApi: true,
@@ -568,6 +555,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     
     try {
       const webglAddon = new WebglAddon();
+      // A lost GPU context leaves the canvas (cursor included) blank: fall back to the DOM renderer
+      webglAddon.onContextLoss(() => {
+        webglAddon.dispose();
+        reviveCursor(term);
+      });
       term.loadAddon(webglAddon);
     } catch (e) {
       console.warn("WebGL addon could not be loaded");
@@ -576,6 +568,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
     fitAddon.fit();
+
+    // Bring the cursor back whenever the input gets keyboard focus or the window is shown again
+    const reviveOnFocus = () => reviveCursor(term);
+    const reviveWhenVisible = () => { if (document.visibilityState === 'visible') reviveCursor(term); };
+    term.textarea?.addEventListener('focus', reviveOnFocus);
+    window.addEventListener('focus', reviveOnFocus);
+    document.addEventListener('visibilitychange', reviveWhenVisible);
 
     let currentSessionId = initialSessionId;
     const sessionManager = SessionManager.getInstance();
@@ -776,10 +775,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         unsubConsent = ConsentQueue.getInstance().subscribe((pending) => {
           const matching = pending.find(r => !r.tabId || r.tabId === currentSessionId);
           if (matching) {
-            const docked = decideApprovalPresentation({
-              hasDraft: inputLineRef.current.hasDraft(),
-              msSinceLastKeystroke: lastKeystrokeAtRef.current ? Date.now() - lastKeystrokeAtRef.current : Infinity,
-            }) === 'dock';
             // The queue notifies on every change: keep the card the user already sees as it is
             setSecurityModalPlan((prev) => prev?.requestId === matching.id ? prev : {
               plan: matching.plan,
@@ -791,7 +786,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 }
               },
               requestId: matching.id,
-              docked,
             });
           } else {
             setSecurityModalPlan((prev) => (prev?.requestId ? null : prev));
@@ -1162,7 +1156,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
         term.onData(async (data) => {
           if (!currentSessionId) return;
-          lastKeystrokeAtRef.current = Date.now();
           CeroSerlCoordinator.getInstance().markActivity();
 
           // Stop key decision (Task 2.2: Ctrl+C stops a running task or copies selection)
@@ -1641,6 +1634,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       detachDisplay?.();
       if (paneId) TerminalWorkspace.getInstance().unregister(paneId);
       ConsentQueue.getInstance().clearQueue(currentSessionId);
+      term.textarea?.removeEventListener('focus', reviveOnFocus);
+      window.removeEventListener('focus', reviveOnFocus);
+      document.removeEventListener('visibilitychange', reviveWhenVisible);
       window.removeEventListener('cero:toggle-search', handleToggleSearch);
       window.removeEventListener('cero:find-in-terminal', handleFindRequest);
       searchAddon.dispose();
@@ -1654,6 +1650,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       try {
         fitAddonRef.current.fit();
         xtermRef.current.focus();
+        reviveCursor(xtermRef.current);
         const activeId = sessionIdRef.current || sessionId;
         if (activeId && xtermRef.current.rows > 0 && xtermRef.current.cols > 0) {
           SessionManager.getInstance().resize(activeId, xtermRef.current.rows, xtermRef.current.cols);
@@ -1664,6 +1661,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         try {
           fitAddonRef.current?.fit();
           xtermRef.current?.focus();
+          reviveCursor(xtermRef.current);
           const activeId = sessionIdRef.current || sessionId;
           if (activeId && xtermRef.current && xtermRef.current.rows > 0 && xtermRef.current.cols > 0) {
             SessionManager.getInstance().resize(activeId, xtermRef.current.rows, xtermRef.current.cols);
@@ -2103,207 +2101,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         />
       )}
 
-      {/* Security & Deletion Authorization Overlay Modal: rendered on <body>, above every drawer and pane */}
-      {securityModalPlan && securityModalPlan.docked && createPortal(
+      {/* Approval card: one presentation for every request, on <body>, never takes keyboard focus */}
+      {securityModalPlan && createPortal(
         <ApprovalDock
           plan={securityModalPlan.plan}
-          explicitClick={needsExplicitClick(securityModalPlan.plan)}
           onApprove={() => { securityModalPlan.resolve(true); setSecurityModalPlan(null); }}
           onDeny={() => { securityModalPlan.resolve(false); setSecurityModalPlan(null); }}
         />,
-        document.body
-      )}
-      {securityModalPlan && !securityModalPlan.docked && createPortal(
-        <div 
-          tabIndex={0}
-          ref={(el) => {
-            if (!el) return;
-            // Once per request. This callback runs on every render, and focusing each time took the
-            // keyboard back from the terminal whenever progress changed.
-            if (consentPlanRef.current !== securityModalPlan.plan) {
-              consentPlanRef.current = securityModalPlan.plan;
-              consentShownAtRef.current = Date.now();
-              el.focus();
-            }
-          }}
-          onKeyDown={(e) => {
-            const now = Date.now();
-            const action = decideModalKey({
-              key: e.key,
-              ctrlOrMeta: e.ctrlKey || e.metaKey,
-              needsExplicitClick: needsExplicitClick(securityModalPlan.plan),
-              // Armed only after the dialog was visible for a moment with no typing going on
-              armed: now - consentShownAtRef.current > 800 && now - consentStrayKeyAtRef.current > 800,
-              repeat: e.repeat,
-            });
-            if (action === 'deny') {
-              securityModalPlan.resolve(false);
-              setSecurityModalPlan(null);
-            } else if (action === 'approve') {
-              securityModalPlan.resolve(true);
-              setSecurityModalPlan(null);
-            } else if (action === 'arm-only') {
-              consentStrayKeyAtRef.current = now;
-            } else if (action === 'dock-and-forward') {
-              // The user started typing. That is not an answer: give the keyboard back to the
-              // terminal with this key, and keep the request as a card they can click.
-              consentStrayKeyAtRef.current = now;
-              e.preventDefault();
-              const term = xtermRef.current;
-              setSecurityModalPlan((prev) => (prev ? { ...prev, docked: true } : prev));
-              term?.focus();
-              term?.input(e.key === 'Backspace' ? '\x7f' : e.key);
-            }
-          }}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '20px',
-            transition: 'all 0.3s ease',
-            outline: 'none'
-          }}>
-          <div style={{
-            width: '100%',
-            maxWidth: '460px',
-            background: 'rgba(22, 24, 32, 0.88)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            borderRadius: '16px',
-            boxShadow: '0 24px 64px rgba(0, 0, 0, 0.85), 0 4px 16px rgba(0, 0, 0, 0.5)',
-            padding: '26px',
-            color: '#fff',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '18px' }}>
-              <div style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: '12px',
-                backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#e5e7eb'
-              }}>
-                <ShieldAlert size={20} />
-              </div>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#f8fafc', letterSpacing: '-0.2px' }}>
-                  {securityModalPlan.plan.capabilityId === 'workflow.batch' && String(securityModalPlan.plan.parameters?.command || '').includes('\n') ? 'Run these commands?' : 'Run this command?'}
-                </h3>
-                <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginTop: '2px' }}>
-                  Needs your approval · {String(securityModalPlan.plan.riskLevel || 'admin').toLowerCase()} risk
-                </span>
-              </div>
-            </div>
-
-            <p style={{ fontSize: '13px', lineHeight: '1.55', color: 'rgba(255, 255, 255, 0.75)', margin: '0 0 18px 0' }}>
-              {securityModalPlan.plan.requiresPassword
-                ? 'This can stop or change things on your computer. Cero will run exactly what is shown below, only after you click Run. It never asks for your password.'
-                : securityModalPlan.plan.requiresClick
-                  ? 'These commands come from a file. Cero will run exactly what is shown below, only after you click Run.'
-                  : 'Cero will run exactly what is shown below. Nothing runs until you approve.'}
-            </p>
-
-            <div style={{
-              backgroundColor: 'rgba(10, 11, 15, 0.6)',
-              border: '1px solid rgba(255, 255, 255, 0.07)',
-              borderRadius: '10px',
-              padding: '12px 14px',
-              marginBottom: '20px',
-              fontSize: '12px',
-              fontFamily: 'monospace'
-            }}>
-              <div style={{ fontSize: '10.5px', letterSpacing: '0.6px', textTransform: 'uppercase', color: 'rgba(255, 255, 255, 0.4)', marginBottom: '6px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
-                {securityModalPlan.plan.capabilityId === 'shell.execute' ? 'Command'
-                  : securityModalPlan.plan.capabilityId === 'terminal.spawn' ? 'Command · keeps running in its own terminal'
-                  : securityModalPlan.plan.capabilityId === 'workflow.batch' ? 'Commands, in order'
-                  : securityModalPlan.plan.capabilityId}
-              </div>
-              <div style={{ color: '#f5f5f7', fontSize: '13px', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontWeight: 500 }}>
-                {String(securityModalPlan.plan.parameters?.command || securityModalPlan.plan.parameters?.path || securityModalPlan.plan.parameters?.source || JSON.stringify(securityModalPlan.plan.parameters))}
-              </div>
-              {(securityModalPlan.plan.parameters?.explanation || securityModalPlan.plan.explanation) && (
-                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.07)', display: 'flex', gap: '8px', alignItems: 'flex-start', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.4)', flexShrink: 0 }}>Why</span>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.78)', lineHeight: '1.45', wordBreak: 'break-word' }}>
-                    {securityModalPlan.plan.parameters?.explanation || securityModalPlan.plan.explanation}
-                  </span>
-                </div>
-              )}
-              {securityModalPlan.plan.parameters?.explanation && securityModalPlan.plan.explanation
-                && securityModalPlan.plan.parameters.explanation !== securityModalPlan.plan.explanation && (
-                <div style={{ marginTop: '6px', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.42)', lineHeight: 1.45, fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
-                  {securityModalPlan.plan.explanation}
-                </div>
-              )}
-            </div>
-
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button
-                onClick={() => {
-                  securityModalPlan.resolve(false);
-                  setSecurityModalPlan(null);
-                    }}
-                style={{
-                  padding: '9px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                  color: '#cbd5e1',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  fontWeight: 500,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  transition: 'background-color 0.2s ease'
-                }}
-              >
-                <X size={13} />
-                <span>Cancel</span> <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '4px' }}>Esc</span>
-              </button>
-              <button
-                onClick={() => {
-                  securityModalPlan.resolve(true);
-                  setSecurityModalPlan(null);
-                }}
-                style={{
-                  padding: '9px 18px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: '#f5f5f7',
-                  color: '#0b0c10',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  boxShadow: 'none',
-                  transition: 'all 0.2s ease',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <Check size={14} />
-                <span>Run</span>
-                {!needsExplicitClick(securityModalPlan.plan) && <span style={{ opacity: 0.55, fontSize: '11px', background: 'rgba(0,0,0,0.08)', padding: '1px 5px', borderRadius: '4px' }}>↵</span>}
-              </button>
-            </div>
-          </div>
-        </div>,
         document.body
       )}
     </div>
