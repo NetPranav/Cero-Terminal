@@ -4,6 +4,10 @@
  * Formal grammar constraints enforced at the token sampling level in llama.cpp / llama-server.
  * Mathematically eliminates 100% of conversational chatbot apologies, markdown leaks,
  * and malformed JSON output at hardware sampling time with zero token overhead.
+ *
+ * Whitespace between tokens is bounded (`ws`, as in llama.cpp's own json.gbnf). An unbounded
+ * `[ \t\n\r]*` lets a small model keep emitting newlines until the token limit, which cuts the
+ * JSON off and reaches the user as "could not understand the instruction", on the built-in model only.
  */
 
 export type GrammarType = 'CERO_ACTION' | 'CERO_PLANNER' | 'STRICT_JSON';
@@ -29,7 +33,7 @@ action-execute ::= ("{" ws "\\"action\\"" ws ":" ws "\\"execute\\"" ws "," ws "\
 action-done ::= ("{" ws "\\"action\\"" ws ":" ws "\\"done\\"" ws "," ws "\\"summary\\"" ws ":" ws string ws "}") | ("{" ws "\\"summary\\"" ws ":" ws string ws "," ws "\\"action\\"" ws ":" ws "\\"done\\"" ws "}")
 
 string ::= "\\"" ([^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]))* "\\""
-ws ::= [ \\t\\n\\r]*`;
+ws ::= | " " | "\\n" [ \\t]{0,20}`;
 
   /**
    * JSON Schema equivalent of CERO_ACTION for backends that take a schema instead of GBNF
@@ -56,7 +60,7 @@ ws ::= [ \\t\\n\\r]*`;
 
 string-list ::= "[" ws (string (ws "," ws string)*)? ws "]"
 string ::= "\\"" ([^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]))* "\\""
-ws ::= [ \\t\\n\\r]*`;
+ws ::= | " " | "\\n" [ \\t]{0,20}`;
 
   /**
    * STRICT_JSON GBNF:
@@ -73,7 +77,7 @@ value ::= object | array | string | number | "true" | "false" | "null"
 
 string ::= "\\"" ([^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]))* "\\""
 number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)?
-ws ::= [ \\t\\n\\r]*`;
+ws ::= | " " | "\\n" [ \\t]{0,20}`;
 
   public static getInstance(): GbnfGrammarManager {
     if (!GbnfGrammarManager.instance) {
@@ -136,7 +140,7 @@ ws ::= [ \\t\\n\\r]*`;
 string-list ::= "[" ws (string (ws "," ws string)*)? ws "]"
 string ::= "\\"" ([^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]))* "\\""
 number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)?
-ws ::= [ \\t\\n\\r]*`;
+ws ::= | " " | "\\n" [ \\t]{0,20}`;
   }
 
   /**
