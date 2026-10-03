@@ -1801,3 +1801,18 @@ describe('fixLeadingVerb', () => {
     expect(fixLeadingVerb('')).toBe('');
   });
 });
+
+describe('isActionableGoal and knowledge questions', () => {
+  it('answers knowledge questions instead of demanding a command', async () => {
+    const { isActionableGoal } = await import('./AgentLoop');
+    for (const q of ['how does binary search work?', 'explain what async and await do in typescript', 'what is a closure in programming?', 'why is the sky blue', 'define recursion']) {
+      expect(isActionableGoal(q)).toBe(false);
+    }
+  });
+  it('still treats requests about this computer as actions', async () => {
+    const { isActionableGoal } = await import('./AgentLoop');
+    for (const q of ['what is using port 3000', 'what files are in this folder', 'how much disk space is left', 'find all log files', 'show git status', 'search for read me file in repository']) {
+      expect(isActionableGoal(q)).toBe(true);
+    }
+  });
+});

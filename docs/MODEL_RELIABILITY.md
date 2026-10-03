@@ -66,6 +66,7 @@ The embedded engine catalog supports three tiers tailored to machine memory:
 
 | Catalog Model | Quantization | Disk / RAM Size | Target Machine RAM | Accuracy (`pass@1`) | Inference Latency | Best Suited For |
 |---|---|---|---|---|---|---|
+| **Qwen2.5-Coder-0.5B** (smallest) | Q4_K_M | ~470 MB | < 4 GB RAM | not measured | not measured | Slow connections and very old machines; Cero does more in code |
 | **Qwen2.5-Coder-1.5B** | Q4_K_M | ~1.1 GB | < 8 GB RAM | not measured | not measured | Memory-constrained systems, older laptops |
 | **Qwen2.5-Coder-3B** (Default) | Q4_K_M | ~2.0 GB | 8 GB - 16 GB RAM | 83.1% raw (see section 2) | 11.3 s on an 8 GB laptop | Default recommended balance of speed and precision |
 | **Qwen3-4B-Instruct-2507** | Q4_K_M | ~2.7 GB | >= 16 GB RAM | not measured | not measured | High-spec machines needing maximum natural language comprehension |
@@ -76,3 +77,11 @@ The embedded engine catalog supports three tiers tailored to machine memory:
 2. **Transparent Identity:** Active model name, parameter size, and execution host are shown in Settings and the status bar tooltip.
 3. **Report a Wrong Answer:** Every AI result footer includes a "Report a wrong answer" action. Clicking it copies the prompt, model name, and proposed action (with secrets and passwords automatically redacted) to the clipboard formatted as a `cases.json` unit test case.
 
+
+### Can the download be made much smaller by compressing it?
+
+Measured, not guessed: the first 300 MB of the 3B model file compressed to 289.9 MB with `zstd -19` (3.4% smaller) and
+290.9 MB with `xz -6`. A quantized model file is already packed tightly, so lossless compression cannot take 2 GB to 200 MB.
+The real ways to a smaller download are a smaller model (the 0.5B tier is about 470 MB, the 1.5B about 1.1 GB), a lower
+quantization (smaller and noticeably less accurate), and resuming an interrupted download (already supported: it continues
+from the `.part` file and checks the SHA-256 at the end).

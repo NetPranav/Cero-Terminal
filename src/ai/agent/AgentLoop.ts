@@ -22,6 +22,7 @@ import { parseSystemAction, commandFor, suggestionsFor, TOPIC_NAMES, type System
 import { parseQuitRequest, listRunningCommand, parseRunning, matchRunning, quitCommand, type QuitRequest, type RunningItem } from '../../domain/system/AppControl';
 import { parseFlowCreateRequest, draftFlow, serializeFlow, describeDraft, draftNeedsTerminal, type FlowCreateRequest, type FlowDraft } from '../../workflows/flow/FlowAuthoring';
 import { parseModelReply } from './ModelReply';
+import { fixTypos } from './TypoFix';
 import { editDistance } from '../../domain/system/NameMatch';
 import { DiagnosticLogger } from '../../infrastructure/logging/DiagnosticLogger';
 import { parseSaveIntent, suggestWorkflowName, cleanName, type SaveIntent } from '../../workflows/engine/SaveIntent';
@@ -809,7 +810,7 @@ export function fixLeadingVerb(text: string): string {
 
 export function normalizeGoalText(text: string): string {
   if (!text) return text;
-  return fixLeadingVerb(text)
+  return fixLeadingVerb(fixTypos(text))
     .replace(/\b(?:inilitilzie|initilize|initalize|initalise|initilise)\b/gi, 'initialize')
     .replace(/\b(?:adn|nad)\b/gi, 'and')
     .replace(/\b(?:avaialble|avaialable|availabe)\b/gi, 'available')
@@ -1001,6 +1002,12 @@ export function isActionableGoal(goal: string): boolean {
     .trim();
 
   if (/^(?:who are you|what is your name|what can you do|help)$/i.test(stripped) || stripped === '' || /^(?:hi|hey|hello|yo|howdy|sup)$/i.test(lower)) {
+    return false;
+  }
+  // A knowledge question ("how does binary search work?", "explain closures") is answered, not run, unless it names
+  // something on this computer (a file, port, process, app...)
+  const isKnowledgeQuestion = /^(?:what|why|who|when|how\s+(?:does|do|is|are|can|would|should)|explain|define|describe|tell me (?:about|what|how))\b/i.test(stripped);
+  if (isKnowledgeQuestion && !/\b(?:folder|folders|directory|directories|dir|file|files|path|paths|network|wifi|wi-fi|bluetooth|port|ports|process|processes|cpu|ram|memory|storage|disk|battery|git|repo|repository|terminal|service|ip|address|volume|screen|here|this machine|my (?:computer|mac|pc|laptop|system))\b/i.test(stripped)) {
     return false;
   }
   const actionablePatterns = [
@@ -1855,6 +1862,23 @@ export class AgentLoop {
     const showFile = (cleaned || goal).trim().replace(/[?.!]+$/, '').match(/^(?:what(?:'s|\s+is)\s+in|show(?:\s+me)?|print|display|cat|read)\s+(?:the\s+)?(?:file\s+)?["']?([^\s"']+\.[A-Za-z0-9]{1,6})["']?$/i);
     if (showFile) {
       return this.runShellStep(`head -n 60 -- ${posixQuote(showFile[1])}`, `Show ${showFile[1]}`, context, out => out || `${showFile[1]} is empty.`);
+    }
+
+    // 1b2. "find all python files in this directory", "locate all log files in /var/log": a plain find, no database, no sudo
+    const findByType = (cleaned || goal).trim().replace(/[?.!]+$/, '').match(/^(?:find|locate|list|show|search\s+for)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?([a-z]+)\s+files(?:\s+(?:in|under|inside)\s+(?:the\s+)?(\/\S*|~\S*|\.\S*|this\s+(?:directory|folder)|current\s+(?:directory|folder)))?$/i);
+    const EXT: Record<string, string> = { python: 'py', rust: 'rs', javascript: 'js', typescript: 'ts', log: 'log', logs: 'log', text: 'txt', markdown: 'md', json: 'json', yaml: 'yaml', csv: 'csv', shell: 'sh', java: 'java', html: 'html', css: 'css', go: 'go', ruby: 'rb', php: 'php', config: 'conf', image: 'png', pdf: 'pdf' };
+    if (findByType && EXT[findByType[1].toLowerCase()]) {
+      const where = findByType[2] && !/^this|^current/i.test(findByType[2]) ? findByType[2] : '.';
+      const target = where.startsWith('~') ? `"$HOME"${posixQuote(where.slice(1))}` : posixQuote(where);
+      return this.runShellStep(`find ${target} -type f -name ${posixQuote(`*.${EXT[findByType[1].toLowerCase()]}`)} -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -200`,
+        `Find .${EXT[findByType[1].toLowerCase()]} files in ${where === '.' ? 'this folder' : where}`, context, out => out || 'No matching files found.');
+    }
+
+    // 1b3. "create a new workflow called x" with no steps: say what to give, instead of guessing a command
+    if (/^(?:please\s+)?(?:create|make|build|start)\s+(?:me\s+)?(?:a\s+|an\s+)?(?:new\s+)?(?:workflow|flow)(?:\s+(?:called|named)\s+["']?[\w .-]+["']?)?\s*[.!?]?$/i.test((cleaned || goal).trim())) {
+      const summary = 'A workflow needs steps. Tell me what it should do, for example: make me a workflow called backup that runs npm run build and opens github in chrome. Or do the task now and add "and save this as a workflow".';
+      this.emit({ type: 'done', message: summary });
+      return { success: true, summary, steps: [] };
     }
 
     // 1c. "list the files in my notes folder": find the real folder first

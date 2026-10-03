@@ -10,3 +10,4 @@
 | [archive/](archive/README.md) | Historical documents (v6 roadmap, context, fix logs, checklists, benchmark records) |
 
 Verification: `npm test && npm run build && cargo check --manifest-path src-tauri/Cargo.toml && cargo test --manifest-path src-tauri/Cargo.toml --lib`, plus `npm run smoke:engine` on a machine with a local model.
+- [Teaching Cero](LEARNING.md): `/learn`, `/forget`, `/learning on|off`; nothing is learned unless you ask.

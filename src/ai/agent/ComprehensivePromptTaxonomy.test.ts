@@ -245,7 +245,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
         'shell.execute',
         expect.objectContaining({ command: expect.stringContaining('.ts') }),
         '/home/test',
-        undefined
+        expect.any(Function)
       );
     });
   });

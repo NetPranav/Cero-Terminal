@@ -1,3 +1,4 @@
+import { decideLearn, candidateFromRun, isBareLearn, type LearnCandidate } from '../domain/learning/LearnCommand';
 import { AuditLogger } from '../domain/security/AuditLogger';
 import { SystemSettingsProvider } from '../domain/autocomplete/SystemSettingsProvider';
 import { runFlowInTerminal, parseStepMarker, flowApprovalPlan, type ShellFamily } from '../workflows/flow/FlowRunner';
@@ -270,6 +271,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   }, [choiceRequest]);
 
   const lastUnresolvedGoalRef = useRef<{ goal: string; timestamp: number } | null>(null);
+  /** What `/learn` would teach. Set by what happened, used only when the person types /learn */
+  const learnCandidateRef = useRef<LearnCandidate | null>(null);
 
   const handleExecuteRemediation = async (rem: RemediationPrompt) => {
     setActiveRemediation(null);
@@ -882,6 +885,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             if (leftover) writeTerm(leftover);
             PromptProgressManager.getInstance().completePrompt(result.success, result.summary);
             // A declined request is answered: the user chose not to do it
+            // a request that worked with one command can be taught with /learn; one that failed never can
+            learnCandidateRef.current = candidateFromRun(aiGoal, result) ?? (result.success ? null : learnCandidateRef.current);
             if (!result.success && !result.declined) {
               lastUnresolvedGoalRef.current = { goal: aiGoal, timestamp: Date.now() };
               setPlanExecutionStatus('failed');
@@ -1275,6 +1280,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 return;
               }
 
+              // /learning on | off: whether Cero may collect its own failures for later study (off by default)
+              if (/^\/learning(?:\s+(?:on|off))?\s*$/i.test(cleanCmd)) {
+                await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
+                const arg = cleanCmd.replace(/^\/learning\s*/i, '').toLowerCase();
+                try {
+                  if (arg === 'on') localStorage.setItem('cero_auto_learning', 'true');
+                  else if (arg === 'off') localStorage.removeItem('cero_auto_learning');
+                } catch { /* storage blocked */ }
+                const on = CeroSerlCoordinator.isAutoCaptureEnabled();
+                writeTerm(`\r\n  ${S.soft}Automatic learning is ${on ? 'ON: Cero keeps a local record of its failed requests' : 'OFF: Cero learns only when you type /learn'}.${S.reset}\r\n\r\n`);
+                return;
+              }
+
               // Intercept demonstration learning slash commands: /learn, /learned, /forget
               if (cleanCmd.startsWith('/learn') || cleanCmd.startsWith('/learned') || cleanCmd.startsWith('/forget')) {
                 await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
@@ -1282,7 +1300,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                   const patterns = DemonstrationLearningEngine.getInstance().getAllPatterns();
                   if (patterns.length === 0) {
                     writeTerm(`\r\n\x1b[33m[Learning Engine] No custom patterns learned yet.\x1b[0m\r\n`);
-                    writeTerm(`\x1b[37mTeach Cero via:\x1b[0m \x1b[1;32m/learn <goal> -> <command>\x1b[0m\r\n\r\n`);
+                    writeTerm(`\x1b[37mTeach Cero after a request that worked:\x1b[0m \x1b[1;32m/learn\x1b[0m   \x1b[37mor\x1b[0m   \x1b[1;32m/learn <goal> -> <command>\x1b[0m\r\n\r\n`);
                   } else {
                     writeTerm(`\r\n\x1b[1;35m[Learning Engine] Currently Learned Workflows (${patterns.length}):\x1b[0m\r\n`);
                     patterns.forEach((p, idx) => {
@@ -1301,6 +1319,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                     }
                   } else {
                     writeTerm(`\r\n\x1b[37mUsage:\x1b[0m \x1b[1;31m/forget <pattern_id or goal>\x1b[0m\r\n\r\n`);
+                  }
+                } else if (isBareLearn(cleanCmd)) {
+                  const decision = decideLearn(learnCandidateRef.current);
+                  if (decision.kind === 'refuse') {
+                    writeTerm(`\r\n\x1b[33m[Learning] ${decision.reason}\x1b[0m\r\n\r\n`);
+                  } else {
+                    const pattern = DemonstrationLearningEngine.getInstance().learnExplicit(decision.goal, decision.command);
+                    EpisodicMemoryEngine.getInstance().recordMemory(decision.goal, decision.command, { cwd: currentPath, source: 'explicit_teach' });
+                    learnCandidateRef.current = null;
+                    writeTerm(`\r\n\x1b[1;32m[Learning] Learned, because you asked:\x1b[0m\r\n`);
+                    writeTerm(`  \u2022 When you ask: \x1b[1;36m"${pattern.originalGoal}"\x1b[0m\r\n`);
+                    writeTerm(`  \u2022 Cero runs:    \x1b[1;33m${pattern.commandTemplate}\x1b[0m\r\n`);
+                    writeTerm(`\x1b[37mUndo with /forget ${pattern.id}\x1b[0m\r\n\r\n`);
                   }
                 } else {
                   // /learn <trigger> -> <command>
@@ -1354,32 +1385,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 !cleanCmd.startsWith('/') &&
                 isPlausibleDemonstration(lastUnresolvedGoalRef.current.goal, cleanCmd)
               ) {
-                const learned = DemonstrationLearningEngine.getInstance().learnFromDemonstration(
-                  lastUnresolvedGoalRef.current.goal,
-                  cleanCmd,
-                  currentPathRef.current
-                );
-                EpisodicMemoryEngine.getInstance().recordMemory(
-                  lastUnresolvedGoalRef.current.goal,
-                  cleanCmd,
-                  {
-                    cwd: currentPathRef.current,
-                    source: 'demonstration'
-                  }
-                );
-                // Tier 4: Feed human demonstration into Cero-SERL closed-loop
-                CeroSerlCoordinator.getInstance().onHumanDemonstration(
-                  lastUnresolvedGoalRef.current.goal,
-                  cleanCmd,
-                  `Human demonstration in ${currentPathRef.current || '~'}`
-                ).catch(e => console.warn('[TerminalView] SERL demonstration recording error:', e));
-                if (learned) {
-                  writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Learned from your command${S.reset}\r\n`);
-                  writeTerm(`    ${S.muted}when you ask${S.reset}  ${S.soft}${lastUnresolvedGoalRef.current.goal}${S.reset}\r\n`);
-                  writeTerm(`    ${S.muted}Cero runs${S.reset} ${S.code}${cleanCmd}${S.reset}\r\n`);
-                  writeTerm(`    ${S.muted}Undo with /forget ${learned.id}${S.reset}\r\n\r\n`);
-                  lastUnresolvedGoalRef.current = null;
-                }
+                // Nothing is learned from watching. The command is only remembered as something /learn could teach.
+                learnCandidateRef.current = { goal: lastUnresolvedGoalRef.current.goal, command: cleanCmd, at: Date.now(), source: 'typed' };
+                writeTerm(`\r\n  ${S.muted}To teach Cero "${lastUnresolvedGoalRef.current.goal}" = ${cleanCmd}, type /learn. Otherwise nothing is learned.${S.reset}\r\n`);
+                lastUnresolvedGoalRef.current = null;
               }
 
               // `>` starts an AI request. Once it asks a clarification question,

@@ -48,7 +48,7 @@ export interface ArtifactManifestEntry {
   description: string;
 }
 
-export type EmbeddedModelTier = 'lite' | 'balanced' | 'accuracy';
+export type EmbeddedModelTier = 'tiny' | 'lite' | 'balanced' | 'accuracy';
 
 export interface EmbeddedModelSpec {
   id: string;
@@ -68,6 +68,17 @@ export interface EmbeddedModelSpec {
  * API for these exact files. A download that does not match its hash is discarded.
  */
 export const EMBEDDED_MODEL_TIERS: Record<EmbeddedModelTier, EmbeddedModelSpec> = {
+  tiny: {
+    id: 'qwen2.5-coder-0.5b-instruct',
+    tier: 'tiny',
+    fileName: 'qwen2.5-coder-0.5b-instruct-q4_k_m.gguf',
+    displayName: 'Qwen 2.5 Coder 0.5B Instruct',
+    sizeBytes: 491400064,
+    url: 'https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf',
+    sha256: '1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32',
+    ramRequiredMb: 800,
+    description: 'Smallest download (about 470 MB) for slow connections and old machines; simple requests only, Cero does more of the work in code'
+  },
   lite: {
     id: 'qwen2.5-coder-1.5b-instruct',
     tier: 'lite',
@@ -199,7 +210,7 @@ export class EmbeddedEngineManager {
   public static getSelectedTier(): EmbeddedModelTier {
     try {
       const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(EmbeddedEngineManager.TIER_STORAGE_KEY) : null;
-      if (saved === 'lite' || saved === 'balanced' || saved === 'accuracy') return saved;
+      if (saved === 'tiny' || saved === 'lite' || saved === 'balanced' || saved === 'accuracy') return saved;
     } catch {
       // storage unavailable
     }
@@ -216,6 +227,7 @@ export class EmbeddedEngineManager {
 
   /** Suggest a tier from total RAM in GB. */
   public static recommendTier(ramGb: number): EmbeddedModelTier {
+    if (ramGb > 0 && ramGb < 4) return 'tiny';
     if (ramGb > 0 && ramGb < 8) return 'lite';
     if (ramGb >= 16) return 'accuracy';
     return 'balanced';

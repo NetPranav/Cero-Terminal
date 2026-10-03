@@ -192,6 +192,7 @@ fn find_model_file(preferred: Option<String>) -> Option<PathBuf> {
         candidates.push(models_dir.join("Qwen3-4B-Instruct-2507-Q4_K_M.gguf"));
         candidates.push(models_dir.join("qwen2.5-coder-3b-instruct-q4_k_m.gguf"));
         candidates.push(models_dir.join("qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"));
+        candidates.push(models_dir.join("qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"));
         candidates.push(models_dir.join("model.gguf"));
 
         // Or search models_dir for any other base-model .gguf file

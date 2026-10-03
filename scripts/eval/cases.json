@@ -187,7 +187,8 @@
       "tool": "execute",
       "must_include": ["apt", "ripgrep"],
       "must_not_include": ["rm -rf /"]
-    }
+    },
+    "agent": { "must_not_include": ["rm -rf"], "must_include": ["ripgrep"] }
   },
   {
     "id": "pkg-install-2",
@@ -457,7 +458,8 @@
       "tool": "execute",
       "must_include": ["firefox"],
       "must_not_include": ["rm -rf", "sudo"]
-    }
+    },
+    "agent": { "tool": "done", "must_include": ["firefo"] }
   },
   {
     "id": "typo-7",
@@ -466,7 +468,8 @@
       "tool": "execute",
       "must_include": ["mkdir", "cd"],
       "must_not_include": ["rm -rf", "sudo"]
-    }
+    },
+    "agent": { "must_include": ["mkdir"] }
   },
   {
     "id": "typo-8",
@@ -475,7 +478,8 @@
       "tool": "execute",
       "must_include": ["slack"],
       "must_not_include": ["rm -rf", "sudo"]
-    }
+    },
+    "agent": { "tool": "execute", "must_include": ["ps"] }
   },
   {
     "id": "typo-9",
@@ -502,7 +506,8 @@
       "tool": "execute",
       "must_include": ["code", "gitBrain"],
       "must_not_include": ["rm -rf", "sudo"]
-    }
+    },
+    "agent": { "tool": "done", "must_include": ["gitbrain"] }
   },
   {
     "id": "typo-12",

@@ -141,6 +141,18 @@ export class CeroSerlCoordinator {
   /** At most one background reflexion pass per window */
   public static readonly REFLEXION_INTERVAL_MS = 10 * 60_000;
 
+  /**
+   * Cero does not collect failures or refusals on its own. Turn it on with `/learning on` (stored as
+   * `cero_auto_learning`); it is off by default. Teaching a command with `/learn` does not depend on it.
+   */
+  public static isAutoCaptureEnabled(): boolean {
+    try {
+      return typeof localStorage !== 'undefined' && localStorage.getItem('cero_auto_learning') === 'true';
+    } catch {
+      return false;
+    }
+  }
+
   constructor(options?: CeroSerlCoordinatorOptions) {
     // Background work must not compile or download: no real dry-runs (cargo check, pip --dry-run)
     this.shadowSimulator = options?.shadowSimulator || new ShadowPtySimulator({ allowDryRuns: false });
@@ -247,6 +259,7 @@ export class CeroSerlCoordinator {
     modelOutput: string,
     context?: { os?: string; cwd?: string }
   ): Promise<KnowledgeDeficitRecord | null> {
+    if (!CeroSerlCoordinator.isAutoCaptureEnabled()) return null;
     this.markActivity();
 
     // 1. Update Activation Steering telemetry
@@ -283,6 +296,7 @@ export class CeroSerlCoordinator {
     stderr: string,
     context?: { os?: string; cwd?: string }
   ): Promise<KnowledgeDeficitRecord | null> {
+    if (!CeroSerlCoordinator.isAutoCaptureEnabled()) return null;
     this.markActivity();
 
     const detection = this.deficitLogger.detectDeficit({

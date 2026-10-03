@@ -38,6 +38,8 @@ describe('CeroSerlCoordinator — End-to-End Orchestrator', () => {
   let episodicMemory: EpisodicMemoryEngine;
 
   beforeEach(() => {
+    // collecting failures is off by default; these tests are about what it does when it is on
+    vi.stubGlobal('localStorage', { getItem: (k: string) => (k === 'cero_auto_learning' ? 'true' : null), setItem: () => {}, removeItem: () => {} });
     tempDir = path.join('/tmp', `serl_coord_test_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
     fs.mkdirSync(tempDir, { recursive: true });
 
@@ -82,6 +84,7 @@ describe('CeroSerlCoordinator — End-to-End Orchestrator', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     coordinator.stopCoordinator();
     try {
       fs.rmSync(tempDir, { recursive: true, force: true });
@@ -431,5 +434,12 @@ describe('CeroSerlCoordinator — End-to-End Orchestrator', () => {
       expect(res.success).toBe(true);
       expect(res.rolledBackTo).toBe('cero-coder-v2.1.0');
     });
+  });
+
+  it('collects nothing on its own when automatic learning is off (the default)', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeItem: () => {} });
+    expect(CeroSerlCoordinator.isAutoCaptureEnabled()).toBe(false);
+    expect(await coordinator.onModelRefusal('open the thing', "I'm sorry, I can't help with that.")).toBeNull();
+    expect(await coordinator.onCommandExecutionFailure('do it', 'badcmd', 127, 'command not found')).toBeNull();
   });
 });

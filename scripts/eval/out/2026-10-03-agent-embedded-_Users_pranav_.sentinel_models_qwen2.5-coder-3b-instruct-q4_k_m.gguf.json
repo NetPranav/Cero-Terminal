@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-03",
+  "timestamp": "2026-10-03T04:54:55.102Z",
+  "model": "/Users/pranav/.sentinel/models/qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+  "provider": "embedded",
+  "mode": "agent",
+  "summary": {
+    "cases": 1,
+    "totalRuns": 1,
+    "passAt1": 0,
+    "flipRate": 0,
+    "medianMs": 90011
+  },
+  "results": [
+    {
+      "caseId": "chat-question-4",
+      "prompt": "how does binary search work?",
+      "runs": 1,
+      "passes": 0,
+      "passRate": 0,
+      "distinctAnswers": [
+        "TIMEOUT"
+      ],
+      "flipped": false,
+      "sampleAnswer": "TIMEOUT"
+    }
+  ]
+}

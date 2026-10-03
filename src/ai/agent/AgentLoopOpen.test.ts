@@ -296,3 +296,32 @@ describe('showing a file and listing a named folder', () => {
     expect(execute.mock.calls.every(c => !/nowhere-xyz/.test(String(c[1]?.command)) || !/^ls /.test(String(c[1]?.command)))).toBe(true);
   });
 });
+
+describe('find by file type, and a workflow request with no steps', () => {
+  let loop: AgentLoop;
+  let execute: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate: vi.fn() }),
+      getActiveModel: () => ({ modelId: 'mock' }), initialize: vi.fn(),
+    } as any);
+    execute = vi.fn().mockResolvedValue({ success: true, data: { stdout: '/var/log/a.log' } });
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+  });
+
+  it('"locate all log files in /var/log" is a plain find: no sudo, no updatedb', async () => {
+    await loop.run('locate all log files in /var/log', { os: 'linux', cwd: '/tmp' });
+    const cmd = execute.mock.calls[0][1].command as string;
+    expect(cmd).toContain("find '/var/log' -type f -name '*.log'");
+    expect(cmd).not.toMatch(/sudo|updatedb|locate /);
+  });
+  it('"find all python files in this directory" searches here', async () => {
+    await loop.run('find all python files in this directory', { os: 'linux', cwd: '/tmp' });
+    expect(execute.mock.calls[0][1].command).toContain("find '.' -type f -name '*.py'");
+  });
+  it('"create a new workflow called backup-db" asks for the steps and runs nothing', async () => {
+    const r = await loop.run('create a new workflow called backup-db', { os: 'linux', cwd: '/tmp' });
+    expect(r.summary).toContain('A workflow needs steps');
+    expect(execute).not.toHaveBeenCalled();
+  });
+});
