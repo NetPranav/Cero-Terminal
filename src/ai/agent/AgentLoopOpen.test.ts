@@ -82,7 +82,7 @@ describe('Opening a folder by name', () => {
   });
 
   it('two folders of the same name: asks, opens the choice, and remembers it', async () => {
-    loop.setPathProbe(fakeProbe(['/home/me/Projects/gitBrains', '/home/me/Documents/gitBrains']));
+    loop.setPathProbe(fakeProbe(['/home/me/Projects/gitBrains', '/home/me/code/gitBrains']));
     const asked: any[] = [];
     setChoiceHandlerForTests(async q => { asked.push(q); return { index: 1 }; });
     const first = await loop.run('open the folder gitBrains in code', ctx);
@@ -120,7 +120,7 @@ describe('Opening a folder by name', () => {
   });
 
   it('with no screen to ask on, it lists the candidates instead of guessing', async () => {
-    loop.setPathProbe(fakeProbe(['/home/me/Projects/gitBrains', '/home/me/Documents/gitBrains']));
+    loop.setPathProbe(fakeProbe(['/home/me/Projects/gitBrains', '/home/me/code/gitBrains']));
     const r = await loop.run('open the folder gitBrains in code', ctx);
     expect(r.success).toBe(false);
     expect(r.summary).toContain('Several places could be "gitBrains"');
@@ -243,7 +243,7 @@ describe('cd and remembered names', () => {
   });
 
   it('remembers a choice, reports it, and forgets it on request', async () => {
-    loop.setPathProbe(fakeProbe(['/home/me/Projects/gitBrains', '/home/me/Documents/gitBrains']));
+    loop.setPathProbe(fakeProbe(['/home/me/Projects/gitBrains', '/home/me/code/gitBrains']));
     setChoiceHandlerForTests(async () => ({ index: 0 }));
     const first = await loop.run('cd gitbrains', ctx);
     expect(first.cdPath).toBeTruthy();

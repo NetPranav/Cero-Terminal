@@ -17,6 +17,8 @@ export interface ChoiceRequest {
   /** Lines shown above the options (what will be saved) */
   lines?: string[];
   options: ChoiceOption[];
+  /** The small heading above the options; "Choose one" when not given */
+  heading?: string;
   /** A text field for something else, e.g. a folder path */
   custom?: { label: string; placeholder: string };
 }

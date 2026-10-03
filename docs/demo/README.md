@@ -1,6 +1,6 @@
 # The demo video
 
-`docs/media/cero-demo.mp4` (2.5 minutes) is made of one slide per feature followed by a real, unedited clip
+`docs/media/cero-demo.mp4` (about 2.5 minutes, recorded for Cero 2.2) is made of one slide per feature followed by a real, unedited clip
 of the macOS app doing it. Nothing in it is mocked up.
 
 - `storyboard.json`: the slides (text, icon, length) and the order, including which seconds of each clip are shown.

@@ -30,7 +30,9 @@ export interface ResolveInput {
   remembered?: string;
 }
 
-export const COMMON_PLACES = ['Projects', 'projects', 'Project Folder', 'code', 'dev', 'src', 'work', 'Documents', 'Desktop', 'Downloads', 'repos', 'git', 'github'];
+export const COMMON_PLACES = ['Projects', 'projects', 'Project Folder', 'code', 'dev', 'src', 'work', 'repos', 'git', 'github'];
+/** macOS asks permission the first time an app looks in these, so they are searched last and only when nothing else matched */
+export const PROTECTED_PLACES = ['Documents', 'Desktop', 'Downloads'];
 const EXACT = 95;
 const GAP = 15;
 const MIN_SCORE = 40;
@@ -103,6 +105,18 @@ export async function resolvePath(input: ResolveInput, ctx: { cwd: string }, pro
           const segs = h.path.split(/[\\/]/).filter(Boolean);
           if (tail.length === 2 ? segs.slice(-2).join('/').toLowerCase() === tail.join('/').toLowerCase() : base(h.path).toLowerCase() === tail[0].toLowerCase()) hintDirs.push(h.path);
         }
+        // not under the home folder proper: try the folders macOS asks permission for, since the person named a place
+        if (hintDirs.length === 0) {
+          for (const place of PROTECTED_PLACES) {
+            const dir = join(home, place);
+            if (!(await probe.exists(dir))) continue;
+            const more = await probe.find({ roots: [dir], query: tail[tail.length - 1], kind: 'dir', maxDepth: 4, limit: 20 });
+            for (const h of more) {
+              const segs2 = h.path.split(/[\\/]/).filter(Boolean);
+              if (tail.length === 2 ? segs2.slice(-2).join('/').toLowerCase() === tail.join('/').toLowerCase() : base(h.path).toLowerCase() === tail[0].toLowerCase()) hintDirs.push(h.path);
+            }
+          }
+        }
       }
     }
     for (const d of hintDirs) await search(d, 2, true);
@@ -124,6 +138,12 @@ export async function resolvePath(input: ResolveInput, ctx: { cwd: string }, pro
     }
   }
   if (!hasExact()) await search(home, 3, false);
+  if (found.size === 0) {                                        // anything at all (even a typo) means no need to look there
+    for (const place of PROTECTED_PLACES) {
+      const dir = join(home, place);
+      if (await probe.exists(dir)) await search(dir, 2, false);
+    }
+  }
 
   const ranked = [...found.values()].sort((a, b) => b.score - a.score || Number(b.inHint) - Number(a.inHint) || a.path.localeCompare(b.path));
   if (ranked.length === 0) return { type: 'missing', searched: [...new Set(searched)] };

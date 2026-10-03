@@ -297,6 +297,7 @@ export class NodeTauriBridge {
 // ---- find_paths: the same bounded folder search the app does in Rust (src-tauri/src/path_search.rs) ----
 
 const SKIP_DIRS = new Set(['node_modules', '.git', '.cache', 'target', 'dist', 'build', '.venv', '__pycache__', 'Library', 'AppData', 'proc', 'sys', 'dev', 'snap']);
+const PROTECTED_UNDER_HOME = new Set(['Desktop', 'Documents', 'Downloads', 'Movies', 'Music', 'Pictures', 'Public']);
 const compactOf = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
 
 function editDistanceLoose(a: string, b: string): number {
@@ -348,6 +349,8 @@ function findPaths(query: string, roots: string[], kind: string, maxDepth: numbe
       const hidden = e.name.startsWith('.');
       if (isDir) {
         if (SKIP_DIRS.has(e.name) || (hidden && !wantHidden)) continue;
+        // macOS asks permission the first time an app looks inside these; a search from the home folder leaves them out
+        if (depth === 0 && dir === home && PROTECTED_UNDER_HOME.has(e.name)) continue;
         queue.push([path.join(dir, e.name), depth + 1]);
       } else if (hidden && !wantHidden) continue;
       const kindOk = kind === 'dir' ? isDir : kind === 'file' ? !isDir : true;

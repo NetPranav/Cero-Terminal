@@ -3282,7 +3282,7 @@ export class AgentLoop {
   /** Read-only look at this computer's memory, disk, caches, project folders and processes, then advice built from it */
   private async runSystemAdvice(focus: 'performance' | 'storage' | 'general', context: AgentRunContext): Promise<AgentResult | null> {
     const os = osOf(context.os);
-    this.emit({ type: 'tool_start', message: 'Looking at this computer: memory, storage, caches, project folders, running apps' });
+    this.emit({ type: 'tool_start', message: 'Looking at this computer: memory, storage, caches, project folders, running apps. macOS may ask to let Cero look in Downloads or similar folders; choose Don\'t Allow to skip them.' });
     const params = { command: snapshotScript(), explanation: 'Read memory, disk, caches, node_modules sizes and running processes (read-only)' };
     const result = context.signal
       ? await this.toolExecutor.execute('shell.execute', params, context.cwd, async () => true, undefined, context.signal)
@@ -3942,6 +3942,7 @@ export class AgentLoop {
       ? { index: place === 'desktop' ? 0 : 1 }
       : await askChoice({
         title,
+        heading: 'Where should it go?',
         lines,
         options: [
           { label: 'Desktop', detail: folders.desktop },

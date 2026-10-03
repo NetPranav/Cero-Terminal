@@ -21,6 +21,9 @@ const SKIP_DIRS: &[&str] = &[
     "node_modules", ".git", ".cache", "target", "dist", "build", ".venv", "__pycache__", "Library", "AppData",
     "proc", "sys", "dev", "snap",
 ];
+/// Folders macOS asks permission for the first time an app looks inside. A search that starts at the home folder
+/// does not go into them (searching one directly, or naming it, still does).
+const PROTECTED_UNDER_HOME: &[&str] = &["Desktop", "Documents", "Downloads", "Movies", "Music", "Pictures", "Public"];
 const MAX_VISITED: usize = 20_000;
 const MAX_TIME: Duration = Duration::from_secs(2);
 
@@ -70,6 +73,7 @@ pub fn search(query: &str, roots: &[String], kind: &str, max_depth: u32, limit: 
     let mut seen: HashSet<PathBuf> = HashSet::new();
     let mut visited = 0usize;
 
+    let home: Option<PathBuf> = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok().map(PathBuf::from);
     let mut queue: VecDeque<(PathBuf, u32)> = VecDeque::new();
     for root in roots {
         let p = expand_tilde(root);
@@ -104,6 +108,9 @@ pub fn search(query: &str, roots: &[String], kind: &str, max_depth: u32, limit: 
             let hidden = name.starts_with('.');
             if is_dir {
                 if SKIP_DIRS.contains(&name.as_str()) || (hidden && !want_hidden) {
+                    continue;
+                }
+                if depth == 0 && home.as_ref().map_or(false, |h| *h == dir) && PROTECTED_UNDER_HOME.contains(&name.as_str()) {
                     continue;
                 }
                 queue.push_back((entry.path(), depth + 1));

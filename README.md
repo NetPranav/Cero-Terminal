@@ -49,6 +49,11 @@ Everything else goes to the AI you choose (see [Choose your AI](#choose-your-ai)
 <img src="docs/media/flow-demo.gif" alt="Double-clicking dev-setup.flow: Cero lists every command, waits for a click on Run, then types each step into the terminal" width="820">
 
 Double-clicking a `.flow` file: every command is listed, nothing runs until you click Run, then each step is typed into the terminal.
+
+**Watch the demo (2.5 min):** [docs/media/cero-demo.mp4](docs/media/cero-demo.mp4). One slide per feature, then the real
+app doing it, unedited: asking in plain words, a wrong folder name that gets a question instead of a guess, saving a task as a
+`.flow` file, double-clicking it to run, Ctrl+C stopping a request, and teaching Cero with `/learn`. Recorded in the macOS
+build of Cero 2.2. Made with the [product-demo](docs/demo/README.md) method.
 </div>
 
 ## .flow files: write a setup once, run it anywhere
@@ -152,6 +157,10 @@ Format, actions and the package table: [docs/FLOW_FILES.md](docs/FLOW_FILES.md).
   nothing, a folder that does not exist, an app name that is not installed, a program that is not on the PATH), Cero checks the real
   state of your computer and answers from that: the running apps, your folders, your installed apps, the programs on your PATH. It
   asks before running anything it had to correct, and never closes an app on a guess.
+<div align="center">
+<img src="docs/images/by-name.png" alt="Cero asking 'Did you mean gitbrains?' for the misspelled folder gitbarins" width="720">
+</div>
+
 - A slipped first word is read as intended: `opne fldor docs in cod` becomes `open folder docs in code`.
 
 ## Stop it, queue it

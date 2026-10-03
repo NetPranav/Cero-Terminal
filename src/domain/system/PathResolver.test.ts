@@ -64,7 +64,7 @@ describe('resolvePath', () => {
   });
 
   it('asks when two folders have the same name', async () => {
-    const disk = fakeDisk(['/home/me/Projects/gitBrains', '/home/me/Documents/gitBrains']);
+    const disk = fakeDisk(['/home/me/Projects/gitBrains', '/home/me/code/gitBrains']);
     const r = await resolvePath({ name: 'gitBrains', kind: 'folder' }, ctx, disk);
     expect(r.type).toBe('choose');
     if (r.type === 'choose') { expect(r.reason).toBe('several'); expect(r.candidates).toHaveLength(2); }
@@ -126,5 +126,17 @@ describe('resolvePath', () => {
   it('finds a folder in the current folder first', async () => {
     const disk = fakeDisk(['/home/me/elsewhere/gitBrains', '/home/me/Projects/gitBrains']);
     expect(await resolvePath({ name: 'gitBrains', kind: 'folder' }, ctx, disk)).toEqual({ type: 'found', path: '/home/me/elsewhere/gitBrains' });
+  });
+});
+
+describe('folders macOS asks permission for', () => {
+  it('are not searched when the name is found elsewhere, but are when nothing else matched', async () => {
+    const disk = fakeDisk(['/home/me/Projects/gitBrains', '/home/me/Documents/gitBrains']);
+    const seen: string[] = [];
+    const spy = { ...disk, find: async (o: any) => { seen.push(o.roots[0]); return disk.find(o); } };
+    expect(await resolvePath({ name: 'gitBrains', kind: 'folder' }, ctx, spy)).toEqual({ type: 'found', path: '/home/me/Projects/gitBrains' });
+    expect(seen.some(r => /Documents|Desktop|Downloads/.test(r))).toBe(false);
+    const only = fakeDisk(['/home/me/Documents/lonely']);
+    expect(await resolvePath({ name: 'lonely', kind: 'folder' }, ctx, only)).toEqual({ type: 'found', path: '/home/me/Documents/lonely' });
   });
 });

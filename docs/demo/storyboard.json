@@ -1,226 +1,162 @@
 {
-  "brand": "Cero 2.1",
-  "slides": [
-    {
-      "id": "title",
-      "kind": "title",
-      "kicker": "Cero 2.1",
-      "title": "A terminal you can<br><span>talk to.</span>",
-      "body": "Simple tools in plain words. Workflows that run on any computer.",
-      "duration": 4.2,
-      "icon": "terminal"
-    },
-    {
-      "id": "wifi",
-      "kind": "feature",
-      "kicker": "01  Simple tools",
-      "title": "Turn Wi-Fi <span>off and on</span>",
-      "body": "Say it in plain words. It shows the command and asks first.",
-      "duration": 3.8,
-      "icon": "wifi"
-    },
-    {
-      "id": "join",
-      "kind": "feature",
-      "kicker": "02  Simple tools",
-      "title": "Join a <span>network</span>",
-      "body": "The exact command is shown. Nothing changes until you say yes.",
-      "duration": 3.8,
-      "icon": "shield"
-    },
-    {
-      "id": "port",
-      "kind": "feature",
-      "kicker": "03  Simple tools",
-      "title": "Close a <span>port</span>",
-      "body": "It finds what is listening, names it, and stops only that.",
-      "duration": 3.8,
-      "icon": "plug"
-    },
-    {
-      "id": "app",
-      "kind": "feature",
-      "kicker": "04  Simple tools",
-      "title": "Quit an app <span>by name</span>",
-      "body": "It checks what is really running before it closes anything.",
-      "duration": 3.8,
-      "icon": "window"
-    },
-    {
-      "id": "usp",
-      "kind": "section",
-      "kicker": "The main idea",
-      "title": "Workflows that<br><span>run anywhere.</span>",
-      "body": "Describe the steps once. Get a .flow file that works on macOS, Windows and Linux.",
-      "duration": 4.4,
-      "icon": "file"
-    },
-    {
-      "id": "describe",
-      "kind": "feature",
-      "kicker": "05  Make a workflow",
-      "title": "Describe it, <span>save it</span>",
-      "body": "Tell the terminal the steps. Choose where the file goes.",
-      "duration": 3.8,
-      "icon": "folder"
-    },
-    {
-      "id": "run",
-      "kind": "feature",
-      "kicker": "06  Run a workflow",
-      "title": "Double-click <span>to run</span>",
-      "body": "Cero lists every command and waits for your click.",
-      "duration": 3.8,
-      "icon": "pointer"
-    },
-    {
-      "id": "desktop",
-      "kind": "feature",
-      "kicker": "07  Only apps and pages?",
-      "title": "The terminal <span>never opens</span>",
-      "body": "A workflow that only opens things runs quietly.",
-      "duration": 3.8,
-      "icon": "layers"
-    },
-    {
-      "id": "closing",
-      "kind": "closing",
-      "kicker": "Free and open source",
-      "title": "Cero",
-      "body": "macOS, Windows and Linux. The AI runs on your computer.",
-      "pill": "github.com/NetPranav/Sentinal-Terminal",
-      "duration": 5
-    }
-  ],
-  "sequence": [
-    {
-      "slide": "title"
-    },
-    {
-      "slide": "wifi"
-    },
-    {
-      "clip": "wifi",
-      "cuts": [
-        [
-          1.3,
-          7.0
-        ],
-        [
-          10.5,
-          20.8
-        ],
-        [
-          24.0,
-          28.5
-        ],
-        [
-          32.0,
-          35.6
-        ]
-      ]
-    },
-    {
-      "slide": "join"
-    },
-    {
-      "clip": "join",
-      "cuts": [
-        [
-          2.0,
-          9.0
-        ],
-        [
-          12.0,
-          15.6
-        ]
-      ]
-    },
-    {
-      "slide": "port"
-    },
-    {
-      "clip": "port",
-      "cuts": [
-        [
-          1.0,
-          6.5
-        ],
-        [
-          9.0,
-          14.0
-        ],
-        [
-          17.2,
-          22.4
-        ]
-      ]
-    },
-    {
-      "slide": "app"
-    },
-    {
-      "clip": "app",
-      "cuts": [
-        [
-          3.0,
-          8.5
-        ],
-        [
-          11.0,
-          16.5
-        ]
-      ]
-    },
-    {
-      "slide": "usp"
-    },
-    {
-      "slide": "describe"
-    },
-    {
-      "clip": "describe",
-      "cuts": [
-        [
-          2.5,
-          9.0
-        ],
-        [
-          11.0,
-          16.0
-        ],
-        [
-          19.0,
-          23.6
-        ]
-      ]
-    },
-    {
-      "slide": "run"
-    },
-    {
-      "clip": "run",
-      "cuts": [
-        [
-          1.0,
-          20.3
-        ]
-      ]
-    },
-    {
-      "slide": "desktop"
-    },
-    {
-      "clip": "desktop",
-      "cuts": [
-        [
-          1.5,
-          12.0
-        ]
-      ]
-    },
-    {
-      "slide": "closing"
-    }
-  ]
+ "brand": "Cero 2.2",
+ "slides": [
+  {
+   "id": "title",
+   "kind": "title",
+   "kicker": "Cero 2.2",
+   "title": "A terminal you can<br><span>talk to.</span>",
+   "body": "Plain words in. Real commands out. You approve what changes anything.",
+   "duration": 4.4,
+   "icon": "terminal"
+  },
+  {
+   "id": "ask",
+   "kind": "feature",
+   "kicker": "01  Ask",
+   "title": "Ask in <span>plain words</span>",
+   "body": "Answers come from your real files, not a guess.",
+   "duration": 3.6,
+   "icon": "terminal"
+  },
+  {
+   "id": "real",
+   "kind": "feature",
+   "kicker": "02  It finds the real thing",
+   "title": "Wrong name?<br><span>It asks, it does not guess.</span>",
+   "body": "Spelling and typos are forgiven. Nothing is created or opened by mistake.",
+   "duration": 4.4,
+   "icon": "folder"
+  },
+  {
+   "id": "save",
+   "kind": "feature",
+   "kicker": "03  Save what you did",
+   "title": "Say <span>\"save this as a workflow\"</span>",
+   "body": "It runs the task, then saves what really ran as a .flow file.",
+   "duration": 4.0,
+   "icon": "file"
+  },
+  {
+   "id": "run",
+   "kind": "feature",
+   "kicker": "04  Run it anywhere",
+   "title": "Double-click <span>to run</span>",
+   "body": "Cero lists every command and waits for your click.",
+   "duration": 3.6,
+   "icon": "pointer"
+  },
+  {
+   "id": "stop",
+   "kind": "feature",
+   "kicker": "05  Stay in control",
+   "title": "Ctrl+C <span>stops it</span>",
+   "body": "The request and the command it started, right away.",
+   "duration": 3.6,
+   "icon": "shield"
+  },
+  {
+   "id": "teach",
+   "kind": "feature",
+   "kicker": "06  Teach it",
+   "title": "It learns <span>only when you say so</span>",
+   "body": "Type /learn after a request that worked. Nothing is learned by watching you.",
+   "duration": 4.2,
+   "icon": "layers"
+  },
+  {
+   "id": "closing",
+   "kind": "closing",
+   "kicker": "Free and open source",
+   "title": "Cero",
+   "body": "macOS, Windows and Linux. The AI runs on your computer.",
+   "duration": 5,
+   "icon": "",
+   "pill": "github.com/NetPranav/Sentinal-Terminal"
+  }
+ ],
+ "sequence": [
+  {
+   "slide": "title"
+  },
+  {
+   "slide": "ask"
+  },
+  {
+   "clip": "ask",
+   "cuts": [
+    [
+     1.0,
+     24.5
+    ]
+   ]
+  },
+  {
+   "slide": "real"
+  },
+  {
+   "clip": "real",
+   "cuts": [
+    [
+     1.0,
+     25.0
+    ]
+   ]
+  },
+  {
+   "slide": "save"
+  },
+  {
+   "clip": "save",
+   "cuts": [
+    [
+     1.0,
+     15.0
+    ]
+   ]
+  },
+  {
+   "slide": "run"
+  },
+  {
+   "clip": "run",
+   "cuts": [
+    [
+     1.0,
+     14.5
+    ]
+   ]
+  },
+  {
+   "slide": "stop"
+  },
+  {
+   "clip": "stop",
+   "cuts": [
+    [
+     0.8,
+     4.0
+    ],
+    [
+     12.0,
+     28.5
+    ]
+   ]
+  },
+  {
+   "slide": "teach"
+  },
+  {
+   "clip": "teach",
+   "cuts": [
+    [
+     1.0,
+     21.0
+    ]
+   ]
+  },
+  {
+   "slide": "closing"
+  }
+ ]
 }

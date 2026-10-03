@@ -25,6 +25,6 @@ printf '{ "name": "build-check", "steps": [ { "command": "echo step-one-ok" }, {
 mkdir demo-repo && cd demo-repo && export HOME="$T/home" && git init -q && echo "# demo" > README.md && git add . && git commit -qm "initial commit" && echo a > a.txt && git add . && git commit -qm "add a" && echo b > b.txt && git add . && git commit -qm "add b" && echo change >> README.md
 # folders for the open-by-name tests (Phase 6): one inside a place named the way report 6 names it,
 # a differently spelled one, two with the same name, and plain neighbours
-mkdir -p "$T/home/padhai_in_linux/Projects/gitbrains" "$T/home/Projects/shop-ui" "$T/home/Projects/api-server" "$T/home/Projects/twin" "$T/home/Documents/twin" "$T/home/code/my-dotfiles"
+mkdir -p "$T/home/padhai_in_linux/Projects/gitbrains" "$T/home/Projects/shop-ui" "$T/home/Projects/api-server" "$T/home/Projects/twin" "$T/home/code/twin" "$T/home/code/my-dotfiles"
 echo "# gitbrains" > "$T/home/padhai_in_linux/Projects/gitbrains/README.md"
 echo "fixtures ready"

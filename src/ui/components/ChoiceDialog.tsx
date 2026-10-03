@@ -53,7 +53,7 @@ export const ChoiceDialog: React.FC<{ request: ChoiceRequest; onResult: (result:
             {request.lines.join('\n')}
           </div>
         )}
-        <div style={{ fontSize: '12px', letterSpacing: '0.6px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: '8px' }}>Where should it go?</div>
+        <div style={{ fontSize: '12px', letterSpacing: '0.6px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: '8px' }}>{request.heading ?? 'Choose one'}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {request.options.map((o, i) => (
             <button

@@ -51,7 +51,7 @@ export function snapshotScript(): string {
     "echo '##swap'; (sysctl -n vm.swapusage 2>/dev/null || free -b 2>/dev/null | awk '/Swap/{print \"used = \" $3 \" B\"}')",
     "echo '##disk'; df -k \"$HOME\" | tail -1",
     "echo '##sizes'; for p in \"$HOME/Library/Caches\" \"$HOME/.cache\" \"$HOME/.npm\" \"$HOME/.cargo/registry\" \"$HOME/.gradle/caches\" \"$HOME/Library/Developer/Xcode/DerivedData\" \"$HOME/Library/Developer/CoreSimulator\" \"$HOME/.Trash\" \"$HOME/.local/share/Trash\" \"$HOME/Downloads\" \"$HOME/.docker\" \"/tmp\" \"/var/tmp\"; do [ -e \"$p\" ] && du -sk \"$p\" 2>/dev/null; done",
-    "echo '##nodemodules'; find \"$HOME\" -mindepth 1 -maxdepth 6 \\( -name Library -o -name '.*' -o -name Applications -o -name Movies -o -name Music -o -name Pictures \\) -prune -o -type d -name node_modules -print -prune 2>/dev/null | head -60 | while read d; do du -sk \"$d\" 2>/dev/null; done",
+    "echo '##nodemodules'; find \"$HOME\" -mindepth 1 -maxdepth 6 \\( -name Library -o -name '.*' -o -name Applications -o -name Movies -o -name Music -o -name Pictures -o -name Desktop -o -name Documents -o -name Downloads \\) -prune -o -type d -name node_modules -print -prune 2>/dev/null | head -60 | while read d; do du -sk \"$d\" 2>/dev/null; done",
     "echo '##procs'; if [ \"$(uname)\" = Darwin ]; then ps -Ao pcpu=,pmem=,comm= -r | head -7; else ps -eo pcpu=,pmem=,comm= --sort=-pcpu | head -7; fi",
     "echo '##uptime'; uptime",
     "echo '##battery'; system_profiler SPPowerDataType 2>/dev/null | grep -E 'Cycle Count|Condition|Maximum Capacity'",
