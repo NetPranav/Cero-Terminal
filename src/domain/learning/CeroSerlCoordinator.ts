@@ -1,7 +1,7 @@
 /**
- * SentinelSerlCoordinator.ts — End-to-End Sentinel-SERL Autonomous Orchestrator
+ * CeroSerlCoordinator.ts — End-to-End Cero-SERL Autonomous Orchestrator
  * 
- * Part of Sentinel-SERL (Self-Evolving Reflexion Loop & Frontier On-Device Intelligence):
+ * Part of Cero-SERL (Self-Evolving Reflexion Loop & Frontier On-Device Intelligence):
  * Unifies and synchronizes all 8 Tier 4 subsystems into a harmonious, closed-loop,
  * self-evolving intelligence architecture on Apple Silicon macOS:
  * 
@@ -91,7 +91,7 @@ export interface RegressionGateResult {
   threshold: number;
 }
 
-export interface SentinelSerlCoordinatorOptions {
+export interface CeroSerlCoordinatorOptions {
   shadowSimulator?: ShadowPtySimulator;
   deficitLogger?: KnowledgeDeficitLogger;
   reflexionEngine?: ReflexionEngine;
@@ -112,8 +112,8 @@ export interface SentinelSerlCoordinatorOptions {
   powerChecker?: () => Promise<PowerState>;
 }
 
-export class SentinelSerlCoordinator {
-  private static instance: SentinelSerlCoordinator;
+export class CeroSerlCoordinator {
+  private static instance: CeroSerlCoordinator;
 
   private shadowSimulator: ShadowPtySimulator;
   private deficitLogger: KnowledgeDeficitLogger;
@@ -141,7 +141,7 @@ export class SentinelSerlCoordinator {
   /** At most one background reflexion pass per window */
   public static readonly REFLEXION_INTERVAL_MS = 10 * 60_000;
 
-  constructor(options?: SentinelSerlCoordinatorOptions) {
+  constructor(options?: CeroSerlCoordinatorOptions) {
     // Background work must not compile or download: no real dry-runs (cargo check, pip --dry-run)
     this.shadowSimulator = options?.shadowSimulator || new ShadowPtySimulator({ allowDryRuns: false });
     this.deficitLogger = options?.deficitLogger || KnowledgeDeficitLogger.getInstance();
@@ -188,11 +188,11 @@ export class SentinelSerlCoordinator {
     });
   }
 
-  public static getInstance(options?: SentinelSerlCoordinatorOptions): SentinelSerlCoordinator {
-    if (!SentinelSerlCoordinator.instance || options) {
-      SentinelSerlCoordinator.instance = new SentinelSerlCoordinator(options);
+  public static getInstance(options?: CeroSerlCoordinatorOptions): CeroSerlCoordinator {
+    if (!CeroSerlCoordinator.instance || options) {
+      CeroSerlCoordinator.instance = new CeroSerlCoordinator(options);
     }
-    return SentinelSerlCoordinator.instance;
+    return CeroSerlCoordinator.instance;
   }
 
   // =========================================================================
@@ -361,8 +361,8 @@ export class SentinelSerlCoordinator {
   public async onTerminalIdle(idleSeconds: number): Promise<void> {
     // Phase 4.3: Idle Reflexion Worker. Only when the user has really stepped away, the
     // machine is on AC power, no model request is in flight, and not more than once per window.
-    const reflexionDue = Date.now() - this.lastReflexionAt >= SentinelSerlCoordinator.REFLEXION_INTERVAL_MS;
-    if (idleSeconds >= SentinelSerlCoordinator.REFLEXION_MIN_IDLE_SECONDS && idleSeconds < 1200 && reflexionDue) {
+    const reflexionDue = Date.now() - this.lastReflexionAt >= CeroSerlCoordinator.REFLEXION_INTERVAL_MS;
+    if (idleSeconds >= CeroSerlCoordinator.REFLEXION_MIN_IDLE_SECONDS && idleSeconds < 1200 && reflexionDue) {
       const unresolved = this.deficitLogger.getUnresolvedDeficits();
       const inferenceBusy = this.embeddedEngine.getInferenceQueueStatus().queuedCount > 0
         || Boolean(this.embeddedEngine.getInferenceQueueStatus().activeRequest);
@@ -582,13 +582,13 @@ export class SentinelSerlCoordinator {
   }> {
     const startTime = Date.now();
     const home = typeof process !== 'undefined' && process.env ? (process.env.HOME || '/tmp') : '/tmp';
-    const adapterGguf = options?.customAdapterPath || path.join(home, '.sentinel', 'models', 'sentinel_mlx_lora.gguf');
+    const adapterGguf = options?.customAdapterPath || path.join(home, '.cero', 'models', 'cero_mlx_lora.gguf');
     const role = options?.modelRole || 'coder';
 
     try {
       // 1. Run MLX fine-tuning script
       const cwd = typeof process !== 'undefined' && typeof process.cwd === 'function' ? process.cwd() : '.';
-      const scriptPath = path.join(cwd, 'scripts', 'train_sentinel_mlx.py');
+      const scriptPath = path.join(cwd, 'scripts', 'train_cero_mlx.py');
       const dryRunFlag = options?.dryRun ? '--dry-run' : '';
       const trainCmd = `python3 "${scriptPath}" ${dryRunFlag}`.trim();
 
@@ -781,7 +781,7 @@ export class SentinelSerlCoordinator {
     return {
       resolved: false,
       source: 'needs_llm_inference',
-      grammar: GbnfGrammarManager.SENTINEL_ACTION_GBNF,
+      grammar: GbnfGrammarManager.CERO_ACTION_GBNF,
       logitBias: this.steeringManager.generateLogitBias()
     };
   }

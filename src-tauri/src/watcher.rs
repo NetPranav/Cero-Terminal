@@ -2,7 +2,7 @@
 //!
 //! Files are tailed by polling their size once a second: cheap for a handful of files, works on
 //! every filesystem (including network mounts where inotify does not), and handles rotation and
-//! truncation. New complete lines are emitted to the webview as `sentinel-watch-lines` events;
+//! truncation. New complete lines are emitted to the webview as `cero-watch-lines` events;
 //! the TypeScript side decides what is an error and what to do about it.
 
 use serde::Serialize;
@@ -97,7 +97,7 @@ fn read_from(path: &Path, offset: u64, max: u64) -> std::io::Result<Vec<u8>> {
 fn emit_lines(app: &AppHandle, id: u64, mut lines: Vec<String>) {
     while !lines.is_empty() {
         let rest = if lines.len() > MAX_LINES_PER_EVENT { lines.split_off(MAX_LINES_PER_EVENT) } else { Vec::new() };
-        let _ = app.emit("sentinel-watch-lines", WatchLines { id, lines });
+        let _ = app.emit("cero-watch-lines", WatchLines { id, lines });
         lines = rest;
     }
 }
@@ -151,7 +151,7 @@ async fn stream_command(app: AppHandle, id: u64, program: String, args: Vec<Stri
     command.creation_flags(crate::embedded_server::CREATE_NO_WINDOW);
     let child = command.spawn();
     let Ok(mut child) = child else {
-        let _ = app.emit("sentinel-watch-lines", WatchLines { id, lines: vec![format!("[sentinel] could not start {}", program)] });
+        let _ = app.emit("cero-watch-lines", WatchLines { id, lines: vec![format!("[cero] could not start {}", program)] });
         return;
     };
     let Some(stdout) = child.stdout.take() else { return };

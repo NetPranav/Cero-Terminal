@@ -1,0 +1,74 @@
+app-id: org.cero.terminal
+runtime: org.gnome.Platform
+runtime-version: '46'
+sdk: org.gnome.Sdk
+command: cero-terminal
+
+finish-args:
+  # X11 + Wayland windowing
+  - --socket=x11
+  - --socket=wayland
+  - --share=ipc
+  # Network capability for AI models and diagnostics
+  - --share=network
+  # Full filesystem access for host shell execution
+  - --filesystem=host
+  - --filesystem=xdg-config
+  - --filesystem=xdg-data
+  # Desktop notifications and hardware devices
+  - --talk-name=org.freedesktop.Notifications
+  - --device=all
+
+modules:
+  - name: cero-terminal
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 cero-terminal /app/bin/cero-terminal
+      - install -Dm644 org.cero.terminal.desktop /app/share/applications/org.cero.terminal.desktop
+      - install -Dm644 org.cero.terminal.metainfo.xml /app/share/metainfo/org.cero.terminal.metainfo.xml
+      - install -Dm644 cero-terminal-mime.xml /app/share/mime/packages/org.cero.terminal.xml
+      - install -Dm644 icon.png /app/share/icons/hicolor/512x512/apps/org.cero.terminal.png
+      - install -Dm644 128x128.png /app/share/icons/hicolor/128x128/apps/org.cero.terminal.png
+      - install -Dm644 32x32.png /app/share/icons/hicolor/32x32/apps/org.cero.terminal.png
+      - install -Dm644 flow-16.png /app/share/icons/hicolor/16x16/mimetypes/application-x-cero-workflow.png
+      - install -Dm644 flow-24.png /app/share/icons/hicolor/24x24/mimetypes/application-x-cero-workflow.png
+      - install -Dm644 flow-32.png /app/share/icons/hicolor/32x32/mimetypes/application-x-cero-workflow.png
+      - install -Dm644 flow-48.png /app/share/icons/hicolor/48x48/mimetypes/application-x-cero-workflow.png
+      - install -Dm644 flow-64.png /app/share/icons/hicolor/64x64/mimetypes/application-x-cero-workflow.png
+      - install -Dm644 flow-128.png /app/share/icons/hicolor/128x128/mimetypes/application-x-cero-workflow.png
+      - install -Dm644 flow-256.png /app/share/icons/hicolor/256x256/mimetypes/application-x-cero-workflow.png
+      - install -Dm644 flow-512.png /app/share/icons/hicolor/512x512/mimetypes/application-x-cero-workflow.png
+      - install -Dm644 flow-icon.svg /app/share/icons/hicolor/scalable/mimetypes/application-x-cero-workflow.svg
+    sources:
+      - type: file
+        path: ../../src-tauri/target/release/cero-terminal
+      - type: file
+        path: org.cero.terminal.desktop
+      - type: file
+        path: org.cero.terminal.metainfo.xml
+      - type: file
+        path: ../linux/cero-terminal-mime.xml
+      - type: file
+        path: ../../src-tauri/icons/icon.png
+      - type: file
+        path: ../../src-tauri/icons/128x128.png
+      - type: file
+        path: ../../src-tauri/icons/32x32.png
+      - type: file
+        path: ../../src-tauri/icons/flow/flow-16.png
+      - type: file
+        path: ../../src-tauri/icons/flow/flow-24.png
+      - type: file
+        path: ../../src-tauri/icons/flow/flow-32.png
+      - type: file
+        path: ../../src-tauri/icons/flow/flow-48.png
+      - type: file
+        path: ../../src-tauri/icons/flow/flow-64.png
+      - type: file
+        path: ../../src-tauri/icons/flow/flow-128.png
+      - type: file
+        path: ../../src-tauri/icons/flow/flow-256.png
+      - type: file
+        path: ../../src-tauri/icons/flow/flow-512.png
+      - type: file
+        path: ../../assets/brand/flow-icon.svg

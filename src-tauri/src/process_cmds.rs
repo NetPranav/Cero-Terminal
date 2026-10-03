@@ -306,7 +306,7 @@ pub async fn run_command(
             stderr.push('\n');
         }
         stderr.push_str(&format!(
-            "[sentinel] command timed out after {} ms and was terminated",
+            "[cero] command timed out after {} ms and was terminated",
             timeout_ms.unwrap_or(0)
         ));
     }
@@ -387,22 +387,22 @@ pub fn check_path_exists(path: String) -> bool {
     std::path::Path::new(&path).exists()
 }
 
-/// ~/.sentinel, where every learning store lives.
-fn sentinel_dir() -> Option<std::path::PathBuf> {
+/// ~/.cero, where every learning store lives.
+fn cero_dir() -> Option<std::path::PathBuf> {
     std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .ok()
-        .map(|home| std::path::PathBuf::from(home).join(".sentinel"))
+        .map(|home| std::path::PathBuf::from(home).join(".cero"))
 }
 
-/// Make ~/.sentinel readable by its owner only. It holds the audit log, session transcripts and
+/// Make ~/.cero readable by its owner only. It holds the audit log, session transcripts and
 /// learning data; a folder that is world-readable would expose them on machines whose home folders
 /// are open to other users. Everything inside is protected by this folder's permissions.
 pub fn ensure_private_data_dir() {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Some(dir) = sentinel_dir() {
+        if let Some(dir) = cero_dir() {
             if std::fs::create_dir_all(&dir).is_ok() {
                 let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
             }
@@ -410,22 +410,22 @@ pub fn ensure_private_data_dir() {
     }
 }
 
-/// Resolve a path relative to ~/.sentinel, refusing anything that escapes it.
-pub(crate) fn resolve_in_sentinel(relative: &str) -> Result<std::path::PathBuf, String> {
+/// Resolve a path relative to ~/.cero, refusing anything that escapes it.
+pub(crate) fn resolve_in_cero(relative: &str) -> Result<std::path::PathBuf, String> {
     let rel = std::path::Path::new(relative);
     // Only plain names: a root ("\\x" or "/x" on Windows is not `is_absolute()` but `join` would
-    // still leave the store), a drive prefix ("C:x") or ".." could all reach outside ~/.sentinel
+    // still leave the store), a drive prefix ("C:x") or ".." could all reach outside ~/.cero
     let plain = rel.components().all(|c| matches!(c, std::path::Component::Normal(_) | std::path::Component::CurDir));
     if relative.is_empty() || !plain {
-        return Err(format!("Path must stay inside ~/.sentinel: {}", relative));
+        return Err(format!("Path must stay inside ~/.cero: {}", relative));
     }
-    Ok(sentinel_dir().ok_or("HOME is not set")?.join(rel))
+    Ok(cero_dir().ok_or("HOME is not set")?.join(rel))
 }
 
 #[derive(Serialize)]
-pub struct SentinelStoreSnapshot {
+pub struct CeroStoreSnapshot {
     pub home: String,
-    /// Relative path under ~/.sentinel -> file contents
+    /// Relative path under ~/.cero -> file contents
     pub files: std::collections::HashMap<String, String>,
 }
 
@@ -435,12 +435,12 @@ const SNAPSHOT_SKIP_DIRS: [&str; 4] = ["bin", "engine", "logs", "flow_icons"];
 const SNAPSHOT_MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
 const SNAPSHOT_MAX_TOTAL_BYTES: u64 = 32 * 1024 * 1024;
 
-/// Contents of the small .json/.jsonl state files (and .flow workflows) under ~/.sentinel, loaded once at startup so
+/// Contents of the small .json/.jsonl state files (and .flow workflows) under ~/.cero, loaded once at startup so
 /// the webview's synchronous `fs` shim can serve the learning stores.
 #[tauri::command]
-pub fn sentinel_store_snapshot() -> Result<SentinelStoreSnapshot, String> {
+pub fn cero_store_snapshot() -> Result<CeroStoreSnapshot, String> {
     let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).map_err(|e| e.to_string())?;
-    let root = std::path::PathBuf::from(&home).join(".sentinel");
+    let root = std::path::PathBuf::from(&home).join(".cero");
     let mut files = std::collections::HashMap::new();
     let mut total: u64 = 0;
     let mut stack = vec![root.clone()];
@@ -467,14 +467,14 @@ pub fn sentinel_store_snapshot() -> Result<SentinelStoreSnapshot, String> {
             }
         }
     }
-    Ok(SentinelStoreSnapshot { home, files })
+    Ok(CeroStoreSnapshot { home, files })
 }
 
-/// Append to a file under ~/.sentinel (creating it and its parents).
+/// Append to a file under ~/.cero (creating it and its parents).
 #[tauri::command]
-pub fn sentinel_store_append(relative_path: String, contents: String) -> Result<(), String> {
+pub fn cero_store_append(relative_path: String, contents: String) -> Result<(), String> {
     use std::io::Write;
-    let path = resolve_in_sentinel(&relative_path)?;
+    let path = resolve_in_cero(&relative_path)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -486,20 +486,20 @@ pub fn sentinel_store_append(relative_path: String, contents: String) -> Result<
     file.write_all(contents.as_bytes()).map_err(|e| e.to_string())
 }
 
-/// Replace a file under ~/.sentinel (creating it and its parents).
+/// Replace a file under ~/.cero (creating it and its parents).
 #[tauri::command]
-pub fn sentinel_store_write(relative_path: String, contents: String) -> Result<(), String> {
-    let path = resolve_in_sentinel(&relative_path)?;
+pub fn cero_store_write(relative_path: String, contents: String) -> Result<(), String> {
+    let path = resolve_in_cero(&relative_path)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     std::fs::write(&path, contents).map_err(|e| format!("Failed to write {}: {}", path.display(), e))
 }
 
-/// Delete a file under ~/.sentinel; missing files are not an error.
+/// Delete a file under ~/.cero; missing files are not an error.
 #[tauri::command]
-pub fn sentinel_store_remove(relative_path: String) -> Result<(), String> {
-    let path = resolve_in_sentinel(&relative_path)?;
+pub fn cero_store_remove(relative_path: String) -> Result<(), String> {
+    let path = resolve_in_cero(&relative_path)?;
     match std::fs::remove_file(&path) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -530,18 +530,18 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_store_paths_cannot_escape() {
-        assert!(resolve_in_sentinel("learning/deficits.jsonl").is_ok());
-        assert!(resolve_in_sentinel("../.ssh/authorized_keys").is_err());
-        assert!(resolve_in_sentinel("/etc/passwd").is_err());
-        assert!(resolve_in_sentinel("learning/../../x").is_err());
-        assert!(resolve_in_sentinel("").is_err());
+    fn cero_store_paths_cannot_escape() {
+        assert!(resolve_in_cero("learning/deficits.jsonl").is_ok());
+        assert!(resolve_in_cero("../.ssh/authorized_keys").is_err());
+        assert!(resolve_in_cero("/etc/passwd").is_err());
+        assert!(resolve_in_cero("learning/../../x").is_err());
+        assert!(resolve_in_cero("").is_err());
         #[cfg(windows)]
         {
-            assert!(resolve_in_sentinel("\\Windows\\System32\\x").is_err());
-            assert!(resolve_in_sentinel("C:x").is_err());
-            assert!(resolve_in_sentinel("C:\\x").is_err());
-            assert!(resolve_in_sentinel("learning\\deficits.jsonl").is_ok());
+            assert!(resolve_in_cero("\\Windows\\System32\\x").is_err());
+            assert!(resolve_in_cero("C:x").is_err());
+            assert!(resolve_in_cero("C:\\x").is_err());
+            assert!(resolve_in_cero("learning\\deficits.jsonl").is_ok());
         }
     }
 

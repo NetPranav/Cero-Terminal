@@ -227,7 +227,7 @@ export class BluetoothCapability extends BaseCapabilityDriver<BluetoothInput, an
 
       if (op === 'on' || op === 'off') {
         if (platform === 'linux') {
-          if (typeof process !== 'undefined' && process.env.SENTINEL_BENCHMARK === 'true') {
+          if (typeof process !== 'undefined' && process.env.CERO_BENCHMARK === 'true') {
             const output = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', {
               command: 'sh',
               args: ['-c', `echo "Controller powered: ${op === 'on' ? 'yes' : 'no'}"`]
@@ -404,7 +404,7 @@ export class BluetoothCapability extends BaseCapabilityDriver<BluetoothInput, an
 
   public async verify(input: BluetoothInput, result: CapabilityExecutionResult<any>): Promise<boolean> {
     if (!result.success || result.cancelled) return false;
-    if (typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.SENTINEL_BENCHMARK === 'true')) return true;
+    if (typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.CERO_BENCHMARK === 'true')) return true;
 
     const platform = this.detectPlatform();
     if (platform !== 'macos') {
@@ -433,7 +433,7 @@ export class BluetoothCapability extends BaseCapabilityDriver<BluetoothInput, an
 
   public async rollback(_input: BluetoothInput, result: CapabilityExecutionResult<any>): Promise<boolean> {
     if (!result.success) return false;
-    if (typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.SENTINEL_BENCHMARK === 'true')) return true;
+    if (typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.CERO_BENCHMARK === 'true')) return true;
 
     const platform = this.detectPlatform();
     if (platform !== 'macos') {

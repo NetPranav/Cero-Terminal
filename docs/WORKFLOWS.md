@@ -1,6 +1,6 @@
-# Sentinel Terminal — Workflow & Macro Automation Architecture
+# Cero — Workflow & Macro Automation Architecture
 
-Sentinel Terminal features an intelligent, multi-tiered workflow and macro automation engine. While traditional terminals force developers to manually repeat complex shell incantations or write brittle ad-hoc shell scripts, Sentinel bridges conversational AI planning with zero-token deterministic execution.
+Cero features an intelligent, multi-tiered workflow and macro automation engine. While traditional terminals force developers to manually repeat complex shell incantations or write brittle ad-hoc shell scripts, Cero bridges conversational AI planning with zero-token deterministic execution.
 
 Developers can decompose high-level goals into multi-stage pipelines using natural language, persist verified execution trajectories as schema-versioned JSON workflows, and deterministically replay them with sub-millisecond dispatch, parameter substitution, environment drift detection, and categorical security guardrails.
 
@@ -11,7 +11,7 @@ Developers can decompose high-level goals into multi-stage pipelines using natur
 
 ## 1. Architectural Overview & Philosophy
 
-Sentinel's workflow engine is divided into two complementary layers designed for distinct operational phases:
+Cero's workflow engine is divided into two complementary layers designed for distinct operational phases:
 
 ```
 +-----------------------------------------------------------------------------------+
@@ -27,7 +27,7 @@ Sentinel's workflow engine is divided into two complementary layers designed for
 |  - Workflow Recorder (Captures session commands, UndoLog, & AgentPlan trajectories)|
 |  - Deterministic Replay Engine (Zero-token replay, drift check, security analysis)  |
 |  - Cross-Platform Command Adapter (OS & distro translation: Linux, macOS, Win)    |
-|  - Disk Workflow Storage (Persisted to ~/.sentinel/workflows/<name>.json)         |
+|  - Disk Workflow Storage (Persisted to ~/.cero/workflows/<name>.json)         |
 +-----------------------------------------------------------------------------------+
                                         |
 +---------------------------------------v-------------------------------------------+
@@ -45,9 +45,9 @@ Sentinel's workflow engine is divided into two complementary layers designed for
 ### Core Design Principles
 
 1. **Zero-Token Instant Replay**: Once an AI agent or developer discovers and verifies the correct sequence of commands for a task, re-executing that task should never consume LLM inference tokens or incur model latency. Saved workflows replay deterministically in 15–25ms.
-2. **Environment Drift Awareness**: Workflows explicitly declare prerequisite binaries, ports, and paths. Sentinel verifies these prerequisites before dispatching commands, preventing silent failures caused by missing packages or occupied ports.
-3. **Categorical Zero-Trust Security**: Replayed commands are not exempt from safety checks. Every command is statically evaluated by Sentinel's `SecurityEngine`. Commands classified as `SENSITIVE` halt execution for explicit operator consent unless pre-approved.
-4. **Session Reversibility & Auditability**: Every step executed during workflow replay is recorded in Sentinel's session `UndoLog`, ensuring full auditability and rollback capability.
+2. **Environment Drift Awareness**: Workflows explicitly declare prerequisite binaries, ports, and paths. Cero verifies these prerequisites before dispatching commands, preventing silent failures caused by missing packages or occupied ports.
+3. **Categorical Zero-Trust Security**: Replayed commands are not exempt from safety checks. Every command is statically evaluated by Cero's `SecurityEngine`. Commands classified as `SENSITIVE` halt execution for explicit operator consent unless pre-approved.
+4. **Session Reversibility & Auditability**: Every step executed during workflow replay is recorded in Cero's session `UndoLog`, ensuring full auditability and rollback capability.
 5. **Cross-Platform Portability**: Workflows created on Linux execute seamlessly on macOS and Windows through automated shell translation and platform-specific step overrides.
 
 ---
@@ -58,7 +58,7 @@ The Interactive Shell Workflow System provides command-line ergonomics for recor
 
 ### A. Recording Workflows from CLI
 
-Sentinel supports three natural mechanisms for saving workflows:
+Cero supports three natural mechanisms for saving workflows:
 
 #### 1. Simultaneous Task Execution + Named Save Directive
 Execute a natural language task and immediately persist the executed sequence as a named workflow using the `:: save as workflow <name>` syntax:
@@ -67,7 +67,7 @@ Execute a natural language task and immediately persist the executed sequence as
 > clean build cache, run cargo test, and package release :: save as workflow release-prep
 ```
 
-Sentinel's `MultistagePromptDecomposer` extracts the inner goal (`clean build cache, run cargo test, and package release`) and the target workflow name (`release-prep`). Upon successful completion, the verified commands are written to `~/.sentinel/workflows/release-prep.json`.
+Cero's `MultistagePromptDecomposer` extracts the inner goal (`clean build cache, run cargo test, and package release`) and the target workflow name (`release-prep`). Upon successful completion, the verified commands are written to `~/.cero/workflows/release-prep.json`.
 
 #### 2. Retrospective Scoped Workflow Save
 Persist commands recently executed in the current session into a workflow by referencing recent steps recorded in the `UndoLog`:
@@ -89,7 +89,7 @@ When an AI agent generates a multi-phase `AgentPlan` via `AdaptivePlanEngine`, t
 
 ### B. Saved Workflow File Schema (`schemaVersion: 1`)
 
-Workflows are persisted as human-readable, schema-versioned JSON files in `~/.sentinel/workflows/<name>.json`.
+Workflows are persisted as human-readable, schema-versioned JSON files in `~/.cero/workflows/<name>.json`.
 
 ```json
 {
@@ -232,7 +232,7 @@ Located in `src/workflows/engine/DeterministicReplayEngine.ts`, this engine exec
          |
          v
 +-------------------------------+
-|  1. Load Workflow Definition  | ---> (From ~/.sentinel/workflows/<name>.json)
+|  1. Load Workflow Definition  | ---> (From ~/.cero/workflows/<name>.json)
 +-------------------------------+
          |
          v
@@ -311,7 +311,7 @@ Located in `src/workflows/engine/CrossPlatformCommandAdapter.ts`, this adapter e
 
 ### Operating System & Distribution Resolution
 
-Sentinel automatically resolves the host platform via `getPlatform()` and detects the Linux distribution family (`debian`, `arch`, `fedora`, `alpine`, `generic`):
+Cero automatically resolves the host platform via `getPlatform()` and detects the Linux distribution family (`debian`, `arch`, `fedora`, `alpine`, `generic`):
 
 | Target OS / Distro | Shell Invocation | Package Manager / Tool Idiom |
 | :--- | :--- | :--- |
@@ -344,8 +344,8 @@ Located in `src/workflows/storage/DiskWorkflowStorage.ts`, this module provides 
 ### Storage Paths & Directory Layout
 
 Workflows are stored in the user's home configuration directory:
-- **Linux & macOS**: `~/.sentinel/workflows/`
-- **Windows**: `%USERPROFILE%\.sentinel\workflows\`
+- **Linux & macOS**: `~/.cero/workflows/`
+- **Windows**: `%USERPROFILE%\.cero\workflows\`
 
 Each workflow is saved as an individual JSON file (`<workflow_name>.json`). The filename is sanitized to contain only alphanumeric characters, underscores, and hyphens.
 
@@ -406,7 +406,7 @@ The Workflow Manager Drawer (`src/ui/components/WorkflowManagerDrawer.tsx`) prov
 
 ## 8. Advanced Three-Tier Declarative Workflow Architecture
 
-In addition to task-level shell macros, Sentinel contains an enterprise-grade declarative workflow engine modeled in `src/workflows/models/WorkflowTypes.ts` and orchestrated by `src/workflows/engine/WorkflowExecutionEngine.ts`.
+In addition to task-level shell macros, Cero contains an enterprise-grade declarative workflow engine modeled in `src/workflows/models/WorkflowTypes.ts` and orchestrated by `src/workflows/engine/WorkflowExecutionEngine.ts`.
 
 ### A. The Three-Tier Architecture
 
@@ -420,7 +420,7 @@ In addition to task-level shell macros, Sentinel contains an enterprise-grade de
 3. WorkflowInstance (Isolated Single Execution Run)
 ```
 
-1. **`WorkflowTemplate`**: Immutable, pre-configured blueprints shipped built-in with Sentinel or imported from external repositories. Templates cannot be modified during execution.
+1. **`WorkflowTemplate`**: Immutable, pre-configured blueprints shipped built-in with Cero or imported from external repositories. Templates cannot be modified during execution.
 2. **`UserWorkflow`**: Editable clones of templates or workflows built from scratch. Belongs to the user, supports custom parameter definitions, schedules, and triggers.
 3. **`WorkflowInstance`**: Represents a single execution run. Stores timestamped execution metrics, resolved variables, node results, generated outputs, and diagnostic errors without mutating the parent `UserWorkflow`.
 
@@ -428,7 +428,7 @@ In addition to task-level shell macros, Sentinel contains an enterprise-grade de
 
 ### B. 11 Strongly-Typed Variable Domains
 
-Sentinel workflows support strict variable typing across 11 system domains:
+Cero workflows support strict variable typing across 11 system domains:
 
 | Variable Type | Domain Description | Validation & UI Control |
 | :--- | :--- | :--- |
@@ -466,7 +466,7 @@ Workflows support complex logic beyond linear pipelines:
 
 ### D. Built-In Workflow Templates
 
-Sentinel ships with 6 immutable starter templates (`src/workflows/templates/WorkflowTemplates.ts`):
+Cero ships with 6 immutable starter templates (`src/workflows/templates/WorkflowTemplates.ts`):
 
 1. **`tpl-morning-development`** (`Morning Development`): Launches developer IDE, terminal, browser, and connects to specified WiFi network.
 2. **`tpl-staging-deploy`** (`Staging Deployment`): Runs linter, compiles containers, pushes to container registry, and verifies HTTP health checks.
@@ -483,7 +483,7 @@ Workflows can be triggered through multiple event sources (`WorkflowTrigger`):
 
 - **`manual`**: Explicit operator invocation from CLI or UI drawer.
 - **`on_login`**: Executed when the user logs into their desktop session.
-- **`on_startup`**: Executed when Sentinel Terminal initializes.
+- **`on_startup`**: Executed when Cero initializes.
 - **`daily`**: Executed at a specific time of day (e.g., `09:00`).
 - **`weekly`**: Executed on a specific day of the week and time.
 - **`cron`**: Executed on standard 5-field cron schedules (e.g. `*/15 * * * *`).
@@ -494,7 +494,7 @@ Workflows can be triggered through multiple event sources (`WorkflowTrigger`):
 
 ### F. Programmatic Workflow Builder API
 
-For developers creating workflows programmatically, Sentinel provides a fluent `WorkflowBuilder` (`src/workflows/builder/WorkflowBuilder.ts`):
+For developers creating workflows programmatically, Cero provides a fluent `WorkflowBuilder` (`src/workflows/builder/WorkflowBuilder.ts`):
 
 ```typescript
 import { WorkflowBuilder } from './workflows/builder/WorkflowBuilder';
@@ -525,13 +525,13 @@ const workflow = new WorkflowBuilder('Full Stack Deploy', 'dev-team')
 
 ---
 
-### G. Workflow Sharing & Portability (`sentinel-workflow-v1`)
+### G. Workflow Sharing & Portability (`cero-workflow-v1`)
 
 Workflows can be exported and imported using the `WorkflowSharing` module (`src/workflows/sharing/WorkflowSharing.ts`):
 
 ```typescript
 export interface WorkflowExportPayload {
-  readonly format: 'sentinel-workflow-v1';
+  readonly format: 'cero-workflow-v1';
   readonly exportedAt: number;
   readonly workflow: UserWorkflow;
   readonly templateId?: string;
@@ -545,10 +545,10 @@ The export payload includes a SHA-256 checksum to guarantee file integrity durin
 
 ## 9. Security & Safety Guardrails
 
-Workflow execution adheres strictly to Sentinel's Zero-Trust architecture:
+Workflow execution adheres strictly to Cero's Zero-Trust architecture:
 
 1. **Pre-Execution Static Risk Analysis**:
-   Every command within a workflow is inspected by `SecurityEngine` before running. Sentinel evaluates the command against 8 safety categories (filesystem destruction, network exfiltration, system tampering, etc.).
+   Every command within a workflow is inspected by `SecurityEngine` before running. Cero evaluates the command against 8 safety categories (filesystem destruction, network exfiltration, system tampering, etc.).
 2. **Consent Queue Enforcement**:
    If a step is identified as `SENSITIVE` (e.g., `rm -rf /`, `mkfs`, raw partition modification, downloading unverified remote binaries), execution immediately pauses and requests operator confirmation unless the workflow was explicitly triggered with `--auto-approve`.
 3. **Parameter Sanitization**:
@@ -560,7 +560,7 @@ Workflow execution adheres strictly to Sentinel's Zero-Trust architecture:
 
 ## 10. Benchmarks & Validation Records
 
-The Sentinel Workflow System is continuously validated across automated test suites and benchmark suites:
+The Cero Workflow System is continuously validated across automated test suites and benchmark suites:
 
 - **100% Pass Rate Across Domain 9 (Multi-Stage Composite Workflows)**:
   50 distinct composite workflow prompts (Prompts 9.1 through 9.50) are evaluated in `docs/BENCHMARK_REPORT.md` with an average execution latency of **22ms** and zero LLM inference tokens.

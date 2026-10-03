@@ -12,14 +12,14 @@ export class GhostTextRenderer {
 
   public attach(container: HTMLElement) {
     this.overlayElement = document.createElement('div');
-    this.overlayElement.className = 'sentinel-ghost-text';
+    this.overlayElement.className = 'cero-ghost-text';
     this.overlayElement.style.position = 'absolute';
     this.overlayElement.style.pointerEvents = 'none';
     this.overlayElement.style.whiteSpace = 'pre';
-    this.overlayElement.style.color = 'var(--sentinel-fg, #ffffff)';
+    this.overlayElement.style.color = 'var(--cero-fg, #ffffff)';
     this.overlayElement.style.opacity = '0.38';
-    this.overlayElement.style.fontFamily = 'var(--sentinel-font, "JetBrains Mono", Menlo, Monaco, monospace)';
-    this.overlayElement.style.fontSize = 'var(--sentinel-font-size, 14px)';
+    this.overlayElement.style.fontFamily = 'var(--cero-font, "JetBrains Mono", Menlo, Monaco, monospace)';
+    this.overlayElement.style.fontSize = 'var(--cero-font-size, 14px)';
     this.overlayElement.style.zIndex = '250';
     this.overlayElement.style.display = 'none';
 

@@ -53,7 +53,7 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({ isOpen, onClose }) => {
   };
 
   const handleStopRunning = () => {
-    window.dispatchEvent(new CustomEvent('sentinel:abort-active-run'));
+    window.dispatchEvent(new CustomEvent('cero:abort-active-run'));
   };
 
   return (

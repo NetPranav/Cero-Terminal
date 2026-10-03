@@ -42,20 +42,20 @@ export function describeAi(input: {
       return {
         state: 'ready',
         label: 'AI: local',
-        detail: `Provider: Sentinel Embedded\nModel: ${modelName}${cpuSuffix}\nHost: 127.0.0.1:${embedded.port || 8847}\nStatus: Running`,
+        detail: `Provider: Cero Embedded\nModel: ${modelName}${cpuSuffix}\nHost: 127.0.0.1:${embedded.port || 8847}\nStatus: Running`,
       };
     }
     if (embedded?.isWarming) {
       return {
         state: 'starting',
         label: 'AI: Starting...',
-        detail: 'Provider: Sentinel Embedded\nHost: 127.0.0.1:8847\nStatus: Warming up the model',
+        detail: 'Provider: Cero Embedded\nHost: 127.0.0.1:8847\nStatus: Warming up the model',
       };
     }
     return {
       state: 'off',
       label: 'AI: Off',
-      detail: 'Provider: Sentinel Embedded\nHost: 127.0.0.1:8847\nStatus: Built-in AI is stopped. Click to start it.',
+      detail: 'Provider: Cero Embedded\nHost: 127.0.0.1:8847\nStatus: Built-in AI is stopped. Click to start it.',
     };
   }
 

@@ -12,11 +12,11 @@ describe('decideStopKey (Task 2.2)', () => {
     expect(decideStopKey({ data: '\x03', hasSelection: true, isAiBusy: true })).toBe('copy-selection');
   });
 
-  it('returns pass-to-pty when Ctrl+C is pressed and Sentinel is not running an AI task', () => {
+  it('returns pass-to-pty when Ctrl+C is pressed and Cero is not running an AI task', () => {
     expect(decideStopKey({ data: '\x03', hasSelection: false, isAiBusy: false })).toBe('pass-to-pty');
   });
 
-  it('returns abort-ai-task on first Ctrl+C when Sentinel is running an AI task', () => {
+  it('returns abort-ai-task on first Ctrl+C when Cero is running an AI task', () => {
     expect(decideStopKey({ data: '\x03', hasSelection: false, isAiBusy: true })).toBe('abort-ai-task');
   });
 

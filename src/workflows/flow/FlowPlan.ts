@@ -281,7 +281,7 @@ export function stepForAction(action: any, os: FlowOs, index: number): FlowStep 
 }
 
 /**
- * A plain command from a Sentinel workflow (.workflow.json) that only opens something: it may run
+ * A plain command from a Cero workflow (.workflow.json) that only opens something: it may run
  * without the terminal. Strict on purpose: one launch, no chaining, redirection or substitution.
  */
 export function isDesktopCommand(command: string): boolean {
@@ -294,7 +294,7 @@ export function isDesktopCommand(command: string): boolean {
     || /^code\s+(?:\.|'[^']+'|\S+)$/.test(c);
 }
 
-/** Plan a .flow document or a Sentinel workflow ({ steps: [{ command }] }) for this OS. */
+/** Plan a .flow document or a Cero workflow ({ steps: [{ command }] }) for this OS. */
 export function planFlow(doc: any, fallbackName: string, os: FlowOs): FlowPlan | null {
   if (!doc || typeof doc !== 'object') return null;
   const steps: FlowStep[] = [];

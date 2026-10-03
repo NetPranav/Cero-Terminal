@@ -35,7 +35,7 @@ export interface RunningItem {
 }
 
 // Things "stop"/"close" refer to that are not apps: other routes handle them
-const NOT_AN_APP = /^(?:(?:the\s+)?(?:dev\s+|web\s+|local\s+|http\s+)?server|(?:this|the|that|current|other|last|first)?\s*(?:tab|pane|split|terminal|window|shell|session)(?:\s+\d+)?|tab\s+\d+|terminal\s+\d+|it|this|that|everything|all|settings|sentinel(?:\s+terminal)?|port\s+\d+|pid\s+\d+|\d+|the\s+build|build|watch(?:er|ing)?|recording|the\s+recording|it\s+all|(?:the\s+)?(?:command|process)(?:\s+(?:on|using)\s+port\s+\d+)?|.*\bport\s+\d+.*|.*\b(?:in|on)\s+tab\s+\d+.*)$/i;
+const NOT_AN_APP = /^(?:(?:the\s+)?(?:dev\s+|web\s+|local\s+|http\s+)?server|(?:this|the|that|current|other|last|first)?\s*(?:tab|pane|split|terminal|window|shell|session)(?:\s+\d+)?|tab\s+\d+|terminal\s+\d+|it|this|that|everything|all|settings|cero(?:\s+terminal)?|port\s+\d+|pid\s+\d+|\d+|the\s+build|build|watch(?:er|ing)?|recording|the\s+recording|it\s+all|(?:the\s+)?(?:command|process)(?:\s+(?:on|using)\s+port\s+\d+)?|.*\bport\s+\d+.*|.*\b(?:in|on)\s+tab\s+\d+.*)$/i;
 
 const VERB = '(?:force\\s+quit|force\\s+close|force\\s+kill|quit|close|stop|kill|terminate|exit|shut\\s*down|end)';
 

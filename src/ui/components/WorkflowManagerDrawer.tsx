@@ -120,7 +120,7 @@ export const WorkflowManagerDrawer: React.FC<WorkflowManagerDrawerProps> = ({
         if (tauriDialog && typeof tauriDialog.open === 'function') {
           const selected = await tauriDialog.open({
             multiple: false,
-            filters: [{ name: 'Sentinel flow', extensions: ['flow'] }]
+            filters: [{ name: 'Cero flow', extensions: ['flow'] }]
           });
           if (selected && typeof selected === 'string') {
             const { readTextFile } = await import('@tauri-apps/plugin-fs');
@@ -178,7 +178,7 @@ export const WorkflowManagerDrawer: React.FC<WorkflowManagerDrawerProps> = ({
         if (tauriDialog && typeof tauriDialog.save === 'function') {
           const selected = await tauriDialog.save({
             defaultPath: defaultName,
-            filters: [{ name: 'Sentinel flow', extensions: ['flow'] }]
+            filters: [{ name: 'Cero flow', extensions: ['flow'] }]
           });
           if (selected && typeof selected === 'string') {
             const { writeTextFile } = await import('@tauri-apps/plugin-fs');
@@ -190,7 +190,7 @@ export const WorkflowManagerDrawer: React.FC<WorkflowManagerDrawerProps> = ({
         }
       } catch {
         // Fallback to browser download
-        const blob = new Blob([text], { type: 'application/x-sentinel-workflow' });
+        const blob = new Blob([text], { type: 'application/x-cero-workflow' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -1197,7 +1197,7 @@ export const WorkflowManagerDrawer: React.FC<WorkflowManagerDrawerProps> = ({
             <ShieldCheck size={13} style={{ color: 'rgba(255, 255, 255, 0.55)' }} />
             <span>AST Verified</span>
           </div>
-          <span style={{ fontFamily: 'ui-monospace, monospace' }}>~/.sentinel/workflows/</span>
+          <span style={{ fontFamily: 'ui-monospace, monospace' }}>~/.cero/workflows/</span>
         </div>
 
         {/* Custom Grayscale Delete Confirmation Modal */}

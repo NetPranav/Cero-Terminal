@@ -8,10 +8,10 @@
   "actions": [
     { "type": "install", "package": "nodejs" },
     { "type": "install", "package": "git" },
-    { "type": "clone", "repo": "https://github.com/expressjs/express.git", "into": "~/sentinel-demo/express" },
-    { "type": "command", "name": "Install dependencies", "command": "npm install", "cwd": "~/sentinel-demo/express" },
-    { "type": "command", "name": "Run the tests", "command": "npm test", "windows": "npm.cmd test", "cwd": "~/sentinel-demo/express" },
-    { "type": "app", "name": "Open the project in VS Code", "app": "VS Code", "path": "~/sentinel-demo/express" },
+    { "type": "clone", "repo": "https://github.com/expressjs/express.git", "into": "~/cero-demo/express" },
+    { "type": "command", "name": "Install dependencies", "command": "npm install", "cwd": "~/cero-demo/express" },
+    { "type": "command", "name": "Run the tests", "command": "npm test", "windows": "npm.cmd test", "cwd": "~/cero-demo/express" },
+    { "type": "app", "name": "Open the project in VS Code", "app": "VS Code", "path": "~/cero-demo/express" },
     { "type": "browser", "name": "Open the Express guide", "url": "https://expressjs.com/en/starter/hello-world.html" }
   ]
 }

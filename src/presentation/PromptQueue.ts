@@ -151,7 +151,7 @@ export class PromptQueue {
       this.paused = paused;
       this.notify();
       if (!paused && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('sentinel:queue-resumed'));
+        window.dispatchEvent(new CustomEvent('cero:queue-resumed'));
       }
     }
   }

@@ -7,7 +7,7 @@
  * Terminal steps are typed into a real terminal, one at a time, after one approval that lists
  * every command: the output is visible and prompts (a sudo password, "continue? [y/N]") can be
  * answered there. The end of each step is reported by an invisible escape sequence
- * (OSC 777 "sentinel-step;<exit code>") printed by a small shell function defined once.
+ * (OSC 777 "cero-step;<exit code>") printed by a small shell function defined once.
  */
 
 import type { FlowOs, FlowPlan, FlowStep } from './FlowPlan';
@@ -44,11 +44,11 @@ export async function runDesktopSteps(steps: FlowStep[], os: FlowOs, execute: Ex
 export function markerDefinition(shell: ShellFamily): string {
   switch (shell) {
     case 'powershell':
-      return 'function __sentinel_step($c) { Write-Host -NoNewline "$([char]27)]777;sentinel-step;$c$([char]7)" }';
+      return 'function __cero_step($c) { Write-Host -NoNewline "$([char]27)]777;cero-step;$c$([char]7)" }';
     case 'fish':
-      return "function __sentinel_step; printf '\\e]777;sentinel-step;%s\\a' $argv[1]; end";
+      return "function __cero_step; printf '\\e]777;cero-step;%s\\a' $argv[1]; end";
     default:
-      return "__sentinel_step() { printf '\\033]777;sentinel-step;%s\\007' \"$1\"; }";
+      return "__cero_step() { printf '\\033]777;cero-step;%s\\007' \"$1\"; }";
   }
 }
 
@@ -57,17 +57,17 @@ export function typedStep(step: FlowStep, os: FlowOs, shell: ShellFamily): strin
   const command = withCwd(step, os);
   switch (shell) {
     case 'powershell':
-      return `${command}; __sentinel_step $(if ($?) { 0 } elseif ($LASTEXITCODE) { $LASTEXITCODE } else { 1 })`;
+      return `${command}; __cero_step $(if ($?) { 0 } elseif ($LASTEXITCODE) { $LASTEXITCODE } else { 1 })`;
     case 'fish':
-      return `${command}; __sentinel_step $status`;
+      return `${command}; __cero_step $status`;
     default:
-      return `${command}; __sentinel_step $?`;
+      return `${command}; __cero_step $?`;
   }
 }
 
-/** The exit code in an OSC 777 payload ("sentinel-step;0"), or null for other payloads */
+/** The exit code in an OSC 777 payload ("cero-step;0"), or null for other payloads */
 export function parseStepMarker(payload: string): number | null {
-  const m = payload.match(/^sentinel-step;(-?\d+)$/);
+  const m = payload.match(/^cero-step;(-?\d+)$/);
   return m ? Number(m[1]) : null;
 }
 

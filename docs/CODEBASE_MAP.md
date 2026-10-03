@@ -36,15 +36,15 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 | `agent/AdaptivePlanEngine.ts` | 1267 | app | Dynamic Adaptive Multi-Phase Planning & Execution Engine Core AI architecture for: 1 |
 | `agent/AgentLoop.ts` | 3684 | app | The Core AI Brain (ReAct Agent Loop) This replaces the entire regex-based intent pipeline with a real LLM-powered agent loop |
 | `agent/DirectoryNavigationEngine.ts` | 235 | app | - |
-| `agent/DynamicToolPruner.ts` | 142 | app | Sentinel Terminal — Dynamic Domain Tool Pruner Reduces large tool libraries (103+ tools) down to the 4–6 most relevant tools for any given user instru... |
-| `agent/ErrorDiagnosticsEngine.ts` | 255 | app | Sentinel Terminal — Error Diagnostics Engine Inspects execution failures (stderr, non-zero exit codes, error payloads) and determines whether an error... |
+| `agent/DynamicToolPruner.ts` | 142 | app | Cero — Dynamic Domain Tool Pruner Reduces large tool libraries (103+ tools) down to the 4–6 most relevant tools for any given user instru... |
+| `agent/ErrorDiagnosticsEngine.ts` | 255 | app | Cero — Error Diagnostics Engine Inspects execution failures (stderr, non-zero exit codes, error payloads) and determines whether an error... |
 | `agent/FailureClassifier.ts` | 179 | app | Failure Classification Before Retry (Phase 0.5, Item 10) Categorizes command and tool execution failures before embarking on retries: - MISSING_BINARY... |
 | `agent/InstantAnswers.ts` | 134 | app | deterministic answers for the most common inspection questions |
 | `agent/PromptProgressManager.ts` | 191 | app | Real-time AI Prompt Progress & Time Estimation Tracks live progress percentage, multi-stage lifecycle, elapsed time, and estimated time to completion ... |
-| `agent/ShadowPtySimulator.ts` | 731 | app | Speculative Shadow-PTY Simulation Engine ("Minority Report for the Shell") Part of Sentinel-SERL (Self-Evolving Reflexion Loop): Spawns an ephemeral R... |
+| `agent/ShadowPtySimulator.ts` | 731 | app | Speculative Shadow-PTY Simulation Engine ("Minority Report for the Shell") Part of Cero-SERL (Self-Evolving Reflexion Loop): Spawns an ephemeral R... |
 | `agent/SystemPrompt.ts` | 407 | app | Dynamic System Prompt Builder for LLM Agent Loop Generates a system prompt that includes all available tools from the registry, formatted so the LLM c... |
 | `agent/ToolExecutor.ts` | 136 | app | Bridge between AgentLoop and CapabilityRegistrySDK Executes a tool by ID with given parameters through the SDK driver registry |
-| `agent/ToolParameterValidator.ts` | 120 | app | Sentinel Terminal — Zero-Hallucination Tool Parameter Validator Validates, repairs, and type-coerces LLM-generated parameter JSON before calling execu... |
+| `agent/ToolParameterValidator.ts` | 120 | app | Cero — Zero-Hallucination Tool Parameter Validator Validates, repairs, and type-coerces LLM-generated parameter JSON before calling execu... |
 | `cache/AICache.ts` | 6 | unreachable | - |
 | `cache/PromptCache.ts` | 23 | unreachable | - |
 | `config/AIConfig.ts` | 5 | unreachable | - |
@@ -68,9 +68,9 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 | `intent/CompositePatterns.ts` | 173 | unreachable | Multi-Step Intent Pattern Library Recognizes common multi-step user instructions that should be decomposed into sequential tool chains |
 | `intent/ConfidenceEstimator.ts` | 60 | unreachable | Comprehensive Confidence Scoring Engine Computes overall confidence score (0.00 to 1.00) based on: - Tool identification clarity and match quality |
 | `intent/ContextBuilder.ts` | 112 | unreachable | Dynamic Tool Awareness & Context Engineering At runtime, builds lightweight prompt runtime context from active Tool Registry state: - available tools,... |
-| `intent/EntityExtractor.ts` | 340 | unreachable | Comprehensive OS & Registry Entity Extractor Reliably extracts all Sentinel required entities from natural language: paths, folders, files, URLs, repo... |
+| `intent/EntityExtractor.ts` | 340 | unreachable | Comprehensive OS & Registry Entity Extractor Reliably extracts all Cero required entities from natural language: paths, folders, files, URLs, repo... |
 | `intent/IntentClassifier.ts` | 74 | unreachable | Fast Hybrid Intent & Domain Classification Determines primary domain, category, and action from unrestricted natural language |
-| `intent/IntentEngine.ts` | 132 | unreachable | Core Sentinel Local Intent AI Platform Coordinates the full natural language -> structured execution plan conversion pipeline: 1 |
+| `intent/IntentEngine.ts` | 132 | unreachable | Core Cero Local Intent AI Platform Coordinates the full natural language -> structured execution plan conversion pipeline: 1 |
 | `intent/PlanValidator.ts` | 99 | unreachable | Structured Plan Verification & Auto-Correction Validates generated execution plans against active Tool Registry metadata |
 | `intent/Planner.ts` | 541 | unreachable | Local Intent Multi-Step Task Decomposition Converts unrestricted natural language into sequential task arrays composed of Tool IDs and extracted entit... |
 | `intent/SynonymMap.ts` | 171 | app | Centralized Verb & Noun Synonym Registry Single source of truth for all synonym expansions used across: - ToolSearcher (verb-aware scoring) |
@@ -78,12 +78,12 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 | `management/ModelRecommendationEngine.ts` | 217 | app | Hardware-Aware LLM Tier & Model Recommendation Engine Analyzes host hardware profile (RAM, CPU cores, GPU/VRAM) and assigns an optimal model tier: - B... |
 | `models/AIProvider.ts` | 9 | app | - |
 | `models/AIResponse.ts` | 12 | app | - |
-| `models/ActivationSteeringManager.ts` | 766 | app | Neural Activation Steering & Representation Engineering Part of Sentinel-SERL (Self-Evolving Reflexion Loop): Breakthrough 3: Brain Surgery on the Res... |
-| `models/EmbeddedEngineManager.ts` | 982 | app | Sentinel Terminal — Embedded Engine Manager Manages the self-contained local LLM inference lifecycle (Qwen2.5-Coder-3B-Instruct), request isolation ac... |
+| `models/ActivationSteeringManager.ts` | 766 | app | Neural Activation Steering & Representation Engineering Part of Cero-SERL (Self-Evolving Reflexion Loop): Breakthrough 3: Brain Surgery on the Res... |
+| `models/EmbeddedEngineManager.ts` | 982 | app | Cero — Embedded Engine Manager Manages the self-contained local LLM inference lifecycle (Qwen2.5-Coder-3B-Instruct), request isolation ac... |
 | `models/GbnfGrammarManager.ts` | 218 | app | GBNF (GGML BNF) Grammar-Constrained Decoding Manager Formal grammar constraints enforced at the token sampling level in llama.cpp / llama-server |
 | `models/IntentModel.ts` | 408 | app | Two-Tier Intent Classification & Step Decomposition Engine Implements Phase 0.75 Tasks: - 0.75.1: Real IntentModel.classify() backed by small CPU-resi... |
 | `models/LocalModel.ts` | 17 | app | - |
-| `models/ModelManifestManager.ts` | 316 | app | Adapter Version Registry & Rollback Controller Phase 0.75.12: Tracks active and historical adapter versions in `~/.sentinel/models/manifest.json` with... |
+| `models/ModelManifestManager.ts` | 316 | app | Adapter Version Registry & Rollback Controller Phase 0.75.12: Tracks active and historical adapter versions in `~/.cero/models/manifest.json` with... |
 | `models/OllamaProvider.ts` | 125 | app | - |
 | `planner/DependencyResolver.ts` | 86 | unreachable | Pure DAG operations for GoalNodes |
 | `planner/GoalPlanner.ts` | 95 | unreachable | - |
@@ -97,7 +97,7 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 | `planner/PlanningStrategy.ts` | 33 | unreachable | Implements high-level planning strategies: - Conditional Planning: Skipping nodes that are already satisfied |
 | `planner/TaskDecomposer.ts` | 221 | unreachable | - |
 | `provider/CloudApiProvider.ts` | 578 | app | Unified Cloud LLM Provider Layer Implements ModelProvider for commercial and open cloud endpoints: - OpenAI (gpt-4o, gpt-4o-mini, o3-mini) |
-| `provider/EmbeddedProvider.ts` | 326 | app | Embedded llama.cpp Model Provider Communicates with a bundled llama-server sidecar binary that ships inside the Sentinel Terminal .app bundle |
+| `provider/EmbeddedProvider.ts` | 326 | app | Embedded llama.cpp Model Provider Communicates with a bundled llama-server sidecar binary that ships inside the Cero .app bundle |
 | `provider/LlamaCppProvider.ts` | 101 | unreachable | llama.cpp / Local Server Provider Implementation Communicates with embedded or local HTTP llama.cpp runtime servers for ultra-fast Apple Silicon GGUF ... |
 | `provider/OllamaProvider.ts` | 188 | app | Ollama Model Provider Implementation Communicates cleanly with local Ollama runtime over HTTP REST endpoints |
 | `provider/Provider.ts` | 53 | app | Pluggable Model Provider Layer Defines the foundational interface for local and pluggable model inference providers |
@@ -162,33 +162,33 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 | `capabilities/ShellCapability.ts` | 50 | unreachable | - |
 | `capabilities/SystemCapability.ts` | 58 | unreachable | - |
 | `desktop/DesktopCommands.ts` | 89 | app | window control and screenshots for the Linux desktop in use |
-| `discovery/ProjectDiscoveryEngine.ts` | 330 | app | Sentinel Terminal — Project & Environment Discovery Engine Scans development workspaces for project manifests (ROS 1/2, Node, Python, Rust, Docker) to... |
-| `discovery/WorkspaceRegistry.ts` | 191 | unreachable | Sentinel Terminal — Workspace Registry Scans, indexes, and caches developer workspaces (ROS 1/2, Node, Python, Rust, Docker) across local filesystem r... |
+| `discovery/ProjectDiscoveryEngine.ts` | 330 | app | Cero — Project & Environment Discovery Engine Scans development workspaces for project manifests (ROS 1/2, Node, Python, Rust, Docker) to... |
+| `discovery/WorkspaceRegistry.ts` | 191 | unreachable | Cero — Workspace Registry Scans, indexes, and caches developer workspaces (ROS 1/2, Node, Python, Rust, Docker) across local filesystem r... |
 | `integration/InstallerService.ts` | 700 | app | - |
 | `integration/UrlSchemeHandler.ts` | 119 | app | - |
-| `interfaces.ts` | 88 | unreachable | Domain Layer Interfaces for Sentinel Terminal |
-| `knowledge/SystemKnowledgeScanner.ts` | 509 | app | what Sentinel knows about this machine |
+| `interfaces.ts` | 88 | unreachable | Domain Layer Interfaces for Cero |
+| `knowledge/SystemKnowledgeScanner.ts` | 509 | app | what Cero knows about this machine |
 | `knowledge/TldrKnowledgeEngine.ts` | 936 | app | Offline Ground-Truth CLI Knowledge Base Part of Tier 5 (Production Hardening & Ground-Truth Intelligence Oracles): Provides instant 0.1ms semantic loo... |
-| `learning/DemonstrationLearningEngine.ts` | 403 | app | Sentinel Terminal — Autonomous Demonstration & Pattern Learning Engine Enables Sentinel to learn new terminal workflows directly from human demonstrat... |
-| `learning/DpoDatasetEngine.ts` | 364 | app | Direct Preference Optimization (DPO) Pair Generator Part of Sentinel-SERL (Self-Evolving Reflexion Loop): Automatically constructs high-quality DPO tr... |
-| `learning/DreamStateScheduler.ts` | 795 | app | The "Dream-State" Nightly Autonomous Self-Play Engine Part of Sentinel-SERL (Self-Evolving Reflexion Loop): Breakthrough 4: Nightly Autonomous Self-Pl... |
-| `learning/EpisodicMemoryEngine.ts` | 401 | app | Sentinel Terminal — Tier 3: Episodic Memory Engine Implements Continuous On-Device Learning via: 1 |
-| `learning/KnowledgeDeficitLogger.ts` | 462 | app | Runtime Knowledge Deficit Logger Part of Sentinel-SERL (Self-Evolving Reflexion Loop): Intercepts when the model fails, produces an excuse, or outputs... |
+| `learning/DemonstrationLearningEngine.ts` | 403 | app | Cero — Autonomous Demonstration & Pattern Learning Engine Enables Cero to learn new terminal workflows directly from human demonstrat... |
+| `learning/DpoDatasetEngine.ts` | 364 | app | Direct Preference Optimization (DPO) Pair Generator Part of Cero-SERL (Self-Evolving Reflexion Loop): Automatically constructs high-quality DPO tr... |
+| `learning/DreamStateScheduler.ts` | 795 | app | The "Dream-State" Nightly Autonomous Self-Play Engine Part of Cero-SERL (Self-Evolving Reflexion Loop): Breakthrough 4: Nightly Autonomous Self-Pl... |
+| `learning/EpisodicMemoryEngine.ts` | 401 | app | Cero — Tier 3: Episodic Memory Engine Implements Continuous On-Device Learning via: 1 |
+| `learning/KnowledgeDeficitLogger.ts` | 462 | app | Runtime Knowledge Deficit Logger Part of Cero-SERL (Self-Evolving Reflexion Loop): Intercepts when the model fails, produces an excuse, or outputs... |
 | `learning/PowerState.ts` | 44 | app | is the machine on AC power, and how full is the battery? Background learning work must not drain a laptop battery |
 | `learning/ProjectFingerprint.ts` | 96 | app | Workspace & Project Identification Scoping Part of Phase 0.5 (Roadmap item 0.5.4): Scopes episodic memory and learned patterns per project rather than... |
-| `learning/ReflexionEngine.ts` | 472 | app | Autonomous Background Reflexion & Counterfactual Synthesis Engine Part of Sentinel-SERL (Self-Evolving Reflexion Loop): When the terminal is idle, thi... |
-| `learning/SentinelSerlCoordinator.ts` | 850 | app | End-to-End Sentinel-SERL Autonomous Orchestrator Part of Sentinel-SERL (Self-Evolving Reflexion Loop & Frontier On-Device Intelligence): Unifies and s... |
-| `observer/PtyOutputObserver.ts` | 189 | app | Sentinel Terminal — Passive PTY Output Stream Observer Monitors real-time terminal stdout/stderr stream from standard shell sessions |
-| `planner/Planner.ts` | 340 | unreachable | AI Operating Knowledge Base Orchestrator (Phase X Integrated) The Planner orchestrates Sentinel's Local Intent AI System: 1 |
+| `learning/ReflexionEngine.ts` | 472 | app | Autonomous Background Reflexion & Counterfactual Synthesis Engine Part of Cero-SERL (Self-Evolving Reflexion Loop): When the terminal is idle, thi... |
+| `learning/CeroSerlCoordinator.ts` | 850 | app | End-to-End Cero-SERL Autonomous Orchestrator Part of Cero-SERL (Self-Evolving Reflexion Loop & Frontier On-Device Intelligence): Unifies and s... |
+| `observer/PtyOutputObserver.ts` | 189 | app | Cero — Passive PTY Output Stream Observer Monitors real-time terminal stdout/stderr stream from standard shell sessions |
+| `planner/Planner.ts` | 340 | unreachable | AI Operating Knowledge Base Orchestrator (Phase X Integrated) The Planner orchestrates Cero's Local Intent AI System: 1 |
 | `planner/RuleBasedReasoningEngine.ts` | 72 | unreachable | 1 |
 | `planner/types.ts` | 56 | unreachable | - |
-| `process/ProcessPortManager.ts` | 196 | unreachable | Sentinel Terminal — Process & Port Manager Discovers active listening TCP/UDP ports, maps them to their owning PIDs and process binaries, and provides... |
+| `process/ProcessPortManager.ts` | 196 | unreachable | Cero — Process & Port Manager Discovers active listening TCP/UDP ports, maps them to their owning PIDs and process binaries, and provides... |
 | `remediation/AutoRemediationPolicy.ts` | 107 | app | decides whether a detected error may be fixed without asking |
 | `remediation/DeterministicRuleOracle.ts` | 1700 | app | Battle-Tested CLI Error Remediation Oracle Ported from the battle-tested architecture of nvbn/thefuck (85,000+ GitHub stars) and tailored specifically... |
-| `remote/RemoteSSHManager.ts` | 113 | unreachable | Sentinel Terminal — Remote SSH Manager Discovers and parses remote SSH hosts from ~/.ssh/config, providing one-click remote multiplexing and connectio... |
-| `rice/DotfileManager.ts` | 242 | app | Sentinel Terminal — Safe Dotfile & Rice Configuration Manager Provides safe, non-destructive configuration editing for window managers (Hyprland, i3, ... |
-| `rice/DotfileSyncEngine.ts` | 85 | app | Sentinel Terminal — Dotfile & Profile Sync Engine Bundles themes, glassmorphism UI preferences, learned AI demonstration workflows, and custom shell a... |
-| `ros/RosEnvironment.ts` | 49 | app | make ROS 2 commands work from Sentinel |
+| `remote/RemoteSSHManager.ts` | 113 | unreachable | Cero — Remote SSH Manager Discovers and parses remote SSH hosts from ~/.ssh/config, providing one-click remote multiplexing and connectio... |
+| `rice/DotfileManager.ts` | 242 | app | Cero — Safe Dotfile & Rice Configuration Manager Provides safe, non-destructive configuration editing for window managers (Hyprland, i3, ... |
+| `rice/DotfileSyncEngine.ts` | 85 | app | Cero — Dotfile & Profile Sync Engine Bundles themes, glassmorphism UI preferences, learned AI demonstration workflows, and custom shell a... |
+| `ros/RosEnvironment.ts` | 49 | app | make ROS 2 commands work from Cero |
 | `security/AuditLogger.ts` | 207 | app | - |
 | `security/CommandSafetyGuardian.ts` | 442 | app | 8-Category Linux System Destruction Guardian & Consequence Explainer Intercepts dangerous, catastrophic commands across 8 threat vectors: 1 |
 | `security/ConsentQueue.ts` | 222 | app | Asynchronous Non-Blocking Consent Flow Part of Phase 0.5 (Roadmap item 0.5.2): Manages pending user consent/authorization requests for sensitive or ad... |
@@ -200,8 +200,8 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 | `security/SecurityEngine.ts` | 374 | app | - |
 | `security/ShellAstParser.ts` | 771 | app | ShellAstParser.ts Recursive-descent concrete AST parser for Bash/Zsh/POSIX shell command lines |
 | `security/ShellCommandGuard.ts` | 363 | unreachable | - |
-| `services/SystemServiceManager.ts` | 221 | app | Sentinel Terminal — Unified Cross-Platform System Service Manager Controls background daemons and services across Linux (systemd / systemctl), macOS (... |
-| `session/SessionPersistenceEngine.ts` | 468 | app | Sentinel Terminal — Session Persistence Engine Provides crash-proof workspace state serialization for multi-tab and split-pane layouts |
+| `services/SystemServiceManager.ts` | 221 | app | Cero — Unified Cross-Platform System Service Manager Controls background daemons and services across Linux (systemd / systemctl), macOS (... |
+| `session/SessionPersistenceEngine.ts` | 468 | app | Cero — Session Persistence Engine Provides crash-proof workspace state serialization for multi-tab and split-pane layouts |
 | `session/UndoLog.ts` | 262 | app | Destructive Workflow Rollback & Undo Log (Phase 0.5, Item 9) Maintains a chronological log of commands and mutations executed across the session |
 | `shell/ShellAdapter.ts` | 136 | app | - |
 | `simulation/CommandCapabilityClassifier.ts` | 184 | app | CommandCapabilityClassifier.ts Implements Phase 0.5, Item 5: Classifies shell commands into three distinct simulation execution paths: |
@@ -221,8 +221,8 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 
 | File | Lines | Status | Purpose |
 |---|---:|---|---|
-| `execution/NodeTauriBridge.ts` | 283 | cli | Seamless Tauri IPC Polyfill for Node.js / CLI Environments Enables all Sentinel Capability SDK drivers to execute real native macOS commands directly ... |
-| `interfaces.ts` | 29 | unreachable | Infrastructure Layer Interfaces for Sentinel Terminal |
+| `execution/NodeTauriBridge.ts` | 283 | cli | Seamless Tauri IPC Polyfill for Node.js / CLI Environments Enables all Cero Capability SDK drivers to execute real native macOS commands directly ... |
+| `interfaces.ts` | 29 | unreachable | Infrastructure Layer Interfaces for Cero |
 | `logging/DiagnosticLogger.ts` | 65 | app | - |
 
 ## `src/learning/` (0/9 used)
@@ -231,7 +231,7 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 |---|---:|---|---|
 | `discovery/PatternDiscoveryEngine.ts` | 102 | unreachable | Identifies recurring behaviors and sequences |
 | `experience/ExperienceBuilder.ts` | 56 | unreachable | Normalizes diverse system events into ExperienceRecords |
-| `models/LearningTypes.ts` | 68 | unreachable | Core Data Models for Sentinel Learning Engine Defines ExperienceRecords, LearningProfiles, and Recommendations |
+| `models/LearningTypes.ts` | 68 | unreachable | Core Data Models for Cero Learning Engine Defines ExperienceRecords, LearningProfiles, and Recommendations |
 | `optimizer/Optimizer.ts` | 41 | unreachable | Synthesizes Long-Term Preferences for Planner Context |
 | `policies/LearningProfiles.ts` | 48 | unreachable | Manages context switching and privacy boundaries |
 | `ranking/RankingEngine.ts` | 104 | unreachable | Adaptive Sorting based on Experience Deterministically sorts entities based on frequency, recency, success rate, and user feedback |
@@ -246,7 +246,7 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 | `entities/EntitySchemas.ts` | 132 | unreachable | Strongly Typed Schemas for Memory Graph Entities Defines the 18 core entities capable of existing as nodes in the Knowledge Graph |
 | `explainability/ExplainabilityEngine.ts` | 85 | unreachable | Memory Retrieval Transparency Enriches retrieved memory nodes with natural language reasoning, detailing the path traversal and confidence scores |
 | `graph/KnowledgeGraph.ts` | 136 | unreachable | In-Memory Directional Graph Holds nodes and edges, provides traversal and subgraph extraction algorithms |
-| `models/MemoryTypes.ts` | 76 | unreachable | Core Data Models for Sentinel Memory Engine Enforces immutable provenance, strict privacy labels, confidence scoring, and semantic revision histories ... |
+| `models/MemoryTypes.ts` | 76 | unreachable | Core Data Models for Cero Memory Engine Enforces immutable provenance, strict privacy labels, confidence scoring, and semantic revision histories ... |
 | `pipeline/ObservationPipeline.ts` | 131 | unreachable | The Only Path to Memory Mutation Ensures all explicit and implicit facts pass through validation and policy enforcement before being committed to the ... |
 | `policies/PolicyEngine.ts` | 97 | unreachable | Enforces Data Lifecycles & Privacy Rules Applies confidence decay over time, enforces TTL expirations, and masks data based on PrivacyLabels |
 | `relationships/RelationshipTypes.ts` | 44 | unreachable | Defined Edge Vocabularies for Knowledge Graph Includes base weights to influence retrieval ranking |
@@ -284,12 +284,12 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 | `host/PluginHost.ts` | 83 | unreachable | Independent Owner for an Individual Plugin Instance Instantiates the Sandbox, configures SDK Bridge, injects capabilities, and gracefully manages isol... |
 | `lifecycle/PluginLifecycle.ts` | 87 | unreachable | Orchestrates the Plugin State Machine |
 | `manifest/ManifestValidator.ts` | 46 | unreachable | Enforces PluginManifest integrity via Zod |
-| `marketplace/PluginMarketplaceCatalog.ts` | 191 | app | Sentinel Terminal — Plugin Marketplace Catalog Provides a curated catalog of ecosystem extensions for Sentinel Terminal, with 1-click installation, pe... |
+| `marketplace/PluginMarketplaceCatalog.ts` | 191 | app | Cero — Plugin Marketplace Catalog Provides a curated catalog of ecosystem extensions for Cero, with 1-click installation, pe... |
 | `models/PluginTypes.ts` | 44 | unreachable | Core Data Models for the Plugin SDK |
 | `permissions/PermissionManager.ts` | 41 | unreachable | Evaluates Capability-level permissions |
 | `registry/PluginRegistry.ts` | 41 | unreachable | Discovers and tracks loaded plugins |
 | `sandbox/PluginSandbox.ts` | 47 | unreachable | Execution Isolation Boundary For this architecture, we use Node VM as an implementation detail, proxying exclusively through the SDKBridge to allow fu... |
-| `sdk/SentinelSDK.ts` | 52 | unreachable | Public SDK Surface API This is the ONLY object injected into the Plugin Sandbox |
+| `sdk/CeroSDK.ts` | 52 | unreachable | Public SDK Surface API This is the ONLY object injected into the Plugin Sandbox |
 | `telemetry/PluginTelemetry.ts` | 39 | unreachable | Tracks Load Times, Usage, and Crashes |
 
 ## `src/presentation/` (3/3 used)
@@ -331,7 +331,7 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 
 | File | Lines | Status | Purpose |
 |---|---:|---|---|
-| `engine/ExecutionEngine.ts` | 104 | unreachable | Master orchestrator for Sentinel Terminal V3 Execution Runtime Coordinates ExecutionSessions, Schedulers, State Machines, and Event Streams |
+| `engine/ExecutionEngine.ts` | 104 | unreachable | Master orchestrator for Cero V3 Execution Runtime Coordinates ExecutionSessions, Schedulers, State Machines, and Event Streams |
 | `events/RuntimeEventBus.ts` | 95 | unreachable | Typed, immutable, replayable event bus Every subsystem communicates only through events |
 | `executor/NodeExecutor.ts` | 161 | unreachable | Executes ActionNodes with timeout, retries, and context publishing Enforces action retry policy and timeout |
 | `lifecycle/RuntimeHooks.ts` | 48 | unreachable | Extensible lifecycle hooks Hooks allow plugins, logging, analytics, debugging, and learning without modifying the Runtime |
@@ -355,7 +355,7 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 | `browser/BrowserCapability.ts` | 92 | unreachable | Native macOS Capability Driver for Web Browsers & Tabs Handles browser session dispatch, secure HTTPS URL scheme injection, and AppleScript active tab... |
 | `capabilities/CancellationToken.ts` | 38 | unreachable | Lightweight token for propagating cooperative cancellation to executing capabilities |
 | `capabilities/CapabilityRegistrySDK.ts` | 305 | app | Central Capability SDK Binding Registry Binds every Tool Registry capability entry directly to its concrete TypeScript execution driver across all 10 ... |
-| `capabilities/CapabilitySDK.ts` | 179 | app | Core Architecture for Sentinel Execution Capabilities Defines the standard interfaces and base classes for concrete capability execution drivers |
+| `capabilities/CapabilitySDK.ts` | 179 | app | Core Architecture for Cero Execution Capabilities Defines the standard interfaces and base classes for concrete capability execution drivers |
 | `capabilities/CapabilityTypes.ts` | 155 | unreachable | Complete Interfaces for the Native macOS Capability SDK Defines structured payloads, metadata contracts, and context passthrough |
 | `capabilities/drivers/ApplicationCapability.ts` | 614 | app | Concrete Execution Driver for Desktop Applications Implements native macOS Launch Services, window manager interaction, and software package installat... |
 | `capabilities/drivers/BluetoothCapability.ts` | 463 | app | Concrete Execution Driver for Bluetooth Subsystems Implements native macOS Bluetooth control APIs via system_profiler and blueutil command interfaces |
@@ -404,9 +404,9 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 | `collectors/IStateCollector.ts` | 27 | unreachable | Collector Interface & Schema Enforces collector isolation: every domain capability owns its own state collector |
 | `collectors/StateCollectorManager.ts` | 105 | unreachable | Decentralized State Harvesting Aggregator Coordinates state collection across all SDK capability collectors |
 | `diff/StateDiffer.ts` | 93 | unreachable | Structural Before/After Delta Analyzer for World Model Snapshots Computes exact modifications between any two historical snapshots so the Planner and ... |
-| `engine/StateEngine.ts` | 176 | unreachable | Centralized State Engine & World Model Synchronization Hub Serves as Sentinel's single source of truth for all operating system state |
+| `engine/StateEngine.ts` | 176 | unreachable | Centralized State Engine & World Model Synchronization Hub Serves as Cero's single source of truth for all operating system state |
 | `events/StateEventBus.ts` | 92 | unreachable | Real-time event propagation mechanism for State Engine Prefer subscriptions over polling to keep the World Model synchronized |
-| `models/StateTypes.ts` | 80 | unreachable | Core Data Contracts for Sentinel V3 State Engine & World Model Implements rigorous state wrappers containing timestamp, confidence (0.0 to 1.0), origi... |
+| `models/StateTypes.ts` | 80 | unreachable | Core Data Contracts for Cero V3 State Engine & World Model Implements rigorous state wrappers containing timestamp, confidence (0.0 to 1.0), origi... |
 | `models/WorldModel.ts` | 176 | unreachable | The Single Source of Truth representing current Operating System state |
 | `queries/StateQueries.ts` | 184 | unreachable | Ergonomic, Strongly-Typed State Query Layer Planner and Runtime should NEVER inspect raw snapshots directly |
 | `snapshot/StateSnapshot.ts` | 73 | unreachable | Immutable World Model Snapshot Generator & History Log Every state update generates an immutable snapshot (Object.freeze) |
@@ -450,10 +450,10 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 
 | File | Lines | Status | Purpose |
 |---|---:|---|---|
-| `clipboard.ts` | 112 | app | Unified Native & Web Clipboard Management for Sentinel Terminal Provides robust clipboard access across desktop Linux (Wayland wl-clipboard / X11), ma... |
+| `clipboard.ts` | 112 | app | Unified Native & Web Clipboard Management for Cero Provides robust clipboard access across desktop Linux (Wayland wl-clipboard / X11), ma... |
 | `cryptoPolyfill.ts` | 18 | unreachable | Browser-Safe Crypto Polyfill for Tauri Webview |
 | `encodingUtils.ts` | 32 | app | Isomorphic Base64 and String Utilities Works identically in Node.js (Buffer) and Browser/WebKit (btoa/atob) |
-| `fsPolyfill.ts` | 140 | app | synchronous `fs` for the Tauri webview, backed by ~/.sentinel |
+| `fsPolyfill.ts` | 140 | app | synchronous `fs` for the Tauri webview, backed by ~/.cero |
 | `pathPolyfill.ts` | 100 | unreachable | Browser-Safe POSIX Path Polyfill for Tauri Webview Provides standard POSIX path functions (join, resolve, dirname, basename, extname, sep, delimiter) ... |
 
 ## `src/ux/` (0/16 used)
@@ -496,7 +496,7 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 | `registry/WorkflowRegistry.ts` | 145 | unreachable | Unified Workflow Discovery & Lookup Layer Separates discovery (Registry) from persistence (Storage) |
 | `scheduler/WorkflowScheduler.ts` | 179 | unreachable | Multi-Trigger Workflow Scheduling Engine Supports 8 trigger modes: manual, on_login, on_startup, daily, weekly, cron, filesystem_event, and applicatio... |
 | `sharing/WorkflowSharing.ts` | 84 | unreachable | Import/Export & Sharing Utilities Exports workflows as self-contained versioned JSON payloads |
-| `storage/DiskWorkflowStorage.ts` | 489 | app | Schema-Versioned File Persistence for Saved Workflows Persists and loads workflows to/from `~/.sentinel/workflows/<name>.json` |
+| `storage/DiskWorkflowStorage.ts` | 489 | app | Schema-Versioned File Persistence for Saved Workflows Persists and loads workflows to/from `~/.cero/workflows/<name>.json` |
 | `storage/WorkflowStorage.ts` | 128 | unreachable | Versioned JSON Persistence Layer Responsible ONLY for persistence |
 | `telemetry/WorkflowTelemetry.ts` | 69 | unreachable | Execution Frequency, Duration, Success Rate, Template Usage & Repair Rate |
 | `templates/StarterWorkflows.ts` | 226 | app | Curated Starter Workflow Definitions for Linux Provides production-ready, deterministic workflow blueprints saved in schemaVersion: 1 |
@@ -512,31 +512,31 @@ Totals: 137 app, 1 cli-only, 251 unreachable.
 | `lib.rs` | 230 | Tauri setup: plugins, managed state, command registration, window and exit handling. |
 | `logger.rs` | 83 | Diagnostic logging to file for release builds. |
 | `main.rs` | 6 | Binary entry point; calls the library run(). |
-| `process_cmds.rs` | 453 | execute_command (timeout, process-group kill, closed stdin, output cap), process list/kill, system stats, file helpers, ~/.sentinel store commands. |
+| `process_cmds.rs` | 453 | execute_command (timeout, process-group kill, closed stdin, output cap), process list/kill, system stats, file helpers, ~/.cero store commands. |
 | `pty.rs` | 310 | Pseudo-terminal sessions (portable-pty): spawn the user shell, stream output, resize, kill. |
-| `watcher.rs` | 273 | Error watcher backend: file tailing (rotation/truncation aware) and journalctl streaming, emitted as sentinel-watch-lines events. |
+| `watcher.rs` | 273 | Error watcher backend: file tailing (rotation/truncation aware) and journalctl streaming, emitted as cero-watch-lines events. |
 
 ## `scripts/`
 
 | File | Purpose |
 |---|---|
-| `agent-cli.ts` | scripts/agent-cli.ts — Direct CLI Agent Runner & Inspection Harness Allows running Sentinel AI Terminal prompts directly from terminal / scripts, with... |
+| `agent-cli.ts` | scripts/agent-cli.ts — Direct CLI Agent Runner & Inspection Harness Allows running Cero AI Terminal prompts directly from terminal / scripts, with... |
 | `benchmark_cold_boot.ts` | scripts/benchmark_cold_boot.ts Phase 4 Cold-Boot Startup Latency Benchmark Measures startup time from process invocation to: |
-| `benchmark_prompts.ts` | scripts/benchmark_prompts.ts — Sentinel Terminal Automated Benchmark Suite Phase 0 of SENTINEL_ROADMAP_v5.0: Executes domain-classified prompts agains... |
+| `benchmark_prompts.ts` | scripts/benchmark_prompts.ts — Cero Automated Benchmark Suite Phase 0 of CERO_ROADMAP_v5.0: Executes domain-classified prompts agains... |
 | `build_all_packages.sh` | Build the Linux release bundles (deb, rpm, AppImage, pacman) from src-tauri. |
 | `build_all_test_cases.js` | Generate tests/tool_test_cases.json from a tool spec dump (one-off generator). |
-| `convert_peft_to_gguf.py` | convert_peft_to_gguf.py — Converts Hugging Face PEFT LoRA safetensors to GGUF format Compatible with llama.cpp and Sentinel's embedded llama-server /  |
+| `convert_peft_to_gguf.py` | convert_peft_to_gguf.py — Converts Hugging Face PEFT LoRA safetensors to GGUF format Compatible with llama.cpp and Cero's embedded llama-server /  |
 | `engine_smoke.ts` | live check of the self-hosted llama.cpp engine |
-| `export_colab_dataset.py` | export_colab_dataset.py — Python CLI Wrapper for Sentinel Dataset Compilation Runs the dataset exporter and outputs the paths to: - sentinel_sft_datas |
-| `export_colab_dataset.ts` | Sentinel Unified Training Dataset Exporter for Google Colab Aggregates all on-device intelligence datasets: 1 |
-| `finetune_sentinel_lora.py` | Sentinel Terminal — Autonomous LoRA Fine-Tuning Pipeline (Tier 3) Trains a lightweight LoRA adapter on your personal terminal interactions, human demo |
+| `export_colab_dataset.py` | export_colab_dataset.py — Python CLI Wrapper for Cero Dataset Compilation Runs the dataset exporter and outputs the paths to: - cero_sft_datas |
+| `export_colab_dataset.ts` | Cero Unified Training Dataset Exporter for Google Colab Aggregates all on-device intelligence datasets: 1 |
+| `finetune_cero_lora.py` | Cero — Autonomous LoRA Fine-Tuning Pipeline (Tier 3) Trains a lightweight LoRA adapter on your personal terminal interactions, human demo |
 | `generate_codebase_map.py` | Generate docs/CODEBASE_MAP.md from the import graph: python3 scripts/generate_codebase_map.py > docs/CODEBASE_MAP.md |
-| `run_cli_prompts.ts` | scripts/run_cli_prompts.ts — Sentinel CLI Prompt Test Runner & Telemetry Recorder Executes prompts through the Sentinel CLI (scripts/agent-cli.ts), re... |
+| `run_cli_prompts.ts` | scripts/run_cli_prompts.ts — Cero CLI Prompt Test Runner & Telemetry Recorder Executes prompts through the Cero CLI (scripts/agent-cli.ts), re... |
 | `sync-shared.ps1` | Pull only the OS-agnostic shared core from another branch (PowerShell). |
 | `sync-shared.sh` | Pull only the OS-agnostic shared core from another branch (bash). |
 | `train_colab_standalone.py` | train_colab_standalone.py — Standalone Google Colab / Cloud GPU Fine-Tuning Script Fine-tunes Qwen/Qwen2.5-Coder-3B-Instruct (or 7B) on Google Colab ( |
-| `train_sentinel_grpo.py` | scripts/train_sentinel_grpo.py — On-Device Rule-Based GRPO Reinforcement Learning DeepSeek-R1 Architecture for Bash & Terminal Automation Part of Sent |
-| `train_sentinel_mlx.py` | Sentinel Terminal — Apple Silicon Native MLX LoRA Fine-Tuning Pipeline (Phase 4.8) Part of Sentinel-SERL (Self-Evolving Reflexion Loop): Breakthrough  |
+| `train_cero_grpo.py` | scripts/train_cero_grpo.py — On-Device Rule-Based GRPO Reinforcement Learning DeepSeek-R1 Architecture for Bash & Terminal Automation Part of Sent |
+| `train_cero_mlx.py` | Cero — Apple Silicon Native MLX LoRA Fine-Tuning Pipeline (Phase 4.8) Part of Cero-SERL (Self-Evolving Reflexion Loop): Breakthrough  |
 | `verify_distro_compatibility.ts` | scripts/verify_distro_compatibility.ts Phase 4 Multi-Distribution Verification Script Audits host Linux distribution, package managers, init systems, ... |
 
 ## `tools/` (tool definitions)

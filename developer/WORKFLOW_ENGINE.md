@@ -39,7 +39,7 @@ Unlike single-shot script wrappers, the engine handles multi-stage execution pip
 Prior to invoking capability drivers, every proposed workflow step evaluates against our `SecurityEngine`. Operations assessed at a high risk profile (`filesystem.delete` or administrative mutations) trigger an immediate execution block, holding runtime processing until explicit user authorization is granted via interactive terminal dialogs.
 
 ### 3. Automatic Shell Directory Synchronization (`cd <path>`)
-A major challenge in terminal agent architectures is synchronizing background subprocess executions with active interactive user shells. Sentinel implements an automated solution:
+A major challenge in terminal agent architectures is synchronizing background subprocess executions with active interactive user shells. Cero implements an automated solution:
 - When any executed workflow step involves filesystem directory navigation (`filesystem.cd`, `shell.cd`, or outputs starting with `Changed directory to:`), `AgentRuntime` automatically captures the resolved target path.
 - Upon completing workflow executions and rendering the summary report, `TerminalView.tsx` directly injects `cd "<target_path>"\r` into the user's active `zsh` session via `SessionManager`. 
 - **The developer's visible command prompt moves instantaneously to the newly selected working directory without manual intervention!**

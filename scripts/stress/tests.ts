@@ -41,7 +41,7 @@ export const tests: Test[] = [
     check: c => c.cmds.some(x => /\.git\//.test(x.out)) ? 'output includes .git paths' : (c.cmds.length ? null : 'nothing ran') },
   { id: 'csv-sum', prompt: 'what is the total of the score column in data.csv?', check: expectSay('42.5') },
   { id: 'todo-lines', prompt: 'find all TODO comments in src and show the file and line number for each', check: expectSay('main.py', 'util.py') },
-  { id: 'git-log-fmt', prompt: 'show the last 3 commits in demo-repo, one line each with the author and how long ago', check: expectSay('Sentinel Test') },
+  { id: 'git-log-fmt', prompt: 'show the last 3 commits in demo-repo, one line each with the author and how long ago', check: expectSay('Cero Test') },
   { id: 'csv-to-json', prompt: 'convert data.csv to a JSON array of objects using python and save it as data.json',
     check: c => { try { const j = JSON.parse(fs.readFileSync(path.join(c.work, 'data.json'), 'utf8')); return Array.isArray(j) && j.length === 3 && j[0].name === 'ana' ? null : `data.json=${JSON.stringify(j).slice(0, 120)}`; } catch (e: any) { return `data.json: ${e.message}`; } } },
   { id: 'json-scripts', prompt: 'is node-app/package.json valid JSON? print its scripts section', check: expectSay('test', 'start') },

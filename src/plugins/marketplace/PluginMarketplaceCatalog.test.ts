@@ -25,7 +25,7 @@ describe('PluginMarketplaceCatalog (Pillar 3.1)', () => {
   });
 
   it('installs, toggles, and uninstalls plugins', () => {
-    const pluginId = 'sentinel.docker.orchestrator';
+    const pluginId = 'cero.docker.orchestrator';
     expect(catalog.install(pluginId)).toBe(true);
 
     const installed = catalog.getAll().find(p => p.id === pluginId);

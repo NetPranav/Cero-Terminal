@@ -57,7 +57,7 @@ export class PermissionManager {
           permissionId: perm,
           granted: isGranted,
           status: isGranted ? 'granted' : 'prompt_needed',
-          remedyHint: `Navigate to macOS System Settings > Privacy & Security > ${perm} and enable Sentinel Terminal.`,
+          remedyHint: `Navigate to macOS System Settings > Privacy & Security > ${perm} and enable Cero.`,
         });
       }
     }

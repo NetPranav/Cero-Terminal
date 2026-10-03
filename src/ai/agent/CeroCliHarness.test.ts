@@ -3,7 +3,7 @@ import { parseArgs, formatData, runPrompt, CliOptions } from '../../../scripts/a
 import { NodeTauriBridge, CommandExecutionRecord } from '../../infrastructure/execution/NodeTauriBridge';
 import { AgentLoop } from './AgentLoop';
 
-describe('Sentinel CLI Runner & Inspection Harness Suite', () => {
+describe('Cero CLI Runner & Inspection Harness Suite', () => {
   beforeEach(() => {
     NodeTauriBridge.install();
   });

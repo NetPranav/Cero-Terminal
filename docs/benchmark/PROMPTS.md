@@ -9,7 +9,7 @@ that table rather than the model. See the earlier audit in git history (`git sho
 
 ## 6. Master Domain Benchmark: Detailed Prompts, Verification & Fix Harness
 
-This suite contains **450 domain-classified prompts** (50 prompts across each of the 9 core functional domains). It serves as the automated regression and quality test harness for Sentinel on Linux.
+This suite contains **450 domain-classified prompts** (50 prompts across each of the 9 core functional domains). It serves as the automated regression and quality test harness for Cero on Linux.
 
 ### Domain 1: System Diagnostics & Hardware Monitoring (50 Prompts)
 
@@ -396,8 +396,8 @@ This suite contains **450 domain-classified prompts** (50 prompts across each of
 | 7.37 | `>increase screen brightness by 10%` | `brightnessctl set +10% 2>/dev/null \|\| light -A 10` | Backlight increased confirmation | Brightness stepped up |
 | 7.38 | `>decrease screen brightness by 10%` | `brightnessctl set 10%- 2>/dev/null \|\| light -U 10` | Backlight decreased confirmation | Brightness stepped down |
 | 7.39 | `>check current screen brightness` | `brightnessctl get 2>/dev/null \|\| light -G` | Current backlight level value | Positive numeric brightness value |
-| 7.40 | `>send desktop notification test` | `notify-send 'Sentinel AI' 'System diagnostics complete'` | Desktop notification banner displayed | Notification daemon receives alert |
-| 7.41 | `>send urgent desktop notification` | `notify-send -u critical 'Sentinel Security' 'Alert: Port scan detected'` | Critical alert banner displayed | Urgent notification dispatched |
+| 7.40 | `>send desktop notification test` | `notify-send 'Cero AI' 'System diagnostics complete'` | Desktop notification banner displayed | Notification daemon receives alert |
+| 7.41 | `>send urgent desktop notification` | `notify-send -u critical 'Cero Security' 'Alert: Port scan detected'` | Critical alert banner displayed | Urgent notification dispatched |
 | 7.42 | `>type text hello world synthetically` | `wtype 'hello world' 2>/dev/null \|\| xdotool type 'hello world'` | Synthetic keystrokes typed | Dispatches keyboard events |
 | 7.43 | `>send synthetic key combo ctrl shift t` | `wtype -M ctrl -M shift -k t 2>/dev/null \|\| xdotool key ctrl+shift+t` | Key combo dispatched | Shortcut event sent to active window |
 | 7.44 | `>send synthetic key combo alt tab` | `wtype -M alt -k Tab 2>/dev/null \|\| xdotool key alt+Tab` | Window switcher shortcut dispatched | Window focus cycle event |
@@ -476,7 +476,7 @@ This suite contains **450 domain-classified prompts** (50 prompts across each of
 | 9.3 | `>docker clean: stop all containers, prune unused volumes, and show remaining images` | `1. docker stop $(docker ps -aq)<br>2. docker volume prune -f<br>3. docker images` | Container stop status, reclaimed space report, remaining images list. | Sequential docker cleanup execution |
 | 9.4 | `>prepare release: check clean git status, run linter, run tests, and build production bundle` | `1. git status --porcelain<br>2. npm run lint<br>3. npm test<br>4. npm run build` | Multi-phase release verification gate confirming zero errors before build. | Zero errors across all 4 gate stages |
 | 9.5 | `>system health audit: check cpu, memory, disk, failed services, and battery` | `1. lscpu<br>2. free -h<br>3. df -h /<br>4. systemctl --failed<br>5. sysfs battery` | Unified executive health card summarizing all 5 hardware metrics. | Aggregated hardware report card |
-| 9.6 | `>save workflow release-gate` | `Macro Engine` | Saves pipeline 9.4 as release-gate.json in ~/.sentinel/workflows/. | Workflow file written to disk |
+| 9.6 | `>save workflow release-gate` | `Macro Engine` | Saves pipeline 9.4 as release-gate.json in ~/.cero/workflows/. | Workflow file written to disk |
 | 9.7 | `>run workflow release-gate` | `Macro Replay Engine` | Executes pipeline 9.4 with zero LLM inference tokens. | Deterministic instant execution |
 | 9.8 | `>dev environment boot: check port 3000, kill if in use, launch vite, and open browser` | `1. Port 3000 check<br>2. Port release<br>3. npm run dev<br>4. browser.navigate` | Development server boot orchestration. | Port cleared and server launched |
 | 9.9 | `>backup database and prune old archives older than 7 days` | `1. pg_dump / sqlite3 backup<br>2. find /backups -mtime +7 -delete` | Backup created with timestamp and old archives pruned. | Backup file verified and prune complete |
@@ -487,7 +487,7 @@ This suite contains **450 domain-classified prompts** (50 prompts across each of
 | 9.14 | `>diagnose network failure: check default gateway ping, verify dns resolution, test wan ping` | `1. ip route \| grep default<br>2. ping gateway<br>3. dig google.com<br>4. ping 1.1.1.1` | Root cause network diagnosis. | Pinpoints failure layer (LAN, DNS, WAN) |
 | 9.15 | `>benchmark cpu performance: record idle temp, run 5 second stress test, record peak temp` | `1. sensors temp<br>2. stress -c 4 -t 5s<br>3. sensors temp` | Delta temperature and throttling report. | Pre and post benchmark stats |
 | 9.16 | `>clean disk space: clear pacman cache, clean npm cache, vacuum journal logs to 100MB` | `1. sudo pacman -Sc --noconfirm<br>2. npm cache clean --force<br>3. journalctl --vacuum-size=100M` | Reclaimed disk space report. | Reclaims storage across package managers |
-| 9.17 | `>save workflow dev-boot` | `Macro Engine` | Persists dev-boot pipeline to ~/.sentinel/workflows/dev-boot.json. | Workflow JSON persisted |
+| 9.17 | `>save workflow dev-boot` | `Macro Engine` | Persists dev-boot pipeline to ~/.cero/workflows/dev-boot.json. | Workflow JSON persisted |
 | 9.18 | `>run workflow dev-boot` | `Macro Replay Engine` | Executes dev-boot with parameter overrides. | Instant replay execution |
 | 9.19 | `>security audit: check listening ports, verify root processes, inspect failed logins` | `1. ss -tulpn<br>2. ps -u root<br>3. journalctl -u sshd \| grep 'Failed password'` | Security posture summary. | Port, privilege, and auth report |
 | 9.20 | `>automated bug triage: check git diff of last commit, run test suite, capture failed test logs` | `1. git diff HEAD~1<br>2. npm test<br>3. capture failure stack trace` | Automated regression report. | Pinpoints failing assertions |
@@ -496,7 +496,7 @@ This suite contains **450 domain-classified prompts** (50 prompts across each of
 | 9.23 | `>rust dependency upgrade: run cargo update, run cargo check, run cargo test` | `1. cargo update<br>2. cargo check<br>3. cargo test` | Rust crate update and verification. | Crates updated and tests green |
 | 9.24 | `>node dependency upgrade: run npm update, run npm audit, run npm test` | `1. npm update<br>2. npm audit<br>3. npm test` | Node package update and regression check. | Packages updated with audit report |
 | 9.25 | `>full desktop environment reset: restart hyprland, restart waybar, restart pipewire audio` | `1. hyprctl reload<br>2. killall waybar && waybar &<br>3. systemctl --user restart pipewire` | Desktop session restart confirmation. | Window manager, bar, audio restored |
-| 9.26 | `>save workflow desktop-reset` | `Macro Engine` | Saves desktop reset pipeline to ~/.sentinel/workflows/desktop-reset.json. | Workflow file written to disk |
+| 9.26 | `>save workflow desktop-reset` | `Macro Engine` | Saves desktop reset pipeline to ~/.cero/workflows/desktop-reset.json. | Workflow file written to disk |
 | 9.27 | `>run workflow desktop-reset` | `Macro Replay Engine` | Executes desktop-reset pipeline instantly. | Deterministic instant execution |
 | 9.28 | `>docker development stack launch: start postgres, start redis, wait for healthcheck, run migration` | `1. docker compose up -d postgres redis<br>2. wait for port 5432 and 6379<br>3. npm run migrate` | Container services healthy and database migrated. | All dependent services active |
 | 9.29 | `>docker development stack teardown: stop containers, dump database, remove networks` | `1. docker compose down<br>2. pg_dump<br>3. docker network prune -f` | Teardown confirmation with backup created. | Clean shutdown confirmation |
@@ -520,6 +520,6 @@ This suite contains **450 domain-classified prompts** (50 prompts across each of
 | 9.47 | `>run workflow ai-healthcheck` | `Macro Replay Engine` | Executes AI healthcheck instantly. | Zero token instant execution |
 | 9.48 | `>verify git tag and commit signatures: check GPG signature on HEAD commit and latest tag` | `git verify-commit HEAD 2>/dev/null && git verify-tag $(git describe --tags) 2>/dev/null` | GPG signature verification report. | Valid signature or unsigned warning |
 | 9.49 | `>create timestamped project tarball backup excluding git and node_modules` | `tar --exclude='.git' --exclude='node_modules' -czf ~/project_backup_$(date +%Y%m%d_%H%M%S).tar.gz .` | Compressed tarball creation confirmation. | Creates timestamped archive in home |
-| 9.50 | `>execute full sentinel self-test: run vitest unit tests, check tauri backend, check tsc build` | `1. npx vitest run<br>2. cargo check --manifest-path src-tauri/Cargo.toml<br>3. npm run build` | Triple verification pass confirmation across unit, rust, and bundle layers. | All 3 verification gates exit 0 |
+| 9.50 | `>execute full cero self-test: run vitest unit tests, check tauri backend, check tsc build` | `1. npx vitest run<br>2. cargo check --manifest-path src-tauri/Cargo.toml<br>3. npm run build` | Triple verification pass confirmation across unit, rust, and bundle layers. | All 3 verification gates exit 0 |
 
 ---

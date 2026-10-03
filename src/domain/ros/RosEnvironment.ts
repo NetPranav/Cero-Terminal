@@ -1,8 +1,8 @@
 /**
- * RosEnvironment.ts — make ROS 2 commands work from Sentinel.
+ * RosEnvironment.ts — make ROS 2 commands work from Cero.
  *
  * Agent commands run in a non-interactive `bash -c`, which never reads ~/.bashrc, so `ros2`,
- * `colcon` and `rosdep` were "command not found" unless Sentinel itself was started from a
+ * `colcon` and `rosdep` were "command not found" unless Cero itself was started from a
  * sourced shell. This module prefixes such commands with the ROS setup script and the nearest
  * workspace overlay, and bounds commands that otherwise stream forever.
  */

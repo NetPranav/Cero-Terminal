@@ -1,5 +1,5 @@
 /**
- * StateTypes.ts — Core Data Contracts for Sentinel V3 State Engine & World Model
+ * StateTypes.ts — Core Data Contracts for Cero V3 State Engine & World Model
  *
  * Implements rigorous state wrappers containing timestamp, confidence (0.0 to 1.0),
  * origin source, and dynamically computed freshness indicators.

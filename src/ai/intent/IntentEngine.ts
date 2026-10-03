@@ -1,5 +1,5 @@
 /**
- * IntentEngine.ts — Core Sentinel Local Intent AI Platform
+ * IntentEngine.ts — Core Cero Local Intent AI Platform
  * 
  * Coordinates the full natural language -> structured execution plan conversion pipeline:
  * 1. Receive natural language

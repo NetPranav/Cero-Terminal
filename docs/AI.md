@@ -1,25 +1,25 @@
-# Sentinel Terminal — Local AI Cognitive Architecture
+# Cero — Local AI Cognitive Architecture
 
-Sentinel brings native desktop computing and offline artificial intelligence together. Unlike cloud-based assistants that transmit sensitive code, environment credentials, and terminal buffers to external servers, Sentinel operates an in-app embedded Large Language Model engine directly on local machine hardware with zero external dependencies.
+Cero brings native desktop computing and offline artificial intelligence together. Unlike cloud-based assistants that transmit sensitive code, environment credentials, and terminal buffers to external servers, Cero operates an in-app embedded Large Language Model engine directly on local machine hardware with zero external dependencies.
 
 ---
 
 ## 1. Embedded In-App Inference Engine
 
 ### A. Zero-Ollama Embedded Server
-- **Native llama-server Integration**: Sentinel bundles an embedded, standalone `llama-server` binary natively managed by Tauri's Rust backend (`src-tauri/src/embedded_server.rs`).
-- **Zero External Dependencies**: Users do not need to install, run, or configure Ollama or any external daemon. Sentinel handles process spawning, port discovery (defaulting to `8080` with automatic port-conflict incrementing), health polling, and clean child-process termination on application exit.
-- **Auto-Start on Application Launch**: When Sentinel opens, the embedded inference engine automatically initializes in the background. Live engine status is reflected on the bottom bar (`StatusBar.tsx`).
-- **Optional External Ollama Fallback**: For users with pre-existing Ollama models or remote inference servers, Sentinel retains a high-performance `OllamaProvider.ts` with instant toggle capability in the AI Settings drawer.
+- **Native llama-server Integration**: Cero bundles an embedded, standalone `llama-server` binary natively managed by Tauri's Rust backend (`src-tauri/src/embedded_server.rs`).
+- **Zero External Dependencies**: Users do not need to install, run, or configure Ollama or any external daemon. Cero handles process spawning, port discovery (defaulting to `8080` with automatic port-conflict incrementing), health polling, and clean child-process termination on application exit.
+- **Auto-Start on Application Launch**: When Cero opens, the embedded inference engine automatically initializes in the background. Live engine status is reflected on the bottom bar (`StatusBar.tsx`).
+- **Optional External Ollama Fallback**: For users with pre-existing Ollama models or remote inference servers, Cero retains a high-performance `OllamaProvider.ts` with instant toggle capability in the AI Settings drawer.
 
 ### B. Bundled Model Profile: Qwen 2.5 Coder 3B GGUF
 - **Target Model**: `Qwen2.5-Coder-3B-Instruct` quantized in 4-bit / 8-bit GGUF format.
 - **Hardware Acceleration**: Automatically compiles with and utilizes GPU acceleration backends (**Vulkan** on Linux, **CUDA** on NVIDIA, and **Metal** on Apple Silicon).
-- **Graceful CPU Degradation**: If GPU VRAM is exhausted or hardware acceleration is unavailable, Sentinel seamlessly falls back to CPU thread layers without crashing or throwing unhandled errors.
+- **Graceful CPU Degradation**: If GPU VRAM is exhausted or hardware acceleration is unavailable, Cero seamlessly falls back to CPU thread layers without crashing or throwing unhandled errors.
 
 ### C. GBNF Grammar-Constrained Sampling
 - **Deterministic Tool Calling**: Raw LLM output is constrained through Backus-Naur Form (GBNF) grammar schemas managed by `GbnfGrammarManager.ts`.
-- **Zero Parse Failures**: The model is mathematically forbidden from emitting malformed JSON, unclosed quotes, or illegal tool signatures. Every token sampled adheres to Sentinel's strictly validated tool schema.
+- **Zero Parse Failures**: The model is mathematically forbidden from emitting malformed JSON, unclosed quotes, or illegal tool signatures. Every token sampled adheres to Cero's strictly validated tool schema.
 - **Unconstrained Fallback**: If an unsupported grammar rule or sampler initialization error occurs, `EmbeddedProvider.ts` automatically falls back to unconstrained JSON completion.
 
 ---
@@ -42,11 +42,11 @@ Whenever a natural language prompt is executed (e.g. `> write a python script...
 
 ## 3. Cognitive Architecture & Multi-Domain Tool Routing
 
-Small local models often hallucinate or struggle when exposed to dozens of complex tools simultaneously. Sentinel overcomes this through a multi-pillar cognitive pipeline:
+Small local models often hallucinate or struggle when exposed to dozens of complex tools simultaneously. Cero overcomes this through a multi-pillar cognitive pipeline:
 
 ### A. Dynamic Domain Tool Pruning
 Instead of saturating context with 100+ raw tool specifications:
-1. Sentinel's lightweight classifier determines the intent domain among 9 specialized functional domains:
+1. Cero's lightweight classifier determines the intent domain among 9 specialized functional domains:
    - *Domain 1: System Diagnostics & Hardware Monitoring*
    - *Domain 2: Process Management & Resource Optimization*
    - *Domain 3: Network Diagnostics, Ports & Connections*
@@ -72,14 +72,14 @@ When the user prompts to switch directories (e.g. `> switch pwd to backend` or `
 - **Deep Workspace Indexing**: Scans user projects and directories up to 3 levels deep across `~`, `~/Projects`, `~/workspace`, and custom roots.
 - **Exact & Substring Matching**: Immediately resolves matches if an exact or unique partial folder name is found.
 - **Fuzzy "Did You Mean" Correction**: If the requested folder name contains a typo or spelling error (e.g. `sentinl` instead of `sentinal`), uses Levenshtein distance to detect candidates and prompts the user with an interactive disambiguation menu.
-- **Automatic Creation Confirmation**: If the target folder does not exist on disk, Sentinel detects the absence, asks the user if they would like Sentinel to create the folder, and upon confirmation executes `mkdir -p` and automatically navigates the PTY.
+- **Automatic Creation Confirmation**: If the target folder does not exist on disk, Cero detects the absence, asks the user if they would like Cero to create the folder, and upon confirmation executes `mkdir -p` and automatically navigates the PTY.
 
 ---
 
 ## 4. Deep System Knowledge Scanner & Persistent Profile
 
 ### A. Non-Blocking 8-Domain Environmental Audit (`SystemKnowledgeScanner.ts`)
-On startup, Sentinel executes an asynchronous background audit to build a comprehensive, structured snapshot of the host operating system:
+On startup, Cero executes an asynchronous background audit to build a comprehensive, structured snapshot of the host operating system:
 1. **Desktop Applications**: Parses `.desktop` files from `/usr/share/applications`, `~/.local/share/applications`, Flatpak, and Snap to index installed GUI applications and binary launch triggers.
 2. **Developer Toolchains**: Detects installed compilers and runtimes (`node`, `python3`, `rustc`/`cargo`, `gcc`, `go`, `docker`, `podman`).
 3. **Hardware Acceleration & Compute**: Discovers GPU model (NVIDIA CUDA VRAM, AMD ROCm), physical CPU cores, total/available RAM, and power state.
@@ -90,15 +90,15 @@ On startup, Sentinel executes an asynchronous background audit to build a compre
 8. **Desktop Session & Audio**: Identifies display server (`Wayland` vs `X11`), compositor (`Hyprland`, `KDE`, `GNOME`), and audio subsystem (`PipeWire` vs `PulseAudio`).
 
 ### B. Persistent Profile Caching & Prompt Injection
-- **Persistence**: Saved to `~/.sentinel/knowledge/system_profile.json` and mirrored in `localStorage`.
-- **System Prompt Enrichment (`SystemPrompt.ts`)**: Injects a compact, token-optimized summary into the AI context window, allowing Sentinel to answer queries like *"open my browser"*, *"how much disk space is free"*, or *"what ports are open"* without running exploratory shell commands.
+- **Persistence**: Saved to `~/.cero/knowledge/system_profile.json` and mirrored in `localStorage`.
+- **System Prompt Enrichment (`SystemPrompt.ts`)**: Injects a compact, token-optimized summary into the AI context window, allowing Cero to answer queries like *"open my browser"*, *"how much disk space is free"*, or *"what ports are open"* without running exploratory shell commands.
 
 ---
 
 ## 5. Multi-Model Architecture & Hardware Tier Recommendations
 
 ### A. Hardware-Adaptive Model Recommendations (`ModelRecommendationEngine.ts`)
-Sentinel inspects physical CPU cores, RAM, and GPU VRAM to categorize the host machine into one of four hardware tiers and suggest the ideal local model:
+Cero inspects physical CPU cores, RAM, and GPU VRAM to categorize the host machine into one of four hardware tiers and suggest the ideal local model:
 - **Budget Tier (< 6 GB RAM)**: Recommends ultra-lightweight models (e.g. `Qwen 2.5 Coder 1.5B (Q4_K_M)` requiring ~1.2 GB RAM) or Cloud API providers to prevent host memory exhaustion.
 - **Balanced Tier (6 GB - 12 GB RAM)**: Recommends `Qwen 2.5 Coder 3B Instruct (Q4_K_M)` (~2.5 GB RAM) as the optimal sweet spot for local reasoning, tool orchestration, and responsiveness.
 - **Performance Tier (12 GB - 24 GB RAM)**: Recommends `Qwen 2.5 Coder 7B Instruct` or `DeepSeek Coder 6.7B` for advanced multi-file synthesis and complex bash scripting.
@@ -120,18 +120,18 @@ For developers who prefer zero local CPU/RAM overhead or who require frontier cl
 ## 6. Continuous Learning & Memory Engines
 
 ### A. Episodic Memory Engine (`EpisodicMemoryEngine.ts`)
-- Stores execution trajectories, intent embeddings, and user corrections in localized storage (`~/.sentinel/memory/`).
+- Stores execution trajectories, intent embeddings, and user corrections in localized storage (`~/.cero/memory/`).
 - Future prompts matching past goals query episodic memory to replay proven command patterns instantaneously.
 
 ### B. Demonstration Learning Engine (`DemonstrationLearningEngine.ts`)
-- If an AI prompt fails or is unresolved, and the user manually executes the correct terminal command within 3 minutes, Sentinel automatically links the user's command to the goal.
-- Generates verified pattern templates in `~/.sentinel/learned_patterns.json` so the AI remembers the exact solution next time.
+- If an AI prompt fails or is unresolved, and the user manually executes the correct terminal command within 3 minutes, Cero automatically links the user's command to the goal.
+- Generates verified pattern templates in `~/.cero/learned_patterns.json` so the AI remembers the exact solution next time.
 
-### C. Sentinel SERL Coordinator (`SentinelSerlCoordinator.ts`)
+### C. Cero SERL Coordinator (`CeroSerlCoordinator.ts`)
 - Implements Self-Evolving Reinforcement Learning (SERL).
 - Logs successful command executions into instruction-tuning datasets:
-  - **SFT Dataset**: Supervised fine-tuning pairs (`sentinel_sft_dataset.jsonl`).
-  - **DPO Dataset**: Direct preference optimization pairs (`sentinel_dpo_dataset.jsonl`).
+  - **SFT Dataset**: Supervised fine-tuning pairs (`cero_sft_dataset.jsonl`).
+  - **DPO Dataset**: Direct preference optimization pairs (`cero_dpo_dataset.jsonl`).
 - Enables localized LoRA fine-tuning tailored to the user's specific developer environment and aliases.
 
 ### D. Session Undo Log & Destructive Rollback (`UndoLog.ts`)
@@ -143,7 +143,7 @@ For developers who prefer zero local CPU/RAM overhead or who require frontier cl
 ## 7. Security & 8-Category Command Safety Guardian
 
 - **Command Safety Guardian (`CommandSafetyGuardian.ts`)**: Permanently blocks destructive operations across 8 threat vectors (root deletion, raw disk zeroing, partition wipes, permission lockouts, fork bombs, UEFI wipes, glibc removal, and obfuscated base64 pipes).
-- **Explicit Capability Refusal**: Asserts that Sentinel does not have the capability to execute dangerous commands, outputting an ANSI refusal banner with full consequence analysis and safe alternatives.
+- **Explicit Capability Refusal**: Asserts that Cero does not have the capability to execute dangerous commands, outputting an ANSI refusal banner with full consequence analysis and safe alternatives.
 - **Asynchronous Consent Queue**: Non-destructive sensitive operations require explicit user approval via a non-blocking modal.
 - **AST Shell Validation**: Model-generated commands are parsed by `ShellAstParser.ts` prior to execution.
 - **Secret Redaction**: Sanitizes API keys, tokens, and passwords prior to writing traces to disk or terminal buffers.

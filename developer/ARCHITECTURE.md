@@ -1,6 +1,6 @@
-# Sentinel System & Technical Architecture
+# Cero System & Technical Architecture
 
-Sentinel Terminal implements a highly decoupled architecture designed to unify presentation layer speed, asynchronous AI reasoning pipelines, and low-level native systems programming.
+Cero implements a highly decoupled architecture designed to unify presentation layer speed, asynchronous AI reasoning pipelines, and low-level native systems programming.
 
 ---
 

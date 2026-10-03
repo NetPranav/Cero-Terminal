@@ -2,7 +2,7 @@
 # Rebuild the stress-test fixtures from scratch
 T="$(cd "$(dirname "$0")" && pwd)/.runs"; mkdir -p "$T"
 rm -rf "$T/work" "$T/home"; mkdir -p "$T/home" "$T/work"; : > "$T/home/.zshenv"
-printf '[user]\n\tname = Sentinel Test\n\temail = test@example.invalid\n[init]\n\tdefaultBranch = main\n' > "$T/home/.gitconfig"
+printf '[user]\n\tname = Cero Test\n\temail = test@example.invalid\n[init]\n\tdefaultBranch = main\n' > "$T/home/.gitconfig"
 cd "$T/work" || exit 1
 mkdir -p node-app logs text photos src "my notes" scripts wf backup
 printf '{ "name": "node-app", "version": "1.0.0", "scripts": { "test": "node test.js", "start": "node server.js" } }\n' > node-app/package.json

@@ -48,14 +48,14 @@ Run each target below, then fill in the matrix. Commands to copy are in the righ
 | 9 | look at the status bar for each provider | never "Off" while it works; a reason when it does not | not run | not run | not run | not run | not run |
 | 10 | run a slow request, press Ctrl+C | stops in under a second, no leftover process (`pgrep -fa sleep`) | not run | not run | not run | not run | not run |
 | 11 | `npm run eval:model` | `pass@1` of at least 95%, flip rate of at most 3% | not run | not run | not run | not run | not run |
-| 12 | `xdg-mime query filetype x.flow`; look at the file in the file manager; double-click it; first run of the AppImage | `application/x-sentinel-workflow`, the Sentinel flow icon, opens in Sentinel; AppImage asks once to register | not run | not run | not run | not run | not run |
+| 12 | `xdg-mime query filetype x.flow`; look at the file in the file manager; double-click it; first run of the AppImage | `application/x-cero-workflow`, the Cero flow icon, opens in Cero; AppImage asks once to register | not run | not run | not run | not run | not run |
 
 Useful commands on the Linux machine:
 
 ```bash
-xdg-mime query filetype ~/Desktop/test.flow          # application/x-sentinel-workflow
-xdg-mime query default application/x-sentinel-workflow   # sentinel-terminal.desktop
-ls ~/.local/share/mime/packages/ ~/.local/share/applications/ | grep -i sentinel   # AppImage registration
+xdg-mime query filetype ~/Desktop/test.flow          # application/x-cero-workflow
+xdg-mime query default application/x-cero-workflow   # cero-terminal.desktop
+ls ~/.local/share/mime/packages/ ~/.local/share/applications/ | grep -i cero   # AppImage registration
 update-mime-database ~/.local/share/mime && update-desktop-database ~/.local/share/applications
 pgrep -fa 'sleep|llama-server'                       # nothing left over after Ctrl+C
 ```

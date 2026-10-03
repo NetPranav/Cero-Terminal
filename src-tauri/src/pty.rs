@@ -116,9 +116,9 @@ pub fn spawn_pty(
     // Enforce standard terminal emulator variables
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
-    cmd.env("TERM_PROGRAM", "Sentinel Terminal");
+    cmd.env("TERM_PROGRAM", "Cero");
     cmd.env("TERM_PROGRAM_VERSION", "0.1.0");
-    cmd.env("SENTINEL_TERMINAL", "1");
+    cmd.env("CERO_TERMINAL", "1");
     cmd.env("LANG", "en_US.UTF-8");
     cmd.env("LC_ALL", "en_US.UTF-8");
 
@@ -188,9 +188,9 @@ pub fn spawn_pty(
                 }
                 fallback_cmd.env("TERM", "xterm-256color");
                 fallback_cmd.env("COLORTERM", "truecolor");
-                fallback_cmd.env("TERM_PROGRAM", "Sentinel Terminal");
+                fallback_cmd.env("TERM_PROGRAM", "Cero");
                 fallback_cmd.env("TERM_PROGRAM_VERSION", "0.1.0");
-                fallback_cmd.env("SENTINEL_TERMINAL", "1");
+                fallback_cmd.env("CERO_TERMINAL", "1");
                 pair.slave.spawn_command(fallback_cmd).map_err(|fb_err| {
                     format!("Failed to spawn shell '{}' ({}) and fallback '{}' ({})", target_shell, e, fallback, fb_err)
                 })?

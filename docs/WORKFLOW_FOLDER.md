@@ -1,6 +1,6 @@
-# Sentinel Terminal — Complete Technical Reference: Workflow Folders (`src/workflows` & `src/domain/workflow`)
+# Cero — Complete Technical Reference: Workflow Folders (`src/workflows` & `src/domain/workflow`)
 
-This document is the exhaustive, file-by-file technical reference for the workflow implementations in Sentinel Terminal. It details the complete architecture, data models, compilers, execution engines, validation rules, scheduling subsystems, storage layers, and test suites across:
+This document is the exhaustive, file-by-file technical reference for the workflow implementations in Cero. It details the complete architecture, data models, compilers, execution engines, validation rules, scheduling subsystems, storage layers, and test suites across:
 - `src/workflows/`: The enterprise declarative workflow library, AST/IR compiler, scheduling, telemetry, and zero-token deterministic replay system.
 - `src/domain/workflow/`: The runtime execution engine, step state tracker, priority task queue, and variable interpolation engine that coordinates with the ReAct agent and capability drivers.
 
@@ -10,7 +10,7 @@ For high-level usage guides and CLI macro replay documentation, see [docs/WORKFL
 
 ## 1. Architecture Overview & Folder Separation
 
-Sentinel Terminal separates workflow automation into two complementary architectural layers:
+Cero separates workflow automation into two complementary architectural layers:
 
 ```
 +---------------------------------------------------------------------------------------+
@@ -96,7 +96,7 @@ src/workflows/
 ├── sharing/
 │   └── WorkflowSharing.ts              # Export/import payload packaging with SHA-256 checksums
 ├── storage/
-│   ├── DiskWorkflowStorage.ts          # File I/O to ~/.sentinel/workflows/ (schemaVersion: 1)
+│   ├── DiskWorkflowStorage.ts          # File I/O to ~/.cero/workflows/ (schemaVersion: 1)
 │   ├── DiskWorkflowStorage.test.ts     # Disk storage unit tests
 │   └── WorkflowStorage.ts              # In-memory versioned storage with rollback snapshots
 ├── telemetry/
@@ -183,7 +183,7 @@ The `WorkflowIR` represents a fully resolved execution graph where:
 - Topological execution order (`executionOrder`) and parallel groups (`parallelGroups`) are computed.
 
 #### Saved Workflow File Schema (`schemaVersion: 1`)
-Persisted to `~/.sentinel/workflows/<name>.json`:
+Persisted to `~/.cero/workflows/<name>.json`:
 - `schemaVersion`: Integer constant (`CURRENT_WORKFLOW_SCHEMA_VERSION = 1`).
 - `environmentPrerequisites`: Prerequisite checks (`requiredBinaries`, `requiredPorts`, `requiredPaths`, `requiredEnvVars`).
 - `steps`: Array of `WorkflowStepDefinition` objects with `command`, `cwd`, `timeoutMs`, `expectedExitCode`, `precondition_check`, `if_precondition_true`, `if_precondition_false`, and `platformCommands`.
@@ -330,7 +330,7 @@ Schedules and triggers workflows across 8 operational trigger modes.
 #### Supported Trigger Types
 1. `manual`: On-demand execution from CLI or UI.
 2. `on_login`: Triggered when the user logs into their desktop session.
-3. `on_startup`: Triggered during Sentinel Terminal initialization.
+3. `on_startup`: Triggered during Cero initialization.
 4. `daily`: Scheduled at specific times of day (`HH:MM`).
 5. `weekly`: Scheduled on specific days of the week (`dayOfWeek`).
 6. `cron`: Standard cron schedule.
@@ -352,11 +352,11 @@ File: [src/workflows/storage/WorkflowStorage.ts](file:///home/user/project/src/w
 - Manages in-memory storage of `UserWorkflow` definitions.
 - Automatic snapshotting: Creates a `WorkflowVersion` snapshot in `versionHistory` before any overwrite.
 - `rollback(id: string, version: string)`: Reverts a workflow to any historical version.
-- `exportAsJSON(id)` / `importFromJSON(jsonStr)`: Serializes workflows into `sentinel-workflow-v1` payloads with SHA-256 checksums.
+- `exportAsJSON(id)` / `importFromJSON(jsonStr)`: Serializes workflows into `cero-workflow-v1` payloads with SHA-256 checksums.
 
 #### Disk Workflow Storage (`src/workflows/storage/DiskWorkflowStorage.ts`)
 File: [src/workflows/storage/DiskWorkflowStorage.ts](file:///home/user/project/src/workflows/storage/DiskWorkflowStorage.ts)
-- Persists workflows as JSON files in `~/.sentinel/workflows/<name>.json` (Windows: `%USERPROFILE%\.sentinel\workflows\<name>.json`).
+- Persists workflows as JSON files in `~/.cero/workflows/<name>.json` (Windows: `%USERPROFILE%\.cero\workflows\<name>.json`).
 - Uses Tauri Rust filesystem bridge (`@tauri-apps/plugin-fs`) in desktop mode with Node.js `fs` fallback for headless testing.
 - Enforces `schemaVersion: 1` and automatically migrates legacy unversioned workflow definitions.
 - Sanitizes file paths to allow only alphanumeric characters, underscores, and hyphens.
@@ -395,7 +395,7 @@ File: [src/workflows/engine/WorkflowExecutionEngine.ts](file:///home/user/projec
 
 #### `DeterministicReplayEngine.ts`
 File: [src/workflows/engine/DeterministicReplayEngine.ts](file:///home/user/project/src/workflows/engine/DeterministicReplayEngine.ts)
-- Replays saved workflows (`~/.sentinel/workflows/<name>.json`) with zero LLM inference tokens in ~22ms.
+- Replays saved workflows (`~/.cero/workflows/<name>.json`) with zero LLM inference tokens in ~22ms.
 - Pre-execution validation: Verifies required binaries, ports, and paths, preventing environment drift.
 - Parameter substitution: Injects CLI overrides (`--port=9000`) into commands.
 - Categorical zero-trust safety: Inspects every command through `SecurityEngine` and halts on `SENSITIVE` operations unless pre-approved.
@@ -434,7 +434,7 @@ File: [src/workflows/history/WorkflowHistory.ts](file:///home/user/project/src/w
 
 File: [src/workflows/sharing/WorkflowSharing.ts](file:///home/user/project/src/workflows/sharing/WorkflowSharing.ts)
 
-Implements the `sentinel-workflow-v1` sharing and portability protocol.
+Implements the `cero-workflow-v1` sharing and portability protocol.
 - Computes SHA-256 integrity checksums over workflow definitions to guarantee payload integrity.
 - Exports self-contained, shareable bundles.
 - Validates payload structure and checksums on import before registering into `WorkflowRegistry`.

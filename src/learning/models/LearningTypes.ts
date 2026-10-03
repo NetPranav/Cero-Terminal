@@ -1,5 +1,5 @@
 /**
- * LearningTypes.ts — Core Data Models for Sentinel Learning Engine
+ * LearningTypes.ts — Core Data Models for Cero Learning Engine
  *
  * Defines ExperienceRecords, LearningProfiles, and Recommendations.
  */

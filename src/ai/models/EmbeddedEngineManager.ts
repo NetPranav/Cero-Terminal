@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Embedded Engine Manager
+ * Cero — Embedded Engine Manager
  *
  * Manages the self-contained local LLM inference lifecycle (Qwen2.5-Coder-3B-Instruct),
  * request isolation across tabs, SHA-256 integrity verification, and graceful GPU VRAM fallback.
@@ -24,7 +24,7 @@ export interface EmbeddedStatus {
   contextTokens?: number;
 }
 
-/** get_sentinel_download_status (src-tauri/src/downloads.rs) */
+/** get_cero_download_status (src-tauri/src/downloads.rs) */
 interface NativeDownloadStatus {
   active: boolean;
   downloaded_bytes: number;
@@ -193,7 +193,7 @@ export interface InferenceQueueStatus {
 export class EmbeddedEngineManager {
   private static instance: EmbeddedEngineManager;
 
-  public static readonly TIER_STORAGE_KEY = 'sentinel_embedded_model_tier';
+  public static readonly TIER_STORAGE_KEY = 'cero_embedded_model_tier';
 
   /** The model tier the user picked (default: balanced). */
   public static getSelectedTier(): EmbeddedModelTier {
@@ -327,11 +327,11 @@ export class EmbeddedEngineManager {
   }
 
   /**
-   * Check if a given LoRA adapter exists in ~/.sentinel/models/
+   * Check if a given LoRA adapter exists in ~/.cero/models/
    */
   public async checkLoraExists(loraPath?: string): Promise<boolean> {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') return true;
-    const pathToCheck = loraPath || '$HOME/.sentinel/models/sentinel_mlx_lora.gguf';
+    const pathToCheck = loraPath || '$HOME/.cero/models/cero_mlx_lora.gguf';
     try {
       const checkCmd = `test -f "${pathToCheck}" && echo "exists"`;
       const res = await invoke<{ stdout: string }>('execute_command', {
@@ -345,7 +345,7 @@ export class EmbeddedEngineManager {
   }
 
   /**
-   * Check if the recommended Qwen 2.5 3B GGUF file exists in ~/.sentinel/models/
+   * Check if the recommended Qwen 2.5 3B GGUF file exists in ~/.cero/models/
    */
   /** Model/engine presence from Rust (stat, no subprocess); undefined when unavailable. */
   private async nativePresence(): Promise<{ model_downloaded?: boolean; engine_installed?: boolean } | undefined> {
@@ -363,7 +363,7 @@ export class EmbeddedEngineManager {
     const native = await this.nativePresence();
     if (typeof native?.model_downloaded === 'boolean') return native.model_downloaded;
     try {
-      const checkCmd = `test -f "$HOME/.sentinel/models/${EmbeddedEngineManager.RECOMMENDED_MODEL.fileName}" && echo "exists"`;
+      const checkCmd = `test -f "$HOME/.cero/models/${EmbeddedEngineManager.RECOMMENDED_MODEL.fileName}" && echo "exists"`;
       const res = await invoke<{ stdout: string }>('execute_command', {
         command: 'sh',
         args: ['-c', checkCmd]
@@ -382,7 +382,7 @@ export class EmbeddedEngineManager {
     const native = await this.nativePresence();
     if (typeof native?.engine_installed === 'boolean') return native.engine_installed;
     try {
-      const checkCmd = `test -x "$HOME/.sentinel/engine/current/llama-server" || test -x "$HOME/.sentinel/bin/llama-server" || command -v llama-server >/dev/null 2>&1 || test -x "/usr/lib/ollama/llama-server"`;
+      const checkCmd = `test -x "$HOME/.cero/engine/current/llama-server" || test -x "$HOME/.cero/bin/llama-server" || command -v llama-server >/dev/null 2>&1 || test -x "/usr/lib/ollama/llama-server"`;
       const res = await invoke<{ code: number }>('execute_command', {
         command: 'sh',
         args: ['-c', checkCmd]
@@ -448,7 +448,7 @@ export class EmbeddedEngineManager {
 
     this.isCpuFallbackMode = true;
     this.cpuFallbackNotice =
-      'Sentinel AI is running in reduced-capability CPU fallback mode due to GPU VRAM exhaustion.';
+      'Cero AI is running in reduced-capability CPU fallback mode due to GPU VRAM exhaustion.';
     console.warn(
       `[EmbeddedEngineManager] GPU VRAM exhaustion detected${errorDetails ? `: ${errorDetails}` : ''}. Restarting in CPU fallback mode (-ngl 0)...`
     );
@@ -481,7 +481,7 @@ export class EmbeddedEngineManager {
     try {
       return await invoke<boolean>('start_embedded_llm', {
         // Rust expands ~/ and falls back to discovery when the file is missing
-        modelPath: modelPath ?? `~/.sentinel/models/${EmbeddedEngineManager.RECOMMENDED_MODEL.fileName}`,
+        modelPath: modelPath ?? `~/.cero/models/${EmbeddedEngineManager.RECOMMENDED_MODEL.fileName}`,
         loraPath,
         gpuLayers
       });
@@ -504,12 +504,12 @@ export class EmbeddedEngineManager {
 
       this.isWarming = true;
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('sentinel:ai-status-changed'));
+        window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
       }
       console.log('[EmbeddedEngineManager] Proactively warming up embedded engine...');
       const started = await this.startEngine();
       if (started && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('sentinel:ai-status-changed'));
+        window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
       }
       return started;
     } catch (err) {
@@ -518,7 +518,7 @@ export class EmbeddedEngineManager {
     } finally {
       this.isWarming = false;
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('sentinel:ai-status-changed'));
+        window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
       }
     }
   }
@@ -747,7 +747,7 @@ export class EmbeddedEngineManager {
   }
 
   /**
-   * Download the recommended Qwen2.5-Coder-3B model into ~/.sentinel/models/
+   * Download the recommended Qwen2.5-Coder-3B model into ~/.cero/models/
    * and verifies SHA-256 checksum against pinned manifest. If corrupted, deletes
    * temporary download and attempts 1 re-download before throwing an error.
    */
@@ -756,8 +756,8 @@ export class EmbeddedEngineManager {
     maxRetries = 1
   ): Promise<boolean> {
     const model = EmbeddedEngineManager.RECOMMENDED_MODEL;
-    const tmpFile = `$HOME/.sentinel/models/${model.fileName}.tmp`;
-    const finalFile = `$HOME/.sentinel/models/${model.fileName}`;
+    const tmpFile = `$HOME/.cero/models/${model.fileName}.tmp`;
+    const finalFile = `$HOME/.cero/models/${model.fileName}`;
 
     // Native download (every OS, including Windows): resumable, SHA-256 checked, with progress
     if (!(typeof process !== 'undefined' && process.env.NODE_ENV === 'test')) {
@@ -780,7 +780,7 @@ export class EmbeddedEngineManager {
       }
 
       const script = `
-        mkdir -p "$HOME/.sentinel/models" && \\
+        mkdir -p "$HOME/.cero/models" && \\
         curl -L -C - --fail --output "${tmpFile}" "${model.url}"
       `;
 
@@ -839,7 +839,7 @@ export class EmbeddedEngineManager {
   }
 
   /**
-   * Download into ~/.sentinel with the app's native command. Null when the command does not
+   * Download into ~/.cero with the app's native command. Null when the command does not
    * exist (the Node CLI), so the caller can use its shell fallback; false on failure.
    */
   private async nativeDownload(
@@ -853,7 +853,7 @@ export class EmbeddedEngineManager {
     let lastBytes = 0;
     let lastTime = Date.now();
     const poll = onProgress ? setInterval(async () => {
-      const status = await invoke<NativeDownloadStatus | null>('get_sentinel_download_status', { relativePath }).catch(() => null);
+      const status = await invoke<NativeDownloadStatus | null>('get_cero_download_status', { relativePath }).catch(() => null);
       if (!status) return;
       const now = Date.now();
       const bytesPerSec = ((status.downloaded_bytes - lastBytes) * 1000) / Math.max(1, now - lastTime);
@@ -870,7 +870,7 @@ export class EmbeddedEngineManager {
     try {
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-          const path = await invoke<string | null>('download_sentinel_file', { url, relativePath, sha256 });
+          const path = await invoke<string | null>('download_cero_file', { url, relativePath, sha256 });
           if (typeof path !== 'string') return null;
           onProgress?.({ percent: 100, downloadedBytes: sizeBytes, totalBytes: sizeBytes, speed: 'Complete' });
           return true;
@@ -900,7 +900,7 @@ export class EmbeddedEngineManager {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
       return { isDownloading: false, downloadedBytes: 0, totalBytes: model.sizeBytes, percent: 0 };
     }
-    const native = await invoke<NativeDownloadStatus | null>('get_sentinel_download_status', { relativePath: `models/${model.fileName}` }).catch(() => null);
+    const native = await invoke<NativeDownloadStatus | null>('get_cero_download_status', { relativePath: `models/${model.fileName}` }).catch(() => null);
     if (native && (native.active || native.done)) {
       const total = native.total_bytes || model.sizeBytes;
       return {
@@ -916,8 +916,8 @@ export class EmbeddedEngineManager {
     }
     try {
       const script = `
-        if [ -f "$HOME/.sentinel/models/${model.fileName}" ]; then
-          bytes=$(stat -c %s "$HOME/.sentinel/models/${model.fileName}" 2>/dev/null || stat -f %z "$HOME/.sentinel/models/${model.fileName}" 2>/dev/null || echo ${model.sizeBytes})
+        if [ -f "$HOME/.cero/models/${model.fileName}" ]; then
+          bytes=$(stat -c %s "$HOME/.cero/models/${model.fileName}" 2>/dev/null || stat -f %z "$HOME/.cero/models/${model.fileName}" 2>/dev/null || echo ${model.sizeBytes})
           echo "done|$bytes"
         else
           running=$(pgrep -x curl 2>/dev/null | while read pid; do
@@ -926,7 +926,7 @@ export class EmbeddedEngineManager {
               break
             fi
           done)
-          bytes=$(stat -c %s "$HOME/.sentinel/models/${model.fileName}.tmp" 2>/dev/null || stat -f %z "$HOME/.sentinel/models/${model.fileName}.tmp" 2>/dev/null || echo 0)
+          bytes=$(stat -c %s "$HOME/.cero/models/${model.fileName}.tmp" 2>/dev/null || stat -f %z "$HOME/.cero/models/${model.fileName}.tmp" 2>/dev/null || echo 0)
           echo "$running|$bytes"
         fi
       `;
@@ -963,7 +963,7 @@ export class EmbeddedEngineManager {
       return true;
     }
     const model = EmbeddedEngineManager.RECOMMENDED_MODEL;
-    const native = await invoke<boolean | null>('cancel_sentinel_download', { relativePath: `models/${model.fileName}`, removePartial }).catch(() => null);
+    const native = await invoke<boolean | null>('cancel_cero_download', { relativePath: `models/${model.fileName}`, removePartial }).catch(() => null);
     if (typeof native === 'boolean' && (native || /^win/i.test(await this.hostOs()))) return true;
     try {
       const script = `
@@ -972,7 +972,7 @@ export class EmbeddedEngineManager {
             kill -9 $pid 2>/dev/null || true
           fi
         done
-        ${removePartial ? `rm -f "$HOME/.sentinel/models/${model.fileName}.tmp"` : ''}
+        ${removePartial ? `rm -f "$HOME/.cero/models/${model.fileName}.tmp"` : ''}
       `;
       await invoke('execute_command', {
         command: 'sh',
@@ -986,7 +986,7 @@ export class EmbeddedEngineManager {
   }
 
   /**
-   * Delete the downloaded GGUF model from ~/.sentinel/models/ to free up disk space.
+   * Delete the downloaded GGUF model from ~/.cero/models/ to free up disk space.
    */
   public async deleteModel(): Promise<boolean> {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
@@ -996,11 +996,11 @@ export class EmbeddedEngineManager {
     try {
       await this.stopEngine();
       if (/^win/i.test(await this.hostOs())) {
-        await invoke('sentinel_store_remove', { relativePath: `models/${model.fileName}.part` }).catch(() => undefined);
-        await invoke('sentinel_store_remove', { relativePath: `models/${model.fileName}` });
+        await invoke('cero_store_remove', { relativePath: `models/${model.fileName}.part` }).catch(() => undefined);
+        await invoke('cero_store_remove', { relativePath: `models/${model.fileName}` });
         return true;
       }
-      const script = `rm -f "$HOME/.sentinel/models/${model.fileName}" "$HOME/.sentinel/models/${model.fileName}.tmp" "$HOME/.sentinel/models/${model.fileName}.part"`;
+      const script = `rm -f "$HOME/.cero/models/${model.fileName}" "$HOME/.cero/models/${model.fileName}.tmp" "$HOME/.cero/models/${model.fileName}.part"`;
       const res = await invoke<{ code: number }>('execute_command', {
         command: 'sh',
         args: ['-c', script]
@@ -1014,8 +1014,8 @@ export class EmbeddedEngineManager {
 
   /**
    * Download the pinned llama.cpp release for this machine, verify its SHA-256, and unpack the
-   * whole bundle (llama-server plus its shared libraries) into ~/.sentinel/engine/<build>, with
-   * ~/.sentinel/engine/current pointing at it. Returns false with the reason logged on failure.
+   * whole bundle (llama-server plus its shared libraries) into ~/.cero/engine/<build>, with
+   * ~/.cero/engine/current pointing at it. Returns false with the reason logged on failure.
    */
   public async installEngine(maxRetries = 1): Promise<boolean> {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
@@ -1038,7 +1038,7 @@ export class EmbeddedEngineManager {
       const downloaded = await this.nativeDownload(asset.url, archive, asset.sha256, asset.sizeBytes, undefined, maxRetries);
       if (!downloaded) return false;
       try {
-        await invoke<string>('install_sentinel_engine', { relativeArchive: archive });
+        await invoke<string>('install_cero_engine', { relativeArchive: archive });
         return true;
       } catch (err) {
         console.warn('[EmbeddedEngineManager] Engine unpack failed:', err);
@@ -1064,7 +1064,7 @@ export class EmbeddedEngineManager {
       return false;
     }
 
-    const downloadDir = '$HOME/.sentinel/engine/.download';
+    const downloadDir = '$HOME/.cero/engine/.download';
     const archive = `${downloadDir}/${asset.fileName}`;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -1087,7 +1087,7 @@ export class EmbeddedEngineManager {
 
         const unpack = await shell(
           `set -e
-           cd "$HOME/.sentinel/engine"
+           cd "$HOME/.cero/engine"
            tar -xzf "${archive}"
            ln -sfn "llama-${ENGINE_BUILD}" current
            ./current/llama-server --version >/dev/null 2>&1
@@ -1103,7 +1103,7 @@ export class EmbeddedEngineManager {
     return false;
   }
 
-  /** Last lines llama-server wrote to ~/.sentinel/logs/llama-server.log (why a start failed). */
+  /** Last lines llama-server wrote to ~/.cero/logs/llama-server.log (why a start failed). */
   public async getEngineLogTail(maxLines = 20): Promise<string> {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') return '';
     try {

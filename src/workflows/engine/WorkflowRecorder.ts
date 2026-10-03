@@ -3,7 +3,7 @@
  *
  * Captures executed session steps, commands, working directories, dynamic parameters,
  * and environment prerequisites, saving them as a schema-versioned workflow definition
- * (`~/.sentinel/workflows/<name>.flow`, schemaVersion: 1).
+ * (`~/.cero/workflows/<name>.flow`, schemaVersion: 1).
  */
 
 import {
@@ -217,7 +217,7 @@ export class WorkflowRecorder {
     const workflow: SavedWorkflowDefinition = {
       schemaVersion: CURRENT_WORKFLOW_SCHEMA_VERSION,
       name: cleanName,
-      description: options?.description || `Workflow ${cleanName} recorded by Sentinel`,
+      description: options?.description || `Workflow ${cleanName} recorded by Cero`,
       steps,
       parameters: Array.from(detectedParams.values()),
       environmentPrerequisites: {

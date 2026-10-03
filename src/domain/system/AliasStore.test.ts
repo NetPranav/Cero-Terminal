@@ -8,7 +8,7 @@ describe('AliasStore', () => {
   let dir: string;
   const store = AliasStore.getInstance();
   beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-alias-'));
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-alias-'));
     store.setFile(path.join(dir, 'aliases.json'));
   });
   afterEach(() => {

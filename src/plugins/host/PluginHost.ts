@@ -7,7 +7,7 @@
 
 import { PluginManifest, PluginContext, PluginState } from '../models/PluginTypes';
 import { PluginSandbox } from '../sandbox/PluginSandbox';
-import { SentinelSDK } from '../sdk/SentinelSDK';
+import { CeroSDK } from '../sdk/CeroSDK';
 import { SDKBridge } from '../bridge/SDKBridge';
 import { PermissionManager } from '../permissions/PermissionManager';
 import { ExtensionPoints } from '../hooks/ExtensionPoints';
@@ -15,13 +15,13 @@ import { ExtensionPoints } from '../hooks/ExtensionPoints';
 export class PluginHost {
   private state: PluginState = 'load';
   private sandbox?: PluginSandbox;
-  private sdk?: SentinelSDK;
+  private sdk?: CeroSDK;
 
   constructor(
     public readonly manifest: PluginManifest,
     private permissionManager: PermissionManager,
     private extensionPoints: ExtensionPoints,
-    private storageDirectory: string = `/tmp/sentinel/plugins/${manifest.id}`
+    private storageDirectory: string = `/tmp/cero/plugins/${manifest.id}`
   ) {}
 
   public getState(): PluginState {
@@ -43,7 +43,7 @@ export class PluginHost {
 
       // Construct Bridge & SDK
       const bridge = new SDKBridge(this.manifest.id, this.permissionManager, this.extensionPoints);
-      this.sdk = new SentinelSDK(bridge);
+      this.sdk = new CeroSDK(bridge);
       
       // Instantiate Sandbox Boundary
       this.sandbox = new PluginSandbox(context, this.sdk);
@@ -69,7 +69,7 @@ export class PluginHost {
     } catch (e) {
       this.state = 'error';
       console.error(`PluginHost: Plugin ${this.manifest.id} crashed during execution`, e);
-      // Host intercepts crash safely; Sentinel Core remains online
+      // Host intercepts crash safely; Cero Core remains online
     }
   }
 

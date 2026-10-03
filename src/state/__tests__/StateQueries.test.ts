@@ -33,7 +33,7 @@ describe('StateQueries — Strongly-Typed Ergonomic Query Layer', () => {
     const btConn = await queries.isConnected('Magic Keyboard');
     expect(btConn.data).toBe(true);
 
-    const wifiConn = await queries.isConnected('Sentinel_5G_Network');
+    const wifiConn = await queries.isConnected('Cero_5G_Network');
     expect(wifiConn.data).toBe(true);
   });
 
@@ -57,7 +57,7 @@ describe('StateQueries — Strongly-Typed Ergonomic Query Layer', () => {
 
   it('8, 9 & 10. currentSSID, batteryLevel & foregroundApp: should query system status with metadata', async () => {
     const ssidRes = await queries.currentSSID();
-    expect(ssidRes.data).toBe('Sentinel_5G_Network');
+    expect(ssidRes.data).toBe('Cero_5G_Network');
 
     const battRes = await queries.batteryLevel();
     expect(battRes.data).toBe(92);

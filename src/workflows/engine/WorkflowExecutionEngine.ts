@@ -4,7 +4,7 @@
  * Strictly follows the Runtime Reuse principle:
  *   Resolve Variables → Compile IR → Compile ActionGraph → Call Runtime.execute()
  *
- * NEVER executes Actions directly. Exactly one execution pipeline exists in Sentinel.
+ * NEVER executes Actions directly. Exactly one execution pipeline exists in Cero.
  */
 
 import {

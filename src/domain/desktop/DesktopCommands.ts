@@ -30,7 +30,7 @@ export interface DesktopCommandSet {
   screenshot: (region: boolean) => string;
 }
 
-const SCREENSHOT_PATH = '"$HOME/Pictures/Screenshots/sentinel-$(date +%Y%m%d-%H%M%S).png"';
+const SCREENSHOT_PATH = '"$HOME/Pictures/Screenshots/cero-$(date +%Y%m%d-%H%M%S).png"';
 const withDir = (cmd: string) => `mkdir -p "$HOME/Pictures/Screenshots" && f=${SCREENSHOT_PATH} && ${cmd} && echo "Saved $f"`;
 
 export function desktopCommands(compositor: Compositor): DesktopCommandSet {

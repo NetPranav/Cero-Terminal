@@ -1,12 +1,12 @@
-# Sentinel Terminal — Cross-Platform Shared Architecture & Synchronization Guide
+# Cero — Cross-Platform Shared Architecture & Synchronization Guide
 
-This document outlines how Sentinel Terminal's cross-platform architecture is organized across operating systems (`macOS`, `Windows`, `Linux`) and how developers on different platform branches pull shared code without causing merge conflicts.
+This document outlines how Cero's cross-platform architecture is organized across operating systems (`macOS`, `Windows`, `Linux`) and how developers on different platform branches pull shared code without causing merge conflicts.
 
 ---
 
 ## 🏗️ Architecture Overview
 
-Sentinel Terminal is structured into two clear layers:
+Cero is structured into two clear layers:
 
 1. **Shared OS-Agnostic Core (~85% of codebase)**:
    - `tools/`: All 101 tool calling JSON schemas, parameters, knowledge artifacts, examples, and tests.

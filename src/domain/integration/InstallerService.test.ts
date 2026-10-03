@@ -33,7 +33,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(async (cmd: string, args?: any) => {
-    if (cmd === 'get_app_binary_path') return '/usr/bin/sentinel-terminal';
+    if (cmd === 'get_app_binary_path') return '/usr/bin/cero-terminal';
     if (cmd === 'execute_command' && args?.command === 'sh' && args?.args?.includes('echo $PATH')) {
       return { stdout: '/home/testuser/.local/bin:/usr/local/bin:/usr/bin:/bin' };
     }
@@ -43,7 +43,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 describe('InstallerService (Linux & Cross-Platform)', () => {
   const installer = InstallerService.getInstance();
-  const cliTarget = '/home/testuser/.local/bin/sentinel';
+  const cliTarget = '/home/testuser/.local/bin/cero';
   const servicesDir = '/home/testuser/.local/share/nautilus/scripts';
   const vscodeSettings = '/home/testuser/.config/Code/User/settings.json';
   const cursorSettings = '/home/testuser/.config/Cursor/User/settings.json';
@@ -52,27 +52,27 @@ describe('InstallerService (Linux & Cross-Platform)', () => {
     for (const k in mockStore) delete mockStore[k];
   });
 
-  it('installs the sentinel command line executable without recursive loops and registers desktop entries', async () => {
+  it('installs the cero command line executable without recursive loops and registers desktop entries', async () => {
     const res = await installer.installCli(undefined, cliTarget);
     expect(res.success).toBe(true);
 
     const script = mockStore[cliTarget];
     expect(script).toBeDefined();
-    // Verify recursion elimination: must not call sentinel on failure
-    expect(script).not.toContain('|| sentinel "$resolved_path"');
+    // Verify recursion elimination: must not call cero on failure
+    expect(script).not.toContain('|| cero "$resolved_path"');
     expect(script).toContain('APP_BIN');
     expect(script).toContain('--help');
     expect(script).toContain('--version');
 
-    // Verify sentinel-shell wrapper is generated
-    const shellWrapper = mockStore['/home/testuser/.local/bin/sentinel-shell'];
+    // Verify cero-shell wrapper is generated
+    const shellWrapper = mockStore['/home/testuser/.local/bin/cero-shell'];
     expect(shellWrapper).toBeDefined();
-    expect(shellWrapper).toContain('SENTINEL_IDE_INTEGRATED=1');
+    expect(shellWrapper).toContain('CERO_IDE_INTEGRATED=1');
 
     // Verify desktop entry with directory and scheme handler
-    const desktopEntry = mockStore['/home/testuser/.local/share/applications/sentinel-terminal.desktop'];
+    const desktopEntry = mockStore['/home/testuser/.local/share/applications/cero-terminal.desktop'];
     expect(desktopEntry).toBeDefined();
-    expect(desktopEntry).toContain('MimeType=inode/directory;x-scheme-handler/sentinel;');
+    expect(desktopEntry).toContain('MimeType=inode/directory;x-scheme-handler/cero;');
   });
 
   it('generates multi-file manager context actions for Nautilus, Dolphin, and Thunar', async () => {
@@ -83,23 +83,23 @@ describe('InstallerService (Linux & Cross-Platform)', () => {
     expect(res.success).toBe(true);
 
     // 1. Nautilus script
-    expect(mockStore[`${servicesDir}/Open in Sentinel Terminal`]).toBeDefined();
-    expect(mockStore[`${servicesDir}/Open in Sentinel Terminal`]).toContain('sentinel');
+    expect(mockStore[`${servicesDir}/Open in Cero`]).toBeDefined();
+    expect(mockStore[`${servicesDir}/Open in Cero`]).toContain('cero');
 
     // 2. Dolphin KIO service menu
-    const dolphinMenu = mockStore['/home/testuser/.local/share/kio/servicemenus/sentinel_open.desktop'];
+    const dolphinMenu = mockStore['/home/testuser/.local/share/kio/servicemenus/cero_open.desktop'];
     expect(dolphinMenu).toBeDefined();
     expect(dolphinMenu).toContain('ServiceTypes=KonqPopupMenu/Plugin,inode/directory');
-    expect(dolphinMenu).toContain('Exec=sentinel "%f"');
+    expect(dolphinMenu).toContain('Exec=cero "%f"');
 
     // 3. Thunar Custom Action
     const thunarXml = mockStore['/home/testuser/.config/Thunar/uca.xml'];
     expect(thunarXml).toBeDefined();
-    expect(thunarXml).toContain('sentinel-open-terminal');
-    expect(thunarXml).toContain('<command>sentinel %f</command>');
+    expect(thunarXml).toContain('cero-open-terminal');
+    expect(thunarXml).toContain('<command>cero %f</command>');
   });
 
-  it('injects Sentinel Shell profile and external exec into VS Code settings.json cleanly for Linux', async () => {
+  it('injects Cero Shell profile and external exec into VS Code settings.json cleanly for Linux', async () => {
     mockStore[vscodeSettings] = JSON.stringify({ "editor.fontSize": 14 });
 
     const res = await installer.configureVsCodeIntegration(vscodeSettings);
@@ -107,19 +107,19 @@ describe('InstallerService (Linux & Cross-Platform)', () => {
 
     const saved = JSON.parse(mockStore[vscodeSettings]);
     expect(saved['editor.fontSize']).toBe(14);
-    expect(saved['terminal.integrated.profiles.linux']['Sentinel Shell']).toBeDefined();
-    expect(saved['terminal.integrated.profiles.linux']['Sentinel Shell'].path).toContain('sentinel-shell');
-    expect(saved['terminal.external.linuxExec']).toBe('sentinel-terminal');
+    expect(saved['terminal.integrated.profiles.linux']['Cero Shell']).toBeDefined();
+    expect(saved['terminal.integrated.profiles.linux']['Cero Shell'].path).toContain('cero-shell');
+    expect(saved['terminal.external.linuxExec']).toBe('cero-terminal');
   });
 
-  it('injects Sentinel Shell profile into Cursor IDE settings.json for Linux', async () => {
+  it('injects Cero Shell profile into Cursor IDE settings.json for Linux', async () => {
     const res = await installer.configureCursorIntegration(cursorSettings);
     expect(res.success).toBe(true);
 
     const saved = JSON.parse(mockStore[cursorSettings]);
-    expect(saved['terminal.integrated.profiles.linux']['Sentinel Shell']).toBeDefined();
-    expect(saved['terminal.integrated.profiles.linux']['Sentinel Shell'].path).toContain('sentinel-shell');
-    expect(saved['terminal.external.linuxExec']).toBe('sentinel-terminal');
+    expect(saved['terminal.integrated.profiles.linux']['Cero Shell']).toBeDefined();
+    expect(saved['terminal.integrated.profiles.linux']['Cero Shell'].path).toContain('cero-shell');
+    expect(saved['terminal.external.linuxExec']).toBe('cero-terminal');
   });
 
   it('accurately verifies status of all desktop integration components including PATH', async () => {
@@ -128,7 +128,7 @@ describe('InstallerService (Linux & Cross-Platform)', () => {
 
     const status = await installer.checkStatus({
       cliPath: cliTarget,
-      servicesDir: `${servicesDir}/Open in Sentinel Terminal`,
+      servicesDir: `${servicesDir}/Open in Cero`,
       vscodePath: vscodeSettings,
       cursorPath: cursorSettings
     });

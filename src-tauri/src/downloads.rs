@@ -1,4 +1,4 @@
-//! Native downloads into ~/.sentinel: the built-in model and the llama.cpp engine.
+//! Native downloads into ~/.cero: the built-in model and the llama.cpp engine.
 //!
 //! The installer used `sh -c "curl ... && mv ..."`, `uname` and `ln -s`, none of which exist on
 //! Windows. This module streams the file over HTTPS (resuming a partial download), checks the
@@ -114,13 +114,13 @@ pub async fn download_to(url: &str, dest: &Path, sha256: Option<&str>, key: &str
     std::fs::rename(&part, dest).map_err(|e| e.to_string())
 }
 
-/// Start (or resume) a download into ~/.sentinel/<relative_path>. Returns when it finishes.
+/// Start (or resume) a download into ~/.cero/<relative_path>. Returns when it finishes.
 #[tauri::command]
-pub async fn download_sentinel_file(url: String, relative_path: String, sha256: Option<String>) -> Result<String, String> {
+pub async fn download_cero_file(url: String, relative_path: String, sha256: Option<String>) -> Result<String, String> {
     if !url.starts_with("https://") {
         return Err("only https downloads are allowed".into());
     }
-    let dest = crate::process_cmds::resolve_in_sentinel(&relative_path)?;
+    let dest = crate::process_cmds::resolve_in_cero(&relative_path)?;
     {
         let mut map = DOWNLOADS.lock().unwrap();
         if map.get(&relative_path).map(|e| e.status.active).unwrap_or(false) {
@@ -138,16 +138,16 @@ pub async fn download_sentinel_file(url: String, relative_path: String, sha256: 
 }
 
 #[tauri::command]
-pub fn get_sentinel_download_status(relative_path: String) -> DownloadStatus {
+pub fn get_cero_download_status(relative_path: String) -> DownloadStatus {
     DOWNLOADS.lock().unwrap().get(&relative_path).map(|e| e.status.clone()).unwrap_or_default()
 }
 
 /// Stop a running download; `remove_partial` also deletes what was downloaded so far.
 #[tauri::command]
-pub fn cancel_sentinel_download(relative_path: String, remove_partial: Option<bool>) -> Result<bool, String> {
+pub fn cancel_cero_download(relative_path: String, remove_partial: Option<bool>) -> Result<bool, String> {
     let found = DOWNLOADS.lock().unwrap().get(&relative_path).map(|e| e.cancel.store(true, Ordering::Relaxed)).is_some();
     if remove_partial.unwrap_or(false) {
-        let dest = crate::process_cmds::resolve_in_sentinel(&relative_path)?;
+        let dest = crate::process_cmds::resolve_in_cero(&relative_path)?;
         let _ = std::fs::remove_file(format!("{}.part", dest.display()));
     }
     Ok(found)
@@ -208,11 +208,11 @@ pub fn install_engine_archive(archive: &Path, engine_dir: &Path, binary: &str) -
     Ok(current.join(binary))
 }
 
-/// Unpack ~/.sentinel/<relative_archive> as the engine and delete the archive.
+/// Unpack ~/.cero/<relative_archive> as the engine and delete the archive.
 #[tauri::command]
-pub fn install_sentinel_engine(relative_archive: String) -> Result<String, String> {
-    let archive = crate::process_cmds::resolve_in_sentinel(&relative_archive)?;
-    let engine_dir = crate::process_cmds::resolve_in_sentinel("engine")?;
+pub fn install_cero_engine(relative_archive: String) -> Result<String, String> {
+    let archive = crate::process_cmds::resolve_in_cero(&relative_archive)?;
+    let engine_dir = crate::process_cmds::resolve_in_cero("engine")?;
     let binary = if cfg!(windows) { "llama-server.exe" } else { "llama-server" };
     let installed = install_engine_archive(&archive, &engine_dir, binary)?;
     let _ = std::fs::remove_file(&archive);
@@ -224,7 +224,7 @@ mod tests {
     use super::*;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("sentinel-dl-test-{}-{}", name, std::process::id()));
+        let dir = std::env::temp_dir().join(format!("cero-dl-test-{}-{}", name, std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir

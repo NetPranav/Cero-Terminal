@@ -11,7 +11,7 @@ const say = (c: Ctx) => String(c.result.summary || '') + '\n' + c.cmds.map(x => 
 const expectSay = (...words: (string | RegExp)[]) => (c: Ctx) =>
   words.every(w => (typeof w === 'string' ? say(c).toLowerCase().includes(w.toLowerCase()) : w.test(say(c)))) ? null : `answer lacks ${words.join(' + ')}: ${String(c.result.summary).slice(0, 140)}`;
 const home = (c: Ctx, ...p: string[]) => path.join(c.work, '..', 'home', ...p);
-const wf = (c: Ctx, name: string) => home(c, '.sentinel', 'workflows', name);
+const wf = (c: Ctx, name: string) => home(c, '.cero', 'workflows', name);
 const planText = (c: Ctx) => c.plans.map(p => p.params).join('\n');
 const noCreate = (c: Ctx) => (c.cmds.some(x => /\b(?:mkdir|touch|New-Item)\b/.test(x.cmd)) ? 'created something' : null);
 const all = (...checks: Array<(c: Ctx) => string | null>) => (c: Ctx) => { for (const f of checks) { const r = f(c); if (r) return r; } return null; };
@@ -80,7 +80,7 @@ export const tests: Test[] = [
 
   // ---- report 12: .flow ----
   { id: 'f-flow-extension', prompt: 'make me a workflow called ship it that runs echo build and opens github in chrome', pick: toStore,
-    check: all(needs(c => fs.existsSync(wf(c, 'ship-it.flow')), 'ship-it.flow missing'), needs(c => !fs.readdirSync(home(c, '.sentinel', 'workflows')).some(f => f.endsWith('.json')), 'a .json file exists')) },
+    check: all(needs(c => fs.existsSync(wf(c, 'ship-it.flow')), 'ship-it.flow missing'), needs(c => !fs.readdirSync(home(c, '.cero', 'workflows')).some(f => f.endsWith('.json')), 'a .json file exists')) },
   { id: 'f-list', prompt: 'list my workflows', check: expectSay(/ship.it|hello.flow|demo/i) },
   { id: 'f-run-missing', prompt: 'run the workflow nope-not-here', check: expectSay('No saved workflow') },
 

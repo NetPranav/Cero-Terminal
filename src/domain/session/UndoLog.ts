@@ -240,7 +240,7 @@ export class UndoLog {
       return {
         rollbackType: 'trash_restore',
         reversibility: 'manual',
-        manualAdvice: 'File was deleted. If files were moved to ~/.sentinel/trash, restore from there; otherwise recover from git or backups.'
+        manualAdvice: 'File was deleted. If files were moved to ~/.cero/trash, restore from there; otherwise recover from git or backups.'
       };
     }
 

@@ -11,7 +11,7 @@ describe('Phase 4.6 — Neural Activation Steering (Representation Engineering)'
   let manager: ActivationSteeringManager;
   const testStoragePath = path.join(
     process.env.HOME || '/tmp',
-    '.sentinel',
+    '.cero',
     'steering',
     'test_steering_vectors.json'
   );
@@ -281,12 +281,12 @@ describe('Phase 4.6 — Neural Activation Steering (Representation Engineering)'
     });
 
     it('formats llama-server control-vector CLI arguments', () => {
-      const args = manager.formatLlamaServerArgs('/opt/sentinel/steering');
+      const args = manager.formatLlamaServerArgs('/opt/cero/steering');
 
       expect(args).toContain('--control-vector-scaled');
-      expect(args).toContain('/opt/sentinel/steering/unix_mastery.gguf');
+      expect(args).toContain('/opt/cero/steering/unix_mastery.gguf');
       expect(args).toContain('1.50');
-      expect(args).toContain('/opt/sentinel/steering/refusal_suppression.gguf');
+      expect(args).toContain('/opt/cero/steering/refusal_suppression.gguf');
       expect(args).toContain('-2.00');
     });
 

@@ -7,7 +7,7 @@
  *  - 'process-running': A foreground program/process is actively running.
  *  - 'alternate-screen-buffer': Fullscreen interactive TUI (vim, htop, less, tmux).
  * 
- * Prevents Sentinel from injecting SIGINT (\x03) into active foreground workloads.
+ * Prevents Cero from injecting SIGINT (\x03) into active foreground workloads.
  */
 
 export type PtyState = 'idle-at-prompt' | 'process-running' | 'alternate-screen-buffer';

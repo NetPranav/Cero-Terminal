@@ -1,5 +1,5 @@
 {
-  "name": "sentinel-terminal",
+  "name": "cero-terminal",
   "private": true,
   "version": "2.2.0",
   "description": "A terminal that takes requests in plain language and runs .flow files on macOS, Windows and Linux",

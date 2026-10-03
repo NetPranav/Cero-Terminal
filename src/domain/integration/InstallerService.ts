@@ -113,14 +113,14 @@ export class InstallerService {
   }
 
   /**
-   * Discover real executable path for Sentinel Terminal.
+   * Discover real executable path for Cero.
    */
   public async getAppBinaryPath(): Promise<string> {
     try {
       const res = await invoke<string>('get_app_binary_path');
       if (res && res.trim()) return res.trim();
     } catch {}
-    return 'sentinel-terminal';
+    return 'cero-terminal';
   }
 
   /**
@@ -147,10 +147,10 @@ export class InstallerService {
   }
 
   /**
-   * Generate and install the sentinel-shell PTY wrapper for IDE integrated terminals.
+   * Generate and install the cero-shell PTY wrapper for IDE integrated terminals.
    */
-  public async ensureSentinelShellWrapper(home: string): Promise<string> {
-    const shellWrapperPath = joinPath(home, '.local', 'bin', 'sentinel-shell');
+  public async ensureCeroShellWrapper(home: string): Promise<string> {
+    const shellWrapperPath = joinPath(home, '.local', 'bin', 'cero-shell');
     try {
       const binDir = getDirname(shellWrapperPath);
       if (!(await safeExists(binDir))) {
@@ -158,18 +158,18 @@ export class InstallerService {
       }
 
       const script = `#!/usr/bin/env bash
-# Sentinel Terminal IDE Integrated Shell Profile
+# Cero IDE Integrated Shell Profile
 # Runs within VS Code / Cursor integrated terminal (node-pty)
 
 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
   export PATH="$HOME/.local/bin:$PATH"
 fi
 
-export SENTINEL_IDE_INTEGRATED=1
-export TERMINAL_EMULATOR="SentinelTerminal"
+export CERO_IDE_INTEGRATED=1
+export TERMINAL_EMULATOR="CeroTerminal"
 
-if [ -f "$HOME/.sentinel/env" ]; then
-  source "$HOME/.sentinel/env" 2>/dev/null || true
+if [ -f "$HOME/.cero/env" ]; then
+  source "$HOME/.cero/env" 2>/dev/null || true
 fi
 
 USER_SHELL="\${SHELL:-/bin/bash}"
@@ -194,7 +194,7 @@ exec "$USER_SHELL" "$@"
    * Install FreeDesktop application entry with directory and URL scheme handlers.
    */
   public async ensureDesktopEntry(home: string): Promise<string> {
-    const desktopPath = joinPath(home, '.local', 'share', 'applications', 'sentinel-terminal.desktop');
+    const desktopPath = joinPath(home, '.local', 'share', 'applications', 'cero-terminal.desktop');
     try {
       const appsDir = getDirname(desktopPath);
       if (!(await safeExists(appsDir))) {
@@ -202,23 +202,23 @@ exec "$USER_SHELL" "$@"
       }
 
       const desktopContent = `[Desktop Entry]
-Name=Sentinel Terminal
+Name=Cero
 Comment=Autonomous AI-Native Linux Terminal Copilot
 GenericName=Terminal Emulator
-Exec=sentinel-terminal %U
-Icon=sentinel-terminal
+Exec=cero-terminal %U
+Icon=cero-terminal
 Type=Application
 Terminal=false
 StartupNotify=true
-StartupWMClass=sentinel-terminal
+StartupWMClass=cero-terminal
 Categories=System;TerminalEmulator;Development;Utility;
 Keywords=terminal;shell;ai;copilot;bash;pty;llama;
-MimeType=inode/directory;x-scheme-handler/sentinel;
+MimeType=inode/directory;x-scheme-handler/cero;
 Actions=NewWindow;
 
 [Desktop Action NewWindow]
 Name=Open New Window
-Exec=sentinel-terminal
+Exec=cero-terminal
 `;
       await safeWriteTextFile(desktopPath, desktopContent);
 
@@ -232,7 +232,7 @@ Exec=sentinel-terminal
       try {
         await invoke('execute_command', {
           command: 'xdg-mime',
-          args: ['default', 'sentinel-terminal.desktop', 'x-scheme-handler/sentinel']
+          args: ['default', 'cero-terminal.desktop', 'x-scheme-handler/cero']
         });
       } catch {}
     } catch {}
@@ -240,14 +240,14 @@ Exec=sentinel-terminal
   }
 
   /**
-   * Install the 'sentinel' command line executable to target binary folder.
-   * On Linux, defaults to rootless `~/.local/bin/sentinel` with fallback to `/usr/local/bin/sentinel`.
+   * Install the 'cero' command line executable to target binary folder.
+   * On Linux, defaults to rootless `~/.local/bin/cero` with fallback to `/usr/local/bin/cero`.
    */
   public async installCli(cliSourceContent?: string, targetPath?: string): Promise<{ success: boolean; error?: string }> {
     const home = await this.getResolvedHomeDir();
     const finalTargetPath = targetPath || (isLinux()
-      ? joinPath(home, '.local', 'bin', 'sentinel')
-      : '/usr/local/bin/sentinel');
+      ? joinPath(home, '.local', 'bin', 'cero')
+      : '/usr/local/bin/cero');
 
     try {
       const dir = getDirname(finalTargetPath);
@@ -256,32 +256,32 @@ Exec=sentinel-terminal
         await safeMkdir(dir, { recursive: true });
       }
 
-      let detectedAppBin = 'sentinel-terminal';
+      let detectedAppBin = 'cero-terminal';
       if (isLinux()) {
         detectedAppBin = await this.getAppBinaryPath();
       }
 
       const scriptContent = cliSourceContent || (isLinux()
         ? `#!/usr/bin/env bash
-# Sentinel Terminal CLI Launcher (Linux)
+# Cero CLI Launcher (Linux)
 set -e
 
 # Multi-tier binary resolution
 CANDIDATE_BIN="${detectedAppBin}"
-if [ -n "$CANDIDATE_BIN" ] && [ -x "$CANDIDATE_BIN" ] && [ "$CANDIDATE_BIN" != "sentinel-terminal" ]; then
+if [ -n "$CANDIDATE_BIN" ] && [ -x "$CANDIDATE_BIN" ] && [ "$CANDIDATE_BIN" != "cero-terminal" ]; then
   APP_BIN="$CANDIDATE_BIN"
-elif command -v sentinel-terminal >/dev/null 2>&1; then
-  APP_BIN="$(command -v sentinel-terminal)"
-elif [ -x "/usr/bin/sentinel-terminal" ]; then
-  APP_BIN="/usr/bin/sentinel-terminal"
-elif [ -x "/usr/local/bin/sentinel-terminal" ]; then
-  APP_BIN="/usr/local/bin/sentinel-terminal"
-elif [ -x "$HOME/.local/bin/sentinel-terminal" ]; then
-  APP_BIN="$HOME/.local/bin/sentinel-terminal"
+elif command -v cero-terminal >/dev/null 2>&1; then
+  APP_BIN="$(command -v cero-terminal)"
+elif [ -x "/usr/bin/cero-terminal" ]; then
+  APP_BIN="/usr/bin/cero-terminal"
+elif [ -x "/usr/local/bin/cero-terminal" ]; then
+  APP_BIN="/usr/local/bin/cero-terminal"
+elif [ -x "$HOME/.local/bin/cero-terminal" ]; then
+  APP_BIN="$HOME/.local/bin/cero-terminal"
 elif [ -n "$APPIMAGE" ] && [ -x "$APPIMAGE" ]; then
   APP_BIN="$APPIMAGE"
-elif [ -x "$(dirname "$0")/sentinel-terminal" ]; then
-  APP_BIN="$(dirname "$0")/sentinel-terminal"
+elif [ -x "$(dirname "$0")/cero-terminal" ]; then
+  APP_BIN="$(dirname "$0")/cero-terminal"
 else
   APP_BIN=""
 fi
@@ -295,7 +295,7 @@ for arg in "$@"; do
   fi
 done
 
-if [ -n "$SENTINEL_DEBUG" ]; then
+if [ -n "$CERO_DEBUG" ]; then
   if [ -n "$APP_BIN" ]; then
     exec "$APP_BIN" "$@"
   fi
@@ -339,23 +339,23 @@ fi
 
 # Fallback to desktop URL handler if binary was not found directly
 if command -v xdg-open >/dev/null 2>&1; then
-  if xdg-open "sentinel://open?path=$resolved_path" 2>/dev/null; then
+  if xdg-open "cero://open?path=$resolved_path" 2>/dev/null; then
     exit 0
   fi
 fi
 
-echo "sentinel: error: Sentinel Terminal binary ('sentinel-terminal') not found." >&2
-echo "Please verify your installation or ensure sentinel-terminal is in PATH." >&2
+echo "cero: error: Cero binary ('cero-terminal') not found." >&2
+echo "Please verify your installation or ensure cero-terminal is in PATH." >&2
 exit 1
 `
         : `#!/usr/bin/env bash
-# Sentinel Terminal CLI Launcher (macOS)
-APP_NAME="Sentinel Terminal"
+# Cero CLI Launcher (macOS)
+APP_NAME="Cero"
 target="$1"
 if [ -z "$target" ]; then target="."; fi
-if [ "$target" == "--new-tab" ]; then open "sentinel://new-tab?path=$(pwd)"; exit 0; fi
-if [ "$target" == "--split" ]; then open "sentinel://split?path=$(pwd)"; exit 0; fi
-open "sentinel://open?path=$(cd "$target" 2>/dev/null && pwd || echo "$target")" 2>/dev/null || open -a "$APP_NAME" "$target"
+if [ "$target" == "--new-tab" ]; then open "cero://new-tab?path=$(pwd)"; exit 0; fi
+if [ "$target" == "--split" ]; then open "cero://split?path=$(pwd)"; exit 0; fi
+open "cero://open?path=$(cd "$target" 2>/dev/null && pwd || echo "$target")" 2>/dev/null || open -a "$APP_NAME" "$target"
 `);
 
       await safeWriteTextFile(finalTargetPath, scriptContent);
@@ -372,14 +372,14 @@ open "sentinel://open?path=$(cd "$target" 2>/dev/null && pwd || echo "$target")"
         }
 
         // Also ensure shell wrapper and desktop entry exist
-        await this.ensureSentinelShellWrapper(home);
+        await this.ensureCeroShellWrapper(home);
         await this.ensureDesktopEntry(home);
       }
 
       return { success: true };
     } catch (e: any) {
       if ((e?.code === 'EACCES' || String(e).includes('permission denied')) && finalTargetPath.startsWith('/usr/local/bin')) {
-        const fallbackPath = joinPath(home, '.local', 'bin', 'sentinel');
+        const fallbackPath = joinPath(home, '.local', 'bin', 'cero');
         return this.installCli(cliSourceContent, fallbackPath);
       }
       return { success: false, error: e?.message || String(e) };
@@ -387,14 +387,14 @@ open "sentinel://open?path=$(cd "$target" 2>/dev/null && pwd || echo "$target")"
   }
 
   /**
-   * Enable Linux File Manager / macOS Finder context action ("Open in Sentinel").
+   * Enable Linux File Manager / macOS Finder context action ("Open in Cero").
    */
   public async enableFinderIntegration(targetServicesDir?: string): Promise<{ success: boolean; workflowPath: string; error?: string }> {
     const home = await this.getResolvedHomeDir();
 
     if (isLinux()) {
       const scriptDir = targetServicesDir || joinPath(home, '.local', 'share', 'nautilus', 'scripts');
-      const scriptPath = joinPath(scriptDir, 'Open in Sentinel Terminal');
+      const scriptPath = joinPath(scriptDir, 'Open in Cero');
       try {
         if (!(await safeExists(scriptDir))) {
           await safeMkdir(scriptDir, { recursive: true });
@@ -405,14 +405,14 @@ target=\$(echo "\$target" | head -n 1)
 if [ -z "\$target" ]; then target="\$PWD"; fi
 if [ -f "\$target" ]; then target="\$(dirname "\$target")"; fi
 
-if command -v sentinel >/dev/null 2>&1; then
-  sentinel "\$target" &
-elif [ -x "\$HOME/.local/bin/sentinel" ]; then
-  "\$HOME/.local/bin/sentinel" "\$target" &
-elif command -v sentinel-terminal >/dev/null 2>&1; then
-  sentinel-terminal "\$target" &
-elif [ -x "/usr/bin/sentinel-terminal" ]; then
-  /usr/bin/sentinel-terminal "\$target" &
+if command -v cero >/dev/null 2>&1; then
+  cero "\$target" &
+elif [ -x "\$HOME/.local/bin/cero" ]; then
+  "\$HOME/.local/bin/cero" "\$target" &
+elif command -v cero-terminal >/dev/null 2>&1; then
+  cero-terminal "\$target" &
+elif [ -x "/usr/bin/cero-terminal" ]; then
+  /usr/bin/cero-terminal "\$target" &
 fi
 `;
         await safeWriteTextFile(scriptPath, scriptContent);
@@ -424,9 +424,9 @@ fi
         const nemoDir = joinPath(home, '.local', 'share', 'nemo', 'scripts');
         try {
           if (!(await safeExists(nemoDir))) await safeMkdir(nemoDir, { recursive: true });
-          await safeWriteTextFile(joinPath(nemoDir, 'Open in Sentinel Terminal'), scriptContent);
+          await safeWriteTextFile(joinPath(nemoDir, 'Open in Cero'), scriptContent);
           try {
-            await invoke('execute_command', { command: 'chmod', args: ['+x', joinPath(nemoDir, 'Open in Sentinel Terminal')] });
+            await invoke('execute_command', { command: 'chmod', args: ['+x', joinPath(nemoDir, 'Open in Cero')] });
           } catch {}
         } catch {}
 
@@ -434,9 +434,9 @@ fi
         const cajaDir = joinPath(home, '.local', 'share', 'caja', 'scripts');
         try {
           if (!(await safeExists(cajaDir))) await safeMkdir(cajaDir, { recursive: true });
-          await safeWriteTextFile(joinPath(cajaDir, 'Open in Sentinel Terminal'), scriptContent);
+          await safeWriteTextFile(joinPath(cajaDir, 'Open in Cero'), scriptContent);
           try {
-            await invoke('execute_command', { command: 'chmod', args: ['+x', joinPath(cajaDir, 'Open in Sentinel Terminal')] });
+            await invoke('execute_command', { command: 'chmod', args: ['+x', joinPath(cajaDir, 'Open in Cero')] });
           } catch {}
         } catch {}
 
@@ -445,24 +445,24 @@ fi
 Type=Service
 ServiceTypes=KonqPopupMenu/Plugin,inode/directory
 MimeType=inode/directory;
-Actions=openInSentinel;
+Actions=openInCero;
 X-KDE-Priority=TopLevel
 
-[Desktop Action openInSentinel]
-Name=Open in Sentinel Terminal
-Icon=sentinel-terminal
-Exec=sentinel "%f"
+[Desktop Action openInCero]
+Name=Open in Cero
+Icon=cero-terminal
+Exec=cero "%f"
 `;
         const kioDir = joinPath(home, '.local', 'share', 'kio', 'servicemenus');
         try {
           if (!(await safeExists(kioDir))) await safeMkdir(kioDir, { recursive: true });
-          await safeWriteTextFile(joinPath(kioDir, 'sentinel_open.desktop'), dolphinMenuContent);
+          await safeWriteTextFile(joinPath(kioDir, 'cero_open.desktop'), dolphinMenuContent);
         } catch {}
 
         const kservices5Dir = joinPath(home, '.local', 'share', 'kservices5', 'ServiceMenus');
         try {
           if (!(await safeExists(kservices5Dir))) await safeMkdir(kservices5Dir, { recursive: true });
-          await safeWriteTextFile(joinPath(kservices5Dir, 'sentinel_open.desktop'), dolphinMenuContent);
+          await safeWriteTextFile(joinPath(kservices5Dir, 'cero_open.desktop'), dolphinMenuContent);
         } catch {}
 
         // 4. XFCE Thunar Custom Actions (uca.xml)
@@ -481,8 +481,8 @@ Exec=sentinel "%f"
             }
           }
 
-          if (!ucaXml.includes('sentinel-open-terminal') && !ucaXml.includes('Open in Sentinel Terminal')) {
-            const thunarAction = `\n<action>\n\t<icon>sentinel-terminal</icon>\n\t<name>Open in Sentinel Terminal</name>\n\t<submenu></submenu>\n\t<unique-id>sentinel-open-terminal</unique-id>\n\t<command>sentinel %f</command>\n\t<description>Open folder in Sentinel Terminal</description>\n\t<range></range>\n\t<patterns>*</patterns>\n\t<startup-notify/>\n\t<directories/>\n</action>\n`;
+          if (!ucaXml.includes('cero-open-terminal') && !ucaXml.includes('Open in Cero')) {
+            const thunarAction = `\n<action>\n\t<icon>cero-terminal</icon>\n\t<name>Open in Cero</name>\n\t<submenu></submenu>\n\t<unique-id>cero-open-terminal</unique-id>\n\t<command>cero %f</command>\n\t<description>Open folder in Cero</description>\n\t<range></range>\n\t<patterns>*</patterns>\n\t<startup-notify/>\n\t<directories/>\n</action>\n`;
             if (ucaXml.includes('</actions>')) {
               ucaXml = ucaXml.replace('</actions>', `${thunarAction}</actions>`);
             } else {
@@ -503,7 +503,7 @@ Exec=sentinel "%f"
 
     // macOS Finder Quick Action Workflow
     const servicesDir = targetServicesDir || joinPath(home, 'Library', 'Services');
-    const workflowPath = joinPath(servicesDir, 'Open in Sentinel.workflow');
+    const workflowPath = joinPath(servicesDir, 'Open in Cero.workflow');
 
     try {
       if (!(await safeExists(servicesDir))) {
@@ -520,16 +520,16 @@ Exec=sentinel "%f"
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key>
-  <string>Open in Sentinel</string>
+  <string>Open in Cero</string>
   <key>CFBundleIdentifier</key>
-  <string>com.sentinel.services.open</string>
+  <string>com.cero.services.open</string>
   <key>NSServices</key>
   <array>
     <dict>
       <key>NSMenuItem</key>
       <dict>
         <key>default</key>
-        <string>Open in Sentinel</string>
+        <string>Open in Cero</string>
       </dict>
       <key>NSMessage</key>
       <string>runWorkflowAsService</string>
@@ -543,7 +543,7 @@ Exec=sentinel "%f"
 </plist>`;
       await safeWriteTextFile(joinPath(contentsDir, 'Info.plist'), infoPlistContent);
 
-      const documentStub = `open "sentinel://open?path=$1"`;
+      const documentStub = `open "cero://open?path=$1"`;
       await safeWriteTextFile(joinPath(contentsDir, 'document.wflow'), documentStub);
 
       return { success: true, workflowPath };
@@ -586,7 +586,7 @@ Exec=sentinel "%f"
 
       // Also register external terminal launcher
       if (isLinux()) {
-        config['terminal.external.linuxExec'] = 'sentinel-terminal';
+        config['terminal.external.linuxExec'] = 'cero-terminal';
       }
 
       await safeWriteTextFile(settingsPath, JSON.stringify(config, null, 2));
@@ -605,17 +605,17 @@ Exec=sentinel "%f"
       ? joinPath(home, '.config', 'Code', 'User', 'settings.json')
       : joinPath(home, 'Library', 'Application Support', 'Code', 'User', 'settings.json'));
 
-    let binPath = '/Applications/Sentinel Terminal.app/Contents/MacOS/Sentinel Terminal';
+    let binPath = '/Applications/Cero.app/Contents/MacOS/Cero';
     if (isLinux()) {
       if (mockSettingsPath) {
-        binPath = joinPath(home, '.local', 'bin', 'sentinel-shell');
+        binPath = joinPath(home, '.local', 'bin', 'cero-shell');
       } else {
-        const sysWrapper = '/usr/bin/sentinel-shell';
-        binPath = (await safeExists(sysWrapper)) ? sysWrapper : await this.ensureSentinelShellWrapper(home);
+        const sysWrapper = '/usr/bin/cero-shell';
+        binPath = (await safeExists(sysWrapper)) ? sysWrapper : await this.ensureCeroShellWrapper(home);
       }
     }
 
-    return this.updateIdeSettings(settingsPath, 'Sentinel Shell', binPath);
+    return this.updateIdeSettings(settingsPath, 'Cero Shell', binPath);
   }
 
   /**
@@ -627,17 +627,17 @@ Exec=sentinel "%f"
       ? joinPath(home, '.config', 'Cursor', 'User', 'settings.json')
       : joinPath(home, 'Library', 'Application Support', 'Cursor', 'User', 'settings.json'));
 
-    let binPath = '/Applications/Sentinel Terminal.app/Contents/MacOS/Sentinel Terminal';
+    let binPath = '/Applications/Cero.app/Contents/MacOS/Cero';
     if (isLinux()) {
       if (mockSettingsPath) {
-        binPath = joinPath(home, '.local', 'bin', 'sentinel-shell');
+        binPath = joinPath(home, '.local', 'bin', 'cero-shell');
       } else {
-        const sysWrapper = '/usr/bin/sentinel-shell';
-        binPath = (await safeExists(sysWrapper)) ? sysWrapper : await this.ensureSentinelShellWrapper(home);
+        const sysWrapper = '/usr/bin/cero-shell';
+        binPath = (await safeExists(sysWrapper)) ? sysWrapper : await this.ensureCeroShellWrapper(home);
       }
     }
 
-    return this.updateIdeSettings(settingsPath, 'Sentinel Shell', binPath);
+    return this.updateIdeSettings(settingsPath, 'Cero Shell', binPath);
   }
 
   /**
@@ -646,10 +646,10 @@ Exec=sentinel "%f"
   public async checkStatus(opts?: { cliPath?: string; servicesDir?: string; vscodePath?: string; cursorPath?: string }): Promise<IntegrationStatus> {
     const home = await this.getResolvedHomeDir();
 
-    const cliPath = opts?.cliPath || (isLinux() ? joinPath(home, '.local', 'bin', 'sentinel') : '/usr/local/bin/sentinel');
+    const cliPath = opts?.cliPath || (isLinux() ? joinPath(home, '.local', 'bin', 'cero') : '/usr/local/bin/cero');
     const servicesDir = opts?.servicesDir || (isLinux()
-      ? joinPath(home, '.local', 'share', 'nautilus', 'scripts', 'Open in Sentinel Terminal')
-      : joinPath(home, 'Library', 'Services', 'Open in Sentinel.workflow'));
+      ? joinPath(home, '.local', 'share', 'nautilus', 'scripts', 'Open in Cero')
+      : joinPath(home, 'Library', 'Services', 'Open in Cero.workflow'));
 
     const vscodePath = opts?.vscodePath || (isLinux()
       ? joinPath(home, '.config', 'Code', 'User', 'settings.json')
@@ -660,15 +660,15 @@ Exec=sentinel "%f"
       : joinPath(home, 'Library', 'Application Support', 'Cursor', 'User', 'settings.json'));
 
     const cliInstalled = (await safeExists(cliPath))
-      || (await safeExists(joinPath(home, '.local', 'bin', 'sentinel')))
-      || (await safeExists('/usr/local/bin/sentinel'))
-      || (await safeExists('/usr/bin/sentinel-terminal'))
-      || (await safeExists('/usr/bin/sentinel'));
+      || (await safeExists(joinPath(home, '.local', 'bin', 'cero')))
+      || (await safeExists('/usr/local/bin/cero'))
+      || (await safeExists('/usr/bin/cero-terminal'))
+      || (await safeExists('/usr/bin/cero'));
 
     const finderEnabled = (await safeExists(servicesDir))
-      || (await safeExists(joinPath(home, '.local', 'share', 'kio', 'servicemenus', 'sentinel_open.desktop')))
-      || (await safeExists(joinPath(home, '.local', 'share', 'applications', 'sentinel-terminal.desktop')))
-      || (await safeExists(joinPath(home, '.local', 'share', 'applications', 'com.pranav.sentinel-terminal.desktop')));
+      || (await safeExists(joinPath(home, '.local', 'share', 'kio', 'servicemenus', 'cero_open.desktop')))
+      || (await safeExists(joinPath(home, '.local', 'share', 'applications', 'cero-terminal.desktop')))
+      || (await safeExists(joinPath(home, '.local', 'share', 'applications', 'com.pranav.cero-terminal.desktop')));
 
     const profileKey = isLinux() ? 'terminal.integrated.profiles.linux' : 'terminal.integrated.profiles.osx';
 
@@ -677,7 +677,7 @@ Exec=sentinel "%f"
       try {
         const data = JSON.parse(await safeReadTextFile(vscodePath));
         const profiles = data[profileKey] || data['terminal.integrated.profiles.linux'] || data['terminal.integrated.profiles.osx'] || {};
-        vscodeConfigured = !!(profiles['Sentinel Shell'] || profiles['Sentinel Terminal']);
+        vscodeConfigured = !!(profiles['Cero Shell'] || profiles['Cero']);
       } catch {}
     }
 
@@ -686,7 +686,7 @@ Exec=sentinel "%f"
       try {
         const data = JSON.parse(await safeReadTextFile(cursorPath));
         const profiles = data[profileKey] || data['terminal.integrated.profiles.linux'] || data['terminal.integrated.profiles.osx'] || {};
-        cursorConfigured = !!(profiles['Sentinel Shell'] || profiles['Sentinel Terminal']);
+        cursorConfigured = !!(profiles['Cero Shell'] || profiles['Cero']);
       } catch {}
     }
 

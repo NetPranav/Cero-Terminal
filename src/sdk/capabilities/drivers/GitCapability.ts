@@ -80,7 +80,7 @@ export class GitCapability extends BaseCapabilityDriver<GitDriverInput, any> {
         case 'merge': return { success: true, data: { merged: input.branch, conflicts: false }, commandExecuted };
         case 'stash': return { success: true, data: { stashed: true, ref: 'stash@{0}' }, commandExecuted, rollbackPayload: { action: 'stash_pop' } };
         case 'branch': return { success: true, data: { branches: ['main', 'develop', 'feature/auth'], current: 'main' }, commandExecuted };
-        case 'log': return { success: true, data: { logs: [{ hash: '7c8d9a1', author: 'Sentinel AI', message: 'Initial commit' }] }, commandExecuted };
+        case 'log': return { success: true, data: { logs: [{ hash: '7c8d9a1', author: 'Cero AI', message: 'Initial commit' }] }, commandExecuted };
         case 'diff': return { success: true, data: { diff: 'diff --git a/src/app.ts b/src/app.ts\n+ console.log("initialized");' }, commandExecuted };
         default: return { success: true, data: { operation: op }, commandExecuted };
       }

@@ -25,7 +25,7 @@ export const osOf = (name: string | undefined): OpenOs =>
 
 const PROCESS: Record<string, string> = { code: 'code', codium: 'codium', cursor: 'cursor', windsurf: 'windsurf', zed: 'zed', subl: 'sublime_text', idea: 'idea', pycharm: 'pycharm', webstorm: 'webstorm', clion: 'clion', studio: 'studio' };
 
-/** Run detached so closing Sentinel does not close the editor */
+/** Run detached so closing Cero does not close the editor */
 const detach = (cmd: string, os: OpenOs) => (os === 'linux' ? `setsid -f ${cmd} >/dev/null 2>&1` : os === 'macos' ? `${cmd}` : cmd);
 
 export function openCommand(path: string, os: OpenOs, withApp?: string): OpenCommand {

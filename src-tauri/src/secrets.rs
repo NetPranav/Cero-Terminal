@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 //! Secrets (API keys): the operating system keychain where there is one, a private file where there is not.
 //!
-//! macOS: Keychain. Windows: Credential Manager. Linux: `~/.sentinel/secrets.json` with mode 0600, because
+//! macOS: Keychain. Windows: Credential Manager. Linux: `~/.cero/secrets.json` with mode 0600, because
 //! the Secret Service needs system libraries a bare window manager may not have. Every command returns an
 //! error rather than pretending: the caller keeps the old copy of a key until a write has been read back.
 
@@ -12,7 +12,7 @@ const FILE_NAME: &str = "secrets.json";
 
 fn secrets_file() -> Result<PathBuf, String> {
     let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).map_err(|e| e.to_string())?;
-    Ok(PathBuf::from(home).join(".sentinel").join(FILE_NAME))
+    Ok(PathBuf::from(home).join(".cero").join(FILE_NAME))
 }
 
 fn read_map(path: &PathBuf) -> BTreeMap<String, String> {
@@ -131,7 +131,7 @@ mod tests {
     use super::*;
 
     fn temp_file(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("sentinel-secrets-{}-{}", name, std::process::id()));
+        let dir = std::env::temp_dir().join(format!("cero-secrets-{}-{}", name, std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir.join("secrets.json")
     }

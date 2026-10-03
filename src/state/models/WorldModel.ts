@@ -2,7 +2,7 @@
  * WorldModel.ts — The Single Source of Truth representing current Operating System state.
  *
  * All domain state is structured, immutable, and stamped with explicit confidence metadata.
- * No other module in Sentinel V3 should cache OS state independently.
+ * No other module in Cero V3 should cache OS state independently.
  */
 
 import { StateMetadata } from './StateTypes';
@@ -158,7 +158,7 @@ export function createDefaultWorldModel(snapshotId = `snap-${Date.now()}`): Worl
     windows: createDefaultMetadata({ activeWindows: [{ title: 'AI Terminal — Cursor', appName: 'Cursor', bounds: { x: 0, y: 0, w: 1440, h: 900 } }] }, 'collector:window'),
     filesystem: createDefaultMetadata({ knownDirectories: { '/home/user/project': { exists: true, isEmpty: false, lastModified: Date.now() }, '/tmp/empty_test_folder': { exists: true, isEmpty: true, lastModified: Date.now() } } }, 'collector:filesystem'),
     network: createDefaultMetadata({ activeInterfaces: [{ interface: 'en0', ip: '192.168.1.105', isOnline: true }] }, 'collector:network'),
-    wifi: createDefaultMetadata({ connectedSSID: 'Sentinel_5G_Network', powered: true, interface: 'en0' }, 'collector:wifi'),
+    wifi: createDefaultMetadata({ connectedSSID: 'Cero_5G_Network', powered: true, interface: 'en0' }, 'collector:wifi'),
     bluetooth: createDefaultMetadata({ powered: true, connectedDevices: [{ name: 'Magic Keyboard', address: '00:1A:7D:DA:71:13', connected: true }, { name: 'AirPods Pro', address: '00:1A:7D:EE:22:91', connected: true }] }, 'collector:bluetooth'),
     volumes: createDefaultMetadata({ mountedVolumes: [{ name: 'Macintosh HD', path: '/', totalSpaceGb: 994, availableSpaceGb: 412 }, { name: 'External SSD', path: '/Volumes/External SSD', totalSpaceGb: 2000, availableSpaceGb: 1450 }] }, 'collector:system'),
     displays: createDefaultMetadata({ displays: [{ resolution: '3456x2234', isPrimary: true, brightness: 85 }] }, 'collector:system'),

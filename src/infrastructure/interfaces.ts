@@ -1,4 +1,4 @@
-// Infrastructure Layer Interfaces for Sentinel Terminal
+// Infrastructure Layer Interfaces for Cero
 
 export interface CommandResult {
   stdout: string;

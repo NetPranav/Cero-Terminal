@@ -1,7 +1,7 @@
 /**
  * AliasStore.ts: remember which folder or app a spoken name meant, so the same question is asked once.
  *
- * Stored in ~/.sentinel/aliases.json (capped at 200 entries, newest kept). Reads never throw:
+ * Stored in ~/.cero/aliases.json (capped at 200 entries, newest kept). Reads never throw:
  * a missing or damaged file is simply an empty list.
  */
 import * as fs from 'fs';
@@ -35,7 +35,7 @@ export class AliasStore {
   }
 
   private file(): string {
-    return this.customFile || path.join(os.homedir(), '.sentinel', 'aliases.json');
+    return this.customFile || path.join(os.homedir(), '.cero', 'aliases.json');
   }
 
   private load(): AliasEntry[] {

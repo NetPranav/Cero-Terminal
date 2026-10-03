@@ -1,5 +1,5 @@
 /**
- * ContextBudget.ts — Token Budgeting & Message Fitting for Sentinel AI
+ * ContextBudget.ts — Token Budgeting & Message Fitting for Cero AI
  * 
  * Prevents context overflow in embedded (llama.cpp) and external models by
  * strictly fitting system prompt, history, and user requests within bounds.

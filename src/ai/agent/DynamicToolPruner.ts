@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Dynamic Domain Tool Pruner
+ * Cero — Dynamic Domain Tool Pruner
  *
  * Reduces large tool libraries (103+ tools) down to the 4–6 most relevant tools
  * for any given user instruction in <1ms. Keeps local small language models (SLMs)

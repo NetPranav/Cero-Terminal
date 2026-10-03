@@ -28,12 +28,12 @@ export function decideStopKey(ctx: StopKeyContext): StopKeyAction {
     return 'copy-selection';
   }
 
-  // When Sentinel is idle and only shell commands run in PTY, pass Ctrl+C to PTY
+  // When Cero is idle and only shell commands run in PTY, pass Ctrl+C to PTY
   if (!ctx.isAiBusy) {
     return 'pass-to-pty';
   }
 
-  // When Sentinel itself is running an agent loop, workflow, or LLM call:
+  // When Cero itself is running an agent loop, workflow, or LLM call:
   const now = ctx.now ?? Date.now();
   if (ctx.lastInterruptTime && (now - ctx.lastInterruptTime) <= 500) {
     return 'force-kill-ai-task';

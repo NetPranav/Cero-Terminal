@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Sentinel Terminal",
+  "productName": "Cero",
   "version": "2.2.0",
-  "identifier": "org.sentinel.terminal",
+  "identifier": "org.cero.terminal",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Sentinel Terminal",
+        "title": "Cero",
         "width": 1024,
         "height": 768,
         "visible": false,
@@ -46,7 +46,7 @@
     "category": "DeveloperTool",
     "shortDescription": "AI-native terminal for macOS, Linux and Windows",
     "longDescription": "High-performance AI-native Linux terminal emulator with embedded llama-server, multi-stage workflow macros, and native system diagnostics.",
-    "copyright": "2026 Sentinel Terminal Contributors",
+    "copyright": "2026 Cero Contributors",
     "resources": {
       "icons/flow/flow.ico": "flow.ico"
     },
@@ -69,18 +69,18 @@
           "libappindicator3-1 | libayatana-appindicator3-1"
         ],
         "files": {
-          "/usr/share/mime/packages/sentinel-terminal.xml": "../packaging/linux/sentinel-terminal-mime.xml",
-          "/usr/share/icons/hicolor/16x16/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-16.png",
-          "/usr/share/icons/hicolor/24x24/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-24.png",
-          "/usr/share/icons/hicolor/32x32/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-32.png",
-          "/usr/share/icons/hicolor/48x48/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-48.png",
-          "/usr/share/icons/hicolor/64x64/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-64.png",
-          "/usr/share/icons/hicolor/128x128/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-128.png",
-          "/usr/share/icons/hicolor/256x256/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-256.png",
-          "/usr/share/icons/hicolor/512x512/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-512.png",
-          "/usr/share/icons/hicolor/scalable/mimetypes/application-x-sentinel-workflow.svg": "../assets/brand/flow-icon.svg"
+          "/usr/share/mime/packages/cero-terminal.xml": "../packaging/linux/cero-terminal-mime.xml",
+          "/usr/share/icons/hicolor/16x16/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-16.png",
+          "/usr/share/icons/hicolor/24x24/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-24.png",
+          "/usr/share/icons/hicolor/32x32/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-32.png",
+          "/usr/share/icons/hicolor/48x48/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-48.png",
+          "/usr/share/icons/hicolor/64x64/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-64.png",
+          "/usr/share/icons/hicolor/128x128/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-128.png",
+          "/usr/share/icons/hicolor/256x256/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-256.png",
+          "/usr/share/icons/hicolor/512x512/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-512.png",
+          "/usr/share/icons/hicolor/scalable/mimetypes/application-x-cero-workflow.svg": "../assets/brand/flow-icon.svg"
         },
-        "desktopTemplate": "../packaging/linux/sentinel-terminal.desktop.hbs",
+        "desktopTemplate": "../packaging/linux/cero-terminal.desktop.hbs",
         "postInstallScript": "../packaging/linux/postinst.sh",
         "postRemoveScript": "../packaging/linux/postrm.sh"
       },
@@ -89,18 +89,18 @@
           "webkit2gtk4.1"
         ],
         "files": {
-          "/usr/share/mime/packages/sentinel-terminal.xml": "../packaging/linux/sentinel-terminal-mime.xml",
-          "/usr/share/icons/hicolor/16x16/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-16.png",
-          "/usr/share/icons/hicolor/24x24/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-24.png",
-          "/usr/share/icons/hicolor/32x32/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-32.png",
-          "/usr/share/icons/hicolor/48x48/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-48.png",
-          "/usr/share/icons/hicolor/64x64/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-64.png",
-          "/usr/share/icons/hicolor/128x128/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-128.png",
-          "/usr/share/icons/hicolor/256x256/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-256.png",
-          "/usr/share/icons/hicolor/512x512/mimetypes/application-x-sentinel-workflow.png": "icons/flow/flow-512.png",
-          "/usr/share/icons/hicolor/scalable/mimetypes/application-x-sentinel-workflow.svg": "../assets/brand/flow-icon.svg"
+          "/usr/share/mime/packages/cero-terminal.xml": "../packaging/linux/cero-terminal-mime.xml",
+          "/usr/share/icons/hicolor/16x16/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-16.png",
+          "/usr/share/icons/hicolor/24x24/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-24.png",
+          "/usr/share/icons/hicolor/32x32/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-32.png",
+          "/usr/share/icons/hicolor/48x48/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-48.png",
+          "/usr/share/icons/hicolor/64x64/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-64.png",
+          "/usr/share/icons/hicolor/128x128/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-128.png",
+          "/usr/share/icons/hicolor/256x256/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-256.png",
+          "/usr/share/icons/hicolor/512x512/mimetypes/application-x-cero-workflow.png": "icons/flow/flow-512.png",
+          "/usr/share/icons/hicolor/scalable/mimetypes/application-x-cero-workflow.svg": "../assets/brand/flow-icon.svg"
         },
-        "desktopTemplate": "../packaging/linux/sentinel-terminal.desktop.hbs",
+        "desktopTemplate": "../packaging/linux/cero-terminal.desktop.hbs",
         "postInstallScript": "../packaging/linux/postinst.sh",
         "postRemoveScript": "../packaging/linux/postrm.sh"
       },
@@ -113,10 +113,10 @@
         "ext": [
           "flow"
         ],
-        "name": "Sentinel Flow",
-        "description": "Sentinel Terminal workflow",
+        "name": "Cero Flow",
+        "description": "Cero workflow",
         "role": "Editor",
-        "mimeType": "application/x-sentinel-workflow"
+        "mimeType": "application/x-cero-workflow"
       }
     ]
   }

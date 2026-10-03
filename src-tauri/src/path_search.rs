@@ -139,7 +139,7 @@ mod tests {
     use std::fs;
 
     fn tree() -> PathBuf {
-        let root = std::env::temp_dir().join(format!("sentinel-find-{}-{}", std::process::id(), Instant::now().elapsed().as_nanos()));
+        let root = std::env::temp_dir().join(format!("cero-find-{}-{}", std::process::id(), Instant::now().elapsed().as_nanos()));
         let _ = fs::remove_dir_all(&root);
         for d in ["Projects/gitbrains", "Projects/other", "Projects/node_modules/gitbrains", ".hidden/gitbrains", "deep/a/b/c/gitbrains"] {
             fs::create_dir_all(root.join(d)).unwrap();
@@ -172,7 +172,7 @@ mod tests {
 
     #[test]
     fn honours_the_limit() {
-        let root = std::env::temp_dir().join(format!("sentinel-find-limit-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("cero-find-limit-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         for i in 0..40 {
             fs::create_dir_all(root.join(format!("proj{i}"))).unwrap();

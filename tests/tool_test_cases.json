@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "description": "Sentinel Terminal AI Tool Calling Evaluation and Verification Suite",
+  "description": "Cero AI Tool Calling Evaluation and Verification Suite",
   "totalToolsCovered": 101,
   "totalTestCases": 211,
   "domains": [

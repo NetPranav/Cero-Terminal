@@ -1949,7 +1949,7 @@ for (const t of tools) {
 if (!fs.existsSync('tests')) fs.mkdirSync('tests', { recursive: true });
 fs.writeFileSync('tests/tool_test_cases.json', JSON.stringify({
   version: '1.0.0',
-  description: 'Sentinel Terminal AI Tool Calling Evaluation and Verification Suite',
+  description: 'Cero AI Tool Calling Evaluation and Verification Suite',
   totalToolsCovered: tools.length,
   totalTestCases: allTestCases.length,
   domains: [...new Set(tools.map(t => t.domain))],
@@ -2001,9 +2001,9 @@ const domainIcons = {
   shell: '🐚'
 };
 
-let md = `# Sentinel Terminal — AI Tool Calling Comprehensive Test Suite
+let md = `# Cero — AI Tool Calling Comprehensive Test Suite
 
-This document defines the complete **AI Tool Calling Test Suite** for Sentinel Terminal. It provides test cases for all **${tools.length} autonomous capabilities** currently supported across **${domainOrder.length} operational domains**.
+This document defines the complete **AI Tool Calling Test Suite** for Cero. It provides test cases for all **${tools.length} autonomous capabilities** currently supported across **${domainOrder.length} operational domains**.
 
 Every capability includes real-world natural language prompts, expected JSON tool-call invocations, expected parameter schemas, and verification criteria.
 
@@ -2038,7 +2038,7 @@ md += `| **TOTAL** | **${tools.length} Tools** | **${allTestCases.length} Test C
 
 ## 🧠 Tool Calling Execution Model
 
-When a user submits a prompt in Sentinel Terminal:
+When a user submits a prompt in Cero:
 1. **Fast-Path Engine**: Evaluates high-frequency deterministic regex shortcuts (e.g., instant navigation \`cd\`, \`turn on bluetooth\`, \`system info\`) for sub-millisecond execution.
 2. **ReAct Agent Loop (\`AgentLoop.ts\`)**: When complex or natural language objectives are supplied, the local LLM evaluates the system prompt containing registered tool definitions.
 3. **Structured JSON Output**: The LLM emits a single tool execution action:
@@ -2092,7 +2092,7 @@ md += `---
 
 ## 🔄 Multi-Step Autonomous Workflows
 
-Sentinel Terminal's agent loop automatically decomposes complex multi-step objectives into sequences of tool calls:
+Cero's agent loop automatically decomposes complex multi-step objectives into sequences of tool calls:
 
 ### 🎧 Complete Bluetooth Connection Flow
 1. **User Objective**: *"Connect my Soundcore Space One headphones"*
@@ -2133,7 +2133,7 @@ Sentinel Terminal's agent loop automatically decomposes complex multi-step objec
 ## 🧪 How to Execute & Verify These Test Cases
 
 ### 1. Interactive Terminal Verification
-Type any test prompt verbatim directly into the Sentinel Terminal prompt:
+Type any test prompt verbatim directly into the Cero prompt:
 \`\`\`bash
 # Example:
 connect soundcore space one headphone

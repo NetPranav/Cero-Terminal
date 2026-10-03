@@ -1,5 +1,5 @@
 #!/bin/bash
-# Publish Sentinel Terminal releases, one per platform, each from its own branch.
+# Publish Cero releases, one per platform, each from its own branch.
 #
 #   scripts/release.sh macos     # build the Apple Silicon DMG here, publish v<version>-macos
 #   scripts/release.sh linux     # CI builds the Arch package, .deb, .rpm and .AppImage
@@ -23,7 +23,7 @@ PLATFORMS=("$@")
 [ "$(git config user.name)" = "NetPranav" ] || { echo "git user.name is not NetPranav." >&2; exit 1; }
 HEAD_SHA="$(git rev-parse HEAD)"
 
-echo "Sentinel Terminal $VERSION from $(git rev-parse --abbrev-ref HEAD) ($(git rev-parse --short HEAD))"
+echo "Cero $VERSION from $(git rev-parse --abbrev-ref HEAD) ($(git rev-parse --short HEAD))"
 CI=true npm test >/dev/null && echo "tests: pass"
 
 for platform in "${PLATFORMS[@]}"; do
@@ -44,12 +44,12 @@ for platform in "${PLATFORMS[@]}"; do
     # The Apple Silicon DMG is the build tested on this Mac; CI adds the Intel one
     CI=true npm run bundle:dmg >/dev/null
     out="$(mktemp -d)"
-    cp "src-tauri/target/release/bundle/dmg/Sentinel Terminal_${VERSION}_aarch64.dmg" "$out/Sentinel.Terminal_${VERSION}_aarch64.dmg"
-    (cd "$out" && shasum -a 256 "Sentinel.Terminal_${VERSION}_aarch64.dmg" > SHA256SUMS-apple-silicon.txt)
+    cp "src-tauri/target/release/bundle/dmg/Cero_${VERSION}_aarch64.dmg" "$out/Cero.Terminal_${VERSION}_aarch64.dmg"
+    (cd "$out" && shasum -a 256 "Cero.Terminal_${VERSION}_aarch64.dmg" > SHA256SUMS-apple-silicon.txt)
     if gh release view "$tag" >/dev/null 2>&1; then
       gh release upload "$tag" "$out"/* --clobber
     else
-      gh release create "$tag" "$out"/* --target "$branch" --title "Sentinel Terminal $VERSION for macOS" --notes-file docs/releases/macos.md
+      gh release create "$tag" "$out"/* --target "$branch" --title "Cero $VERSION for macOS" --notes-file docs/releases/macos.md
     fi
   fi
 done

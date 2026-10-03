@@ -29,7 +29,7 @@ describe('PtyStateTracker', () => {
     tracker.feedOutput('Running test suite...\nTests passed: 42\n');
     expect(tracker.getState()).toBe('process-running');
 
-    tracker.feedOutput('user@sentinel:~/project$ ');
+    tracker.feedOutput('user@cero:~/project$ ');
     expect(tracker.getState()).toBe('idle-at-prompt');
     expect(tracker.canSafelyInjectCtrlC()).toBe(true);
   });

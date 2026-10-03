@@ -100,7 +100,7 @@ export function parseSystemAction(goal: string): SystemAction | null {
 
   // "open bluetooth settings", "take me to display settings", "show sound preferences"
   if (/\b(?:settings|preferences|prefs|control\s+panel|options)\b/.test(t) && /^(?:open|show|go\s+to|take\s+me\s+to|launch|bring\s+up|display)?\b/.test(t)
-    && !/\bsentinel\b|\b(?:ai|model|terminal)\s+settings\b/.test(t)) {
+    && !/\bcero\b|\b(?:ai|model|terminal)\s+settings\b/.test(t)) {
     return { kind: 'settings', topic };
   }
 
@@ -227,7 +227,7 @@ function winRadio(kind: 'WiFi' | 'Bluetooth', state?: 'On' | 'Off'): string {
 }
 
 /** Core Audio (default output device) from PowerShell, via a small C# type */
-const WIN_AUDIO = `if (-not ('SentinelAudio' -as [type])) { Add-Type -TypeDefinition @'
+const WIN_AUDIO = `if (-not ('CeroAudio' -as [type])) { Add-Type -TypeDefinition @'
 using System.Runtime.InteropServices;
 [Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 interface IAudioEndpointVolume { int f(); int g(); int h(); int i(); int SetMasterVolumeLevelScalar(float level, System.Guid ctx); int j(); int GetMasterVolumeLevelScalar(out float level); int k(); int l(); int m(); int n(); int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, System.Guid ctx); int GetMute(out bool mute); }
@@ -236,7 +236,7 @@ interface IMMDevice { int Activate(ref System.Guid id, int ctx, int p, out IAudi
 [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 interface IMMDeviceEnumerator { int f(); int GetDefaultAudioEndpoint(int flow, int role, out IMMDevice d); }
 [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumeratorComObject { }
-public class SentinelAudio {
+public class CeroAudio {
   static IAudioEndpointVolume V() { var e = new MMDeviceEnumeratorComObject() as IMMDeviceEnumerator; IMMDevice d; Marshal.ThrowExceptionForHR(e.GetDefaultAudioEndpoint(0, 1, out d)); var id = typeof(IAudioEndpointVolume).GUID; IAudioEndpointVolume v; Marshal.ThrowExceptionForHR(d.Activate(ref id, 23, 0, out v)); return v; }
   public static float Volume { get { float l; Marshal.ThrowExceptionForHR(V().GetMasterVolumeLevelScalar(out l)); return l; } set { Marshal.ThrowExceptionForHR(V().SetMasterVolumeLevelScalar(value, System.Guid.Empty)); } }
   public static bool Mute { get { bool m; Marshal.ThrowExceptionForHR(V().GetMute(out m)); return m; } set { Marshal.ThrowExceptionForHR(V().SetMute(value, System.Guid.Empty)); } }
@@ -296,7 +296,7 @@ export function commandFor(action: SystemAction, os: SystemOs): SystemCommand | 
       if (action.op === 'status') {
         return {
           title: 'Wi-Fi status', changes: false,
-          done: (out) => out.trim().replace('<redacted>', 'hidden by macOS (allow Location Services for Sentinel Terminal to see it)'),
+          done: (out) => out.trim().replace('<redacted>', 'hidden by macOS (allow Location Services for Cero to see it)'),
           command: win ? "netsh wlan show interfaces | Select-String -Pattern '^\\s+(State|SSID|Signal|Radio type)\\s' | ForEach-Object { $_.Line.Trim() }"
             : mac ? `dev=$(networksetup -listallhardwareports | awk '/Wi-Fi|AirPort/{getline; print $2; exit}'); networksetup -getairportpower "$dev"; ipconfig getsummary "$dev" 2>/dev/null | awk -F' : ' '/ SSID/{print "Network: " $2}'`
               : 'nmcli radio wifi | sed "s/^/Wi-Fi radio: /"; nmcli -t -f active,ssid,signal dev wifi | awk -F: \'$1=="yes"{print "Network: " $2 " (" $3 "%)"}\'',
@@ -371,17 +371,17 @@ export function commandFor(action: SystemAction, os: SystemOs): SystemCommand | 
       if (op === 'get') {
         return {
           title: 'Volume', changes: false, done: (out) => out.trim(),
-          command: win ? `${WIN_AUDIO}; 'Volume: ' + [int]([SentinelAudio]::Volume * 100) + '%' + $(if ([SentinelAudio]::Mute) { ' (muted)' } else { '' })`
+          command: win ? `${WIN_AUDIO}; 'Volume: ' + [int]([CeroAudio]::Volume * 100) + '%' + $(if ([CeroAudio]::Mute) { ' (muted)' } else { '' })`
             : mac ? `osascript -e 'set s to get volume settings' -e 'if output muted of s then return "Volume: " & (output volume of s) & "% (muted)"' -e 'return "Volume: " & (output volume of s) & "%"'`
               : LINUX_VOLUME('wpctl get-volume @DEFAULT_AUDIO_SINK@', 'pactl get-sink-volume @DEFAULT_SINK@ | head -1', "amixer get Master | grep -o '[0-9]*%' | head -1"),
         };
       }
       const level = op === 'set' ? action.level : undefined;
       const title = level !== undefined ? `Set volume to ${level}%` : op === 'mute' ? 'Mute sound' : op === 'unmute' ? 'Unmute sound' : `Turn volume ${op}`;
-      const winCmd = level !== undefined ? `[SentinelAudio]::Mute = $false; [SentinelAudio]::Volume = ${(level / 100).toFixed(2)}`
-        : op === 'mute' ? '[SentinelAudio]::Mute = $true'
-          : op === 'unmute' ? '[SentinelAudio]::Mute = $false'
-            : `[SentinelAudio]::Volume = [Math]::Max(0, [Math]::Min(1, [SentinelAudio]::Volume ${op === 'up' ? '+' : '-'} 0.1))`;
+      const winCmd = level !== undefined ? `[CeroAudio]::Mute = $false; [CeroAudio]::Volume = ${(level / 100).toFixed(2)}`
+        : op === 'mute' ? '[CeroAudio]::Mute = $true'
+          : op === 'unmute' ? '[CeroAudio]::Mute = $false'
+            : `[CeroAudio]::Volume = [Math]::Max(0, [Math]::Min(1, [CeroAudio]::Volume ${op === 'up' ? '+' : '-'} 0.1))`;
       const macCmd = level !== undefined ? `osascript -e 'set volume output volume ${level} without output muted'`
         : op === 'mute' ? `osascript -e 'set volume output muted true'`
           : op === 'unmute' ? `osascript -e 'set volume output muted false'`

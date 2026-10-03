@@ -6,8 +6,8 @@ import * as path from 'path';
 import * as os from 'os';
 
 describe('DpoDatasetEngine — Direct Preference Optimization (DPO) Pair Generator', () => {
-  const testDir = path.join(os.tmpdir(), `sentinel_test_dpo_${Date.now()}`);
-  const testFile = path.join(testDir, 'sentinel_dpo_pairs.jsonl');
+  const testDir = path.join(os.tmpdir(), `cero_test_dpo_${Date.now()}`);
+  const testFile = path.join(testDir, 'cero_dpo_pairs.jsonl');
   const deficitFile = path.join(testDir, 'knowledge_deficits.jsonl');
 
   beforeEach(() => {
@@ -146,7 +146,7 @@ describe('DpoDatasetEngine — Direct Preference Optimization (DPO) Pair Generat
 
       const conversational = dpoEngine.exportConversational();
       expect(conversational.length).toBe(1);
-      expect(conversational[0].system).toContain('Sentinel');
+      expect(conversational[0].system).toContain('Cero');
       expect(conversational[0].prompt).toBe('kill port 3000');
       expect(conversational[0].chosen.role).toBe('assistant');
       expect(conversational[0].chosen.content).toContain('lsof -ti:3000 | xargs kill -9');

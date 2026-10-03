@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BUNDLE_DIR="${REPO_ROOT}/src-tauri/target/release/bundle/snap"
 
-echo "=== Building Snap Package for Sentinel Terminal ==="
+echo "=== Building Snap Package for Cero ==="
 
 if ! command -v snapcraft &>/dev/null; then
     echo "WARNING: snapcraft is not installed."
@@ -15,8 +15,8 @@ if ! command -v snapcraft &>/dev/null; then
     exit 0
 fi
 
-if [ ! -f "${REPO_ROOT}/src-tauri/target/release/sentinel-terminal" ]; then
-    echo "ERROR: Release binary not found at src-tauri/target/release/sentinel-terminal"
+if [ ! -f "${REPO_ROOT}/src-tauri/target/release/cero-terminal" ]; then
+    echo "ERROR: Release binary not found at src-tauri/target/release/cero-terminal"
     exit 1
 fi
 

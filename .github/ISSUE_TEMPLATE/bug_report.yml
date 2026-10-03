@@ -1,5 +1,5 @@
 name: 🐛 Bug Report
-description: Report an issue, regression, or unexpected behavior in Sentinel Terminal
+description: Report an issue, regression, or unexpected behavior in Cero
 title: "[Bug]: "
 labels: ["bug"]
 body:
@@ -12,7 +12,7 @@ body:
     id: platform
     attributes:
       label: Operating System
-      description: What platform are you running Sentinel Terminal on?
+      description: What platform are you running Cero on?
       options:
         - macOS (Apple Silicon M1/M2/M3/M4)
         - macOS (Intel)
@@ -25,8 +25,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: Sentinel Version
-      description: What version or commit of Sentinel Terminal are you using?
+      label: Cero Version
+      description: What version or commit of Cero are you using?
       placeholder: e.g. v0.1.0-alpha / commit a2af22e
     validations:
       required: true
@@ -45,7 +45,7 @@ body:
       label: Steps to Reproduce
       description: Step-by-step commands to reproduce the behavior.
       placeholder: |
-        1. Open Sentinel Terminal
+        1. Open Cero
         2. Execute `>...` or run command `...`
         3. See error
     validations:

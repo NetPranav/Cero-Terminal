@@ -63,7 +63,7 @@ describe('parseWorkflowFile', () => {
   it('recognises workflow file paths', () => {
     expect(isWorkflowFilePath('/Users/u/Downloads/morning.flow')).toBe(true);
     expect(isWorkflowFilePath('/tmp/deploy.workflow.json')).toBe(true);
-    expect(isWorkflowFilePath('/Users/u/.sentinel/workflows/git-quick-sync.json')).toBe(true);
+    expect(isWorkflowFilePath('/Users/u/.cero/workflows/git-quick-sync.json')).toBe(true);
     expect(isWorkflowFilePath('/Users/u/package.json')).toBe(false);
   });
 });

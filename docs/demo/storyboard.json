@@ -1,10 +1,10 @@
 {
-  "brand": "Sentinel Terminal 2.1",
+  "brand": "Cero 2.1",
   "slides": [
     {
       "id": "title",
       "kind": "title",
-      "kicker": "Sentinel Terminal 2.1",
+      "kicker": "Cero 2.1",
       "title": "A terminal you can<br><span>talk to.</span>",
       "body": "Simple tools in plain words. Workflows that run on any computer.",
       "duration": 4.2,
@@ -69,7 +69,7 @@
       "kind": "feature",
       "kicker": "06  Run a workflow",
       "title": "Double-click <span>to run</span>",
-      "body": "Sentinel lists every command and waits for your click.",
+      "body": "Cero lists every command and waits for your click.",
       "duration": 3.8,
       "icon": "pointer"
     },
@@ -86,7 +86,7 @@
       "id": "closing",
       "kind": "closing",
       "kicker": "Free and open source",
-      "title": "Sentinel Terminal",
+      "title": "Cero",
       "body": "macOS, Windows and Linux. The AI runs on your computer.",
       "pill": "github.com/NetPranav/Sentinal-Terminal",
       "duration": 5

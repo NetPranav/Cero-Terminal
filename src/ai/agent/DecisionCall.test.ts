@@ -3,12 +3,12 @@ import { buildDecisionCall, formatConversationPrompt } from './DecisionCall';
 
 describe('DecisionCall', () => {
   it('formats conversation prompt with system prompt and alternating messages', () => {
-    const prompt = formatConversationPrompt('You are Sentinel.', [
+    const prompt = formatConversationPrompt('You are Cero.', [
       { role: 'user', content: 'hello' },
       { role: 'assistant', content: '{"action":"chat"}' },
       { role: 'user', content: 'what is my ip' }
     ]);
-    expect(prompt).toContain('You are Sentinel.\n\n');
+    expect(prompt).toContain('You are Cero.\n\n');
     expect(prompt).toContain('User: hello\n');
     expect(prompt).toContain('Assistant: {"action":"chat"}\n');
     expect(prompt).toContain('User: what is my ip\n');

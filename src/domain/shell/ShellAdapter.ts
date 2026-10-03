@@ -125,9 +125,9 @@ export class ShellAdapter {
     return {
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
-      TERM_PROGRAM: 'Sentinel Terminal',
+      TERM_PROGRAM: 'Cero',
       TERM_PROGRAM_VERSION: '0.1.0',
-      SENTINEL_TERMINAL: '1',
+      CERO_TERMINAL: '1',
       LANG: 'en_US.UTF-8',
       LC_ALL: 'en_US.UTF-8',
       ...customEnv,

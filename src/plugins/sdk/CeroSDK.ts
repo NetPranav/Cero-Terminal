@@ -1,5 +1,5 @@
 /**
- * SentinelSDK.ts — Public SDK Surface API
+ * CeroSDK.ts — Public SDK Surface API
  * 
  * This is the ONLY object injected into the Plugin Sandbox.
  * It delegates all operations to the secure SDKBridge.
@@ -8,7 +8,7 @@
 import { SDKBridge } from '../bridge/SDKBridge';
 import { HookEventName, HookCallback } from '../hooks/ExtensionPoints';
 
-export interface SentinelSDKAPI {
+export interface CeroSDKAPI {
   registerAction(actionDef: any): void;
   registerCapability(capabilityDef: any): void;
   registerCollector(collectorDef: any): void;
@@ -20,7 +20,7 @@ export interface SentinelSDKAPI {
   };
 }
 
-export class SentinelSDK implements SentinelSDKAPI {
+export class CeroSDK implements CeroSDKAPI {
   constructor(private bridge: SDKBridge) {}
 
   public registerAction(actionDef: any): void {

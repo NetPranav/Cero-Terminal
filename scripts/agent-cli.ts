@@ -2,7 +2,7 @@
 /**
  * scripts/agent-cli.ts — Direct CLI Agent Runner & Inspection Harness
  * 
- * Allows running Sentinel AI Terminal prompts directly from terminal / scripts,
+ * Allows running Cero AI Terminal prompts directly from terminal / scripts,
  * with full visibility into:
  * - ReAct thinking process & LLM reasoning
  * - Selected tools & parameters
@@ -94,7 +94,7 @@ export function parseArgs(customArgs?: string[]): CliOptions {
 
 function showHelp(): void {
   console.log(`
-${colors.bold}${colors.cyan}Sentinel AI Terminal — CLI Agent Runner & Inspection Harness${colors.reset}
+${colors.bold}${colors.cyan}Cero AI Terminal — CLI Agent Runner & Inspection Harness${colors.reset}
 
 ${colors.bold}USAGE:${colors.reset}
   npm run agent -- "<prompt>" [options]
@@ -282,16 +282,16 @@ async function startInteractiveRepl(agentLoop: AgentLoop, options: CliOptions): 
 
   console.log(`
 ${colors.bold}${colors.cyan}══════════════════════════════════════════════════════════════════════${colors.reset}
-${colors.bold}${colors.cyan}  Sentinel AI Terminal — Interactive Inspection REPL${colors.reset}
+${colors.bold}${colors.cyan}  Cero AI Terminal — Interactive Inspection REPL${colors.reset}
 ${colors.gray}  Type your natural language goal or command. Type 'exit' or 'quit' to end.${colors.reset}
 ${colors.bold}${colors.cyan}══════════════════════════════════════════════════════════════════════${colors.reset}
 `);
 
   const updatePrompt = () => {
     if (agentLoop.hasPendingQuestion()) {
-      rl.setPrompt(`${colors.bold}${colors.yellow}sentinel (clarify)>${colors.reset} `);
+      rl.setPrompt(`${colors.bold}${colors.yellow}cero (clarify)>${colors.reset} `);
     } else {
-      rl.setPrompt(`${colors.bold}${colors.cyan}sentinel>${colors.reset} `);
+      rl.setPrompt(`${colors.bold}${colors.cyan}cero>${colors.reset} `);
     }
     rl.prompt();
   };
@@ -332,7 +332,7 @@ ${colors.bold}${colors.cyan}═════════════════�
   });
 
   rl.on('close', () => {
-    console.log(`\n${colors.gray}Exiting Sentinel REPL session. Goodbye!${colors.reset}\n`);
+    console.log(`\n${colors.gray}Exiting Cero REPL session. Goodbye!${colors.reset}\n`);
     process.exit(0);
   });
 }
@@ -375,7 +375,7 @@ const isDirectRun = process.argv[1] && process.argv[1].includes('agent-cli');
 
 if (isDirectRun) {
   main().catch((err) => {
-    console.error(`${colors.red}[Sentinel CLI Fatal Error]${colors.reset}`, err);
+    console.error(`${colors.red}[Cero CLI Fatal Error]${colors.reset}`, err);
     process.exit(1);
   });
 }

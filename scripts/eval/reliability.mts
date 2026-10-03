@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * reliability.mts — Repeatable Reliability Evaluation for Sentinel AI Models
+ * reliability.mts — Repeatable Reliability Evaluation for Cero AI Models
  *
  * Runs the real decision path against an active engine, measuring pass@1 and flip rate.
  * Run with: npm run eval:model
@@ -184,7 +184,7 @@ async function makeAgentRunner() {
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-eval-'));
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-eval-'));
   const work = path.join(sandbox, 'work');
   for (const d of ['work', 'Projects/gitBrains', 'Projects/backend', 'Projects/frontend', 'Projects/src', 'Project Folder/AI Terminal', 'Documents/docs']) {
     fs.mkdirSync(path.join(sandbox, d), { recursive: true });
@@ -254,11 +254,11 @@ async function main() {
   let modelName: string;
   if (provider === 'cloud') {
     // Keys come from the environment only and are never written to the report
-    cfg.apiUrl = process.env.SENTINEL_EVAL_API_URL;
-    cfg.apiKey = process.env.SENTINEL_EVAL_API_KEY;
-    cfg.apiModel = process.env.SENTINEL_EVAL_API_MODEL;
+    cfg.apiUrl = process.env.CERO_EVAL_API_URL;
+    cfg.apiKey = process.env.CERO_EVAL_API_KEY;
+    cfg.apiModel = process.env.CERO_EVAL_API_MODEL;
     if (!cfg.apiUrl || !cfg.apiKey || !cfg.apiModel) {
-      console.error('Set SENTINEL_EVAL_API_URL (the full chat completions URL), SENTINEL_EVAL_API_KEY and SENTINEL_EVAL_API_MODEL.');
+      console.error('Set CERO_EVAL_API_URL (the full chat completions URL), CERO_EVAL_API_KEY and CERO_EVAL_API_MODEL.');
       process.exit(2);
     }
     if (!yes) {
@@ -269,12 +269,12 @@ async function main() {
   } else {
     const isRunning = await checkEngineRunning(url, provider);
     if (!isRunning) {
-      console.error(provider === 'ollama' ? 'Start Ollama first and pass --url http://127.0.0.1:11434' : 'Start Sentinel first (the built-in engine must be running)');
+      console.error(provider === 'ollama' ? 'Start Ollama first and pass --url http://127.0.0.1:11434' : 'Start Cero first (the built-in engine must be running)');
       process.exit(2);
     }
     modelName = await getLoadedModel(url);
   }
-  console.log(`Sentinel Model Reliability Evaluation`);
+  console.log(`Cero Model Reliability Evaluation`);
   console.log(`Engine: ${url} | Model: ${modelName} | Runs per case: ${runs} | Mode: ${agent ? 'whole agent path' : 'raw model decision'}`);
 
   const casesRaw = readFileSync(casesPath, 'utf-8');

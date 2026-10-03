@@ -1,5 +1,5 @@
 /**
- * FlowImport.ts — read ".flow" workflow files (action lists) as Sentinel workflows.
+ * FlowImport.ts — read ".flow" workflow files (action lists) as Cero workflows.
  *
  * A .flow file lists actions ("open these URLs in Chrome", "install nodejs", "run npm install")
  * instead of shell commands. FlowPlan turns each into a macOS, Linux and Windows command, so the
@@ -58,7 +58,7 @@ export function flowToWorkflow(raw: unknown, fallbackName: string, os: FlowOs): 
   };
 }
 
-/** A workflow from file text: Sentinel's step format or a .flow action list. */
+/** A workflow from file text: Cero's step format or a .flow action list. */
 export function parseWorkflowFile(text: string, fileName: string, os: FlowOs): SavedWorkflowDefinition | null {
   let raw: any;
   try {
@@ -84,7 +84,7 @@ export function parseWorkflowFile(text: string, fileName: string, os: FlowOs): S
   return null;
 }
 
-/** Whether a path names a workflow file Sentinel can open. */
+/** Whether a path names a workflow file Cero can open. */
 export function isWorkflowFilePath(p: string): boolean {
-  return /\.flow$/i.test(p) || /\.(?:sentinel-workflow|workflow)\.json$/i.test(p) || /[\\/]\.sentinel[\\/]workflows[\\/][^\\/]+\.json$/.test(p);
+  return /\.flow$/i.test(p) || /\.(?:cero-workflow|workflow)\.json$/i.test(p) || /[\\/]\.cero[\\/]workflows[\\/][^\\/]+\.json$/.test(p);
 }

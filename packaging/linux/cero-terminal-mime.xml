@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-cero-workflow">
+    <comment>Cero flow</comment>
+    <comment xml:lang="en">Cero flow</comment>
+    <icon name="application-x-cero-workflow"/>
+    <generic-icon name="application-x-cero-workflow"/>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.flow" weight="80"/>
+  </mime-type>
+</mime-info>

@@ -1,18 +1,18 @@
 [Desktop Entry]
-Name=Sentinel Terminal
+Name=Cero
 Comment=Autonomous AI-Native Linux Terminal Copilot
 GenericName=Terminal Emulator
-Exec=sentinel-terminal %U
-Icon=sentinel-terminal
+Exec=cero-terminal %U
+Icon=cero-terminal
 Type=Application
 Terminal=false
 StartupNotify=true
-StartupWMClass=sentinel-terminal
+StartupWMClass=cero-terminal
 Categories=System;TerminalEmulator;Development;Utility;
 Keywords=terminal;shell;ai;copilot;bash;pty;llama;
-MimeType=inode/directory;x-scheme-handler/sentinel;
+MimeType=inode/directory;x-scheme-handler/cero;
 Actions=NewWindow;
 
 [Desktop Action NewWindow]
 Name=Open New Window
-Exec=sentinel-terminal
+Exec=cero-terminal

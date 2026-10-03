@@ -3,7 +3,7 @@
  *
  * Renders all required icon sizes (16..1024) using high-quality 2D subpixel
  * anti-aliasing, packs flow.ico (Windows), generates flow.icns (macOS),
- * produces application-x-sentinel-workflow.svg (Linux), and creates the
+ * produces application-x-cero-workflow.svg (Linux), and creates the
  * contact sheet docs/brand/flow-icon-preview.png.
  */
 
@@ -304,9 +304,9 @@ try {
 }
 
 // 3. Linux scalable SVG
-const scalableLinuxSvg = path.join(outDir, 'application-x-sentinel-workflow.svg');
+const scalableLinuxSvg = path.join(outDir, 'application-x-cero-workflow.svg');
 fs.copyFileSync(masterSvg, scalableLinuxSvg);
-console.log('✓ Generated application-x-sentinel-workflow.svg (Linux)');
+console.log('✓ Generated application-x-cero-workflow.svg (Linux)');
 
 // 4. Contact sheet: docs/brand/flow-icon-preview.png
 // Render contact sheet PNG directly with dark and light panels

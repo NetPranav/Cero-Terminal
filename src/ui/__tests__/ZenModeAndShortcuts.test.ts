@@ -18,19 +18,19 @@ describe('Zen Mode vs Visual Mode & Shortcuts Architecture', () => {
 
   it('persists Zen Mode by default or when selected in localStorage', () => {
     // Default fallback
-    const defaultMode = localStorage.getItem('sentinel_ui_mode') || 'zen';
+    const defaultMode = localStorage.getItem('cero_ui_mode') || 'zen';
     expect(defaultMode).toBe('zen');
 
     // Setting visual mode
-    localStorage.setItem('sentinel_ui_mode', 'visual');
-    expect(localStorage.getItem('sentinel_ui_mode')).toBe('visual');
+    localStorage.setItem('cero_ui_mode', 'visual');
+    expect(localStorage.getItem('cero_ui_mode')).toBe('visual');
 
     // Setting back to zen mode
-    localStorage.setItem('sentinel_ui_mode', 'zen');
-    expect(localStorage.getItem('sentinel_ui_mode')).toBe('zen');
+    localStorage.setItem('cero_ui_mode', 'zen');
+    expect(localStorage.getItem('cero_ui_mode')).toBe('zen');
   });
 
-  it('handles custom sentinel:ui-mode-changed event on mode toggling', () => {
+  it('handles custom cero:ui-mode-changed event on mode toggling', () => {
     let receivedMode = '';
     const mockWindow = {
       listeners: {} as Record<string, Function[]>,
@@ -51,15 +51,15 @@ describe('Zen Mode vs Visual Mode & Shortcuts Architecture', () => {
     const listener = (e: any) => {
       receivedMode = e.detail;
     };
-    mockWindow.addEventListener('sentinel:ui-mode-changed', listener);
+    mockWindow.addEventListener('cero:ui-mode-changed', listener);
 
-    mockWindow.dispatchEvent({ type: 'sentinel:ui-mode-changed', detail: 'visual' });
+    mockWindow.dispatchEvent({ type: 'cero:ui-mode-changed', detail: 'visual' });
     expect(receivedMode).toBe('visual');
 
-    mockWindow.dispatchEvent({ type: 'sentinel:ui-mode-changed', detail: 'zen' });
+    mockWindow.dispatchEvent({ type: 'cero:ui-mode-changed', detail: 'zen' });
     expect(receivedMode).toBe('zen');
 
-    mockWindow.removeEventListener('sentinel:ui-mode-changed', listener);
+    mockWindow.removeEventListener('cero:ui-mode-changed', listener);
   });
 
   it('verifies WorkspaceRegistry provides discovery entries for WorkspaceSwitcherModal', async () => {
@@ -68,19 +68,19 @@ describe('Zen Mode vs Visual Mode & Shortcuts Architecture', () => {
     expect(Array.isArray(projects)).toBe(true);
   });
 
-  it('dispatches and handles sentinel:toggle-history event for Ctrl+R history modal', () => {
+  it('dispatches and handles cero:toggle-history event for Ctrl+R history modal', () => {
     let historyToggled = false;
     const target = new EventTarget();
     const handleToggle = () => {
       historyToggled = !historyToggled;
     };
 
-    target.addEventListener('sentinel:toggle-history', handleToggle);
-    target.dispatchEvent(new Event('sentinel:toggle-history'));
+    target.addEventListener('cero:toggle-history', handleToggle);
+    target.dispatchEvent(new Event('cero:toggle-history'));
     expect(historyToggled).toBe(true);
 
-    target.dispatchEvent(new Event('sentinel:toggle-history'));
+    target.dispatchEvent(new Event('cero:toggle-history'));
     expect(historyToggled).toBe(false);
-    target.removeEventListener('sentinel:toggle-history', handleToggle);
+    target.removeEventListener('cero:toggle-history', handleToggle);
   });
 });

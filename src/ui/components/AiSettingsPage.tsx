@@ -71,7 +71,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
   const [pullProgress, setPullProgress] = useState<string>('');
   const [showEmbeddedModal, setShowEmbeddedModal] = useState(false);
   const [embeddedStatus, setEmbeddedStatus] = useState<EmbeddedStatus | null>(null);
-  const [autoStart, setAutoStart] = useState<boolean>(() => localStorage.getItem('sentinel_autostart_ai') !== 'false');
+  const [autoStart, setAutoStart] = useState<boolean>(() => localStorage.getItem('cero_autostart_ai') !== 'false');
   const [engineActionLoading, setEngineActionLoading] = useState(false);
 
   // Active AI Provider Selection State
@@ -82,13 +82,13 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
   // Task 1.4: Ghost text Right-arrow preference (on by default)
   const [ghostAcceptRight, setGhostAcceptRight] = useState<boolean>(() => {
     if (typeof localStorage === 'undefined') return true;
-    return localStorage.getItem('sentinel_ghost_accept_right') !== 'false';
+    return localStorage.getItem('cero_ghost_accept_right') !== 'false';
   });
 
   const handleToggleGhostAcceptRight = (val: boolean) => {
     setGhostAcceptRight(val);
     try {
-      localStorage.setItem('sentinel_ghost_accept_right', String(val));
+      localStorage.setItem('cero_ghost_accept_right', String(val));
     } catch {}
   };
 
@@ -146,26 +146,26 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
 
   // Terminal Experience (UI Mode) State
   const [uiModeState, setUiModeState] = useState<'zen' | 'visual'>(() => {
-    return currentUiMode || (localStorage.getItem('sentinel_ui_mode') as 'zen' | 'visual') || 'zen';
+    return currentUiMode || (localStorage.getItem('cero_ui_mode') as 'zen' | 'visual') || 'zen';
   });
 
   // General Tab Feedback State
   const [generalMessage, setGeneralMessage] = useState<string | null>(null);
 
   // Workflow HUD & Execution Notification Overlay State
-  const [hudPlanEnabled, setHudPlanEnabled] = useState<boolean>(() => localStorage.getItem('sentinel_hud_plan_enabled') !== 'false');
-  const [hudPlanDuration, setHudPlanDuration] = useState<string>(() => localStorage.getItem('sentinel_hud_plan_duration') || '8');
+  const [hudPlanEnabled, setHudPlanEnabled] = useState<boolean>(() => localStorage.getItem('cero_hud_plan_enabled') !== 'false');
+  const [hudPlanDuration, setHudPlanDuration] = useState<string>(() => localStorage.getItem('cero_hud_plan_duration') || '8');
 
   const handleToggleHudPlan = (enabled: boolean) => {
     setHudPlanEnabled(enabled);
-    localStorage.setItem('sentinel_hud_plan_enabled', String(enabled));
-    window.dispatchEvent(new CustomEvent('sentinel:hud-settings-changed'));
+    localStorage.setItem('cero_hud_plan_enabled', String(enabled));
+    window.dispatchEvent(new CustomEvent('cero:hud-settings-changed'));
   };
 
   const handleSelectHudDuration = (duration: string) => {
     setHudPlanDuration(duration);
-    localStorage.setItem('sentinel_hud_plan_duration', duration);
-    window.dispatchEvent(new CustomEvent('sentinel:hud-settings-changed'));
+    localStorage.setItem('cero_hud_plan_duration', duration);
+    window.dispatchEvent(new CustomEvent('cero:hud-settings-changed'));
   };
   
   const manager = new OllamaModelManager();
@@ -208,8 +208,8 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
     refreshActiveAiInfo();
 
     const handleAiChanged = () => refreshActiveAiInfo();
-    window.addEventListener('sentinel:ai-status-changed', handleAiChanged);
-    return () => window.removeEventListener('sentinel:ai-status-changed', handleAiChanged);
+    window.addEventListener('cero:ai-status-changed', handleAiChanged);
+    return () => window.removeEventListener('cero:ai-status-changed', handleAiChanged);
   }, []);
 
   const refreshIntegrations = async () => {
@@ -224,7 +224,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
   const formatIntegrationError = (err: any): string => {
     const msg = err?.message || String(err);
     if (msg.includes('invoke') || msg.includes('undefined')) {
-      return 'Desktop integrations require the native Sentinel desktop runtime.';
+      return 'Desktop integrations require the native Cero desktop runtime.';
     }
     return `Error: ${msg}`;
   };
@@ -287,9 +287,9 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
 
   const handleSelectMode = (mode: 'zen' | 'visual') => {
     setUiModeState(mode);
-    localStorage.setItem('sentinel_ui_mode', mode);
+    localStorage.setItem('cero_ui_mode', mode);
     if (onSelectUiMode) onSelectUiMode(mode);
-    window.dispatchEvent(new CustomEvent('sentinel:ui-mode-changed', { detail: mode }));
+    window.dispatchEvent(new CustomEvent('cero:ui-mode-changed', { detail: mode }));
   };
 
   const loadRecommendations = () => {
@@ -366,7 +366,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
 
     setSaveSuccessMsg(`✓ ${CLOUD_CATALOG[selectedCloudService].name} configuration saved${setAsActive ? ' & activated' : ''}!`);
     setTimeout(() => setSaveSuccessMsg(null), 3000);
-    window.dispatchEvent(new CustomEvent('sentinel:ai-status-changed'));
+    window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
   };
 
   const loadEmbeddedStatus = async () => {
@@ -383,7 +383,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
         await EmbeddedEngineManager.getInstance().startEngine();
       }
       await loadEmbeddedStatus();
-      window.dispatchEvent(new CustomEvent('sentinel:ai-status-changed'));
+      window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
     } catch (e) {
       console.error(e);
     }
@@ -663,7 +663,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                   {activeProviderId !== 'embedded' && (
                     <button
                       type="button"
-                      onClick={() => handleSwitchActiveProvider('embedded', 'sentinel-embedded')}
+                      onClick={() => handleSwitchActiveProvider('embedded', 'cero-embedded')}
                       style={{
                         padding: '5px 10px',
                         borderRadius: '6px',
@@ -709,7 +709,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleSwitchActiveProvider('embedded', 'sentinel-embedded')}
+                    onClick={() => handleSwitchActiveProvider('embedded', 'cero-embedded')}
                     style={{
                       padding: '5px 12px',
                       borderRadius: '5px',
@@ -731,7 +731,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                 {/* Option 1: Embedded Engine */}
                 <div
-                  onClick={() => handleSwitchActiveProvider('embedded', 'sentinel-embedded')}
+                  onClick={() => handleSwitchActiveProvider('embedded', 'cero-embedded')}
                   style={{
                     padding: '14px 16px',
                     borderRadius: '10px',
@@ -930,7 +930,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                   <span style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.4)' }}>
                     {secretKind === 'keychain'
                       ? 'Stored in your operating system keychain.'
-                      : 'No system keychain here: the key is kept in a private file (~/.sentinel/secrets.json) that only your account can read.'}
+                      : 'No system keychain here: the key is kept in a private file (~/.cero/secrets.json) that only your account can read.'}
                   </span>
                 )}
               </div>
@@ -1141,7 +1141,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
                     <Sparkles size={15} style={{ color: '#ffffff' }} />
                     <h2 style={{ margin: 0, fontSize: '14.5px', fontWeight: 600, color: '#ffffff' }}>
-                      Sentinel Embedded In-Process AI Engine
+                      Cero Embedded In-Process AI Engine
                     </h2>
                     <span style={{
                       fontSize: '10.5px',
@@ -1179,7 +1179,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                         onChange={(e) => {
                           const val = e.target.checked;
                           setAutoStart(val);
-                          localStorage.setItem('sentinel_autostart_ai', String(val));
+                          localStorage.setItem('cero_autostart_ai', String(val));
                         }}
                         style={{ accentColor: '#ffffff', cursor: 'pointer' }}
                       />
@@ -1269,7 +1269,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                 </div>
               ) : (
                 <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.45)' }}>
-                  {ollamaHealthy ? 'No models installed in external Ollama.' : 'External Ollama is not running. Sentinel will use the embedded engine or configured cloud API keys.'}
+                  {ollamaHealthy ? 'No models installed in external Ollama.' : 'External Ollama is not running. Cero will use the embedded engine or configured cloud API keys.'}
                 </div>
               )}
             </div>
@@ -1434,7 +1434,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                       }}
                     />
                     <span style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.4)' }}>
-                      e.g. https://integrate.api.nvidia.com/v1 (Sentinel automatically appends /chat/completions)
+                      e.g. https://integrate.api.nvidia.com/v1 (Cero automatically appends /chat/completions)
                     </span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -1567,7 +1567,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                   Native Desktop & Shell Integrations
                 </div>
                 <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', lineHeight: 1.45 }}>
-                  Integrate Sentinel Terminal deeply with your operating system, terminal launchers, file managers, and IDEs.
+                  Integrate Cero deeply with your operating system, terminal launchers, file managers, and IDEs.
                 </div>
               </div>
 
@@ -1674,12 +1674,12 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                       <Terminal size={15} />
                     </div>
                     <div style={{ fontWeight: 600, fontSize: '13.5px', color: '#ffffff', lineHeight: 1.3 }}>
-                      Command Line Launcher (<code style={{ fontSize: '11.5px', background: 'rgba(255, 255, 255, 0.08)', padding: '1px 5px', borderRadius: '4px' }}>sentinel</code>)
+                      Command Line Launcher (<code style={{ fontSize: '11.5px', background: 'rgba(255, 255, 255, 0.08)', padding: '1px 5px', borderRadius: '4px' }}>cero</code>)
                     </div>
                   </div>
 
                   <div style={{ fontSize: '11.8px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: 1.5 }}>
-                    Installs a user-space launcher into your PATH. Enables launching Sentinel from any terminal prompt, bash/zsh script, or application launcher (Rofi, Wofi, dmenu) via <code style={{ fontSize: '11px', color: '#ffffff', background: 'rgba(255, 255, 255, 0.08)', padding: '2px 5px', borderRadius: '3px' }}>sentinel &lt;path&gt;</code>.
+                    Installs a user-space launcher into your PATH. Enables launching Cero from any terminal prompt, bash/zsh script, or application launcher (Rofi, Wofi, dmenu) via <code style={{ fontSize: '11px', color: '#ffffff', background: 'rgba(255, 255, 255, 0.08)', padding: '2px 5px', borderRadius: '3px' }}>cero &lt;path&gt;</code>.
                   </div>
                 </div>
 
@@ -1696,7 +1696,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                     borderRadius: '5px',
                     overflow: 'hidden'
                   }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isLinux() ? '~/.local/bin/sentinel' : '/usr/local/bin/sentinel'}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isLinux() ? '~/.local/bin/cero' : '/usr/local/bin/cero'}</span>
                     <span>•</span>
                     <span style={{ color: 'rgba(255, 255, 255, 0.75)', flexShrink: 0 }}>User Space</span>
                   </div>
@@ -1759,8 +1759,8 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
 
                   <div style={{ fontSize: '11.8px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: 1.5 }}>
                     {isLinux()
-                      ? 'Adds "Open in Sentinel Terminal" to right-click context menus in Nautilus, Nemo, and Caja, plus XDG .desktop application directory registration.'
-                      : 'Registers a native macOS Finder service workflow allowing you to right-click any folder or directory and immediately open Sentinel.'}
+                      ? 'Adds "Open in Cero" to right-click context menus in Nautilus, Nemo, and Caja, plus XDG .desktop application directory registration.'
+                      : 'Registers a native macOS Finder service workflow allowing you to right-click any folder or directory and immediately open Cero.'}
                   </div>
                 </div>
 
@@ -1841,7 +1841,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                   </div>
 
                   <div style={{ fontSize: '11.8px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: 1.5 }}>
-                    Updates your user <code style={{ fontSize: '11px', color: '#ffffff', background: 'rgba(255, 255, 255, 0.08)', padding: '2px 5px', borderRadius: '3px' }}>settings.json</code> to register Sentinel as an integrated terminal profile, allowing one-click launching inside editor panels.
+                    Updates your user <code style={{ fontSize: '11px', color: '#ffffff', background: 'rgba(255, 255, 255, 0.08)', padding: '2px 5px', borderRadius: '3px' }}>settings.json</code> to register Cero as an integrated terminal profile, allowing one-click launching inside editor panels.
                   </div>
                 </div>
 
@@ -1900,7 +1900,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
             }}>
               <Info size={16} style={{ color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px', flexShrink: 0 }} />
               <div style={{ fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: 1.5 }}>
-                <strong style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Zero Root Privileges Required:</strong> All Sentinel integrations write strictly to standard user-space directories (<code style={{ color: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.07)', padding: '1px 4px', borderRadius: '3px' }}>~/.local/bin</code>, <code style={{ color: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.07)', padding: '1px 4px', borderRadius: '3px' }}>~/.local/share/nautilus/scripts</code>, and <code style={{ color: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.07)', padding: '1px 4px', borderRadius: '3px' }}>~/.config/Code/User</code>). No root or sudo credentials are ever requested or modified.
+                <strong style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Zero Root Privileges Required:</strong> All Cero integrations write strictly to standard user-space directories (<code style={{ color: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.07)', padding: '1px 4px', borderRadius: '3px' }}>~/.local/bin</code>, <code style={{ color: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.07)', padding: '1px 4px', borderRadius: '3px' }}>~/.local/share/nautilus/scripts</code>, and <code style={{ color: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.07)', padding: '1px 4px', borderRadius: '3px' }}>~/.config/Code/User</code>). No root or sudo credentials are ever requested or modified.
               </div>
             </div>
           </div>
@@ -2155,7 +2155,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                     onLaunchOnboarding();
                   } else {
                     if (onClose) onClose();
-                    window.dispatchEvent(new CustomEvent('sentinel:open-onboarding'));
+                    window.dispatchEvent(new CustomEvent('cero:open-onboarding'));
                   }
                 }}
                 style={{
@@ -2255,12 +2255,12 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                 </div>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '13.5px', color: '#ffffff' }}>
-                    Open .flow files with Sentinel Terminal
+                    Open .flow files with Cero
                   </div>
                   <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginTop: '3px', lineHeight: 1.45 }}>
                     {associationStatus?.desktop_file
                       ? `Registered desktop handler at ${associationStatus.desktop_file}`
-                      : 'Registers Sentinel Terminal as the system handler for .flow files.'}
+                      : 'Registers Cero as the system handler for .flow files.'}
                   </div>
                 </div>
               </div>
@@ -2436,7 +2436,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                 }}>
                   <span style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.45)', textTransform: 'uppercase' }}>Configuration Directory</span>
                   <span style={{ fontWeight: 500, color: '#ffffff', fontFamily: 'monospace' }}>
-                    {isLinux() ? '~/.config/sentinel/' : '~/Library/Application Support/Sentinel Terminal/'}
+                    {isLinux() ? '~/.config/cero/' : '~/Library/Application Support/Cero/'}
                   </span>
                 </div>
 
@@ -2451,7 +2451,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                 }}>
                   <span style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.45)', textTransform: 'uppercase' }}>CLI Launcher Target</span>
                   <span style={{ fontWeight: 500, color: '#ffffff', fontFamily: 'monospace' }}>
-                    {isLinux() ? '~/.local/bin/sentinel' : '/usr/local/bin/sentinel'}
+                    {isLinux() ? '~/.local/bin/cero' : '/usr/local/bin/cero'}
                   </span>
                 </div>
               </div>
@@ -2479,8 +2479,8 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  localStorage.removeItem('sentinel_onboarded');
-                  localStorage.removeItem('sentinel_zen_tip_shown');
+                  localStorage.removeItem('cero_onboarded');
+                  localStorage.removeItem('cero_zen_tip_shown');
                   setGeneralMessage('✓ First-run flags cleared. Onboarding will trigger on next restart.');
                   setTimeout(() => setGeneralMessage(null), 3500);
                 }}

@@ -2,7 +2,7 @@
  * EmbeddedProvider.ts — Embedded llama.cpp Model Provider
  * 
  * Communicates with a bundled llama-server sidecar binary that ships inside
- * the Sentinel Terminal .app bundle. This eliminates the need for users to 
+ * the Cero .app bundle. This eliminates the need for users to 
  * install Ollama or any external dependency.
  * 
  * Lifecycle:
@@ -25,7 +25,7 @@ const MAX_HEALTH_RETRIES = 15; // 15 * 2s = 30s max wait for model load
 
 export class EmbeddedProvider implements ModelProvider {
   readonly providerId = 'embedded';
-  readonly providerName = 'Sentinel Embedded AI (llama.cpp)';
+  readonly providerName = 'Cero Embedded AI (llama.cpp)';
 
   private baseUrl: string;
   private _isHealthy = false;
@@ -70,10 +70,10 @@ export class EmbeddedProvider implements ModelProvider {
    */
   public async waitForReady(onProgress?: (status: string) => void): Promise<boolean> {
     for (let attempt = 0; attempt < MAX_HEALTH_RETRIES; attempt++) {
-      onProgress?.(`Initializing Sentinel AI... (${attempt + 1}/${MAX_HEALTH_RETRIES})`);
+      onProgress?.(`Initializing Cero AI... (${attempt + 1}/${MAX_HEALTH_RETRIES})`);
       
       if (await this.isAvailable()) {
-        onProgress?.('Sentinel AI ready.');
+        onProgress?.('Cero AI ready.');
         return true;
       }
       
@@ -98,8 +98,8 @@ export class EmbeddedProvider implements ModelProvider {
       if (!res.ok) {
         // Server is running but may not support /v1/models — return default
         return [{
-          id: 'sentinel-embedded',
-          name: 'Sentinel Embedded Model',
+          id: 'cero-embedded',
+          name: 'Cero Embedded Model',
           sizeBytes: 0,
           quantization: 'Q4_K_M'
         }];
@@ -107,15 +107,15 @@ export class EmbeddedProvider implements ModelProvider {
       
       const data = await res.json() as any;
       return (data.data || []).map((m: any) => ({
-        id: m.id || 'sentinel-embedded',
-        name: m.id || 'Sentinel Embedded Model',
+        id: m.id || 'cero-embedded',
+        name: m.id || 'Cero Embedded Model',
         sizeBytes: 0,
         quantization: 'Q4_K_M'
       }));
     } catch {
       return [{
-        id: 'sentinel-embedded',
-        name: 'Sentinel Embedded Model',
+        id: 'cero-embedded',
+        name: 'Cero Embedded Model',
         sizeBytes: 0,
         quantization: 'Q4_K_M'
       }];
@@ -129,7 +129,7 @@ export class EmbeddedProvider implements ModelProvider {
 
   public async pullModel(_modelId: string, onProgress?: (percent: number, status: string) => void): Promise<boolean> {
     // Embedded models are pre-bundled — no pulling needed
-    onProgress?.(100, 'Model is bundled with Sentinel.');
+    onProgress?.(100, 'Model is bundled with Cero.');
     return true;
   }
 

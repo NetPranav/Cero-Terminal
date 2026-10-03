@@ -229,7 +229,7 @@ describe('AgentLoop fast-path routing', () => {
 
       expect(isConversationalRefusal("Found 12 matching folders.")).toBe(false);
       expect(isConversationalRefusal("The active listening port is 3000.")).toBe(false);
-      expect(isConversationalRefusal("I am Sentinel, an autonomous mac terminal AI copilot.")).toBe(false);
+      expect(isConversationalRefusal("I am Cero, an autonomous mac terminal AI copilot.")).toBe(false);
     });
 
     it('identifies actionable system goals versus informational queries', () => {
@@ -1077,7 +1077,7 @@ describe('Explaining and exporting what happened', () => {
     expect(why.summary).toContain('succeeded');
   });
 
-  it('exports a redacted Markdown transcript under ~/.sentinel/transcripts', async () => {
+  it('exports a redacted Markdown transcript under ~/.cero/transcripts', async () => {
     const fs = await import('node:fs');
     const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any);
     (loop as any).transcript.push({
@@ -1086,7 +1086,7 @@ describe('Explaining and exporting what happened', () => {
       result: { success: true, summary: 'GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789', steps: [{ tool: 'shell.execute', params: { command: 'echo $GITHUB_TOKEN' }, result: { success: true } }] }
     });
     const res = await loop.run('export session', { os: 'linux', cwd: '/home/u' });
-    const file = `${process.env.HOME}/.sentinel/transcripts/${res.summary.match(/session-[\d-]+\.md/)![0]}`;
+    const file = `${process.env.HOME}/.cero/transcripts/${res.summary.match(/session-[\d-]+\.md/)![0]}`;
     const text = fs.readFileSync(file, 'utf8');
     expect(text).toContain('## ');
     expect(text).toContain('`echo $GITHUB_TOKEN` (ok)');
@@ -1612,7 +1612,7 @@ describe('Making a workflow from plain steps', () => {
       expect(generate).not.toHaveBeenCalled();
       expect(asked).toHaveLength(1);
       expect(asked[0].title).toBe('Save "demo setup" as a .flow file');
-      expect(asked[0].options.map((o: any) => o.label)).toEqual(['Desktop', 'This folder', 'Sentinel workflows']);
+      expect(asked[0].options.map((o: any) => o.label)).toEqual(['Desktop', 'This folder', 'Cero workflows']);
       expect(asked[0].options[1].detail).toBe('/tmp/work');
       expect(asked[0].lines.slice(0, 3)).toEqual(['1. Install node', '2. Open YouTube in Chrome', '3. Open VS Code']);
       const [path] = [...files.keys()];

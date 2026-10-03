@@ -1,7 +1,7 @@
 [package]
-name = "sentinel-terminal"
+name = "cero-terminal"
 version = "2.2.0"
-description = "Sentinel Terminal: a terminal that takes requests in plain language and runs .flow files on any OS"
+description = "Cero: a terminal that takes requests in plain language and runs .flow files on any OS"
 authors = ["Pranav Dubey (NetPranav)"]
 license = "MIT"
 repository = "https://github.com/NetPranav/Sentinal-Terminal"
@@ -17,7 +17,7 @@ name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "sentinel-terminal"
+name = "cero-terminal"
 path = "src/main.rs"
 
 [build-dependencies]

@@ -13,7 +13,7 @@
  * 
  * When a catastrophic command is identified:
  * - Strictly blocks execution.
- * - Emits capability refusal: "Sentinel does not have the capability to execute this command."
+ * - Emits capability refusal: "Cero does not have the capability to execute this command."
  * - Generates a detailed, technical impact analysis explaining what would happen if executed.
  * - Provides non-destructive alternatives where applicable.
  */
@@ -114,7 +114,7 @@ export class CommandSafetyGuardian {
         category: 'ROOT_DESTRUCTION',
         targetedSubsystem: 'Root Filesystem (/)',
         ruleId: 'SEC-001-ROOT-WIPE',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'If executed, this command would recursively and permanently delete all files starting from the root directory (/), ' +
           'including the C standard library, shared drivers, running process binaries, and device nodes. ' +
@@ -134,7 +134,7 @@ export class CommandSafetyGuardian {
         category: 'ROOT_DESTRUCTION',
         targetedSubsystem: targetDir,
         ruleId: 'SEC-002-SYSDIR-DELETION',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           `Target directory '${targetDir}' contains core operating system infrastructure. ` +
           (targetDir === '/etc' ? 'Deleting /etc destroys all user authentication, network configurations, PAM modules, and systemd units, locking all users out instantly.' :
@@ -151,7 +151,7 @@ export class CommandSafetyGuardian {
         category: 'ROOT_DESTRUCTION',
         targetedSubsystem: 'User Home Directory (~)',
         ruleId: 'SEC-003-HOME-DELETION',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Executing this command would irreversibly delete your entire home directory, destroying all personal projects, ' +
           'git repositories, SSH keys, desktop configurations, documents, and credentials with zero possibility of undoing.',
@@ -166,7 +166,7 @@ export class CommandSafetyGuardian {
         category: 'ROOT_DESTRUCTION',
         targetedSubsystem: 'Recursive find deletion on /',
         ruleId: 'SEC-004-FIND-DELETE-ROOT',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Using find with -delete or -exec rm rooted at / performs an unconstrained recursive file sweep across all mounted partitions, ' +
           'destroying system files and unrecoverable user data.',
@@ -185,7 +185,7 @@ export class CommandSafetyGuardian {
         category: 'RAW_DISK_OVERWRITE',
         targetedSubsystem: 'Raw Block Device (/dev/*)',
         ruleId: 'SEC-010-RAW-DISK-DD',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Executing dd targeting a raw block device directly bypasses filesystem safeguards and overwrites raw disk sectors, ' +
           'obliterating partition tables (GPT/MBR), file allocation tables, and volume headers. Data recovery after raw sector zeroing is practically impossible.',
@@ -200,7 +200,7 @@ export class CommandSafetyGuardian {
         category: 'RAW_DISK_OVERWRITE',
         targetedSubsystem: 'Direct Device Redirection',
         ruleId: 'SEC-011-DEVICE-REDIRECTION',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Redirecting standard output directly into a raw device node permanently destroys partition metadata and file tables on the physical disk.',
         safeAlternative: 'Write data into regular files inside an existing filesystem mount.'
@@ -220,7 +220,7 @@ export class CommandSafetyGuardian {
         category: 'PARTITION_FORMATTING',
         targetedSubsystem: 'Filesystem Partition Table',
         ruleId: 'SEC-020-FORMAT-PARTITION',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Formatting or wiping an active block device destroys the filesystem superblock, allocation bitmaps, and all existing files on the volume. ' +
           'If the targeted volume contains root (/) or home (/home), the operating system will immediately crash upon unmount.',
@@ -239,7 +239,7 @@ export class CommandSafetyGuardian {
         category: 'PERMISSION_LOCKOUT',
         targetedSubsystem: 'Global POSIX File Permissions',
         ruleId: 'SEC-030-CHMOD-000',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Setting recursive 000 permissions across / revokes all read, write, and execute permissions from every user including root. ' +
           'No process will be able to load shared libraries or execute commands, instantly locking all users out of the computer permanently.',
@@ -253,7 +253,7 @@ export class CommandSafetyGuardian {
         category: 'PERMISSION_LOCKOUT',
         targetedSubsystem: 'Root Security Model & PAM Authentication',
         ruleId: 'SEC-031-CHMOD-777-ROOT',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Applying 777 permissions across / destroys the Linux security architecture. Critical daemons including OpenSSH, sudo, and PAM ' +
           'strictly refuse to run if system configuration files are world-writable, permanently breaking administrative access.',
@@ -268,7 +268,7 @@ export class CommandSafetyGuardian {
         category: 'PERMISSION_LOCKOUT',
         targetedSubsystem: 'System User & Group Ownership',
         ruleId: 'SEC-032-CHOWN-ROOT',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Recursively altering ownership of / corrupts setuid binaries (/usr/bin/sudo, /usr/bin/su, /usr/bin/passwd), ' +
           'preventing standard privilege escalation and system daemon execution.',
@@ -288,7 +288,7 @@ export class CommandSafetyGuardian {
         category: 'DOS_FORK_BOMB',
         targetedSubsystem: 'Linux Kernel Process Table (PID Exhaustion)',
         ruleId: 'SEC-040-FORK-BOMB',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'A fork bomb exponentially replicates processes until the Linux kernel PID table is completely saturated. ' +
           'The CPU will pin at 100%, memory will thrash, and the system will completely freeze, requiring a hard physical power cycle.',
@@ -303,7 +303,7 @@ export class CommandSafetyGuardian {
         category: 'DOS_FORK_BOMB',
         targetedSubsystem: 'Kernel SysRq Diagnostic Interface',
         ruleId: 'SEC-041-SYSRQ-CRASH',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Writing diagnostic trigger characters directly to /proc/sysrq-trigger forces an immediate kernel crash (Null pointer dereference) ' +
           'or un-synchronized hard reboot, risking filesystem corruption and active data loss.',
@@ -322,7 +322,7 @@ export class CommandSafetyGuardian {
         category: 'UEFI_FIRMWARE_CORRUPTION',
         targetedSubsystem: 'Motherboard UEFI NVRAM Firmware',
         ruleId: 'SEC-050-EFIVARS-WIPE',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Modifying or deleting files in /sys/firmware/efi/efivars directly writes to the motherboard SPI flash memory. ' +
           'On several UEFI implementations, wiping these variables has caused permanent, non-recoverable motherboard bricking.',
@@ -336,7 +336,7 @@ export class CommandSafetyGuardian {
         category: 'UEFI_FIRMWARE_CORRUPTION',
         targetedSubsystem: 'EFI System Partition (ESP)',
         ruleId: 'SEC-051-BOOT-EFI-WIPE',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Deleting /boot/efi removes the GRUB/systemd-boot EFI binaries and NVRAM staging files, preventing the hardware BIOS/UEFI ' +
           'from finding any bootable operating system upon restart.',
@@ -356,7 +356,7 @@ export class CommandSafetyGuardian {
         category: 'CRITICAL_LIBRARY_SABOTAGE',
         targetedSubsystem: 'GNU C Standard Library & Dynamic Linker (glibc)',
         ruleId: 'SEC-060-GLIBC-SABOTAGE',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'The GNU C library (glibc) and dynamic linker (ld-linux) are the core foundation of every dynamically linked program on Linux. ' +
           'Removing them instantly renders every shell command (including ls, bash, and sudo) unable to start.',
@@ -376,7 +376,7 @@ export class CommandSafetyGuardian {
         category: 'HOST_ISOLATION_OBFUSCATION',
         targetedSubsystem: 'Host Linux Firewall & Network Stack',
         ruleId: 'SEC-070-FIREWALL-DROP-ALL',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Flushing firewall rules while simultaneously dropping all incoming or outgoing packets immediately severs all active connections, ' +
           'including SSH remote administration and DNS resolution.',
@@ -391,7 +391,7 @@ export class CommandSafetyGuardian {
         category: 'HOST_ISOLATION_OBFUSCATION',
         targetedSubsystem: 'Local Loopback Interface (lo)',
         ruleId: 'SEC-071-LOOPBACK-DELETE',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Disabling or deleting the loopback interface (lo / 127.0.0.1) breaks inter-process communication across the desktop, ' +
           'causing X11/Wayland display servers, D-Bus session buses, and local development servers to crash.',
@@ -406,7 +406,7 @@ export class CommandSafetyGuardian {
         category: 'HOST_ISOLATION_OBFUSCATION',
         targetedSubsystem: 'Shell Interpreter Execution Pipeline',
         ruleId: 'SEC-072-OBFUSCATED-PIPE',
-        capabilityRefusal: `Sentinel does not have the capability to execute '${raw}'.`,
+        capabilityRefusal: `Cero does not have the capability to execute '${raw}'.`,
         consequenceExplanation: 
           'Piping obfuscated, base64-encoded payloads directly into an execution shell prevents security audits and indicates high malware risk.',
         safeAlternative: 'Decode the script to a file first, inspect its plaintext contents, and run explicitly.'
@@ -422,7 +422,7 @@ export class CommandSafetyGuardian {
   public formatTerminalBanner(evalResult: CommandSafetyEvaluation, rawCmd: string): string {
     const width = 74;
     const divider = '─'.repeat(width);
-    const title = ' [!] SENTINEL SECURITY GUARDIAN — ACTION PERMANENTLY REFUSED';
+    const title = ' [!] CERO SECURITY GUARDIAN — ACTION PERMANENTLY REFUSED';
     const paddedTitle = `│${title.padEnd(width)}│`;
     return [
       `\r\n\x1b[1;31m┌${divider}┐\x1b[0m`,
@@ -436,7 +436,7 @@ export class CommandSafetyGuardian {
       `  ${evalResult.consequenceExplanation.split('. ').join('.\r\n  ')}`,
       ``,
       evalResult.safeAlternative ? `\x1b[1;32m[+] Safe Alternative:\x1b[0m\r\n  ${evalResult.safeAlternative}\r\n` : '',
-      `\x1b[1;30m[#] Policy: Sentinel strictly refuses all commands that cause irreversible destruction of the host OS.\x1b[0m\r\n`
+      `\x1b[1;30m[#] Policy: Cero strictly refuses all commands that cause irreversible destruction of the host OS.\x1b[0m\r\n`
     ].filter(Boolean).join('\r\n');
   }
 }

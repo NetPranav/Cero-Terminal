@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-Sentinel Terminal — Apple Silicon Native MLX LoRA Fine-Tuning Pipeline (Phase 4.8)
+Cero — Apple Silicon Native MLX LoRA Fine-Tuning Pipeline (Phase 4.8)
 
-Part of Sentinel-SERL (Self-Evolving Reflexion Loop):
+Part of Cero-SERL (Self-Evolving Reflexion Loop):
 Breakthrough 4.8: Native Apple Silicon MLX LoRA fine-tuning on Unified Memory GPU.
 Runs on Apple Silicon Metal in under 10 minutes without CUDA or cloud costs,
 and hot-reloads the adapter directly into llama-server --lora.
 
 Dataset sources:
-  - ~/.sentinel/training/sentinel_dpo_pairs.jsonl
-  - ~/.sentinel/training/dream_state_cycles.jsonl
-  - ~/.sentinel/training/sentinel_shell_dataset.jsonl
+  - ~/.cero/training/cero_dpo_pairs.jsonl
+  - ~/.cero/training/dream_state_cycles.jsonl
+  - ~/.cero/training/cero_shell_dataset.jsonl
 
 Target Model: Qwen/Qwen2.5-Coder-3B-Instruct
-Output Adapter: ~/.sentinel/models/sentinel_mlx_lora
+Output Adapter: ~/.cero/models/cero_mlx_lora
 """
 
 import os
@@ -27,19 +27,19 @@ from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 
 DEFAULT_SYSTEM_PROMPT = (
-    'You are Sentinel, an autonomous shell copilot. '
+    'You are Cero, an autonomous shell copilot. '
     'Output JSON only: {"action": "execute", "command": "<cmd>", "explanation": "<reason>"}'
 )
 
-def get_sentinel_paths() -> Dict[str, Path]:
+def get_cero_paths() -> Dict[str, Path]:
     home = Path.home()
     return {
         "home": home,
-        "dpo_dataset": home / ".sentinel" / "training" / "sentinel_dpo_pairs.jsonl",
-        "dream_dataset": home / ".sentinel" / "training" / "dream_state_cycles.jsonl",
-        "shell_dataset": home / ".sentinel" / "training" / "sentinel_shell_dataset.jsonl",
-        "output_adapter_dir": home / ".sentinel" / "models" / "sentinel_mlx_lora",
-        "output_gguf_adapter": home / ".sentinel" / "models" / "sentinel_mlx_lora.gguf",
+        "dpo_dataset": home / ".cero" / "training" / "cero_dpo_pairs.jsonl",
+        "dream_dataset": home / ".cero" / "training" / "dream_state_cycles.jsonl",
+        "shell_dataset": home / ".cero" / "training" / "cero_shell_dataset.jsonl",
+        "output_adapter_dir": home / ".cero" / "models" / "cero_mlx_lora",
+        "output_gguf_adapter": home / ".cero" / "models" / "cero_mlx_lora.gguf",
     }
 
 # =========================================================================
@@ -53,7 +53,7 @@ def load_training_samples(custom_dataset: Optional[str] = None) -> List[Dict[str
     {"messages": [{"role": "system", ...}, {"role": "user", ...}, {"role": "assistant", ...}]}
     """
     samples: List[Dict[str, Any]] = []
-    paths = get_sentinel_paths()
+    paths = get_cero_paths()
 
     source_files = []
     if custom_dataset:
@@ -243,11 +243,11 @@ def export_adapter_manifest(
     metrics: Dict[str, float]
 ) -> Path:
     """
-    Generates adapter_config.json and sentinel_lora_manifest.json for GGUF/llama-server compatibility.
+    Generates adapter_config.json and cero_lora_manifest.json for GGUF/llama-server compatibility.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "adapter_name": "sentinel_mlx_lora",
+        "adapter_name": "cero_mlx_lora",
         "framework": "mlx-lm",
         "target_model": config["model"],
         "base_model_architecture": "Qwen2ForCausalLM",
@@ -261,7 +261,7 @@ def export_adapter_manifest(
         "llama_server_cli_arg": f"--lora {output_dir}.gguf"
     }
 
-    manifest_path = output_dir / "sentinel_lora_manifest.json"
+    manifest_path = output_dir / "cero_lora_manifest.json"
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
 
@@ -376,7 +376,7 @@ def run_test_mlx() -> int:
         }
     ]
 
-    test_tmp = Path("/tmp/test_sentinel_mlx")
+    test_tmp = Path("/tmp/test_cero_mlx")
     if test_tmp.exists():
         shutil.rmtree(test_tmp)
     test_tmp.mkdir(parents=True, exist_ok=True)
@@ -416,7 +416,7 @@ def run_test_mlx() -> int:
     assert metrics["final_loss"] < metrics["initial_loss"], "Loss must decrease during training"
 
     # 5. Verify GGUF & Manifest Artifacts
-    manifest_p = Path(mock_args.output) / "sentinel_lora_manifest.json"
+    manifest_p = Path(mock_args.output) / "cero_lora_manifest.json"
     gguf_p = Path(mock_args.output).with_suffix(".gguf")
     assert manifest_p.exists(), "Manifest file must exist"
     assert gguf_p.exists() and gguf_p.stat().st_size > 0, "GGUF adapter must be generated"
@@ -432,7 +432,7 @@ def run_test_mlx() -> int:
 # =========================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Sentinel Apple Silicon Native MLX LoRA Fine-Tuner")
+    parser = argparse.ArgumentParser(description="Cero Apple Silicon Native MLX LoRA Fine-Tuner")
     parser.add_argument("--model", type=str, default="Qwen/Qwen2.5-Coder-3B-Instruct", help="Base model identifier")
     parser.add_argument("--dataset", type=str, default=None, help="Path to JSONL dataset")
     parser.add_argument("--output", type=str, default=None, help="Output directory for trained LoRA adapter")
@@ -451,7 +451,7 @@ def main():
         sys.exit(run_test_mlx())
 
     print("=" * 65)
-    print("⚡ Sentinel Terminal — Apple Silicon Native MLX LoRA Fine-Tuner")
+    print("⚡ Cero — Apple Silicon Native MLX LoRA Fine-Tuner")
     print("=" * 65)
 
     env = check_apple_silicon_environment()
@@ -459,15 +459,15 @@ def main():
     print(f"• Unified Memory: {env['unified_memory_gb']} GB")
     print(f"• Metal Engine:   {'Active' if env['metal_gpu_active'] else 'Inactive'}")
 
-    paths = get_sentinel_paths()
+    paths = get_cero_paths()
     output_dir = Path(args.output) if args.output else paths["output_adapter_dir"]
 
     samples = load_training_samples(args.dataset)
-    print(f"\n✓ Loaded {len(samples)} interaction samples from Sentinel datasets.")
+    print(f"\n✓ Loaded {len(samples)} interaction samples from Cero datasets.")
 
     if len(samples) == 0 and not args.dry_run:
-        print("\n⚠️ No training samples found yet in ~/.sentinel/training/")
-        print("Sentinel-SERL automatically compiles samples during:")
+        print("\n⚠️ No training samples found yet in ~/.cero/training/")
+        print("Cero-SERL automatically compiles samples during:")
         print("  1. Daily command executions and corrections (/learn)")
         print("  2. Resolved knowledge deficits (Phase 4.2 & 4.3)")
         print("  3. Nightly Dream-State self-play cycles (Phase 4.7)")
@@ -489,7 +489,7 @@ def main():
             ]
         args.iters = 5
 
-    tmp_data_dir = Path("/tmp/sentinel_mlx_run")
+    tmp_data_dir = Path("/tmp/cero_mlx_run")
     train_s, valid_s = split_dataset(samples)
     train_p, valid_p = write_mlx_dataset_splits(train_s, valid_s, tmp_data_dir)
 

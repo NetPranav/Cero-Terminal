@@ -68,7 +68,7 @@ describe('commandFor', () => {
     expect(commandFor({ kind: 'bluetooth', op: 'off' }, 'windows')!.command).toContain("SetStateAsync('Off')");
     expect(commandFor({ kind: 'wifi', op: 'on' }, 'windows')!.command).toContain("$_.Kind -eq 'WiFi'");
     expect(commandFor({ kind: 'brightness', op: 'set', level: 60 }, 'windows')!.command).toContain('WmiSetBrightness');
-    expect(commandFor({ kind: 'volume', op: 'mute' }, 'windows')!.command).toContain('[SentinelAudio]::Mute = $true');
+    expect(commandFor({ kind: 'volume', op: 'mute' }, 'windows')!.command).toContain('[CeroAudio]::Mute = $true');
     expect(commandFor({ kind: 'settings', topic: 'updates' }, 'windows')!.command).toBe("Start-Process 'ms-settings:windowsupdate'");
     expect(commandFor({ kind: 'settings', topic: 'bluetooth' }, 'macos')!.command).toBe("open 'x-apple.systempreferences:com.apple.BluetoothSettings'");
     expect(commandFor({ kind: 'settings', topic: 'bluetooth' }, 'linux')!.command).toMatch(/gnome-control-center bluetooth.*systemsettings kcm_bluetooth/);

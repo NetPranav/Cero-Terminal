@@ -48,7 +48,7 @@ describe('FlowExport', () => {
       ],
       createdAt: 1700000000000,
       updatedAt: 1700000010000,
-      author: 'Sentinel Developer',
+      author: 'Cero Developer',
       tags: ['deployment', 'ci', 'flow']
     };
 

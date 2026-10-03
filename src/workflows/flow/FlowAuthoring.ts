@@ -290,7 +290,7 @@ export function flowFileName(name: string): string {
 export function serializeFlow(draft: FlowDraft): string {
   const doc = {
     schemaVersion: '1.0',
-    metadata: { id: flowSlug(draft.name), name: draft.name, description: 'Made with Sentinel Terminal. Open the file to run it.' },
+    metadata: { id: flowSlug(draft.name), name: draft.name, description: 'Made with Cero. Open the file to run it.' },
     actions: draft.actions,
   };
   return `${JSON.stringify(doc, null, 2)}\n`;

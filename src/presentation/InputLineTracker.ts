@@ -5,7 +5,7 @@
  * That broke in two ways that both sent an AI request to the shell, where a leading `>` is a
  * redirection (`>what is $PATH` truncates a file named "what"):
  *  - a request containing `$`, `%` or `#` was cut in the middle, so it no longer started with `>`;
- *  - text typed while Sentinel was printing agent output had no prompt on its line.
+ *  - text typed while Cero was printing agent output had no prompt on its line.
  *
  * Instead we keep two independent records of the line:
  *  - a shadow of the keystrokes (exact when the user only typed, pasted plain text and used

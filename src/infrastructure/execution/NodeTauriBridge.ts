@@ -1,7 +1,7 @@
 /**
  * NodeTauriBridge.ts — Seamless Tauri IPC Polyfill for Node.js / CLI Environments
  * 
- * Enables all Sentinel Capability SDK drivers to execute real native macOS commands
+ * Enables all Cero Capability SDK drivers to execute real native macOS commands
  * directly in Node.js / CLI / test harnesses without requiring a Tauri GUI window.
  * 
  * Features:
@@ -85,7 +85,7 @@ export class NodeTauriBridge {
     return this.commandHistory.filter(c => 
       !c.isAuditLog && 
       !c.fullCommand.includes('learned_patterns.json') &&
-      !c.fullCommand.includes('test -f "$HOME/.sentinel/models')
+      !c.fullCommand.includes('test -f "$HOME/.cero/models')
     );
   }
 
@@ -130,8 +130,8 @@ export class NodeTauriBridge {
           };
 
           // Same contract as the app's execute_command: `timeoutMs` bounds the run when given.
-          // SENTINEL_CMD_TIMEOUT_MS caps every command in headless test runs.
-          const cap = Number(process.env.SENTINEL_CMD_TIMEOUT_MS) || 0;
+          // CERO_CMD_TIMEOUT_MS caps every command in headless test runs.
+          const cap = Number(process.env.CERO_CMD_TIMEOUT_MS) || 0;
           const requested = Number(payload.timeoutMs) || 0;
           const timeout = [requested, cap].filter(ms => ms > 0).reduce((a, b) => Math.min(a, b), Infinity);
           const result = spawnSync(command, args, {
@@ -157,7 +157,7 @@ export class NodeTauriBridge {
 
         const durationMs = performance.now() - startTime;
         const fullCommand = args.length > 0 ? `${command} ${args.join(' ')}` : command;
-        const isAuditLog = fullCommand.includes('.sentinel/audit.') || fullCommand.includes('audit.jsonl') || fullCommand.includes('audit.benchmark.jsonl');
+        const isAuditLog = fullCommand.includes('.cero/audit.') || fullCommand.includes('audit.jsonl') || fullCommand.includes('audit.benchmark.jsonl');
 
         const record: CommandExecutionRecord = {
           command,

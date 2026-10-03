@@ -65,7 +65,7 @@ export class NetworkingCapability extends BaseCapabilityDriver<NetDriverInput, a
         case 'ports': return { success: true, data: { openPorts: [{ port: 8080, proto: 'tcp', pid: 4210, app: 'node' }, { port: 5432, proto: 'tcp', pid: 920, app: 'postgres' }] }, commandExecuted };
         case 'interfaces': return { success: true, data: { interfaces: [{ name: 'en0', type: 'Wi-Fi', mac: '00:1A:2B:3C:4D:5E', ipv4: '192.168.1.140', status: 'Active' }] }, commandExecuted };
         case 'dns': return { success: true, data: { domain: input.domain || 'openai.com', records: [{ type: 'A', address: '104.18.32.47' }, { type: 'MX', mailServer: 'aspmx.l.google.com', priority: 10 }] }, commandExecuted };
-        case 'ip': return { success: true, data: { localIp: '192.168.1.140', publicIp: '203.0.113.89', isp: 'Sentinel Fiber' }, commandExecuted };
+        case 'ip': return { success: true, data: { localIp: '192.168.1.140', publicIp: '203.0.113.89', isp: 'Cero Fiber' }, commandExecuted };
         default: return { success: true, data: { operation: op }, commandExecuted };
       }
     }

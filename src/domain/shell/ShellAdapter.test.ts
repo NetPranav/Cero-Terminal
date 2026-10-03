@@ -37,8 +37,8 @@ describe('ShellAdapter', () => {
     const env = adapter.getTerminalEnvironment({ CUSTOM_VAR: 'test' });
     expect(env.TERM).toBe('xterm-256color');
     expect(env.COLORTERM).toBe('truecolor');
-    expect(env.TERM_PROGRAM).toBe('Sentinel Terminal');
-    expect(env.SENTINEL_TERMINAL).toBe('1');
+    expect(env.TERM_PROGRAM).toBe('Cero');
+    expect(env.CERO_TERMINAL).toBe('1');
     expect(env.CUSTOM_VAR).toBe('test');
   });
 });

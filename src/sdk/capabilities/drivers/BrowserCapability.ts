@@ -108,7 +108,7 @@ export class BrowserCapability extends BaseCapabilityDriver<BrowserInput, any> {
             rollbackPayload: { url: targetUrl }
           };
         case 'bookmarks':
-          return { success: true, data: { bookmarks: [{ title: 'GitHub', url: 'https://github.com' }, { title: 'Sentinel Docs', url: 'https://sentinel.ai' }] }, commandExecuted };
+          return { success: true, data: { bookmarks: [{ title: 'GitHub', url: 'https://github.com' }, { title: 'Cero Docs', url: 'https://sentinel.ai' }] }, commandExecuted };
         case 'downloads':
           return { success: true, data: { downloads: ['/Users/shared/Downloads/model.onnx', '/Users/shared/Downloads/installer.dmg'] }, commandExecuted };
         case 'history':

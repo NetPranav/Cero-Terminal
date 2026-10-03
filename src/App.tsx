@@ -128,7 +128,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
     if (typeof window !== 'undefined' && window.location && window.location.search.includes('capture_mode=')) {
       return false;
     }
-    return !localStorage.getItem('sentinel_zen_tip_shown') && !!localStorage.getItem('sentinel_onboarded') && localStorage.getItem('sentinel_ui_mode') === 'zen';
+    return !localStorage.getItem('cero_zen_tip_shown') && !!localStorage.getItem('cero_onboarded') && localStorage.getItem('cero_ui_mode') === 'zen';
   });
   const [selectedThemeId, setSelectedThemeId] = useState<string>('classic-dark');
   const [uiMode, setUiMode] = useState<'zen' | 'visual'>(() => {
@@ -136,13 +136,13 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
       if (window.location.search.includes('capture_mode=zen')) return 'zen';
       if (window.location.search.includes('capture_mode=visual')) return 'visual';
     }
-    return (localStorage.getItem('sentinel_ui_mode') as 'zen' | 'visual') || 'zen';
+    return (localStorage.getItem('cero_ui_mode') as 'zen' | 'visual') || 'zen';
   });
   const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
 
   const handleToggleUiMode = (mode: 'zen' | 'visual') => {
     setUiMode(mode);
-    localStorage.setItem('sentinel_ui_mode', mode);
+    localStorage.setItem('cero_ui_mode', mode);
   };
 
   useEffect(() => {
@@ -151,8 +151,8 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
         setUiMode(e.detail);
       }
     };
-    window.addEventListener('sentinel:ui-mode-changed', handleModeChange);
-    return () => window.removeEventListener('sentinel:ui-mode-changed', handleModeChange);
+    window.addEventListener('cero:ui-mode-changed', handleModeChange);
+    return () => window.removeEventListener('cero:ui-mode-changed', handleModeChange);
   }, []);
 
   const handleHistorySelect = (command: string) => {
@@ -172,7 +172,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
     return value;
   };
 
-  // A .flow (or workflow) file opened with Sentinel: Finder, Explorer, a file manager, `sentinel x.flow`.
+  // A .flow (or workflow) file opened with Cero: Finder, Explorer, a file manager, `cero x.flow`.
   // Only desktop actions (open Chrome, a link, VS Code): they run right away, no terminal needed.
   // Anything that installs or runs commands: typed into the focused terminal after one approval
   // that lists every command, so a flow from someone else never runs unseen.
@@ -182,19 +182,19 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
         const text = await invoke<string>('read_system_file', { path: filePath });
         const plan = planFlowFile(text, filePath, flowOsOf(getPlatform()));
         if (!plan) {
-          console.warn('[Sentinel] Not a flow or workflow file:', filePath);
+          console.warn('[Cero] Not a flow or workflow file:', filePath);
           continue;
         }
         if (!plan.needsTerminal) {
           const res = await runDesktopSteps(plan.steps, flowOsOf(getPlatform()), (command, args) =>
             invoke<{ code: number; stdout: string; stderr: string }>('execute_command', { command, args, timeoutMs: 30000 }));
-          if (!res.ok) console.warn('[Sentinel] Flow steps failed:', res.failed);
+          if (!res.ok) console.warn('[Cero] Flow steps failed:', res.failed);
           continue;
         }
         await invoke('show_main_window').catch(() => {});
         submitTerminalRequest({ kind: 'flow', plan, source: filePath });
       } catch (err) {
-        console.warn('[Sentinel] Could not open workflow file:', filePath, err);
+        console.warn('[Cero] Could not open workflow file:', filePath, err);
       }
     }
   };
@@ -213,7 +213,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
       if (window.location.search.includes('capture_mode=')) return false;
       if (window.location.search.includes('onboarding')) return true;
     }
-    return !localStorage.getItem('sentinel_onboarded');
+    return !localStorage.getItem('cero_onboarded');
   });
   const [detectedShell, setDetectedShell] = useState<string>(() => isLinux() ? 'bash' : 'zsh');
   const [showQueuePanel, setShowQueuePanel] = useState<boolean>(false);
@@ -231,8 +231,8 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
 
   useEffect(() => {
     const handleOpenQueue = () => setShowQueuePanel(true);
-    window.addEventListener('sentinel:open-queue', handleOpenQueue);
-    return () => window.removeEventListener('sentinel:open-queue', handleOpenQueue);
+    window.addEventListener('cero:open-queue', handleOpenQueue);
+    return () => window.removeEventListener('cero:open-queue', handleOpenQueue);
   }, []);
 
   useEffect(() => {
@@ -285,13 +285,13 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
   useEffect(() => {
     const autoStartInference = async () => {
       try {
-        const autostartPref = localStorage.getItem('sentinel_autostart_ai');
+        const autostartPref = localStorage.getItem('cero_autostart_ai');
         if (autostartPref === 'false') return;
 
         const manager = EmbeddedEngineManager.getInstance();
         await manager.proactiveWarmup();
       } catch (err) {
-        console.warn('[Sentinel] Auto-start inference engine error:', err);
+        console.warn('[Cero] Auto-start inference engine error:', err);
       }
     };
     const timer = setTimeout(autoStartInference, 150);
@@ -413,7 +413,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
       }
     }).then(fn => { unlistenMenu = fn; }).catch(() => {});
 
-    listen<string[]>("sentinel-url", (event) => {
+    listen<string[]>("cero-url", (event) => {
       const workflowFiles = event.payload.map(toLocalPath).filter(isWorkflowFilePath);
       if (workflowFiles.length > 0) {
         void openWorkflowFiles(workflowFiles);
@@ -470,7 +470,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
             }
           }
         } catch (err) {
-          console.warn('[Sentinel] Failed to process startup launch arguments:', err);
+          console.warn('[Cero] Failed to process startup launch arguments:', err);
         }
       })();
     }
@@ -735,7 +735,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
     const term = getActiveTerminalPane(tab.rootPane);
     const rawPath = term ? (panePaths[term.id] || '~') : '~';
     const cleaned = formatDisplayPath(rawPath).toLowerCase();
-    if (cleaned.includes('.sentinel') || cleaned.includes('src') || cleaned.includes('git') || cleaned.includes('project') || cleaned.includes('code')) {
+    if (cleaned.includes('.cero') || cleaned.includes('src') || cleaned.includes('git') || cleaned.includes('project') || cleaned.includes('code')) {
       return <Code2 size={12} style={{ marginRight: 6, opacity: 0.75, flexShrink: 0 }} />;
     }
     if (cleaned === '~' || cleaned === '') {
@@ -773,12 +773,12 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
     const start = async () => {
       try {
         await CloudApiProvider.getInstance().hydrateSecrets().catch(err => {
-          console.warn('[Sentinel] Keychain unavailable, keys stay in app storage:', err);
+          console.warn('[Cero] Keychain unavailable, keys stay in app storage:', err);
         });
         CloudApiProvider.getInstance().getActiveConfig();
         await ModelManager.getInstance().initialize();
       } catch (err) {
-        console.warn('[Sentinel] AI Provider startup error:', err);
+        console.warn('[Cero] AI Provider startup error:', err);
       }
     };
     void start();
@@ -832,7 +832,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
         }
         if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key && e.key.toLowerCase() === 'f') {
           e.preventDefault();
-          window.dispatchEvent(new CustomEvent('sentinel:toggle-search'));
+          window.dispatchEvent(new CustomEvent('cero:toggle-search'));
           return;
         }
         if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key && e.key.toLowerCase() === 't') {
@@ -900,10 +900,10 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('sentinel:toggle-history', handleToggleHistory);
+    window.addEventListener('cero:toggle-history', handleToggleHistory);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('sentinel:toggle-history', handleToggleHistory);
+      window.removeEventListener('cero:toggle-history', handleToggleHistory);
     };
   }, [tabs, activeTabId, activeTab, activeTerminal, addTab, showAiSettings]);
 
@@ -927,7 +927,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
         case 'settings_general': openSettings('general'); break;
         case 'history': setShowHistorySearch(true); break;
         case 'find':
-          window.dispatchEvent(new CustomEvent('sentinel:find-in-terminal', { detail: { paneId: action.paneId ?? activeTerminal?.id, query: action.query } }));
+          window.dispatchEvent(new CustomEvent('cero:find-in-terminal', { detail: { paneId: action.paneId ?? activeTerminal?.id, query: action.query } }));
           break;
         case 'workflows': setShowWorkflowManager(true); break;
         case 'shortcuts': setShowHelpModal(true); break;
@@ -961,8 +961,8 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
         }
       }
     };
-    window.addEventListener('sentinel:app-action', onAppAction);
-    return () => window.removeEventListener('sentinel:app-action', onAppAction);
+    window.addEventListener('cero:app-action', onAppAction);
+    return () => window.removeEventListener('cero:app-action', onAppAction);
   }, [tabs, activeTabId, activeTab, activeTerminal]);
 
   const handleStatusBarNavigate = (targetPath: string, commandToExecute: string) => {
@@ -983,7 +983,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
           className="pane-terminal-wrapper" 
           onClick={() => setActivePaneId(node.data.id)}
           style={{ 
-            border: isSelected ? '1px solid var(--sentinel-border-active, rgba(255, 255, 255, 0.35))' : '1px solid var(--sentinel-border, rgba(255, 255, 255, 0.08))',
+            border: isSelected ? '1px solid var(--cero-border-active, rgba(255, 255, 255, 0.35))' : '1px solid var(--cero-border, rgba(255, 255, 255, 0.08))',
             zIndex: activeShellMenuPaneId === node.data.id ? 100 : undefined,
           }}
         >
@@ -1172,8 +1172,8 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
                 }}
                 title="Shell Session & Workspace Actions"
                 style={{
-                  background: activeShellMenuPaneId === activeTerminal.id ? 'var(--sentinel-hover, rgba(255, 255, 255, 0.15))' : 'transparent',
-                  borderColor: activeShellMenuPaneId === activeTerminal.id ? 'var(--sentinel-border-active, rgba(255, 255, 255, 0.35))' : 'var(--sentinel-border, rgba(255, 255, 255, 0.1))',
+                  background: activeShellMenuPaneId === activeTerminal.id ? 'var(--cero-hover, rgba(255, 255, 255, 0.15))' : 'transparent',
+                  borderColor: activeShellMenuPaneId === activeTerminal.id ? 'var(--cero-border-active, rgba(255, 255, 255, 0.35))' : 'var(--cero-border, rgba(255, 255, 255, 0.1))',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '4px'
@@ -1194,13 +1194,13 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
                     marginTop: '6px',
                     width: '240px',
                     backgroundColor: '#16171a',
-                    background: 'var(--sentinel-modal-bg, #16171a)',
-                    border: '1px solid var(--sentinel-border-active, rgba(255, 255, 255, 0.18))',
+                    background: 'var(--cero-modal-bg, #16171a)',
+                    border: '1px solid var(--cero-border-active, rgba(255, 255, 255, 0.18))',
                     borderRadius: '8px',
                     boxShadow: '0 16px 36px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.05)',
                     padding: '5px 0',
                     zIndex: 10000,
-                    color: 'var(--sentinel-fg, #ffffff)',
+                    color: 'var(--cero-fg, #ffffff)',
                     fontSize: '12px'
                   }}
                 >
@@ -1222,7 +1222,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
                     }, disabled: (!activeTab || activeTab.rootPane.type !== 'split') && tabs.length === 1 }
                   ].map((item, idx) => {
                     if ('type' in item && item.type === 'divider') {
-                      return <div key={idx} style={{ height: '1px', background: 'var(--sentinel-border, rgba(255, 255, 255, 0.08))', margin: '4px 6px' }} />;
+                      return <div key={idx} style={{ height: '1px', background: 'var(--cero-border, rgba(255, 255, 255, 0.08))', margin: '4px 6px' }} />;
                     }
                     const menuItem = item as { label: string; icon?: React.ReactNode; shortcut: string; action: () => void; disabled?: boolean };
                     return (
@@ -1240,7 +1240,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
                           opacity: menuItem.disabled ? 0.35 : 0.9,
                           transition: 'background-color 0.15s ease',
                         }}
-                        onMouseEnter={(e) => { if (!menuItem.disabled) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--sentinel-hover, rgba(255, 255, 255, 0.08))'; }}
+                        onMouseEnter={(e) => { if (!menuItem.disabled) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--cero-hover, rgba(255, 255, 255, 0.08))'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                       >
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
@@ -1257,7 +1257,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
             <button 
               onClick={(e) => { 
                 e.stopPropagation(); 
-                window.dispatchEvent(new CustomEvent('sentinel:toggle-search')); 
+                window.dispatchEvent(new CustomEvent('cero:toggle-search')); 
               }} 
               title="Search Terminal Buffer (Ctrl+Shift+F)"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
@@ -1293,15 +1293,15 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
           top: '72px',
           right: '20px',
           width: '320px',
-          background: 'var(--sentinel-modal-bg, rgba(20, 20, 22, 0.97))',
-          border: '1px solid var(--sentinel-border-active, rgba(255, 255, 255, 0.2))',
+          background: 'var(--cero-modal-bg, rgba(20, 20, 22, 0.97))',
+          border: '1px solid var(--cero-border-active, rgba(255, 255, 255, 0.2))',
           borderRadius: '10px',
           padding: '16px',
           boxShadow: '0 12px 36px rgba(0, 0, 0, 0.45)',
           zIndex: 9999,
-          color: 'var(--sentinel-fg, #F8FAFC)',
+          color: 'var(--cero-fg, #F8FAFC)',
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid var(--sentinel-border, rgba(255,255,255,0.08))', paddingBottom: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid var(--cero-border, rgba(255,255,255,0.08))', paddingBottom: '8px' }}>
             <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 600, opacity: 0.9, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
               <Palette size={13} />
               <span>Workspace Appearance</span>
@@ -1331,8 +1331,8 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
                     style={{
                       padding: '8px 10px',
                       borderRadius: '6px',
-                      background: isSelected ? 'var(--sentinel-hover, rgba(255, 255, 255, 0.12))' : 'rgba(255, 255, 255, 0.03)',
-                      border: isSelected ? '1px solid var(--sentinel-border-active, rgba(255, 255, 255, 0.4))' : '1px solid var(--sentinel-border, rgba(255, 255, 255, 0.07))',
+                      background: isSelected ? 'var(--cero-hover, rgba(255, 255, 255, 0.12))' : 'rgba(255, 255, 255, 0.03)',
+                      border: isSelected ? '1px solid var(--cero-border-active, rgba(255, 255, 255, 0.4))' : '1px solid var(--cero-border, rgba(255, 255, 255, 0.07))',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
                     }}
@@ -1375,9 +1375,9 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
                     padding: '5px 4px',
                     fontSize: '11px',
                     borderRadius: '6px',
-                    background: transparency === item.val ? 'var(--sentinel-hover, rgba(255, 255, 255, 0.18))' : 'rgba(255, 255, 255, 0.04)',
-                    color: 'var(--sentinel-fg, #ffffff)',
-                    border: transparency === item.val ? '1px solid var(--sentinel-border-active, rgba(255, 255, 255, 0.4))' : '1px solid var(--sentinel-border, rgba(255, 255, 255, 0.08))',
+                    background: transparency === item.val ? 'var(--cero-hover, rgba(255, 255, 255, 0.18))' : 'rgba(255, 255, 255, 0.04)',
+                    color: 'var(--cero-fg, #ffffff)',
+                    border: transparency === item.val ? '1px solid var(--cero-border-active, rgba(255, 255, 255, 0.4))' : '1px solid var(--cero-border, rgba(255, 255, 255, 0.08))',
                     cursor: 'pointer',
                     fontWeight: transparency === item.val ? 600 : 400,
                     transition: 'all 0.2s ease'
@@ -1412,9 +1412,9 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
                     padding: '5px 4px',
                     fontSize: '11px',
                     borderRadius: '6px',
-                    background: blurLevel === item.val ? 'var(--sentinel-hover, rgba(255, 255, 255, 0.18))' : 'rgba(255, 255, 255, 0.04)',
-                    color: 'var(--sentinel-fg, #ffffff)',
-                    border: blurLevel === item.val ? '1px solid var(--sentinel-border-active, rgba(255, 255, 255, 0.4))' : '1px solid var(--sentinel-border, rgba(255, 255, 255, 0.08))',
+                    background: blurLevel === item.val ? 'var(--cero-hover, rgba(255, 255, 255, 0.18))' : 'rgba(255, 255, 255, 0.04)',
+                    color: 'var(--cero-fg, #ffffff)',
+                    border: blurLevel === item.val ? '1px solid var(--cero-border-active, rgba(255, 255, 255, 0.4))' : '1px solid var(--cero-border, rgba(255, 255, 255, 0.08))',
                     cursor: 'pointer',
                     fontWeight: blurLevel === item.val ? 600 : 400,
                     transition: 'all 0.2s ease'
@@ -1524,7 +1524,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
           }
           else if (actionId === 'split_v' && activeTerminal) splitPane(activeTerminal.id, 'vertical');
           else if (actionId === 'split_h' && activeTerminal) splitPane(activeTerminal.id, 'horizontal');
-          else if (actionId === 'find_buffer') window.dispatchEvent(new CustomEvent('sentinel:toggle-search'));
+          else if (actionId === 'find_buffer') window.dispatchEvent(new CustomEvent('cero:toggle-search'));
           else if (actionId === 'history_search') setShowHistorySearch(true);
           else if (actionId === 'clear_screen' && activeTerminal?.sessionId) SessionManager.getInstance().write(activeTerminal.sessionId, 'clear\r');
           else if (actionId === 'command_palette') setCommandPaletteOpen(true);
@@ -1545,7 +1545,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
           { id: 'open_general_settings', name: 'Settings: General & Setup Diagnostics', description: 'Shell detection, config storage, system platform details, and onboarding launcher' },
           { id: 'toggle_ui_mode', name: `Toggle UI Mode (Current: ${uiMode === 'zen' ? 'Zen Mode' : 'Visual Mode'})`, description: 'Switch between minimal hover-reveal controls and always-on visual buttons' },
           { id: 'keyboard_shortcuts', name: 'Keyboard Shortcuts & Help (F1)', description: 'View interactive cheatsheet of all hotkeys, splits, and workflows' },
-          { id: 'open_embedded_ai', name: 'Sentinel Embedded AI (Qwen 2.5 3B)', description: 'Manage self-contained local model — Zero Ollama required' },
+          { id: 'open_embedded_ai', name: 'Cero Embedded AI (Qwen 2.5 3B)', description: 'Manage self-contained local model — Zero Ollama required' },
           { id: 'personalize', name: 'Personalize UI', description: 'Open color theme and glassmorphic appearance customization' },
           { id: 'workflow_manager', name: 'Workflow & Macro Manager (Cmd+Shift+W)', description: 'View, edit, reorder and replay deterministic zero-token multi-stage workflows' },
           { id: 'history_search', name: 'Command History (Ctrl+R)', description: 'Search previous commands ranked by frequency and recency' },
@@ -1593,7 +1593,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
             const bundle = DotfileSyncEngine.getInstance().exportBundle(selectedThemeId, transparency, blurLevel);
             if (navigator.clipboard) {
               await navigator.clipboard.writeText(bundle);
-              alert('Sentinel Rice & AI Profile copied to clipboard!');
+              alert('Cero Rice & AI Profile copied to clipboard!');
             }
           }
         }}
@@ -1623,8 +1623,8 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
             isOpen={showWizard}
             onClose={() => {
               setShowWizard(false);
-              const currentMode = localStorage.getItem('sentinel_ui_mode') || uiMode;
-              if (currentMode === 'zen' && !localStorage.getItem('sentinel_zen_tip_shown')) {
+              const currentMode = localStorage.getItem('cero_ui_mode') || uiMode;
+              if (currentMode === 'zen' && !localStorage.getItem('cero_zen_tip_shown')) {
                 setShowZenCallout(true);
               }
             }}
@@ -1636,7 +1636,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
         isOpen={showZenCallout}
         onDismiss={() => {
           setShowZenCallout(false);
-          localStorage.setItem('sentinel_zen_tip_shown', 'true');
+          localStorage.setItem('cero_zen_tip_shown', 'true');
         }}
       />
       {showAssociationPrompt && (

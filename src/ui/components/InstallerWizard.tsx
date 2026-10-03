@@ -21,7 +21,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
     cursorConfigured: false,
   });
   const [uiMode, setUiMode] = useState<'zen' | 'visual'>(() => {
-    return (localStorage.getItem('sentinel_ui_mode') as 'zen' | 'visual') || 'zen';
+    return (localStorage.getItem('cero_ui_mode') as 'zen' | 'visual') || 'zen';
   });
   const [loading, setLoading] = useState<boolean>(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -113,9 +113,9 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
 
   const handleSelectMode = (mode: 'zen' | 'visual') => {
     setUiMode(mode);
-    localStorage.setItem('sentinel_ui_mode', mode);
+    localStorage.setItem('cero_ui_mode', mode);
     if (onSelectUiMode) onSelectUiMode(mode);
-    window.dispatchEvent(new CustomEvent('sentinel:ui-mode-changed', { detail: mode }));
+    window.dispatchEvent(new CustomEvent('cero:ui-mode-changed', { detail: mode }));
   };
 
   const handleToggleWorkflow = (id: string) => {
@@ -167,7 +167,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
       }
 
       setMessage('✓ All desktop integrations and starter workflows successfully configured!');
-      localStorage.setItem('sentinel_onboarded', 'true');
+      localStorage.setItem('cero_onboarded', 'true');
       setTimeout(() => {
         onClose();
       }, 750);
@@ -210,7 +210,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
   };
 
   const handleDismiss = () => {
-    localStorage.setItem('sentinel_onboarded', 'true');
+    localStorage.setItem('cero_onboarded', 'true');
     onClose();
   };
 
@@ -257,7 +257,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
           }}>
             <Terminal size={12} strokeWidth={2.5} />
           </div>
-          <span style={{ fontWeight: 600, color: '#ffffff', letterSpacing: '-0.2px' }}>Sentinel Terminal</span>
+          <span style={{ fontWeight: 600, color: '#ffffff', letterSpacing: '-0.2px' }}>Cero</span>
           <span style={{ color: 'rgba(255, 255, 255, 0.25)' }}>/</span>
           <span>Workspace Onboarding & Environment Setup</span>
         </div>
@@ -276,13 +276,16 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
         flex: 1
       }}>
         {/* Screen Header */}
-        <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 4px 0', letterSpacing: '-0.4px', color: '#ffffff' }}>
-            Welcome to Sentinel Terminal
-          </h1>
-          <p style={{ fontSize: '13.5px', color: 'rgba(255, 255, 255, 0.65)', margin: 0, lineHeight: 1.45 }}>
-            Configure your terminal experience profile, layout density, and native desktop environment integrations.
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+          <img src="/cero-logo-animated.svg" alt="Cero" width={88} height={88} style={{ borderRadius: '50%', flexShrink: 0 }} />
+          <div>
+            <h1 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 4px 0', letterSpacing: '-0.4px', color: '#ffffff' }}>
+              Welcome to Cero
+            </h1>
+            <p style={{ fontSize: '13.5px', color: 'rgba(255, 255, 255, 0.65)', margin: 0, lineHeight: 1.45 }}>
+              Configure your terminal experience profile, layout density, and native desktop environment integrations.
+            </p>
+          </div>
         </div>
 
         {/* Section 1: Choose Your Terminal Experience */}
@@ -513,13 +516,13 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
                     <Terminal size={15} />
                   </div>
                   <div style={{ fontWeight: 600, fontSize: '13.5px', color: '#ffffff', lineHeight: 1.3 }}>
-                    Command Line Launcher (<code style={{ fontSize: '11.5px', background: 'rgba(255, 255, 255, 0.08)', padding: '1px 5px', borderRadius: '4px' }}>sentinel</code>)
+                    Command Line Launcher (<code style={{ fontSize: '11.5px', background: 'rgba(255, 255, 255, 0.08)', padding: '1px 5px', borderRadius: '4px' }}>cero</code>)
                   </div>
                 </div>
 
                 {/* Description */}
                 <div style={{ fontSize: '11.8px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: 1.5 }}>
-                  Installs a user-space launcher into your PATH. Enables launching Sentinel from any terminal prompt, bash/zsh script, or application launcher (Rofi, Wofi, dmenu) via <code style={{ fontSize: '11px', color: '#ffffff', background: 'rgba(255, 255, 255, 0.08)', padding: '2px 5px', borderRadius: '3px' }}>sentinel &lt;path&gt;</code>.
+                  Installs a user-space launcher into your PATH. Enables launching Cero from any terminal prompt, bash/zsh script, or application launcher (Rofi, Wofi, dmenu) via <code style={{ fontSize: '11px', color: '#ffffff', background: 'rgba(255, 255, 255, 0.08)', padding: '2px 5px', borderRadius: '3px' }}>cero &lt;path&gt;</code>.
                 </div>
                 {status.localBinInPath === false && (
                   <div style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '4px', fontStyle: 'italic' }}>
@@ -542,7 +545,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
                   borderRadius: '5px',
                   overflow: 'hidden'
                 }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isLinux() ? '~/.local/bin/sentinel' : '/usr/local/bin/sentinel'}</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isLinux() ? '~/.local/bin/cero' : '/usr/local/bin/cero'}</span>
                   <span>•</span>
                   <span style={{ color: 'rgba(255, 255, 255, 0.75)', flexShrink: 0 }}>User Space</span>
                 </div>
@@ -606,7 +609,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
 
                 {/* Description */}
                 <div style={{ fontSize: '11.8px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: 1.5 }}>
-                  Registers desktop context menu actions with your graphical file manager (GNOME Nautilus, Nemo, Dolphin, Thunar). Right-click any folder or desktop workspace to spawn Sentinel there.
+                  Registers desktop context menu actions with your graphical file manager (GNOME Nautilus, Nemo, Dolphin, Thunar). Right-click any folder or desktop workspace to spawn Cero there.
                 </div>
               </div>
 
@@ -688,7 +691,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
 
                 {/* Description */}
                 <div style={{ fontSize: '11.8px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: 1.5 }}>
-                  Registers Sentinel Shell in VS Code & Cursor integrated terminal profiles and sets Sentinel as your external editor terminal (Ctrl+Shift+C).
+                  Registers Cero Shell in VS Code & Cursor integrated terminal profiles and sets Cero as your external editor terminal (Ctrl+Shift+C).
                 </div>
               </div>
 
@@ -742,7 +745,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
                 Curated Starter Workflows & Macros
               </div>
               <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.55)', marginTop: '2px' }}>
-                Select automation blueprints to initialize in your workspace (<code style={{ fontSize: '11px', background: 'rgba(255, 255, 255, 0.08)', padding: '1px 5px', borderRadius: '4px' }}>~/.sentinel/workflows</code>). Zero-token deterministic execution.
+                Select automation blueprints to initialize in your workspace (<code style={{ fontSize: '11px', background: 'rgba(255, 255, 255, 0.08)', padding: '1px 5px', borderRadius: '4px' }}>~/.cero/workflows</code>). Zero-token deterministic execution.
               </div>
             </div>
 
@@ -980,7 +983,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                     <span style={{ fontWeight: 600, fontSize: '14px', color: '#ffffff' }}>
-                      Sentinel Embedded AI (Qwen 2.5 Coder 3B Instruct)
+                      Cero Embedded AI (Qwen 2.5 Coder 3B Instruct)
                     </span>
                     <span style={{
                       fontSize: '10px',
@@ -1106,7 +1109,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
                 borderTop: '1px solid rgba(255, 255, 255, 0.05)'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'rgba(255, 255, 255, 0.65)' }}>
-                  <span>Downloading Qwen 2.5 Coder 3B GGUF to ~/.sentinel/models/...</span>
+                  <span>Downloading Qwen 2.5 Coder 3B GGUF to ~/.cero/models/...</span>
                   <span>
                     {modelProgress?.percent ? `${modelProgress.percent}%` : 'Starting...'} 
                     {modelProgress ? ` • ${((modelProgress.downloadedBytes || 0) / (1024 * 1024)).toFixed(0)} / ${((modelProgress.totalBytes || 2104932800) / (1024 * 1024)).toFixed(0)} MB` : ''}
@@ -1156,7 +1159,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
                 alignItems: 'center',
                 gap: '6px'
               }}>
-                <span>• Model download skipped for now. When you run a prompt requiring AI interception, Sentinel will guide you on downloading or setting up Cloud API keys (Groq, OpenAI, Anthropic).</span>
+                <span>• Model download skipped for now. When you run a prompt requiring AI interception, Cero will guide you on downloading or setting up Cloud API keys (Groq, OpenAI, Anthropic).</span>
               </div>
             )}
           </div>

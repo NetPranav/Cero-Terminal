@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Sentinel Terminal CLI Launcher (Arch Linux)
+# Cero CLI Launcher (Arch Linux)
 set -e
 
-APP_BIN="${APP_BIN:-/usr/bin/sentinel-terminal}"
+APP_BIN="${APP_BIN:-/usr/bin/cero-terminal}"
 if [ ! -x "$APP_BIN" ]; then
-  APP_BIN="$(command -v sentinel-terminal 2>/dev/null || echo "$APP_BIN")"
+  APP_BIN="$(command -v cero-terminal 2>/dev/null || echo "$APP_BIN")"
 fi
 
 # Foreground diagnostic / live logging mode:
-# If user passes --debug, -d, --verbose, or -v, or has SENTINEL_DEBUG set,
+# If user passes --debug, -d, --verbose, or -v, or has CERO_DEBUG set,
 # run attached in the foreground without swallowing stdout/stderr.
 for arg in "$@"; do
   if [ "$arg" = "--debug" ] || [ "$arg" = "-d" ] || [ "$arg" = "--verbose" ] || [ "$arg" = "-v" ]; then
@@ -16,7 +16,7 @@ for arg in "$@"; do
   fi
 done
 
-if [ -n "$SENTINEL_DEBUG" ]; then
+if [ -n "$CERO_DEBUG" ]; then
   exec "$APP_BIN" "$@"
 fi
 
@@ -51,10 +51,10 @@ if [ -x "$APP_BIN" ] || command -v "$APP_BIN" >/dev/null 2>&1; then
 fi
 
 if command -v xdg-open >/dev/null 2>&1; then
-  if xdg-open "sentinel://open?path=$resolved_path" 2>/dev/null; then
+  if xdg-open "cero://open?path=$resolved_path" 2>/dev/null; then
     exit 0
   fi
 fi
 
-echo "sentinel: error: Sentinel Terminal binary ('sentinel-terminal') not found." >&2
+echo "cero: error: Cero binary ('cero-terminal') not found." >&2
 exit 1

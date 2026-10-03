@@ -449,6 +449,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "cero-terminal"
+version = "2.2.0"
+dependencies = [
+ "chrono",
+ "keyring",
+ "libc",
+ "objc",
+ "once_cell",
+ "parking_lot",
+ "portable-pty",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sysinfo",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-fs",
+ "tauri-plugin-http",
+ "tauri-plugin-opener",
+ "tauri-plugin-os",
+ "tauri-plugin-process",
+ "tauri-plugin-shell",
+ "tauri-plugin-single-instance",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "cesu8"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3494,35 +3523,6 @@ checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 dependencies = [
  "serde",
  "serde_core",
-]
-
-[[package]]
-name = "sentinel-terminal"
-version = "2.2.0"
-dependencies = [
- "chrono",
- "keyring",
- "libc",
- "objc",
- "once_cell",
- "parking_lot",
- "portable-pty",
- "serde",
- "serde_json",
- "sha2",
- "sysinfo",
- "tauri",
- "tauri-build",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-fs",
- "tauri-plugin-http",
- "tauri-plugin-opener",
- "tauri-plugin-os",
- "tauri-plugin-process",
- "tauri-plugin-shell",
- "tauri-plugin-single-instance",
- "tokio",
- "uuid",
 ]
 
 [[package]]

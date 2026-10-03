@@ -4,7 +4,7 @@
  * Most people never learn keyboard shortcuts, so "open settings", "show my command history",
  * "switch to zen mode", "search the terminal for ERROR" or "go to tab 2" work as plain requests.
  * Parsed without the model (the small local model would otherwise invent shell commands such as
- * `open -a "System Settings"`), then delivered to the window as a `sentinel:app-action` event
+ * `open -a "System Settings"`), then delivered to the window as a `cero:app-action` event
  * that App.tsx maps onto the same handlers the menus and shortcuts use.
  */
 
@@ -61,7 +61,7 @@ export function parseAppAction(goal: string): AppAction | null {
   const t = text.toLowerCase().replace(/^(?:please|can you|could you|pls)\s+/, '').replace(/\s+please$/, '');
 
   // Settings, by section
-  let m = t.match(new RegExp(`^(?:${OPEN}\\s+)?(?:the\\s+)?(?:app\\s+|sentinel\\s+)?(?:(ai|model|llm|provider|integrations?|desktop\\s+integrations?|terminal|appearance|general)\\s+)?(?:settings|preferences|prefs)(?:\\s+page|\\s+screen)?(?:\\s+for\\s+(ai|the\\s+model|models?|integrations?|the\\s+terminal))?$`));
+  let m = t.match(new RegExp(`^(?:${OPEN}\\s+)?(?:the\\s+)?(?:app\\s+|cero\\s+)?(?:(ai|model|llm|provider|integrations?|desktop\\s+integrations?|terminal|appearance|general)\\s+)?(?:settings|preferences|prefs)(?:\\s+page|\\s+screen)?(?:\\s+for\\s+(ai|the\\s+model|models?|integrations?|the\\s+terminal))?$`));
   if (m && (m[1] || m[2] || new RegExp(`^${OPEN}\\b`).test(t) || /^(?:settings|preferences)$/.test(t))) {
     const section = (m[1] || m[2] || '').replace(/^the\s+/, '');
     if (/^(?:ai|models?|llm|provider)$/.test(section)) return { id: 'settings_ai' };
@@ -132,6 +132,6 @@ export function requestAppAction(action: AppAction): boolean {
   if (typeof window === 'undefined' || typeof (window as any).dispatchEvent !== 'function' || typeof CustomEvent === 'undefined') {
     return false;
   }
-  window.dispatchEvent(new CustomEvent('sentinel:app-action', { detail: action }));
+  window.dispatchEvent(new CustomEvent('cero:app-action', { detail: action }));
   return true;
 }

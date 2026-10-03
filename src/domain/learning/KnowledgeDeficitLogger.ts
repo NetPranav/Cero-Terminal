@@ -1,18 +1,18 @@
 /**
  * KnowledgeDeficitLogger.ts — Runtime Knowledge Deficit Logger
  * 
- * Part of Sentinel-SERL (Self-Evolving Reflexion Loop):
+ * Part of Cero-SERL (Self-Evolving Reflexion Loop):
  * Intercepts when the model fails, produces an excuse, or outputs an unresolved answer
  * (e.g. "I can't detect how many ports are being used by antigravity").
  * Captures prompt, model output, environment context, and execution status,
- * and persists to ~/.sentinel/learning/knowledge_deficits.jsonl.
+ * and persists to ~/.cero/learning/knowledge_deficits.jsonl.
  * 
  * Feeds directly into:
  * - Phase 4.3: Autonomous Background Reflexion & Counterfactual Synthesis Engine
  * - Phase 4.4: Direct Preference Optimization (DPO) Pair Generator
  */
 
-import { writeSentinelFile } from '../../infrastructure/storage/SentinelFiles';
+import { writeCeroFile } from '../../infrastructure/storage/CeroFiles';
 import { invoke } from '@tauri-apps/api/core';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -83,7 +83,7 @@ export class KnowledgeDeficitLogger {
       const home = typeof process !== 'undefined'
         ? (process.env.HOME || process.env.USERPROFILE || '/tmp')
         : '/tmp';
-      this.storageFilePath = path.join(home, '.sentinel', 'learning', 'knowledge_deficits.jsonl');
+      this.storageFilePath = path.join(home, '.cero', 'learning', 'knowledge_deficits.jsonl');
     }
     this.loadDeficits();
   }
@@ -447,7 +447,7 @@ export class KnowledgeDeficitLogger {
     // 2. Tauri IPC fallback via base64 encoding
     try {
       const lines = records.map(r => JSON.stringify(r)).join('\n');
-      writeSentinelFile('learning/knowledge_deficits.jsonl', lines + '\n');
+      writeCeroFile('learning/knowledge_deficits.jsonl', lines + '\n');
     } catch {
       // Ignore
     }

@@ -1,7 +1,7 @@
 /**
  * ActivationSteeringManager.ts — Neural Activation Steering & Representation Engineering
  * 
- * Part of Sentinel-SERL (Self-Evolving Reflexion Loop):
+ * Part of Cero-SERL (Self-Evolving Reflexion Loop):
  * Breakthrough 3: Brain Surgery on the Residual Stream.
  * 
  * Steers intermediate transformer layer hidden activations (L14-L22) during token generation:
@@ -160,7 +160,7 @@ export class ActivationSteeringManager {
     };
 
     const homeDir = typeof process !== 'undefined' && process.env ? (process.env.HOME || process.env.USERPROFILE || '/tmp') : '/tmp';
-    this.storageFilePath = options?.storageFilePath || path.join(homeDir, '.sentinel', 'steering', 'steering_vectors.json');
+    this.storageFilePath = options?.storageFilePath || path.join(homeDir, '.cero', 'steering', 'steering_vectors.json');
 
     this.initializeDefaultVectors();
     this.loadFromDiskSync();
@@ -570,22 +570,22 @@ export class ActivationSteeringManager {
       {
         name: 'unix_mastery',
         desc: 'Direct UNIX kernel & POSIX execution authority direction (mdfind, lsof, launchctl)',
-        seed: 'sentinel_serl_unix_mastery_vector_v1',
+        seed: 'cero_serl_unix_mastery_vector_v1',
       },
       {
         name: 'refusal_suppression',
         desc: 'Conversational hesitation and apologetic chatbot evasion direction',
-        seed: 'sentinel_serl_refusal_suppression_vector_v1',
+        seed: 'cero_serl_refusal_suppression_vector_v1',
       },
       {
         name: 'conciseness',
         desc: 'Dense, clean single-line executable command output direction',
-        seed: 'sentinel_serl_conciseness_vector_v1',
+        seed: 'cero_serl_conciseness_vector_v1',
       },
       {
         name: 'safety_guard',
         desc: 'Direction steering away from unconfirmed system-destructive commands',
-        seed: 'sentinel_serl_safety_guard_vector_v1',
+        seed: 'cero_serl_safety_guard_vector_v1',
       },
     ];
 
@@ -653,7 +653,7 @@ export class ActivationSteeringManager {
    */
   public formatLlamaServerArgs(baseDir?: string): string[] {
     const homeDir = process.env.HOME || process.env.USERPROFILE || '/tmp';
-    const steeringDir = baseDir || path.join(homeDir, '.sentinel', 'steering');
+    const steeringDir = baseDir || path.join(homeDir, '.cero', 'steering');
     const args: string[] = [];
 
     const unixVecPath = path.join(steeringDir, 'unix_mastery.gguf');

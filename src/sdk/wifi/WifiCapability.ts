@@ -104,7 +104,7 @@ export class WifiCapability extends BaseCapability {
   }
 
   protected async verifyMock(ctx: CapabilityContext, execResult: CapabilityResult): Promise<VerificationResult> {
-    const ssid = String(ctx.actionNode.inputs.ssid || execResult.outputs.connectedSSID || 'Sentinel_5GHz_Network');
+    const ssid = String(ctx.actionNode.inputs.ssid || execResult.outputs.connectedSSID || 'Cero_5GHz_Network');
     return {
       success: true,
       verifiedOutputs: {

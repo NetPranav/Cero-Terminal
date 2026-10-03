@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Dotfile & Profile Sync Engine
+ * Cero — Dotfile & Profile Sync Engine
  *
  * Bundles themes, glassmorphism UI preferences, learned AI demonstration workflows,
  * and custom shell aliases into a portable profile JSON for multi-machine synchronization.
@@ -7,7 +7,7 @@
 
 import { DemonstrationLearningEngine } from '../learning/DemonstrationLearningEngine';
 
-export interface SentinelSyncBundle {
+export interface CeroSyncBundle {
   version: number;
   exportedAt: string;
   themeId: string;
@@ -32,7 +32,7 @@ export class DotfileSyncEngine {
    */
   public exportBundle(themeId = 'classic-dark', transparency = 0.82, blurLevel = 20): string {
     const patterns = DemonstrationLearningEngine.getInstance().getAllPatterns();
-    const bundle: SentinelSyncBundle = {
+    const bundle: CeroSyncBundle = {
       version: 1,
       exportedAt: new Date().toISOString(),
       themeId,
@@ -53,7 +53,7 @@ export class DotfileSyncEngine {
     error?: string;
   } {
     try {
-      const parsed: SentinelSyncBundle = JSON.parse(bundleJson);
+      const parsed: CeroSyncBundle = JSON.parse(bundleJson);
       if (!parsed || parsed.version !== 1) {
         return { success: false, restoredPatterns: 0, error: 'Unsupported bundle version' };
       }

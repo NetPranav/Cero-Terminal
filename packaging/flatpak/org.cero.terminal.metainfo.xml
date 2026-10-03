@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>org.sentinel.terminal</id>
+  <id>org.cero.terminal</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
-  <name>Sentinel Terminal</name>
+  <name>Cero</name>
   <summary>Autonomous AI-Native Linux Terminal Copilot</summary>
   <description>
     <p>
-      Sentinel Terminal is a high-performance AI-native Linux terminal emulator featuring
+      Cero is a high-performance AI-native Linux terminal emulator featuring
       embedded llama-server orchestration, deterministic multi-stage workflow replay,
       autonomous terminal actions with shadow PTY simulation, and native system diagnostics.
     </p>
@@ -19,9 +19,9 @@
       <li>Native Linux desktop integration with system metrics telemetry</li>
     </ul>
   </description>
-  <launchable type="desktop-id">org.sentinel.terminal.desktop</launchable>
-  <developer id="org.sentinel">
-    <name>Sentinel Terminal Contributors</name>
+  <launchable type="desktop-id">org.cero.terminal.desktop</launchable>
+  <developer id="org.cero">
+    <name>Cero Contributors</name>
   </developer>
   <categories>
     <category>Development</category>
@@ -29,13 +29,13 @@
     <category>TerminalEmulator</category>
   </categories>
   <provides>
-    <binary>sentinel-terminal</binary>
-    <mediatype>application/x-sentinel-workflow</mediatype>
+    <binary>cero-terminal</binary>
+    <mediatype>application/x-cero-workflow</mediatype>
   </provides>
   <releases>
     <release version="2.0.0" date="2026-09-18">
       <description>
-        <p>Sentinel Terminal 2.0.0 Linux production release with multi-distribution packaging.</p>
+        <p>Cero 2.0.0 Linux production release with multi-distribution packaging.</p>
       </description>
     </release>
   </releases>

@@ -26,9 +26,9 @@ describe('RetrievalEngine — Multi-Stage Hybrid Memory Retrieval', () => {
     retrieval = new RetrievalEngine(graph, policy, explain, telemetry);
 
     // Setup mock graph
-    graph.addNode(createNode('p1', 'Project', { name: 'Sentinel' }));
+    graph.addNode(createNode('p1', 'Project', { name: 'Cero' }));
     graph.addNode(createNode('p2', 'Project', { name: 'Apollo' }));
-    graph.addNode(createNode('r1', 'Repository', { url: 'github.com/sentinel' }));
+    graph.addNode(createNode('r1', 'Repository', { url: 'github.com/cero' }));
     graph.addNode(createNode('w1', 'Workflow', { name: 'Deploy' }));
     
     const e1: MemoryEdge = { id: 'e1', sourceId: 'p1', targetId: 'r1', relationship: 'uses', weight: 0.9, provenance: {} as any };

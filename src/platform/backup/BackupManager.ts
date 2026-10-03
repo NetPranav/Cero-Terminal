@@ -4,7 +4,7 @@
 
 export interface BackupManifest {
   readonly timestamp: number;
-  readonly sentinelVersion: string;
+  readonly ceroVersion: string;
   readonly components: string[];
 }
 
@@ -14,7 +14,7 @@ export class BackupManager {
   public async createBackup(components: string[]): Promise<BackupManifest> {
     const manifest: BackupManifest = {
       timestamp: Date.now(),
-      sentinelVersion: '3.0.0',
+      ceroVersion: '3.0.0',
       components
     };
     

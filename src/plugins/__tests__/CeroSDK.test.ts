@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { SentinelSDK } from '../sdk/SentinelSDK';
+import { CeroSDK } from '../sdk/CeroSDK';
 import { SDKBridge } from '../bridge/SDKBridge';
 import { PermissionManager } from '../permissions/PermissionManager';
 import { ExtensionPoints } from '../hooks/ExtensionPoints';
 
-describe('SentinelSDK & Bridge Integration', () => {
-  let sdk: SentinelSDK;
+describe('CeroSDK & Bridge Integration', () => {
+  let sdk: CeroSDK;
   let pm: PermissionManager;
   let ep: ExtensionPoints;
 
@@ -15,7 +15,7 @@ describe('SentinelSDK & Bridge Integration', () => {
     // Simulate plugin initialization
     pm.grantPermissions('p1', ['filesystem.read']);
     const bridge = new SDKBridge('p1', pm, ep);
-    sdk = new SentinelSDK(bridge);
+    sdk = new CeroSDK(bridge);
   });
 
   it('should allow filesystem read due to granted permission', async () => {

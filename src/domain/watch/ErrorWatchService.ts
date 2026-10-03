@@ -66,7 +66,7 @@ function tauriBackend(): WatchBackend {
     list: async () => (await core()).invoke('watch_list'),
     onLines: async (handler) => {
       const { listen } = await import('@tauri-apps/api/event');
-      return listen<{ id: number; lines: string[] }>('sentinel-watch-lines', e => handler(e.payload.id, e.payload.lines));
+      return listen<{ id: number; lines: string[] }>('cero-watch-lines', e => handler(e.payload.id, e.payload.lines));
     },
     run: async (command) => (await core()).invoke('execute_command', { command: 'sh', args: ['-c', command], timeoutMs: 30_000 }),
   };

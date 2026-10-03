@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Process & Port Manager
+ * Cero — Process & Port Manager
  *
  * Discovers active listening TCP/UDP ports, maps them to their owning PIDs
  * and process binaries, and provides safe, 1-click port clearing and process termination.
@@ -25,7 +25,7 @@ export function getPortMetadata(port: number, processName: string): {
   const pName = processName.toLowerCase();
 
   if (port === 8847 || pName.includes('llama')) {
-    return { category: 'AI Sidecar', description: 'Sentinel Embedded AI (llama.cpp Metal GPU)' };
+    return { category: 'AI Sidecar', description: 'Cero Embedded AI (llama.cpp Metal GPU)' };
   }
   if (port === 11434 || pName.includes('ollama')) {
     return { category: 'AI Sidecar', description: 'Ollama LLM Runtime Daemon' };
@@ -87,7 +87,7 @@ export class ProcessPortManager {
           protocol: 'TCP',
           status: 'LISTEN',
           category: 'AI Sidecar',
-          description: 'Sentinel Embedded AI (llama.cpp Metal GPU)'
+          description: 'Cero Embedded AI (llama.cpp Metal GPU)'
         }
       ];
     }

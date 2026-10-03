@@ -23,7 +23,7 @@ export class RecoveryAssistant {
     if (error.message.includes('EACCES')) {
       return {
         title: 'Permission Denied.',
-        reason: 'Sentinel lacks access to read or modify this directory.',
+        reason: 'Cero lacks access to read or modify this directory.',
         suggestedFix: 'Grant Directory Access',
         actionId: 'fix_permissions'
       };

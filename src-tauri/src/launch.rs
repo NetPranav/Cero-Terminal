@@ -18,7 +18,7 @@ static FLOW_OPENED: AtomicBool = AtomicBool::new(false);
 
 pub fn is_flow_path(p: &str) -> bool {
     let lower = p.to_lowercase();
-    lower.ends_with(".flow") || lower.ends_with(".workflow.json") || lower.ends_with(".sentinel-workflow.json")
+    lower.ends_with(".flow") || lower.ends_with(".workflow.json") || lower.ends_with(".cero-workflow.json")
 }
 
 pub fn launched_with_flow() -> bool {
@@ -126,7 +126,7 @@ mod tests {
         assert!(is_flow_path("C:\\Users\\me\\Setup.FLOW"));
         assert!(is_flow_path("file:///tmp/deploy.workflow.json"));
         assert!(!is_flow_path("/tmp/package.json"));
-        assert!(!is_flow_path("sentinel://open?path=/tmp"));
+        assert!(!is_flow_path("cero://open?path=/tmp"));
     }
 
     #[test]
@@ -142,7 +142,7 @@ mod tests {
         let _ = File::create(&txt_file);
 
         let argv = vec![
-            "sentinel-terminal".to_string(),
+            "cero-terminal".to_string(),
             "--some-flag".to_string(),
             "-f".to_string(),
             flow_file.to_string_lossy().to_string(),

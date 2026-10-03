@@ -23,7 +23,7 @@ describe('ContextBudget', () => {
   });
 
   it('keeps system prompt whole and keeps newest user message', () => {
-    const system = 'You are Sentinel AI rules prompt.';
+    const system = 'You are Cero AI rules prompt.';
     const history = [
       { role: 'user', content: 'older question' },
       { role: 'assistant', content: 'older answer' },

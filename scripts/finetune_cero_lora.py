@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Sentinel Terminal — Autonomous LoRA Fine-Tuning Pipeline (Tier 3)
+Cero — Autonomous LoRA Fine-Tuning Pipeline (Tier 3)
 
 Trains a lightweight LoRA adapter on your personal terminal interactions,
 human demonstrations, and self-healed shell workflows.
 
-Dataset source: ~/.sentinel/training/sentinel_shell_dataset.jsonl
+Dataset source: ~/.cero/training/cero_shell_dataset.jsonl
 Target model: Qwen/Qwen2.5-Coder-3B-Instruct
-Output adapter: ~/.sentinel/models/sentinel_custom_lora
+Output adapter: ~/.cero/models/cero_custom_lora
 """
 
 import os
@@ -17,7 +17,7 @@ import argparse
 from pathlib import Path
 
 def main():
-    parser = argparse.ArgumentParser(description="Sentinel LoRA Fine-Tuning Script")
+    parser = argparse.ArgumentParser(description="Cero LoRA Fine-Tuning Script")
     parser.add_argument("--epochs", type=int, default=3, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=2, help="Per device batch size")
     parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate")
@@ -25,19 +25,19 @@ def main():
     args = parser.parse_args()
 
     home = Path.home()
-    dataset_path = home / ".sentinel" / "training" / "sentinel_shell_dataset.jsonl"
-    output_dir = home / ".sentinel" / "models" / "sentinel_custom_lora"
+    dataset_path = home / ".cero" / "training" / "cero_shell_dataset.jsonl"
+    output_dir = home / ".cero" / "models" / "cero_custom_lora"
 
     print("=" * 60)
-    print("⚡ Sentinel Terminal — Continuous On-Device LoRA Fine-Tuner")
+    print("⚡ Cero — Continuous On-Device LoRA Fine-Tuner")
     print("=" * 60)
     print(f"Dataset path: {dataset_path}")
     print(f"Output path:  {output_dir}")
 
     if not dataset_path.exists() or dataset_path.stat().st_size == 0:
-        print("\n⚠️ No training samples found yet in ~/.sentinel/training/sentinel_shell_dataset.jsonl")
+        print("\n⚠️ No training samples found yet in ~/.cero/training/cero_shell_dataset.jsonl")
         print("To generate training samples:")
-        print("  1. Use Sentinel Terminal for daily tasks (every verified command is logged).")
+        print("  1. Use Cero for daily tasks (every verified command is logged).")
         print("  2. Demonstrate commands when AI asks (/learn or typing working commands).")
         print("  3. Run this script once you have accumulated 20+ demonstrated interactions.")
         sys.exit(0)
@@ -125,7 +125,7 @@ def main():
     print("\n🎉 LoRA Fine-Tuning Complete!")
     print(f"Your model adapter is saved at: {output_dir}")
     print("\nTo launch llama-server with your personal LoRA adapter:")
-    print(f"  llama-server -m ~/.sentinel/models/qwen2.5-coder-3b-instruct-q4_k_m.gguf --lora {output_dir}")
+    print(f"  llama-server -m ~/.cero/models/qwen2.5-coder-3b-instruct-q4_k_m.gguf --lora {output_dir}")
 
 if __name__ == "__main__":
     main()

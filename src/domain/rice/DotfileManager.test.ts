@@ -30,9 +30,9 @@ exec-once = nm-applet
 
     expect(result.success).toBe(true);
     expect(result.actionTaken).toContain('Commented out autostart for "gazebo"');
-    expect(writtenFile).toContain('# exec-once = gazebo & # Disabled by Sentinel');
+    expect(writtenFile).toContain('# exec-once = gazebo & # Disabled by Cero');
     expect(result.diff).toContain('- exec-once = gazebo &');
-    expect(result.diff).toContain('+ # exec-once = gazebo & # Disabled by Sentinel');
+    expect(result.diff).toContain('+ # exec-once = gazebo & # Disabled by Cero');
     expect(backupCreated).toContain('hyprland.conf.bak_');
   });
 
@@ -40,7 +40,7 @@ exec-once = nm-applet
     const commentedConf = `
 # Autostart
 exec-once = waybar
-# exec-once = gazebo & # Disabled by Sentinel
+# exec-once = gazebo & # Disabled by Cero
 `;
 
     let writtenFile = '';
@@ -58,7 +58,7 @@ exec-once = waybar
     expect(result.success).toBe(true);
     expect(result.actionTaken).toContain('Uncommented autostart for "gazebo"');
     expect(writtenFile).toContain('exec-once = gazebo &');
-    expect(writtenFile).not.toContain('Disabled by Sentinel');
+    expect(writtenFile).not.toContain('Disabled by Cero');
   });
 
   it('appends a new autostart directive if target is not currently present in config', async () => {
@@ -103,7 +103,7 @@ exec --no-startup-id gazebo
     const result = await DotfileManager.toggleAutostart('gazebo', false, 'i3', mockIO, '/home/user');
 
     expect(result.success).toBe(true);
-    expect(writtenFile).toContain('# exec --no-startup-id gazebo # Disabled by Sentinel');
+    expect(writtenFile).toContain('# exec --no-startup-id gazebo # Disabled by Cero');
   });
 
   it('supports universal XDG desktop autostart entry generation for GNOME/KDE/XFCE', async () => {

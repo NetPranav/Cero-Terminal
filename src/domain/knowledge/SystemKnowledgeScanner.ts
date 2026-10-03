@@ -1,5 +1,5 @@
 /**
- * SystemKnowledgeScanner.ts — what Sentinel knows about this machine.
+ * SystemKnowledgeScanner.ts — what Cero knows about this machine.
  *
  * One batched shell script collects the profile (distro, kernel, desktop session, CPU/RAM, GPU
  * vendor, installed apps, toolchains, package managers, ROS 2 installs, shells, services). It
@@ -65,7 +65,7 @@ export interface HardwareProfileInfo {
 export interface RosInstallInfo {
   /** Installed distros under /opt/ros (e.g. humble, jazzy) */
   distros: string[];
-  /** ROS_DISTRO from the environment Sentinel was started in */
+  /** ROS_DISTRO from the environment Cero was started in */
   activeDistro?: string;
 }
 
@@ -368,7 +368,7 @@ export class SystemKnowledgeScanner {
   private static instance: SystemKnowledgeScanner;
   private cachedProfile: SystemProfile | null = null;
   private isScanning = false;
-  private static readonly STORAGE_KEY = 'sentinel_system_profile';
+  private static readonly STORAGE_KEY = 'cero_system_profile';
   /** Rescan at least this often even if the fingerprint did not change */
   private static readonly MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7;
 

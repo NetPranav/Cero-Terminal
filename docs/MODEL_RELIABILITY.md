@@ -1,6 +1,6 @@
-# Sentinel Terminal — Model Reliability Benchmark & Tracking
+# Cero — Model Reliability Benchmark & Tracking
 
-Tracks the reliability, determinism, and tool-calling accuracy of Sentinel Terminal's built-in local models and provider backends.
+Tracks the reliability, determinism, and tool-calling accuracy of Cero's built-in local models and provider backends.
 
 ---
 

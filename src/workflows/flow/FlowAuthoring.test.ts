@@ -80,8 +80,8 @@ describe('draftFlow', () => {
   });
 
   it('opens a folder by path, and never mistakes a folder phrase for an app', () => {
-    const d = draftFlow(['open textedit', 'open ~/sentinel-demo', 'open the demo folder', 'open ~/Downloads']);
-    expect(d.actions.map(a => [a.type, a.app ?? a.path])).toEqual([['app', 'textedit'], ['folder', '~/sentinel-demo'], ['folder', '~/Downloads']]);
+    const d = draftFlow(['open textedit', 'open ~/cero-demo', 'open the demo folder', 'open ~/Downloads']);
+    expect(d.actions.map(a => [a.type, a.app ?? a.path])).toEqual([['app', 'textedit'], ['folder', '~/cero-demo'], ['folder', '~/Downloads']]);
     expect(d.unrecognised).toEqual(['open the demo folder']);
   });
 

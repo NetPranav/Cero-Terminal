@@ -6,6 +6,7 @@ mod downloads;
 mod launch;
 mod path_search;
 mod secrets;
+mod legacy_migration;
 mod file_association;
 pub mod logger;
 
@@ -35,7 +36,7 @@ fn request_bluetooth_permission() {
 #[cfg(not(target_os = "macos"))]
 fn request_bluetooth_permission() {}
 
-/// macOS asks "Sentinel Terminal would like to use Bluetooth" the first time CoreBluetooth is touched.
+/// macOS asks "Cero would like to use Bluetooth" the first time CoreBluetooth is touched.
 /// That used to happen at every launch, before anyone had asked for anything Bluetooth-related; now the
 /// app calls this only when a Bluetooth request is made.
 #[tauri::command]
@@ -46,7 +47,7 @@ fn request_bluetooth_access() {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     logger::init();
-    logger::log_info("BOOT", "Initializing Sentinel Terminal runtime");
+    logger::log_info("BOOT", "Initializing Cero runtime");
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             use tauri::Emitter;
@@ -54,13 +55,15 @@ pub fn run() {
             let flow_files = launch::filter_flow_argv(&argv);
             if !flow_files.is_empty() {
                 launch::remember_opened(app, &flow_files);
-                let _ = app.emit("sentinel-url", &flow_files);
+                let _ = app.emit("cero-url", &flow_files);
             } else {
                 launch::show_main(app);
             }
         }))
         .setup(|app| {
             logger::log_info("SETUP", "Initializing core application services");
+            // before anything reads ~/.cero: bring an older ~/.sentinel across
+            legacy_migration::migrate_legacy_data();
             process_cmds::ensure_private_data_dir();
             file_association::ensure_registered(app.handle());
             // A previous instance that crashed or was killed can leave its model server running
@@ -100,7 +103,7 @@ pub fn run() {
                 let handle = app.handle();
 
                 // 1. App Submenu
-                let app_menu = Submenu::with_items(handle, "Sentinel Terminal", true, &[
+                let app_menu = Submenu::with_items(handle, "Cero", true, &[
                     &PredefinedMenuItem::about(handle, None, None)?,
                     &PredefinedMenuItem::separator(handle)?,
                     &PredefinedMenuItem::services(handle, None)?,
@@ -213,10 +216,10 @@ pub fn run() {
             secrets::secret_set,
             secrets::secret_get,
             secrets::secret_delete,
-            process_cmds::sentinel_store_snapshot,
-            process_cmds::sentinel_store_append,
-            process_cmds::sentinel_store_write,
-            process_cmds::sentinel_store_remove,
+            process_cmds::cero_store_snapshot,
+            process_cmds::cero_store_append,
+            process_cmds::cero_store_write,
+            process_cmds::cero_store_remove,
             watcher::watch_file_start,
             watcher::watch_service_start,
             watcher::watch_stop,
@@ -230,10 +233,10 @@ pub fn run() {
             embedded_server::cancel_session_requests,
             embedded_server::get_inference_queue_status,
             embedded_server::verify_file_checksum,
-            downloads::download_sentinel_file,
-            downloads::get_sentinel_download_status,
-            downloads::cancel_sentinel_download,
-            downloads::install_sentinel_engine,
+            downloads::download_cero_file,
+            downloads::get_cero_download_status,
+            downloads::cancel_cero_download,
+            downloads::install_cero_engine,
             launch::take_opened_files,
             launch::show_main_window,
             launch::is_main_window_visible,
@@ -262,10 +265,10 @@ pub fn run() {
         .run(|app_handle, event| {
             match event {
                 tauri::RunEvent::Ready => {
-                    logger::log_info("APP", "Sentinel Terminal application runtime READY");
+                    logger::log_info("APP", "Cero application runtime READY");
                 }
                 tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
-                    logger::log_info("APP", "Sentinel Terminal application runtime EXIT");
+                    logger::log_info("APP", "Cero application runtime EXIT");
                     use tauri::Manager;
                     if let Some(state) = app_handle.try_state::<embedded_server::EmbeddedLlmState>() {
                         embedded_server::terminate_embedded_llm_child(&state);
@@ -277,7 +280,7 @@ pub fn run() {
                     let url_strings: Vec<String> = urls.into_iter().map(|u| u.to_string()).collect();
                     logger::log_info("URL", &format!("Opened via protocol handler: {:?}", url_strings));
                     launch::remember_opened(app_handle, &url_strings);
-                    let _ = app_handle.emit("sentinel-url", url_strings);
+                    let _ = app_handle.emit("cero-url", url_strings);
                 }
                 _ => {}
             }

@@ -2,7 +2,7 @@
  * ReleaseMetadata.ts — Build hashes and schemas
  */
 
-export interface SentinelRelease {
+export interface CeroRelease {
   readonly version: string;
   readonly buildHash: string;
   readonly gitCommit: string;
@@ -16,7 +16,7 @@ export interface SentinelRelease {
 }
 
 export class ReleaseMetadata {
-  public static getInfo(): SentinelRelease {
+  public static getInfo(): CeroRelease {
     // In production, these values are injected via Webpack/Vite build envs
     return {
       version: '3.0.0',

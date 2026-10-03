@@ -1,14 +1,14 @@
 /**
- * fsPolyfill.ts — synchronous `fs` for the Tauri webview, backed by ~/.sentinel.
+ * fsPolyfill.ts — synchronous `fs` for the Tauri webview, backed by ~/.cero.
  *
  * Several learning stores (knowledge deficits, DPO pairs, steering vectors, dream records, the
  * model manifest) were written against Node's synchronous fs. In the webview `fs` used to be a
  * no-op, so none of them ever persisted or reloaded. Now:
- * - hydrateSentinelStore() loads the small .json/.jsonl files under ~/.sentinel once at startup;
- * - reads of any path containing "/.sentinel/" are served from that cache;
+ * - hydrateCeroStore() loads the small .json/.jsonl files under ~/.cero once at startup;
+ * - reads of any path containing "/.cero/" are served from that cache;
  * - writes and appends update the cache and are persisted by Rust commands confined to
- *   ~/.sentinel.
- * Paths outside ~/.sentinel behave as before (absent / no-op).
+ *   ~/.cero.
+ * Paths outside ~/.cero behave as before (absent / no-op).
  */
 
 type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
@@ -16,11 +16,11 @@ type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 const cache = new Map<string, string>();
 let invokeFn: Invoke | null = null;
 
-/** "/home/u/.sentinel/learning/x.jsonl" (or "/tmp/.sentinel/...") -> "learning/x.jsonl" */
-export function sentinelRelativePath(filePath: unknown): string | null {
+/** "/home/u/.cero/learning/x.jsonl" (or "/tmp/.cero/...") -> "learning/x.jsonl" */
+export function ceroRelativePath(filePath: unknown): string | null {
   if (typeof filePath !== 'string') return null;
   const normalized = filePath.replace(/\\/g, '/');
-  const marker = '/.sentinel/';
+  const marker = '/.cero/';
   const idx = normalized.indexOf(marker);
   if (idx === -1) return null;
   const rel = normalized.slice(idx + marker.length).replace(/^\/+/, '');
@@ -31,11 +31,11 @@ function persist(command: string, args: Record<string, unknown>): void {
   invokeFn?.(command, args).catch(err => console.warn(`[fsPolyfill] ${command} failed:`, err));
 }
 
-/** Load ~/.sentinel state into the cache. Safe to call outside Tauri (it simply does nothing). */
-export async function hydrateSentinelStore(invoke?: Invoke): Promise<number> {
+/** Load ~/.cero state into the cache. Safe to call outside Tauri (it simply does nothing). */
+export async function hydrateCeroStore(invoke?: Invoke): Promise<number> {
   try {
     invokeFn = invoke ?? (await import('@tauri-apps/api/core')).invoke;
-    const snapshot = await invokeFn<{ home: string; files: Record<string, string> }>('sentinel_store_snapshot');
+    const snapshot = await invokeFn<{ home: string; files: Record<string, string> }>('cero_store_snapshot');
     for (const [rel, content] of Object.entries(snapshot.files || {})) cache.set(rel, content);
     return cache.size;
   } catch {
@@ -44,13 +44,13 @@ export async function hydrateSentinelStore(invoke?: Invoke): Promise<number> {
 }
 
 /** Test helper */
-export function __resetSentinelStore(): void {
+export function __resetCeroStore(): void {
   cache.clear();
   invokeFn = null;
 }
 
 export function existsSync(filePath?: unknown): boolean {
-  const rel = sentinelRelativePath(filePath);
+  const rel = ceroRelativePath(filePath);
   if (rel === null) return false;
   if (cache.has(rel)) return true;
   const prefix = `${rel.replace(/\/+$/, '')}/`;
@@ -59,31 +59,31 @@ export function existsSync(filePath?: unknown): boolean {
 }
 
 export function readFileSync(filePath?: unknown): string {
-  const rel = sentinelRelativePath(filePath);
+  const rel = ceroRelativePath(filePath);
   return rel === null ? '' : (cache.get(rel) ?? '');
 }
 
 export function writeFileSync(filePath?: unknown, data?: unknown): void {
-  const rel = sentinelRelativePath(filePath);
+  const rel = ceroRelativePath(filePath);
   if (rel === null) return;
   const contents = typeof data === 'string' ? data : String(data ?? '');
   cache.set(rel, contents);
-  persist('sentinel_store_write', { relativePath: rel, contents });
+  persist('cero_store_write', { relativePath: rel, contents });
 }
 
 export function appendFileSync(filePath?: unknown, data?: unknown): void {
-  const rel = sentinelRelativePath(filePath);
+  const rel = ceroRelativePath(filePath);
   if (rel === null) return;
   const contents = typeof data === 'string' ? data : String(data ?? '');
   cache.set(rel, (cache.get(rel) ?? '') + contents);
-  persist('sentinel_store_append', { relativePath: rel, contents });
+  persist('cero_store_append', { relativePath: rel, contents });
 }
 
 export function unlinkSync(filePath?: unknown): void {
-  const rel = sentinelRelativePath(filePath);
+  const rel = ceroRelativePath(filePath);
   if (rel === null) return;
   cache.delete(rel);
-  persist('sentinel_store_remove', { relativePath: rel });
+  persist('cero_store_remove', { relativePath: rel });
 }
 
 export function rmdirSync(): void {
@@ -91,7 +91,7 @@ export function rmdirSync(): void {
 }
 
 export function copyFileSync(from?: unknown, to?: unknown): void {
-  const src = sentinelRelativePath(from);
+  const src = ceroRelativePath(from);
   if (src !== null && cache.has(src)) writeFileSync(to, cache.get(src));
 }
 
@@ -100,7 +100,7 @@ export function mkdirSync(): void {
 }
 
 export function readdirSync(dirPath?: unknown): string[] {
-  const rel = sentinelRelativePath(typeof dirPath === 'string' ? `${dirPath.replace(/\/+$/, '')}/` : dirPath);
+  const rel = ceroRelativePath(typeof dirPath === 'string' ? `${dirPath.replace(/\/+$/, '')}/` : dirPath);
   const prefix = rel === null ? null : (rel ? `${rel.replace(/\/+$/, '')}/` : '');
   if (prefix === null) return [];
   const names = new Set<string>();
@@ -111,7 +111,7 @@ export function readdirSync(dirPath?: unknown): string[] {
 }
 
 export function statSync(filePath?: unknown): { isFile: () => boolean; isDirectory: () => boolean; size: number } {
-  const rel = sentinelRelativePath(filePath);
+  const rel = ceroRelativePath(filePath);
   const isFile = rel !== null && cache.has(rel);
   const isDirectory = !isFile && existsSync(filePath);
   return { isFile: () => isFile, isDirectory: () => isDirectory, size: isFile ? cache.get(rel!)!.length : 0 };

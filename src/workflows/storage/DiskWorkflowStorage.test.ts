@@ -10,7 +10,7 @@ describe('DiskWorkflowStorage (Schema-Versioned Persistence)', () => {
   let storage: DiskWorkflowStorage;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-wf-test-'));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-wf-test-'));
     storage = new DiskWorkflowStorage(tempDir);
   });
 
@@ -301,7 +301,7 @@ describe('DiskWorkflowStorage.toShellPath', () => {
     expect(storage.toShellPath('/tmp/wf/a.flow')).toBe("'/tmp/wf/a.flow'");
     expect(storage.toShellPath('/tmp/wf/$(touch x)`id`.flow')).toBe("'/tmp/wf/$(touch x)`id`.flow'");
     expect(storage.toShellPath("/tmp/it's.flow")).toBe("'/tmp/it'\\''s.flow'");
-    expect(storage.toShellPath('~/.sentinel/w$(x).flow')).toBe(`"$HOME"/'.sentinel/w$(x).flow'`);
+    expect(storage.toShellPath('~/.cero/w$(x).flow')).toBe(`"$HOME"/'.cero/w$(x).flow'`);
     expect(storage.toShellPath('~')).toBe('"$HOME"');
   });
 });

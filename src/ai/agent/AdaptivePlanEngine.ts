@@ -139,7 +139,7 @@ export class AdaptivePlanEngine {
           id: '1',
           title: preambleText,
           tool: 'shell.execute',
-          params: { command: resolvedPreambleCmd || `mkdir -p /tmp/sentinel-workflow-test`, explanation: preambleText },
+          params: { command: resolvedPreambleCmd || `mkdir -p /tmp/cero-workflow-test`, explanation: preambleText },
           status: 'pending'
         });
       }
@@ -1038,7 +1038,7 @@ export class AdaptivePlanEngine {
   }
 
   private buildPhasePlanningPrompt(goal: string, context: { os: string; cwd: string }): string {
-    return `You are Sentinel's Core Workflow Planner on ${context.os}. Current directory: ${context.cwd}
+    return `You are Cero's Core Workflow Planner on ${context.os}. Current directory: ${context.cwd}
 
 Break the user request into clear, sequential execution phases to accomplish the goal completely.
 Each phase MUST include the exact bash shell command to execute.

@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Error Diagnostics Engine
+ * Cero — Error Diagnostics Engine
  *
  * Inspects execution failures (stderr, non-zero exit codes, error payloads) and
  * determines whether an error is autonomously software-recoverable via self-healing
@@ -146,7 +146,7 @@ export class ErrorDiagnosticsEngine {
   }
 
   /**
-   * Detect software-recoverable errors that Sentinel can automatically heal via sub-phases.
+   * Detect software-recoverable errors that Cero can automatically heal via sub-phases.
    */
   private static checkSoftwareRecoverable(
     lower: string,

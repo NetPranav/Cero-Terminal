@@ -1,7 +1,7 @@
-export type SentinelActionType = 'open' | 'workspace' | 'run' | 'new-tab' | 'split' | 'noop';
+export type CeroActionType = 'open' | 'workspace' | 'run' | 'new-tab' | 'split' | 'noop';
 
-export interface SentinelUrlAction {
-  type: SentinelActionType;
+export interface CeroUrlAction {
+  type: CeroActionType;
   path?: string;
   command?: string;
   rawUrl: string;
@@ -20,9 +20,9 @@ export class UrlSchemeHandler {
   }
 
   /**
-   * Parse a sentinel:// URL or direct POSIX path into an actionable terminal instruction.
+   * Parse a cero:// URL or direct POSIX path into an actionable terminal instruction.
    */
-  public parse(input: string): SentinelUrlAction {
+  public parse(input: string): CeroUrlAction {
     const cleanInput = input.trim();
     if (!cleanInput) {
       return { type: 'noop', rawUrl: input };
@@ -53,13 +53,13 @@ export class UrlSchemeHandler {
       };
     }
 
-    if (!cleanInput.startsWith('sentinel://') && !cleanInput.startsWith('sentinel:')) {
+    if (!cleanInput.startsWith('cero://') && !cleanInput.startsWith('cero:')) {
       return { type: 'noop', rawUrl: input };
     }
 
     try {
       // Normalise URL string if custom handler lacks double slash
-      const urlStr = cleanInput.startsWith('sentinel://') ? cleanInput : cleanInput.replace('sentinel:', 'sentinel://');
+      const urlStr = cleanInput.startsWith('cero://') ? cleanInput : cleanInput.replace('cero:', 'cero://');
       const url = new URL(urlStr);
       const action = url.hostname || url.pathname.replace(/^\//, '');
       const searchParams = url.searchParams;
@@ -104,7 +104,7 @@ export class UrlSchemeHandler {
 
       return { type: 'open', rawUrl: input };
     } catch (e) {
-      console.warn('Failed to parse Sentinel URI scheme:', input, e);
+      console.warn('Failed to parse Cero URI scheme:', input, e);
       return { type: 'noop', rawUrl: input };
     }
   }
@@ -112,7 +112,7 @@ export class UrlSchemeHandler {
   /**
    * Parse a collection of URLs or argument strings, returning valid actions.
    */
-  public parseMany(inputs: string[]): SentinelUrlAction[] {
+  public parseMany(inputs: string[]): CeroUrlAction[] {
     return inputs
       .map(i => this.parse(i))
       .filter(action => action.type !== 'noop');

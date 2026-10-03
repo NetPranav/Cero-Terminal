@@ -31,7 +31,7 @@ export class DatasetGenerator {
 
       if (rec.type === 'SUCCESSFUL_MATCH' && rec.metadata && rec.metadata.plan) {
         trainingItems.push({
-          instruction: `Convert natural language into a structured Sentinel Tool Registry execution plan.`,
+          instruction: `Convert natural language into a structured Cero Tool Registry execution plan.`,
           input: rec.userQuery,
           output: JSON.stringify(rec.metadata.plan),
           split

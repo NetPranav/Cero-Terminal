@@ -112,13 +112,13 @@ describe('PromptProgressManager', () => {
     expect(state.success).toBe(false);
   });
 
-  it('broadcasts sentinel:prompt-progress events', () => {
+  it('broadcasts cero:prompt-progress events', () => {
     const receivedEvents: PromptProgressState[] = [];
     const handler = (e: any) => {
       receivedEvents.push(e.detail);
     };
 
-    window.addEventListener('sentinel:prompt-progress', handler);
+    window.addEventListener('cero:prompt-progress', handler);
 
     manager.startPrompt('test prompt broadcast');
     expect(receivedEvents.length).toBeGreaterThan(0);
@@ -130,7 +130,7 @@ describe('PromptProgressManager', () => {
     manager.completePrompt(true);
     expect(receivedEvents[receivedEvents.length - 1].percent).toBe(100);
 
-    window.removeEventListener('sentinel:prompt-progress', handler);
+    window.removeEventListener('cero:prompt-progress', handler);
   });
 
   it('resets to idle automatically after completion period', () => {

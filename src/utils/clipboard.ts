@@ -1,5 +1,5 @@
 /**
- * clipboard.ts — Unified Native & Web Clipboard Management for Sentinel Terminal
+ * clipboard.ts — Unified Native & Web Clipboard Management for Cero
  * 
  * Provides robust clipboard access across desktop Linux (Wayland wl-clipboard / X11),
  * macOS, and Windows via Tauri's native clipboard plugin, with fallback to Web API

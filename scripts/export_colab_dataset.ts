@@ -1,17 +1,17 @@
 /**
- * export_colab_dataset.ts — Sentinel Unified Training Dataset Exporter for Google Colab
+ * export_colab_dataset.ts — Cero Unified Training Dataset Exporter for Google Colab
  * 
  * Aggregates all on-device intelligence datasets:
- * 1. Runtime DPO preference pairs (~/.sentinel/training/sentinel_dpo_pairs.jsonl)
- * 2. Knowledge Deficit counterfactual resolutions (~/.sentinel/learning/knowledge_deficits.jsonl)
+ * 1. Runtime DPO preference pairs (~/.cero/training/cero_dpo_pairs.jsonl)
+ * 2. Knowledge Deficit counterfactual resolutions (~/.cero/learning/knowledge_deficits.jsonl)
  * 3. Offline TLDR Knowledge Engine canonical macOS/POSIX CLI recipes (250+ recipes)
  * 4. Deterministic Rule Oracle battle-tested remediation rules (59 rules)
  * 5. Episodic memory & verified human demonstrations
  * 
  * Generates:
- * - dist_dataset/sentinel_sft_dataset.jsonl (ChatML format for SFT / LoRA)
- * - dist_dataset/sentinel_dpo_dataset.jsonl (Prompt/Chosen/Rejected format for DPO)
- * - dist_dataset/sentinel_training_package.zip (Self-contained zip for 1-click Colab upload)
+ * - dist_dataset/cero_sft_dataset.jsonl (ChatML format for SFT / LoRA)
+ * - dist_dataset/cero_dpo_dataset.jsonl (Prompt/Chosen/Rejected format for DPO)
+ * - dist_dataset/cero_training_package.zip (Self-contained zip for 1-click Colab upload)
  */
 
 import * as fs from 'fs';
@@ -20,7 +20,7 @@ import { execSync } from 'child_process';
 import { TldrKnowledgeEngine } from '../src/domain/knowledge/TldrKnowledgeEngine';
 import { DeterministicRuleOracle } from '../src/domain/remediation/DeterministicRuleOracle';
 
-const SYSTEM_PROMPT = 'You are Sentinel, an autonomous on-device terminal copilot on macOS and Linux. You directly execute verified shell commands. Output strictly valid JSON matching: {"action": "execute", "command": "<cmd>", "explanation": "<brief reason>"}.';
+const SYSTEM_PROMPT = 'You are Cero, an autonomous on-device terminal copilot on macOS and Linux. You directly execute verified shell commands. Output strictly valid JSON matching: {"action": "execute", "command": "<cmd>", "explanation": "<brief reason>"}.';
 
 const REFUSAL_TEMPLATES = [
   "I cannot assist with executing terminal commands directly on your system.",
@@ -66,7 +66,7 @@ function formatAssistantAction(cmd: string, explanation: string): string {
   });
 }
 
-export function compileSentinelDatasets(outputDir: string): {
+export function compileCeroDatasets(outputDir: string): {
   sftCount: number;
   dpoCount: number;
   sftPath: string;
@@ -78,10 +78,10 @@ export function compileSentinelDatasets(outputDir: string): {
   const seenPrompts = new Set<string>();
 
   const homeDir = process.env.HOME || '/tmp';
-  const sentinelDir = path.join(homeDir, '.sentinel');
+  const ceroDir = path.join(homeDir, '.cero');
 
   // 1. Read existing DPO pairs from disk
-  const dpoFile = path.join(sentinelDir, 'training', 'sentinel_dpo_pairs.jsonl');
+  const dpoFile = path.join(ceroDir, 'training', 'cero_dpo_pairs.jsonl');
   if (fs.existsSync(dpoFile)) {
     const lines = fs.readFileSync(dpoFile, 'utf-8').split('\n').filter(l => l.trim().length > 0);
     for (const line of lines) {
@@ -113,7 +113,7 @@ export function compileSentinelDatasets(outputDir: string): {
   }
 
   // 2. Read Knowledge Deficit counterfactual resolutions
-  const deficitsFile = path.join(sentinelDir, 'learning', 'knowledge_deficits.jsonl');
+  const deficitsFile = path.join(ceroDir, 'learning', 'knowledge_deficits.jsonl');
   if (fs.existsSync(deficitsFile)) {
     const lines = fs.readFileSync(deficitsFile, 'utf-8').split('\n').filter(l => l.trim().length > 0);
     for (const line of lines) {
@@ -299,14 +299,14 @@ export function compileSentinelDatasets(outputDir: string): {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  const sftPath = path.join(outputDir, 'sentinel_sft_dataset.jsonl');
-  const dpoPath = path.join(outputDir, 'sentinel_dpo_dataset.jsonl');
+  const sftPath = path.join(outputDir, 'cero_sft_dataset.jsonl');
+  const dpoPath = path.join(outputDir, 'cero_dpo_dataset.jsonl');
 
   fs.writeFileSync(sftPath, sftRecords.map(r => JSON.stringify(r)).join('\n') + '\n', 'utf-8');
   fs.writeFileSync(dpoPath, dpoRecords.map(r => JSON.stringify(r)).join('\n') + '\n', 'utf-8');
 
   // Package into zip
-  const zipPath = path.join(outputDir, 'sentinel_training_package.zip');
+  const zipPath = path.join(outputDir, 'cero_training_package.zip');
   try {
     execSync(`cd "${outputDir}" && zip -j "${path.basename(zipPath)}" "${path.basename(sftPath)}" "${path.basename(dpoPath)}"`, { stdio: 'pipe' });
   } catch {
@@ -327,10 +327,10 @@ const isMain = typeof require !== 'undefined' && require.main === module;
 if (isMain || process.argv[1]?.includes('export_colab_dataset')) {
   const targetDir = path.resolve(process.cwd(), 'training_export');
   console.log('='.repeat(60));
-  console.log('⚡ Sentinel Terminal — Colab Dataset Compilation Pipeline');
+  console.log('⚡ Cero — Colab Dataset Compilation Pipeline');
   console.log('='.repeat(60));
 
-  const result = compileSentinelDatasets(targetDir);
+  const result = compileCeroDatasets(targetDir);
 
   console.log(`✓ SFT Training Samples:  ${result.sftCount}`);
   console.log(`✓ DPO Preference Pairs:  ${result.dpoCount}`);

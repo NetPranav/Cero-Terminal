@@ -83,18 +83,18 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     };
 
     fetchAiStatus();
-    // Status changes are also pushed via 'sentinel:ai-status-changed'; the poll is a slow backstop
+    // Status changes are also pushed via 'cero:ai-status-changed'; the poll is a slow backstop
     const interval = setInterval(fetchAiStatus, 10_000);
     const handleStatusChanged = () => {
       fetchAiStatus();
       setActiveModel(ModelManager.getInstance().getActiveModel());
     };
-    window.addEventListener('sentinel:ai-status-changed', handleStatusChanged);
+    window.addEventListener('cero:ai-status-changed', handleStatusChanged);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
-      window.removeEventListener('sentinel:ai-status-changed', handleStatusChanged);
+      window.removeEventListener('cero:ai-status-changed', handleStatusChanged);
     };
   }, []);
 

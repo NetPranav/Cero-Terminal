@@ -4,14 +4,14 @@ import { MultistagePromptDecomposer } from '../../workflows/engine/MultistagePro
 import { LocalIntentClassifier } from '../models/IntentModel';
 
 describe('Issue 2: Complex Multi-Step Workflow Planning & Execution', () => {
-  const complexPrompt = `Create a temporary testing workspace at /tmp/sentinel-workflow-test.
+  const complexPrompt = `Create a temporary testing workspace at /tmp/cero-workflow-test.
 
 Inside it:
 1. Create a directory called project.
 2. Inside project create three files: frontend.txt, backend.txt, and README.md.
 3. Put "Frontend module" inside frontend.txt.
 4. Put "Backend module" inside backend.txt.
-5. Put "Sentinel Workflow Test" inside README.md.
+5. Put "Cero Workflow Test" inside README.md.
 6. Finally list the project directory and display the contents of all three files.
 
 After successfully completing all of these steps, save the verified execution as a workflow named workflow-basic-test.`;
@@ -22,7 +22,7 @@ After successfully completing all of these steps, save the verified execution as
 
     expect(directive.isSaveAsWorkflow).toBe(true);
     expect(directive.workflowName).toBe('workflow-basic-test');
-    expect(directive.taskPrompt).toContain('Create a temporary testing workspace at /tmp/sentinel-workflow-test.');
+    expect(directive.taskPrompt).toContain('Create a temporary testing workspace at /tmp/cero-workflow-test.');
     expect(directive.taskPrompt).toContain('Finally list the project directory');
     expect(directive.taskPrompt).not.toContain('save the verified execution');
   });
@@ -50,11 +50,11 @@ After successfully completing all of these steps, save the verified execution as
 
     // Verify key synthesized commands
     const commands = plan.phases.map(p => p.params?.command as string);
-    expect(commands.some(cmd => cmd.includes('mkdir -p') && cmd.includes('/tmp/sentinel-workflow-test'))).toBe(true);
+    expect(commands.some(cmd => cmd.includes('mkdir -p') && cmd.includes('/tmp/cero-workflow-test'))).toBe(true);
     expect(commands.some(cmd => cmd.includes('touch') || cmd.includes('frontend.txt'))).toBe(true);
     expect(commands.some(cmd => cmd.includes('echo') && cmd.includes('Frontend module'))).toBe(true);
     expect(commands.some(cmd => cmd.includes('echo') && cmd.includes('Backend module'))).toBe(true);
-    expect(commands.some(cmd => cmd.includes('echo') && cmd.includes('Sentinel Workflow Test'))).toBe(true);
+    expect(commands.some(cmd => cmd.includes('echo') && cmd.includes('Cero Workflow Test'))).toBe(true);
     expect(commands.some(cmd => cmd.includes('ls') && cmd.includes('cat'))).toBe(true);
   });
 
@@ -108,13 +108,13 @@ After successfully completing all of these steps, save the verified execution as
               id: '1',
               title: 'Create workspace directory',
               tool: 'shell.execute',
-              params: { command: 'mkdir -p /tmp/sentinel-workflow-test/project', explanation: 'Create workspace' }
+              params: { command: 'mkdir -p /tmp/cero-workflow-test/project', explanation: 'Create workspace' }
             },
             {
               id: '2',
               title: 'Create files',
               tool: 'shell.execute',
-              params: { command: 'touch /tmp/sentinel-workflow-test/project/frontend.txt', explanation: 'Touch file' }
+              params: { command: 'touch /tmp/cero-workflow-test/project/frontend.txt', explanation: 'Touch file' }
             }
           ]
         })
@@ -125,8 +125,8 @@ After successfully completing all of these steps, save the verified execution as
     const plan = await engine.createPlan('create workspace', { os: 'linux', cwd: '/home/user' });
 
     expect(plan.phases.length).toBe(2);
-    expect(plan.phases[0].params?.command).toBe('mkdir -p /tmp/sentinel-workflow-test/project');
-    expect(plan.phases[1].params?.command).toBe('touch /tmp/sentinel-workflow-test/project/frontend.txt');
+    expect(plan.phases[0].params?.command).toBe('mkdir -p /tmp/cero-workflow-test/project');
+    expect(plan.phases[1].params?.command).toBe('touch /tmp/cero-workflow-test/project/frontend.txt');
   });
 
   it('records and persists verified workflow execution when save directive is present', async () => {
@@ -160,7 +160,7 @@ After successfully completing all of these steps, save the verified execution as
     const os = await import('os');
     const path = await import('path');
 
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-wf-test-'));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-wf-test-'));
     DiskWorkflowStorage.getInstance().setCustomBaseDir(tmpDir);
 
     try {

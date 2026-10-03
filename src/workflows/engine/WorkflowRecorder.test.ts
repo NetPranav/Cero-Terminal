@@ -13,7 +13,7 @@ describe('WorkflowRecorder', () => {
   let recorder: WorkflowRecorder;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-rec-test-'));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-rec-test-'));
     storage = new DiskWorkflowStorage(tempDir);
     recorder = new WorkflowRecorder(storage);
     UndoLog.getInstance().clear();

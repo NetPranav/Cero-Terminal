@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Zero-Hallucination Tool Parameter Validator
+ * Cero — Zero-Hallucination Tool Parameter Validator
  *
  * Validates, repairs, and type-coerces LLM-generated parameter JSON before
  * calling execution drivers. Prevents small-model parameter hallucinations,

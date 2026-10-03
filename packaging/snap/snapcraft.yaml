@@ -1,9 +1,9 @@
-name: sentinel-terminal
+name: cero-terminal
 base: core24
 version: '2.0.0'
 summary: Autonomous AI-Native Linux Terminal Copilot
 description: |
-  Sentinel Terminal is a high-performance AI-native Linux terminal emulator featuring
+  Cero is a high-performance AI-native Linux terminal emulator featuring
   embedded llama-server orchestration, deterministic multi-stage workflow replay,
   autonomous terminal actions with shadow PTY simulation, and native system diagnostics.
 
@@ -11,9 +11,9 @@ grade: stable
 confinement: classic
 
 apps:
-  sentinel-terminal:
-    command: usr/bin/sentinel-terminal
-    desktop: usr/share/applications/sentinel-terminal.desktop
+  cero-terminal:
+    command: usr/bin/cero-terminal
+    desktop: usr/share/applications/cero-terminal.desktop
     extensions: [gnome]
     plugs:
       - home
@@ -27,21 +27,21 @@ apps:
       - system-observe
 
 parts:
-  sentinel-terminal:
+  cero-terminal:
     plugin: dump
     source: ../../src-tauri/target/release/
     stage:
-      - sentinel-terminal
+      - cero-terminal
     organize:
-      sentinel-terminal: usr/bin/sentinel-terminal
+      cero-terminal: usr/bin/cero-terminal
 
   desktop:
     plugin: dump
     source: ../arch/
     stage:
-      - sentinel-terminal.desktop
+      - cero-terminal.desktop
     organize:
-      sentinel-terminal.desktop: usr/share/applications/sentinel-terminal.desktop
+      cero-terminal.desktop: usr/share/applications/cero-terminal.desktop
 
   icons:
     plugin: dump
@@ -49,4 +49,4 @@ parts:
     stage:
       - icon.png
     organize:
-      icon.png: usr/share/icons/hicolor/512x512/apps/sentinel-terminal.png
+      icon.png: usr/share/icons/hicolor/512x512/apps/cero-terminal.png

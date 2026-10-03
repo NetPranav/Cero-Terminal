@@ -117,7 +117,7 @@ export class ModelRecommendationEngine {
             ramRequiredGb: 2.5,
             expectedTokensPerSec: 32,
             contextWindowTokens: 16384,
-            bestFor: 'Sentinel default sweet spot: excellent shell tool calling and code reasoning',
+            bestFor: 'Cero default sweet spot: excellent shell tool calling and code reasoning',
             isDefault: true
           },
           {

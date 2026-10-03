@@ -5,8 +5,8 @@ import type { ActiveModelInfo } from './ModelManager';
 function makeActive(overrides: Partial<ActiveModelInfo> = {}): ActiveModelInfo {
   return {
     providerId: 'embedded',
-    modelId: 'sentinel-embedded',
-    displayName: 'Sentinel Embedded Model',
+    modelId: 'cero-embedded',
+    displayName: 'Cero Embedded Model',
     score: 100,
     sizeBytes: 0,
     isReady: true,
@@ -25,7 +25,7 @@ describe('describeAi', () => {
     });
     expect(badge.state).toBe('ready');
     expect(badge.label).toBe('AI: local');
-    expect(badge.detail).toContain('Model: Sentinel Embedded Model');
+    expect(badge.detail).toContain('Model: Cero Embedded Model');
     expect(badge.label).not.toContain('Off');
   });
 

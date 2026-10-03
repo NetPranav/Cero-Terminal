@@ -12,7 +12,7 @@
  * Features:
  * - Secure local persistence of API keys in localStorage
  * - One-click connection testing with latency measurement
- * - Streaming & non-streaming execution conforming to Sentinel's JSON contract
+ * - Streaming & non-streaming execution conforming to Cero's JSON contract
  */
 
 import { wireSampling, resolveSampling } from './DecisionRequest';
@@ -193,7 +193,7 @@ export class CloudApiProvider implements ModelProvider {
   public readonly providerName = 'Cloud API Provider';
 
   private static instance: CloudApiProvider;
-  private static readonly STORAGE_KEY = 'sentinel_cloud_api_keys';
+  private static readonly STORAGE_KEY = 'cero_cloud_api_keys';
   private inMemoryConfigs: Record<string, CloudKeyConfig> = {};
 
   public static getInstance(): CloudApiProvider {
@@ -288,7 +288,9 @@ export class CloudApiProvider implements ModelProvider {
     return true;
   }
 
-  private static readonly SECRET_SERVICE = 'sentinel.cloud_api';
+  private static readonly SECRET_SERVICE = 'cero.cloud_api';
+  /** Where keys were kept under the old app name; read once and moved */
+  private static readonly LEGACY_SECRET_SERVICE = 'sentinel.cloud_api';
 
   /**
    * Call once at startup, before the active provider is chosen. Fills keys in from the keychain and
@@ -304,7 +306,15 @@ export class CloudApiProvider implements ModelProvider {
         if (await this.moveKeyToKeychain(id)) migrated++; else failed++;
       } else {
         try {
-          const stored = await getSecretBackend().get(CloudApiProvider.SECRET_SERVICE, id);
+          let stored = await getSecretBackend().get(CloudApiProvider.SECRET_SERVICE, id);
+          if (!stored) {
+            // a key saved before the rename: copy it to the new name, and only then remove the old entry
+            const legacy = await getSecretBackend().get(CloudApiProvider.LEGACY_SECRET_SERVICE, id);
+            if (legacy && (await storeSecretVerified(CloudApiProvider.SECRET_SERVICE, id, legacy))) {
+              stored = legacy;
+              try { await getSecretBackend().delete(CloudApiProvider.LEGACY_SECRET_SERVICE, id); } catch { /* leave it */ }
+            }
+          }
           if (stored) {
             this.inMemoryConfigs[id] = { ...cfg, apiKey: stored };
             this.keychainHeld.add(id);
@@ -521,7 +531,7 @@ export class CloudApiProvider implements ModelProvider {
 
     // Messages formatting
     const messages = options?.messages || [
-      { role: 'system', content: 'You are Sentinel, an autonomous Linux terminal copilot. Always respond with valid JSON.' },
+      { role: 'system', content: 'You are Cero, an autonomous Linux terminal copilot. Always respond with valid JSON.' },
       { role: 'user', content: prompt }
     ];
 

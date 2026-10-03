@@ -2,8 +2,8 @@
  * ModelManifestManager.ts — Adapter Version Registry & Rollback Controller
  *
  * Phase 0.75.12: Tracks active and historical adapter versions in
- * `~/.sentinel/models/manifest.json` with semantic versioning
- * (`sentinel-intent-vX.Y.Z`, `sentinel-coder-vX.Y.Z`).
+ * `~/.cero/models/manifest.json` with semantic versioning
+ * (`cero-intent-vX.Y.Z`, `cero-coder-vX.Y.Z`).
  *
  * Supports:
  * - Registering new adapter versions with metadata
@@ -16,7 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export interface AdapterVersion {
-  /** Semantic version string: sentinel-{role}-v{major}.{minor}.{patch} */
+  /** Semantic version string: cero-{role}-v{major}.{minor}.{patch} */
   version: string;
   /** Absolute path to the adapter GGUF/LoRA file */
   adapterPath: string;
@@ -59,11 +59,11 @@ export function createDefaultManifest(): ModelManifest {
     schemaVersion: 1,
     lastUpdated: Date.now(),
     intent: {
-      activeVersion: 'sentinel-intent-v1.0.0',
+      activeVersion: 'cero-intent-v1.0.0',
       history: [],
     },
     coder: {
-      activeVersion: 'sentinel-coder-v1.0.0',
+      activeVersion: 'cero-coder-v1.0.0',
       history: [],
     },
   };
@@ -78,7 +78,7 @@ export class ModelManifestManager {
     const home = typeof process !== 'undefined'
       ? (process.env.HOME || process.env.USERPROFILE || '/tmp')
       : '/tmp';
-    this.manifestPath = manifestPath || path.join(home, '.sentinel', 'models', 'manifest.json');
+    this.manifestPath = manifestPath || path.join(home, '.cero', 'models', 'manifest.json');
     this.manifest = this.loadManifest();
   }
 
@@ -289,10 +289,10 @@ export class ModelManifestManager {
 
   /**
    * Increments the patch component of a semantic version string.
-   * sentinel-intent-v1.0.0 → sentinel-intent-v1.0.1
+   * cero-intent-v1.0.0 → cero-intent-v1.0.1
    */
   private incrementVersion(currentVersion: string): string {
-    const match = currentVersion.match(/^(sentinel-(?:intent|coder)-v)(\d+)\.(\d+)\.(\d+)$/);
+    const match = currentVersion.match(/^(cero-(?:intent|coder)-v)(\d+)\.(\d+)\.(\d+)$/);
     if (match) {
       const [, prefix, major, minor, patch] = match;
       return `${prefix}${major}.${minor}.${parseInt(patch, 10) + 1}`;

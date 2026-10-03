@@ -39,7 +39,7 @@ describe('Opening a folder by name', () => {
   const ctx = { os: 'linux', cwd: '/home/me/elsewhere' };
 
   beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-open-'));
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-open-'));
     AliasStore.getInstance().setFile(path.join(tmp, 'aliases.json'));
     generate = vi.fn();
     loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
@@ -160,7 +160,7 @@ describe('Opening an app by name', () => {
   const ctx = { os: 'linux', cwd: '/home/me' };
 
   beforeEach(async () => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-app-'));
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-app-'));
     AliasStore.getInstance().setFile(path.join(tmp, 'aliases.json'));
     const { clearCatalogCache } = await import('../../domain/system/AppCatalog');
     clearCatalogCache();
@@ -221,7 +221,7 @@ describe('cd and remembered names', () => {
   let loop: AgentLoop;
   const ctx = { os: 'linux', cwd: '/home/me/elsewhere' };
   beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-cd-'));
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-cd-'));
     AliasStore.getInstance().setFile(path.join(tmp, 'aliases.json'));
     loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
       getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate: vi.fn() }),

@@ -45,7 +45,7 @@ import { buildToolSpecs, buildSystemPrompt, ToolSpec } from './SystemPrompt';
 import { ToolRegistryState } from '../../tools/loader/ToolLoader';
 import { ExecutionPreviewPlan } from '../../domain/security/ExecutionEngine';
 import { EmbeddedEngineManager } from '../models/EmbeddedEngineManager';
-import { SentinelSerlCoordinator } from '../../domain/learning/SentinelSerlCoordinator';
+import { CeroSerlCoordinator } from '../../domain/learning/CeroSerlCoordinator';
 import { TldrKnowledgeEngine } from '../../domain/knowledge/TldrKnowledgeEngine';
 import { GbnfGrammarManager } from '../models/GbnfGrammarManager';
 import { buildDecisionCall } from './DecisionCall';
@@ -82,7 +82,7 @@ export const defaultQueueIO: QueueIO = {
   setPaused: (paused) => PromptQueue.getInstance().setPaused(paused),
   openPanel: () => {
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('sentinel:open-queue'));
+      window.dispatchEvent(new CustomEvent('cero:open-queue'));
     }
   },
 };
@@ -221,7 +221,7 @@ const FAST_PATHS: {
   { pattern: /^increase\s+screen\s+brightness\s+by\s+10%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl set +10% 2>/dev/null || light -A 10 2>/dev/null", explanation: 'Increase screen brightness by 10%' }) },
   { pattern: /^decrease\s+screen\s+brightness\s+by\s+10%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl set 10%- 2>/dev/null || light -U 10 2>/dev/null", explanation: 'Decrease screen brightness by 10%' }) },
   { pattern: /^check\s+current\s+screen\s+brightness\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl get 2>/dev/null || light -G 2>/dev/null", explanation: 'Check current screen brightness' }) },
-  { pattern: /^show\s+clipboard\s+text\s+contents\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "printf 'Sentinel AI Clipboard Buffer Content' | (wl-copy 2>/dev/null || xclip -selection clipboard 2>/dev/null || true); wl-paste 2>/dev/null || xclip -o 2>/dev/null", explanation: 'Show clipboard text contents' }) },
+  { pattern: /^show\s+clipboard\s+text\s+contents\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "printf 'Cero AI Clipboard Buffer Content' | (wl-copy 2>/dev/null || xclip -selection clipboard 2>/dev/null || true); wl-paste 2>/dev/null || xclip -o 2>/dev/null", explanation: 'Show clipboard text contents' }) },
   { pattern: /^check\s+installed\s+desktop\s+applications\s+list\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find /usr/share/applications -name '*.desktop' 2>/dev/null | head -10", explanation: 'Check installed desktop applications list' }) },
 
   // Domain 8: Linux Dotfiles & Rice Management (Hyprland / Waybar) (8.1 to 8.50)
@@ -707,7 +707,7 @@ const FAST_PATHS: {
     paramsFn: (m) => ({ app: m[1].trim() })
   },
   {
-    pattern: /^(?:open|launch|start)\s+(?:the\s+)?(chrome|google\s+chrome|safari|firefox|brave|edge|vscode|vs\s+code|code|cursor|discord|slack|spotify|terminal|finder|notes|calendar|calculator|mail|messages|sublime|pycharm|intellij|webstorm|sentinel|sentinel\s+terminal|antigravity|antigravity\s+ide)\s*$/i,
+    pattern: /^(?:open|launch|start)\s+(?:the\s+)?(chrome|google\s+chrome|safari|firefox|brave|edge|vscode|vs\s+code|code|cursor|discord|slack|spotify|terminal|finder|notes|calendar|calculator|mail|messages|sublime|pycharm|intellij|webstorm|cero|cero\s+terminal|antigravity|antigravity\s+ide)\s*$/i,
     tool: 'application.open',
     paramsFn: (m) => ({ app: m[1].trim() })
   },
@@ -1027,7 +1027,7 @@ export function isReferentialFollowup(text: string): boolean {
 
 /**
  * Sanitize or transform a model refusal into concrete, professional terminal advice.
- * Completely eliminates robotic disclaimers like "as an AI language model..." from Sentinel.
+ * Completely eliminates robotic disclaimers like "as an AI language model..." from Cero.
  */
 export function cleanseConversationalRefusal(summary: string, goal: string, context: { os: string; cwd: string }): string {
   const lowerGoal = goal.toLowerCase();
@@ -1063,7 +1063,7 @@ export function cleanseConversationalRefusal(summary: string, goal: string, cont
     .trim();
 
   if (!cleaned || isConversationalRefusal(cleaned)) {
-    cleaned = `As Sentinel on ${context.os}, I have full terminal execution capabilities. For "${goal}", you can run system commands directly or use \`>learn: <cmd>\` to register a workflow.`;
+    cleaned = `As Cero on ${context.os}, I have full terminal execution capabilities. For "${goal}", you can run system commands directly or use \`>learn: <cmd>\` to register a workflow.`;
   }
 
   return cleaned;
@@ -1637,13 +1637,13 @@ export class AgentLoop {
     // Conversational greetings & status fast paths (works instantly offline)
     const rawLower = goal.trim().toLowerCase();
     if (/^(?:hey|hi|hello|yo|howdy|sup|greetings)(?:\s+there)?[\s!.]*$/i.test(rawLower)) {
-      const greeting = "Hey there! I am Sentinel AI, your local terminal copilot. You can ask me to inspect listening ports, find high CPU tasks, scaffold projects, automate git workflows, or diagnose broken shell commands.";
+      const greeting = "Hey there! I am Cero AI, your local terminal copilot. You can ask me to inspect listening ports, find high CPU tasks, scaffold projects, automate git workflows, or diagnose broken shell commands.";
       this.emit({ type: 'done', message: greeting });
       return { success: true, summary: greeting, steps: [] };
     }
 
-    if (/^(?:who\s+are\s+you|what\s+can\s+you\s+do|help|what\s+is\s+sentinel)[\s?!.]*$/i.test(rawLower)) {
-      const helpMsg = "I am Sentinel AI — an autonomous terminal agent. You can ask me to:\n• Inspect listening ports: \">what is using port 3000\"\n• Kill zombie processes: \">kill node\"\n• Git actions: \">create a feature branch named auth\"\n• Fix shell errors: Press [Tab] on the Auto-Heal banner\n• Switch projects: Press Cmd+O\n• Search history: Press Ctrl+R\n• Manage the local AI model: Command Palette (Ctrl+Shift+P) > 'Sentinel Embedded AI'";
+    if (/^(?:who\s+are\s+you|what\s+can\s+you\s+do|help|what\s+is\s+cero)[\s?!.]*$/i.test(rawLower)) {
+      const helpMsg = "I am Cero AI — an autonomous terminal agent. You can ask me to:\n• Inspect listening ports: \">what is using port 3000\"\n• Kill zombie processes: \">kill node\"\n• Git actions: \">create a feature branch named auth\"\n• Fix shell errors: Press [Tab] on the Auto-Heal banner\n• Switch projects: Press Cmd+O\n• Search history: Press Ctrl+R\n• Manage the local AI model: Command Palette (Ctrl+Shift+P) > 'Cero Embedded AI'";
       this.emit({ type: 'done', message: helpMsg });
       return { success: true, summary: helpMsg, steps: [] };
     }
@@ -1666,7 +1666,7 @@ export class AgentLoop {
           await manager.startEngine();
         }
       }).catch(err => console.warn('[AgentLoop] setup-ai failed:', err));
-      const msg = `Downloading ${model.displayName} (~${(model.sizeBytes / 1e9).toFixed(1)} GB) into ~/.sentinel/models/.\nTrack progress in the Command Palette (Ctrl+Shift+P > 'Sentinel Embedded AI').`;
+      const msg = `Downloading ${model.displayName} (~${(model.sizeBytes / 1e9).toFixed(1)} GB) into ~/.cero/models/.\nTrack progress in the Command Palette (Ctrl+Shift+P > 'Cero Embedded AI').`;
       this.emit({ type: 'done', message: msg });
       return { success: true, summary: msg, steps: [] };
     }
@@ -1874,7 +1874,7 @@ export class AgentLoop {
     } catch {
       isAIAvailable = false;
     }
-    if (!isAIAvailable && typeof process !== 'undefined' && process.env.NODE_ENV !== 'test' && process.env.SENTINEL_BENCHMARK !== 'true') {
+    if (!isAIAvailable && typeof process !== 'undefined' && process.env.NODE_ENV !== 'test' && process.env.CERO_BENCHMARK !== 'true') {
       try {
         const embeddedMgr = EmbeddedEngineManager.getInstance();
         if (await embeddedMgr.checkModelExists()) {
@@ -2142,7 +2142,7 @@ export class AgentLoop {
     const how = !result.metrics || result.metrics.modelCalls === 0
       ? 'answered without the model (instant answer, learned pattern, workflow or built-in command)'
       : `used ${result.metrics.modelCalls} model call${result.metrics.modelCalls === 1 ? '' : 's'} (${(result.metrics.modelMs / 1000).toFixed(1)} s of model time)`;
-    const lines = [`For "${goal}" Sentinel ${how}${result.metrics ? `, ${(result.metrics.totalMs / 1000).toFixed(1)} s in total` : ''}.`];
+    const lines = [`For "${goal}" Cero ${how}${result.metrics ? `, ${(result.metrics.totalMs / 1000).toFixed(1)} s in total` : ''}.`];
     result.steps.forEach((step, i) => {
       const what = step.params?.command ? `\`${step.params.command}\`` : step.tool;
       const why = step.params?.explanation ? ` (${step.params.explanation})` : '';
@@ -2155,7 +2155,7 @@ export class AgentLoop {
     return lines.join('\n');
   }
 
-  /** Write this tab's transcript as Markdown under ~/.sentinel/transcripts/ and return a notice. */
+  /** Write this tab's transcript as Markdown under ~/.cero/transcripts/ and return a notice. */
   public exportTranscript(): string {
     if (this.transcript.length === 0) return 'Nothing to export yet.';
     // Local time, so the file name matches the clock the user sees
@@ -2163,8 +2163,8 @@ export class AgentLoop {
     const pad = (n: number) => String(n).padStart(2, '0');
     const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
     const home = typeof process !== 'undefined' && process.env?.HOME ? process.env.HOME : '/tmp';
-    const file = `${home}/.sentinel/transcripts/session-${stamp}.md`;
-    const body = [`# Sentinel session transcript (${new Date().toLocaleString()})`, ''];
+    const file = `${home}/.cero/transcripts/session-${stamp}.md`;
+    const body = [`# Cero session transcript (${new Date().toLocaleString()})`, ''];
     for (const entry of this.transcript) {
       body.push(`## ${new Date(entry.at).toLocaleTimeString()} - ${entry.goal}`, '');
       for (const step of entry.result.steps) {
@@ -2174,9 +2174,9 @@ export class AgentLoop {
       body.push('', SecretRedactor.redact(entry.result.summary || ''), '');
     }
     try {
-      fs.mkdirSync(`${home}/.sentinel/transcripts`, { recursive: true });
+      fs.mkdirSync(`${home}/.cero/transcripts`, { recursive: true });
       fs.writeFileSync(file, body.join('\n'));
-      return `Saved ${this.transcript.length} request${this.transcript.length === 1 ? '' : 's'} to ~/.sentinel/transcripts/session-${stamp}.md (secrets redacted).`;
+      return `Saved ${this.transcript.length} request${this.transcript.length === 1 ? '' : 's'} to ~/.cero/transcripts/session-${stamp}.md (secrets redacted).`;
     } catch (err: any) {
       return `Could not write the transcript: ${err?.message || err}`;
     }
@@ -2944,7 +2944,7 @@ export class AgentLoop {
     if (!read.success || !source.trim()) return finish(false, `Could not read ${request.file}: ${String(read.data?.stderr || read.error || 'not found').split('\n')[0]}`);
     if (source.length > 8000) return null;
     if (redactSecrets(source) !== source) {
-      return finish(false, `${request.file} contains what looks like a key or password, so Sentinel did not send it to the model. Remove the secret (for example into an environment variable) and ask again.`);
+      return finish(false, `${request.file} contains what looks like a key or password, so Cero did not send it to the model. Remove the secret (for example into an environment variable) and ask again.`);
     }
 
     this.emit({ type: 'tool_start', message: `Running ${request.file}` });
@@ -3630,7 +3630,7 @@ export class AgentLoop {
       case 'no-folders':
         return report(`Not saved: could not find your folders: ${saved.message}`);
       default:
-        return report('Not saved: there is no screen to ask where to save it. Run this from the Sentinel app.');
+        return report('Not saved: there is no screen to ask where to save it. Run this from the Cero app.');
     }
   }
 
@@ -3656,7 +3656,7 @@ export class AgentLoop {
 
   /**
    * "make me a workflow that ...": turn the listed steps into a .flow file, ask where to keep it
-   * (Desktop, this folder, the Sentinel workflows folder, or a path), and save it without ever
+   * (Desktop, this folder, the Cero workflows folder, or a path), and save it without ever
    * replacing an existing file. Steps that are not understood are named, never guessed.
    */
   private async runCreateFlow(req: FlowCreateRequest, context: AgentRunContext): Promise<AgentResult> {
@@ -3679,11 +3679,11 @@ export class AgentLoop {
       case 'no-folders':
         return finish(false, `Could not find your folders: ${saved.message}`);
       case 'no-screen':
-        return finish(false, `The workflow "${draft.name}" is ready (${draft.actions.length} steps) but there is no screen to ask where to save it. Run this from the Sentinel app.`);
+        return finish(false, `The workflow "${draft.name}" is ready (${draft.actions.length} steps) but there is no screen to ask where to save it. Run this from the Cero app.`);
       case 'cancelled':
         return finish(false, 'Not saved: you cancelled.', { declined: true });
       case 'error':
-        return finish(false, `Could not save the file: ${saved.message}${saved.macBlock ? '. macOS asks before an app may use the Desktop or Documents folder: allow Sentinel Terminal in System Settings, Privacy & Security, Files and Folders.' : ''}`);
+        return finish(false, `Could not save the file: ${saved.message}${saved.macBlock ? '. macOS asks before an app may use the Desktop or Documents folder: allow Cero in System Settings, Privacy & Security, Files and Folders.' : ''}`);
       default: {
         steps.push({ tool: '__flow__', params: { path: saved.path }, result: { success: true } as ToolExecutionResult });
         const left = draft.unrecognised.length ? ` ${draft.unrecognised.length} step${draft.unrecognised.length > 1 ? 's were' : ' was'} left out.` : '';
@@ -3693,7 +3693,7 @@ export class AgentLoop {
   }
 
   /**
-   * Ask where to keep a flow (Desktop, this folder, the Sentinel workflows folder, or a path) and
+   * Ask where to keep a flow (Desktop, this folder, the Cero workflows folder, or a path) and
    * write it without ever replacing an existing file. One place for every "save as .flow" route.
    */
   private async saveDraftWithDialog(
@@ -3722,11 +3722,11 @@ export class AgentLoop {
         options: [
           { label: 'Desktop', detail: folders.desktop },
           { label: 'This folder', detail: context.cwd },
-          { label: 'Sentinel workflows', detail: `${folders.workflows} (listed in the Workflow Manager)` },
+          { label: 'Cero workflows', detail: `${folders.workflows} (listed in the Workflow Manager)` },
         ],
         custom: { label: 'Somewhere else', placeholder: 'A folder or a path ending in .flow' },
       });
-    // No screen to ask on (headless, scripts): the Sentinel workflows folder is the safe default
+    // No screen to ask on (headless, scripts): the Cero workflows folder is the safe default
     if (asked === undefined && storeWhenNoScreen) {
       try {
         const stored = await DiskWorkflowStorage.getInstance().saveFlowText(draft.name, serializeFlow(draft));
@@ -3815,7 +3815,7 @@ export class AgentLoop {
     if (action.id === 'find' && action.query) summary = `Searching this terminal for "${action.query}". Enter jumps to the next match.`;
     if (action.id === 'focus_tab' && action.tab) summary = action.tab === -1 ? 'Switched to the last tab.' : `Switched to tab ${action.tab}.`;
     if (action.id === 'rename_tab' && action.name) summary = `Renamed this tab to "${action.name}".`;
-    if (!delivered) summary = `"${summary.replace(/\.$/, '')}" is available in the Sentinel desktop app.`;
+    if (!delivered) summary = `"${summary.replace(/\.$/, '')}" is available in the Cero desktop app.`;
     this.emit({ type: delivered ? 'done' : 'error', message: summary });
     return { success: delivered, summary, steps: [{ tool: '__app__', params: action, result: { success: delivered } as ToolExecutionResult }] };
   }
@@ -3847,8 +3847,8 @@ export class AgentLoop {
         seed: 42,
         format: 'json',
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-        grammar: GbnfGrammarManager.getGrammar('SENTINEL_ACTION'),
-        grammarJsonSchema: GbnfGrammarManager.SENTINEL_ACTION_JSON_SCHEMA,
+        grammar: GbnfGrammarManager.getGrammar('CERO_ACTION'),
+        grammarJsonSchema: GbnfGrammarManager.CERO_ACTION_JSON_SCHEMA,
         sessionId: context.sessionId || 'default-session',
         requestId: `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       });
@@ -3894,7 +3894,7 @@ export class AgentLoop {
       }
       const log = await embeddedMgr.getEngineLogTail(8);
       if (log.trim()) {
-        this.emit({ type: 'error', message: `The local AI engine did not start. Last lines of ~/.sentinel/logs/llama-server.log:\n${log.trim()}` });
+        this.emit({ type: 'error', message: `The local AI engine did not start. Last lines of ~/.cero/logs/llama-server.log:\n${log.trim()}` });
       }
     } catch {
       // engine could not start
@@ -4009,10 +4009,10 @@ export class AgentLoop {
 
       const guidanceMsg = 
         `No AI Model or API Configured.\n\n` +
-        `Sentinel requires an active AI model or API backend to intercept and run prompts.\n\n` +
+        `Cero requires an active AI model or API backend to intercept and run prompts.\n\n` +
         `• Option 1 (Embedded Local Model - Recommended):\n` +
         `  Download a local model (1.1 to 2.5 GB depending on the size you pick) for private, offline inference.\n` +
-        `  Type ">setup-ai" or press Command Palette (Ctrl+Shift+P) > "Sentinel Embedded AI" to start 1-click download.\n\n` +
+        `  Type ">setup-ai" or press Command Palette (Ctrl+Shift+P) > "Cero Embedded AI" to start 1-click download.\n\n` +
         `• Option 2 (Zero Local Download - Cloud API):\n` +
         `  Connect an API key (Groq, OpenAI, Anthropic, DeepSeek, OpenRouter, or Custom OpenAI-compatible endpoint).\n` +
         `  Open Settings (Ctrl+,) > AI Models > Cloud API Keys to activate your service.\n\n` +
@@ -4183,7 +4183,7 @@ export class AgentLoop {
 
           if (isRefusal) {
             refusalInterceptions++;
-            SentinelSerlCoordinator.getInstance().onModelRefusal(effectiveGoal, summary, {
+            CeroSerlCoordinator.getInstance().onModelRefusal(effectiveGoal, summary, {
               cwd: context.cwd,
               os: context.os,
             }).catch(err => console.warn('[AgentLoop] SERL refusal logging error:', err));
@@ -4228,7 +4228,7 @@ export class AgentLoop {
 
           // Fake completion interceptor: model claimed goal was done/found or gave generic greeting on an actionable task without running ANY step
           if (parsed.action === 'done' && steps.length === 0 && (isActionableGoal(goal) || isActionableGoal(effectiveGoal))) {
-            const isGenericIntro = summary.includes('I am Sentinel') || summary.includes('autonomous terminal copilot') || summary.includes('your AI terminal');
+            const isGenericIntro = summary.includes('I am Cero') || summary.includes('autonomous terminal copilot') || summary.includes('your AI terminal');
             const claimsCompleted = isGenericIntro
               || /\b(?:has been|have been|is|was|were)?\s*(?:found|located|completed|finished|done|executed|opened|created|deleted)\b/i.test(summary)
               || /^(?:done|completed|finished|the .+ has been found)\b/i.test(summary);
@@ -4263,7 +4263,7 @@ export class AgentLoop {
             if (fallback && steps.length === 0) {
               return await this.executeFallback(fallback, context);
             }
-            summary = "Hey! I'm Sentinel, your AI terminal assistant. I can manage Wi-Fi, Bluetooth, navigate folders, inspect hardware/battery, run tools, and execute terminal commands.";
+            summary = "Hey! I'm Cero, your AI terminal assistant. I can manage Wi-Fi, Bluetooth, navigate folders, inspect hardware/battery, run tools, and execute terminal commands.";
           }
 
           // A question about this machine answered without running anything is a guess ("Python
@@ -4415,7 +4415,7 @@ export class AgentLoop {
                   const choice = await askChoice({
                     title: 'Action Rejected',
                     lines: [
-                      'Sentinel rejected the proposed action:',
+                      'Cero rejected the proposed action:',
                       gate2.reason || gate1.reason || 'Safety or validation check failed.',
                       gate2.hint || gate1.hint || 'Please clarify what to run.'
                     ],
@@ -4583,7 +4583,7 @@ export class AgentLoop {
             && isInspectionQuestion(goal) && isClearlyMutating(params.command)) {
             const why = String(priorFailure.result.error || priorFailure.result.data?.stderr || 'it failed').trim().split('\n')[0];
             const tried = typeof priorFailure.params?.command === 'string' ? priorFailure.params.command : priorFailure.tool;
-            const summary = `Could not answer: \`${tried}\` failed (${why}). Sentinel did not run \`${params.command}\` because it would change your system just to answer a question.`;
+            const summary = `Could not answer: \`${tried}\` failed (${why}). Cero did not run \`${params.command}\` because it would change your system just to answer a question.`;
             this.emit({ type: 'error', message: summary });
             return { success: false, summary, steps, cdPath };
           }
@@ -4612,7 +4612,7 @@ export class AgentLoop {
             const notRepo = steps.find(st => /not a git repository/i.test(String(st.result.error || st.result.data?.stderr || '')));
             if (notRepo && /\bgit\s+init\b/.test(params.command) && !/\b(?:init|initiali[sz]e|new\s+(?:git\s+)?repo|create\s+(?:a\s+)?(?:git\s+)?repo)/i.test(goal)) {
               const tried = typeof notRepo.params?.command === 'string' ? notRepo.params.command : 'git';
-              const summary = `\`${tried}\` failed: ${context.cwd} is not inside a git repository. Sentinel did not run \`git init\`, which would create a new repository here. Name the repository folder, for example "in my-repo, ${goal.replace(/^in\s+\S+\s*,?\s*/i, '')}".`;
+              const summary = `\`${tried}\` failed: ${context.cwd} is not inside a git repository. Cero did not run \`git init\`, which would create a new repository here. Name the repository folder, for example "in my-repo, ${goal.replace(/^in\s+\S+\s*,?\s*/i, '')}".`;
               this.emit({ type: 'error', message: summary });
               return { success: false, summary, steps, cdPath };
             }
@@ -4732,7 +4732,7 @@ export class AgentLoop {
             const errorDetails = result.error || result.data?.stderr || (result.data?.stdout && result.data.stdout.includes('Error') ? result.data.stdout : 'Command returned non-zero exit code');
 
             const exitCode = (result.data && typeof result.data.code === 'number') ? result.data.code : 1;
-            SentinelSerlCoordinator.getInstance().onCommandExecutionFailure(
+            CeroSerlCoordinator.getInstance().onCommandExecutionFailure(
               goal,
               failedCmd,
               exitCode,
@@ -4797,7 +4797,7 @@ export class AgentLoop {
               const failedSummary = steps
                 .map((s, idx) => `  ${idx + 1}. \`${s.params.command || s.tool}\` → ${s.result.error || s.result.data?.stderr || 'exited with error'}`)
                 .join('\n');
-              const summary = `Attempted ${steps.length} command solutions, but encountered errors:\n${failedSummary}\n\nYou can run a manual command or teach Sentinel with \`>learn: <cmd>\``;
+              const summary = `Attempted ${steps.length} command solutions, but encountered errors:\n${failedSummary}\n\nYou can run a manual command or teach Cero with \`>learn: <cmd>\``;
               this.emit({ type: 'error', message: summary });
               return { success: false, summary, steps, cdPath };
             }
@@ -5037,7 +5037,7 @@ Output JSON:
     }
 
     if (/^(?:open|launch|start|run)\s+(?:the\s+|an?\s+)?(?:application|app)\s*$/i.test(lower)) {
-      return this.createAgentPlan('Open desktop application', [], 'Which application would you like to open (e.g. Safari, Chrome, VS Code, Sentinel Terminal)?');
+      return this.createAgentPlan('Open desktop application', [], 'Which application would you like to open (e.g. Safari, Chrome, VS Code, Cero)?');
     }
 
     // 2. Concrete Multi-Step Workflows
@@ -5127,7 +5127,7 @@ Output JSON:
         temperature: 0,
         maxTokens: 220,
         format: 'json',
-        grammar: GbnfGrammarManager.getGrammar('SENTINEL_PLANNER'),
+        grammar: GbnfGrammarManager.getGrammar('CERO_PLANNER'),
         sessionId: context.sessionId || 'default-session',
         requestId: `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       });
@@ -5140,7 +5140,7 @@ Output JSON:
   }
 
   private buildPlanningPrompt(goal: string, context: { os: string; cwd: string }): string {
-    return `You are Sentinel's workflow planner on ${context.os}. Current directory: ${context.cwd}
+    return `You are Cero's workflow planner on ${context.os}. Current directory: ${context.cwd}
 
 Return ONLY one JSON object with this exact shape:
 {"decision":"plan"|"clarify","summary":"short outcome","steps":["short concrete step"],"question":"only when clarification is required"}

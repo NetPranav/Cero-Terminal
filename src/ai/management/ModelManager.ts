@@ -43,8 +43,8 @@ export interface ActiveModelInfo {
 
 export class ModelManager {
   private static instance?: ModelManager;
-  public static readonly PREF_PROVIDER_KEY = 'sentinel_active_ai_provider';
-  public static readonly PREF_MODEL_KEY = 'sentinel_active_ai_model';
+  public static readonly PREF_PROVIDER_KEY = 'cero_active_ai_provider';
+  public static readonly PREF_MODEL_KEY = 'cero_active_ai_model';
 
   public static getInstance(): ModelManager {
     if (!ModelManager.instance) {
@@ -198,7 +198,7 @@ export class ModelManager {
           const cfg = CloudApiProvider.getInstance().getActiveConfig();
           if (cfg) displayName = `${cfg.displayName || cfg.serviceId} (${cfg.modelId || 'default'})`;
         } else if (savedProviderId === 'embedded') {
-          displayName = 'Sentinel Embedded Model (Qwen2.5-3B)';
+          displayName = 'Cero Embedded Model (Qwen2.5-3B)';
         } else if (savedProviderId === 'ollama' && savedModelId) {
           const spec = this.matchCatalogSpec(savedModelId);
           displayName = spec ? `${spec.name}` : savedModelId;
@@ -225,7 +225,7 @@ export class ModelManager {
                   this.activeModelInfo.unavailableReason = undefined;
                 }
                 if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('sentinel:ai-status-changed'));
+                  window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
                 }
                 return;
               }
@@ -242,7 +242,7 @@ export class ModelManager {
           }
           // Do NOT clear the saved keys and do NOT silently switch to embedded
           if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('sentinel:ai-status-changed'));
+            window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
           }
         };
         void verifyInBackground();
@@ -264,7 +264,7 @@ export class ModelManager {
       this.activeProvider = availableProviders[0];
     }
 
-    // Sentinel's own engine is the default whenever it is running. Catalog scores used to let any
+    // Cero's own engine is the default whenever it is running. Catalog scores used to let any
     // larger Ollama model (qwen3:4b, 7B coders) take over automatically, which silently traded
     // latency for a model the user never chose. An explicit choice (above) still wins.
     const embedded = availableProviders.find(p => p.providerId === 'embedded');
@@ -272,8 +272,8 @@ export class ModelManager {
       this.activeProvider = embedded;
       this.setActiveModel({
         providerId: embedded.providerId,
-        modelId: 'sentinel-embedded',
-        displayName: 'Sentinel Embedded Model',
+        modelId: 'cero-embedded',
+        displayName: 'Cero Embedded Model',
         score: 100,
         sizeBytes: 0,
         isReady: true,
@@ -317,7 +317,7 @@ export class ModelManager {
 
     // No local candidate found -> default to embedded model since it's bundled
     const targetSpec = { 
-      name: 'Sentinel Embedded Model (Qwen2.5-3B)', 
+      name: 'Cero Embedded Model (Qwen2.5-3B)', 
       overallScore: 100, 
       maxRamBytes: 2147483648 // 2GB
     };
@@ -329,7 +329,7 @@ export class ModelManager {
     // After pulling/loading, register active info
     this.setActiveModel({
       providerId: this.activeProvider.providerId,
-      modelId: 'sentinel-embedded',
+      modelId: 'cero-embedded',
       displayName: targetSpec.name,
       score: targetSpec.overallScore,
       sizeBytes: targetSpec.maxRamBytes,
@@ -357,7 +357,7 @@ export class ModelManager {
 
     let displayName = modelId || prov.providerName;
     if (providerId === 'embedded') {
-      displayName = 'Sentinel Embedded Model (Qwen2.5-3B)';
+      displayName = 'Cero Embedded Model (Qwen2.5-3B)';
     } else if (providerId === 'cloud_api') {
       const activeCfg = CloudApiProvider.getInstance().getActiveConfig();
       if (activeCfg) {
@@ -379,7 +379,7 @@ export class ModelManager {
     });
 
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('sentinel:ai-status-changed'));
+      window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
     }
     return true;
   }
@@ -394,7 +394,7 @@ export class ModelManager {
     }
     // Generic lightweight scoring if model is under 1.5GB
     if (lower.includes('7b') || lower.includes('13b') || lower.includes('34b')) {
-      return undefined; // skip heavyweight models for Sentinel local OS intent
+      return undefined; // skip heavyweight models for Cero local OS intent
     }
     return {
       id: modelId,
@@ -480,7 +480,7 @@ export class ModelManager {
     this.setActiveModel(newInfo);
     this.persistChoice(this.activeProvider.providerId, modelId);
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('sentinel:ai-status-changed'));
+      window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
     }
     return newInfo;
   }
@@ -510,8 +510,8 @@ export class ModelManager {
     if (!this.activeModelInfo) {
       this.activeModelInfo = {
         providerId: 'embedded',
-        modelId: 'sentinel-embedded',
-        displayName: 'Sentinel Embedded Model (Qwen2.5-3B)',
+        modelId: 'cero-embedded',
+        displayName: 'Cero Embedded Model (Qwen2.5-3B)',
         score: 100,
         sizeBytes: 2147483648,
         isReady: false,

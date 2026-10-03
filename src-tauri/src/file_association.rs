@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-static MIME_XML: &str = include_str!("../../packaging/linux/sentinel-terminal-mime.xml");
+static MIME_XML: &str = include_str!("../../packaging/linux/cero-terminal-mime.xml");
 static FLOW_16: &[u8] = include_bytes!("../icons/flow/flow-16.png");
 static FLOW_24: &[u8] = include_bytes!("../icons/flow/flow-24.png");
 static FLOW_32: &[u8] = include_bytes!("../icons/flow/flow-32.png");
@@ -13,7 +13,7 @@ static FLOW_64: &[u8] = include_bytes!("../icons/flow/flow-64.png");
 static FLOW_128: &[u8] = include_bytes!("../icons/flow/flow-128.png");
 static FLOW_256: &[u8] = include_bytes!("../icons/flow/flow-256.png");
 static FLOW_512: &[u8] = include_bytes!("../icons/flow/flow-512.png");
-static FLOW_SVG: &str = include_str!("../icons/flow/application-x-sentinel-workflow.svg");
+static FLOW_SVG: &str = include_str!("../icons/flow/application-x-cero-workflow.svg");
 
 static APP_ICON_512: &[u8] = include_bytes!("../icons/icon.png");
 static APP_ICON_128: &[u8] = include_bytes!("../icons/128x128.png");
@@ -57,16 +57,16 @@ pub fn evaluate_decision_state(stored_decision: Option<&str>, user_choice: Optio
 pub fn build_desktop_entry(appimage_path: &str) -> String {
     format!(
 r#"[Desktop Entry]
-Name=Sentinel Terminal
+Name=Cero
 Comment=Autonomous AI-Native Linux Terminal Copilot
 Exec="{}" %F
-Icon=sentinel-terminal
+Icon=cero-terminal
 Terminal=false
 Type=Application
 Categories=Development;System;TerminalEmulator;
-StartupWMClass=sentinel-terminal
+StartupWMClass=cero-terminal
 Keywords=terminal;shell;copilot;prompt;pty;ai;workflow;flow;
-MimeType=application/x-sentinel-workflow;
+MimeType=application/x-cero-workflow;
 "#,
         appimage_path
     )
@@ -78,7 +78,7 @@ pub fn get_user_home() -> Option<PathBuf> {
 }
 
 pub fn association_store_path(home_dir: &Path) -> PathBuf {
-    home_dir.join(".sentinel").join("association.json")
+    home_dir.join(".cero").join("association.json")
 }
 
 pub fn load_association_store(home_dir: &Path) -> AssociationStore {
@@ -106,14 +106,14 @@ pub fn write_association_files(home_dir: &Path, appimage_path: &str) -> std::io:
     // 1. MIME package
     let mime_dir = home_dir.join(".local/share/mime/packages");
     fs::create_dir_all(&mime_dir)?;
-    let mime_file = mime_dir.join("sentinel-terminal.xml");
+    let mime_file = mime_dir.join("cero-terminal.xml");
     fs::write(&mime_file, MIME_XML)?;
     written.push(mime_file);
 
     // 2. Desktop launcher
     let app_dir = home_dir.join(".local/share/applications");
     fs::create_dir_all(&app_dir)?;
-    let desktop_file = app_dir.join("sentinel-terminal.desktop");
+    let desktop_file = app_dir.join("cero-terminal.desktop");
     fs::write(&desktop_file, build_desktop_entry(appimage_path))?;
     written.push(desktop_file);
 
@@ -127,7 +127,7 @@ pub fn write_association_files(home_dir: &Path, appimage_path: &str) -> std::io:
     for (size, data) in app_sizes {
         let dir = icons_base.join(format!("{}x{}/apps", size, size));
         fs::create_dir_all(&dir)?;
-        let path = dir.join("sentinel-terminal.png");
+        let path = dir.join("cero-terminal.png");
         fs::write(&path, data)?;
         written.push(path);
     }
@@ -146,7 +146,7 @@ pub fn write_association_files(home_dir: &Path, appimage_path: &str) -> std::io:
     for (size, data) in mime_sizes {
         let dir = icons_base.join(format!("{}x{}/mimetypes", size, size));
         fs::create_dir_all(&dir)?;
-        let path = dir.join("application-x-sentinel-workflow.png");
+        let path = dir.join("application-x-cero-workflow.png");
         fs::write(&path, data)?;
         written.push(path);
     }
@@ -154,7 +154,7 @@ pub fn write_association_files(home_dir: &Path, appimage_path: &str) -> std::io:
     // Scalable SVG
     let scalable_dir = icons_base.join("scalable/mimetypes");
     fs::create_dir_all(&scalable_dir)?;
-    let svg_path = scalable_dir.join("application-x-sentinel-workflow.svg");
+    let svg_path = scalable_dir.join("application-x-cero-workflow.svg");
     fs::write(&svg_path, FLOW_SVG)?;
     written.push(svg_path);
 
@@ -163,13 +163,13 @@ pub fn write_association_files(home_dir: &Path, appimage_path: &str) -> std::io:
 
 pub fn remove_association_files(home_dir: &Path) -> std::io::Result<()> {
     // 1. Remove mime xml
-    let mime_file = home_dir.join(".local/share/mime/packages/sentinel-terminal.xml");
+    let mime_file = home_dir.join(".local/share/mime/packages/cero-terminal.xml");
     if mime_file.exists() {
         let _ = fs::remove_file(mime_file);
     }
 
     // 2. Remove desktop file
-    let desktop_file = home_dir.join(".local/share/applications/sentinel-terminal.desktop");
+    let desktop_file = home_dir.join(".local/share/applications/cero-terminal.desktop");
     if desktop_file.exists() {
         let _ = fs::remove_file(desktop_file);
     }
@@ -177,20 +177,20 @@ pub fn remove_association_files(home_dir: &Path) -> std::io::Result<()> {
     // 3. Remove icons
     let icons_base = home_dir.join(".local/share/icons/hicolor");
     for size in &[512, 128, 32] {
-        let p = icons_base.join(format!("{}x{}/apps/sentinel-terminal.png", size, size));
+        let p = icons_base.join(format!("{}x{}/apps/cero-terminal.png", size, size));
         if p.exists() {
             let _ = fs::remove_file(p);
         }
     }
 
     for size in &[16, 24, 32, 48, 64, 128, 256, 512] {
-        let p = icons_base.join(format!("{}x{}/mimetypes/application-x-sentinel-workflow.png", size, size));
+        let p = icons_base.join(format!("{}x{}/mimetypes/application-x-cero-workflow.png", size, size));
         if p.exists() {
             let _ = fs::remove_file(p);
         }
     }
 
-    let svg_path = icons_base.join("scalable/mimetypes/application-x-sentinel-workflow.svg");
+    let svg_path = icons_base.join("scalable/mimetypes/application-x-cero-workflow.svg");
     if svg_path.exists() {
         let _ = fs::remove_file(svg_path);
     }
@@ -224,7 +224,7 @@ pub fn ensure_registered(_app: &tauri::AppHandle) {
         };
 
         // If system copy exists, no AppImage self-registration needed
-        if Path::new("/usr/share/mime/packages/sentinel-terminal.xml").exists() {
+        if Path::new("/usr/share/mime/packages/cero-terminal.xml").exists() {
             return;
         }
 
@@ -235,7 +235,7 @@ pub fn ensure_registered(_app: &tauri::AppHandle) {
 
         let mut store = load_association_store(&home_dir);
         if store.decision.as_deref() == Some("accepted") {
-            let desktop_path = home_dir.join(".local/share/applications/sentinel-terminal.desktop");
+            let desktop_path = home_dir.join(".local/share/applications/cero-terminal.desktop");
             let path_changed = store.appimage_path.as_deref() != Some(&appimage_env);
             if path_changed || !desktop_path.exists() {
                 if write_association_files(&home_dir, &appimage_env).is_ok() {
@@ -254,7 +254,7 @@ pub fn get_association_status() -> AssociationStatus {
     #[cfg(target_os = "linux")]
     {
         let is_appimage = std::env::var("APPIMAGE").map(|s| !s.trim().is_empty()).unwrap_or(false);
-        let system_managed = Path::new("/usr/share/mime/packages/sentinel-terminal.xml").exists();
+        let system_managed = Path::new("/usr/share/mime/packages/cero-terminal.xml").exists();
 
         if system_managed {
             return AssociationStatus {
@@ -262,13 +262,13 @@ pub fn get_association_status() -> AssociationStatus {
                 registered: true,
                 decision: "system_managed".to_string(),
                 appimage_path: None,
-                desktop_file: Some("/usr/share/applications/sentinel-terminal.desktop".to_string()),
+                desktop_file: Some("/usr/share/applications/cero-terminal.desktop".to_string()),
             };
         }
 
         let home_dir = get_user_home().unwrap_or_else(|| PathBuf::from("/tmp"));
         let store = load_association_store(&home_dir);
-        let desktop_file = home_dir.join(".local/share/applications/sentinel-terminal.desktop");
+        let desktop_file = home_dir.join(".local/share/applications/cero-terminal.desktop");
         let registered = store.registered && desktop_file.exists();
 
         let decision = if is_appimage {
@@ -306,7 +306,7 @@ pub fn set_association_status(enabled: bool) -> Result<AssociationStatus, String
         let appimage_path = std::env::var("APPIMAGE").unwrap_or_else(|_| {
             std::env::current_exe()
                 .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|_| "sentinel-terminal".to_string())
+                .unwrap_or_else(|_| "cero-terminal".to_string())
         });
 
         let mut store = load_association_store(&home_dir);
@@ -318,7 +318,7 @@ pub fn set_association_status(enabled: bool) -> Result<AssociationStatus, String
             store.decision = Some("accepted".to_string());
             save_association_store(&home_dir, &store).map_err(|e| e.to_string())?;
 
-            let desktop_path = home_dir.join(".local/share/applications/sentinel-terminal.desktop");
+            let desktop_path = home_dir.join(".local/share/applications/cero-terminal.desktop");
             Ok(AssociationStatus {
                 is_appimage: std::env::var("APPIMAGE").is_ok(),
                 registered: true,
@@ -356,11 +356,11 @@ mod tests {
 
     #[test]
     fn test_build_desktop_entry_quotes_spaces() {
-        let path = "/home/user/App Images/Sentinel Terminal-2.1.0.AppImage";
+        let path = "/home/user/App Images/Cero-2.1.0.AppImage";
         let content = build_desktop_entry(path);
         assert!(content.contains(&format!("Exec=\"{}\" %F", path)));
-        assert!(content.contains("MimeType=application/x-sentinel-workflow;"));
-        assert!(content.contains("StartupWMClass=sentinel-terminal"));
+        assert!(content.contains("MimeType=application/x-cero-workflow;"));
+        assert!(content.contains("StartupWMClass=cero-terminal"));
     }
 
     #[test]
@@ -385,23 +385,23 @@ mod tests {
 
     #[test]
     fn test_write_and_remove_association_files() {
-        let temp_dir = std::env::temp_dir().join(format!("sentinel_assoc_test_{}", std::process::id()));
+        let temp_dir = std::env::temp_dir().join(format!("cero_assoc_test_{}", std::process::id()));
         let _ = fs::create_dir_all(&temp_dir);
 
-        let appimage_path = "/tmp/test apps/Sentinel.AppImage";
+        let appimage_path = "/tmp/test apps/Cero.AppImage";
         let written = write_association_files(&temp_dir, appimage_path).expect("write files failed");
         assert!(!written.is_empty());
 
-        let desktop_file = temp_dir.join(".local/share/applications/sentinel-terminal.desktop");
-        let mime_file = temp_dir.join(".local/share/mime/packages/sentinel-terminal.xml");
-        let icon_file = temp_dir.join(".local/share/icons/hicolor/16x16/mimetypes/application-x-sentinel-workflow.png");
+        let desktop_file = temp_dir.join(".local/share/applications/cero-terminal.desktop");
+        let mime_file = temp_dir.join(".local/share/mime/packages/cero-terminal.xml");
+        let icon_file = temp_dir.join(".local/share/icons/hicolor/16x16/mimetypes/application-x-cero-workflow.png");
 
         assert!(desktop_file.exists());
         assert!(mime_file.exists());
         assert!(icon_file.exists());
 
         let desktop_content = fs::read_to_string(&desktop_file).unwrap();
-        assert!(desktop_content.contains("Exec=\"/tmp/test apps/Sentinel.AppImage\" %F"));
+        assert!(desktop_content.contains("Exec=\"/tmp/test apps/Cero.AppImage\" %F"));
 
         // Now test removal
         remove_association_files(&temp_dir).expect("remove files failed");

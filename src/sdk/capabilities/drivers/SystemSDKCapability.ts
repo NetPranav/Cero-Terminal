@@ -615,9 +615,9 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
             count: targetCount,
             singular: isSingular,
             processes: isSingular ? [
-              { pid: 1423, name: 'Sentinel AI', cpuPercent: 12.4, ramMb: 310 }
+              { pid: 1423, name: 'Cero AI', cpuPercent: 12.4, ramMb: 310 }
             ] : [
-              { pid: 1423, name: 'Sentinel AI', cpuPercent: 12.4, ramMb: 310 },
+              { pid: 1423, name: 'Cero AI', cpuPercent: 12.4, ramMb: 310 },
               { pid: 821, name: 'Google Chrome', cpuPercent: 8.1, ramMb: 1450 },
               { pid: 31, name: 'WindowServer', cpuPercent: 6.0, ramMb: 420 },
               { pid: 5190, name: 'Terminal', cpuPercent: 1.2, ramMb: 95 }

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-scripts/train_sentinel_grpo.py — On-Device Rule-Based GRPO Reinforcement Learning
+scripts/train_cero_grpo.py — On-Device Rule-Based GRPO Reinforcement Learning
 DeepSeek-R1 Architecture for Bash & Terminal Automation
 
-Part of Sentinel-SERL (Self-Evolving Reflexion Loop):
+Part of Cero-SERL (Self-Evolving Reflexion Loop):
 Trains a 3B model (Qwen2.5-Coder-3B-Instruct) using Group Relative Policy Optimization (GRPO)
 without human labels or a separate critic network.
 Guided entirely by mathematical terminal execution feedback:
@@ -309,7 +309,7 @@ def compute_group_advantages(rewards: List[float], eps: float = 1e-8) -> List[fl
 def run_reward_self_tests():
     """Runs automated verification of the rule-based reward oracle and advantage math."""
     print("=" * 60)
-    print("🧪 Running Sentinel GRPO Rule-Based Reward Oracle Self-Tests...")
+    print("🧪 Running Cero GRPO Rule-Based Reward Oracle Self-Tests...")
     print("=" * 60)
 
     # 1. Test success reward (e.g. echo or sw_vers)
@@ -398,7 +398,7 @@ def run_reward_self_tests():
 def run_dry_run_simulation(args):
     """Simulates GRPO group sampling and reward assignment on a sample terminal prompt."""
     print("=" * 60)
-    print("🚀 Running Sentinel GRPO Reinforcement Learning Dry-Run...")
+    print("🚀 Running Cero GRPO Reinforcement Learning Dry-Run...")
     print("=" * 60)
 
     prompt = "give me the list of the ports that is being used by antigravity"
@@ -441,10 +441,10 @@ def run_dry_run_simulation(args):
 def run_grpo_training(args):
     """Executes the full GRPO training loop using HuggingFace TRL."""
     home = Path.home()
-    output_dir = Path(args.output_dir).expanduser() if args.output_dir else home / ".sentinel" / "models" / "sentinel_grpo_r1"
+    output_dir = Path(args.output_dir).expanduser() if args.output_dir else home / ".cero" / "models" / "cero_grpo_r1"
 
     print("=" * 60)
-    print("⚡ Sentinel Terminal — On-Device GRPO Reinforcement Learning")
+    print("⚡ Cero — On-Device GRPO Reinforcement Learning")
     print("=" * 60)
     print(f"Model ID:      {args.model}")
     print(f"Output Dir:    {output_dir}")
@@ -475,7 +475,7 @@ def run_grpo_training(args):
         print("⚠️ Utilizing CPU.")
 
     # Prepare training prompts from dataset
-    dataset_file = Path(args.dataset).expanduser() if args.dataset else home / ".sentinel" / "training" / "sentinel_dpo_pairs.jsonl"
+    dataset_file = Path(args.dataset).expanduser() if args.dataset else home / ".cero" / "training" / "cero_dpo_pairs.jsonl"
     prompts = []
 
     if dataset_file.exists():
@@ -554,7 +554,7 @@ def run_grpo_training(args):
 # ==============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Sentinel GRPO (DeepSeek-R1) Reinforcement Learning Engine")
+    parser = argparse.ArgumentParser(description="Cero GRPO (DeepSeek-R1) Reinforcement Learning Engine")
     parser.add_argument("--test-rewards", action="store_true", help="Run reward oracle and advantage self-tests")
     parser.add_argument("--dry-run", action="store_true", help="Simulate group rollouts and reward computation on sample prompt")
     parser.add_argument("--model", type=str, default="Qwen/Qwen2.5-Coder-3B-Instruct", help="Base model identifier")

@@ -380,7 +380,7 @@ export function formatWatchEvent(event: import('../domain/watch/ErrorWatchServic
     case 'proposal':
       return `${head}    ${S.soft}Fix available: ${event.suggestion.title}${S.reset}  ${S.muted}${event.suggestion.fixedCommand}${S.reset}\r\n    ${S.muted}Run >watch fix to apply it.${S.reset}\r\n`;
     case 'error':
-      return `${head}    ${S.muted}Run >watch fix to have Sentinel diagnose it.${S.reset}\r\n`;
+      return `${head}    ${S.muted}Run >watch fix to have Cero diagnose it.${S.reset}\r\n`;
   }
 }
 

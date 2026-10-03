@@ -8,10 +8,10 @@
   <array>
     <dict>
       <key>CFBundleURLName</key>
-      <string>Sentinel Terminal Protocol</string>
+      <string>Cero Protocol</string>
       <key>CFBundleURLSchemes</key>
       <array>
-        <string>sentinel</string>
+        <string>cero</string>
       </array>
     </dict>
   </array>
@@ -19,7 +19,7 @@
   <array>
     <dict>
       <key>CFBundleTypeName</key>
-      <string>Sentinel Flow</string>
+      <string>Cero Flow</string>
       <key>CFBundleTypeRole</key>
       <string>Editor</string>
       <key>LSHandlerRank</key>
@@ -32,7 +32,7 @@
       </array>
       <key>LSItemContentTypes</key>
       <array>
-        <string>com.sentinel.flow</string>
+        <string>com.cero.flow</string>
       </array>
     </dict>
   </array>
@@ -40,9 +40,9 @@
   <array>
     <dict>
       <key>UTTypeIdentifier</key>
-      <string>com.sentinel.flow</string>
+      <string>com.cero.flow</string>
       <key>UTTypeDescription</key>
-      <string>Sentinel Terminal workflow</string>
+      <string>Cero workflow</string>
       <key>UTTypeConformsTo</key>
       <array>
         <string>public.json</string>
@@ -57,17 +57,17 @@
           <string>flow</string>
         </array>
         <key>public.mime-type</key>
-        <string>application/x-sentinel-workflow</string>
+        <string>application/x-cero-workflow</string>
       </dict>
     </dict>
   </array>
   <key>NSBluetoothAlwaysUsageDescription</key>
-  <string>Sentinel Terminal requires Bluetooth access to turn on/off and connect to your Bluetooth devices on your behalf.</string>
+  <string>Cero requires Bluetooth access to turn on/off and connect to your Bluetooth devices on your behalf.</string>
   <key>NSDesktopFolderUsageDescription</key>
-  <string>Sentinel Terminal saves a workflow (.flow) file to your Desktop when you choose that place, and runs commands you approve in folders you open.</string>
+  <string>Cero saves a workflow (.flow) file to your Desktop when you choose that place, and runs commands you approve in folders you open.</string>
   <key>NSDocumentsFolderUsageDescription</key>
-  <string>Sentinel Terminal saves a workflow (.flow) file to Documents when you choose that place, and runs commands you approve in folders you open.</string>
+  <string>Cero saves a workflow (.flow) file to Documents when you choose that place, and runs commands you approve in folders you open.</string>
   <key>NSDownloadsFolderUsageDescription</key>
-  <string>Sentinel Terminal works with files in Downloads when you ask it to (for example "find the zip in Downloads").</string>
+  <string>Cero works with files in Downloads when you ask it to (for example "find the zip in Downloads").</string>
 </dict>
 </plist>

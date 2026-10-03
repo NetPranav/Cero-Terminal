@@ -1,4 +1,4 @@
-# Sentinel Terminal — Completed Roadmap
+# Cero — Completed Roadmap
 
 Tracks every task completed from `docs/ROADMAP.md` with implementation details.
 
@@ -57,11 +57,11 @@ All four tasks specified in `docs/roadmap.md` under Phase 1 (Tasks 1.1 through 1
 4. `CloudApiProvider.getActiveConfig()` was not guaranteed to be loaded before `ModelManager.initialize()` executed on mount.
 
 **Approach & Implementation:**
-1. **Single Writer Pattern:** Implemented private `persistChoice(providerId, modelId)` in `ModelManager.ts` that safely writes `sentinel_active_ai_provider` and `sentinel_active_ai_model` inside a `try/catch` block (gracefully handling storage quota or blocked storage errors in private browsing).
+1. **Single Writer Pattern:** Implemented private `persistChoice(providerId, modelId)` in `ModelManager.ts` that safely writes `cero_active_ai_provider` and `cero_active_ai_model` inside a `try/catch` block (gracefully handling storage quota or blocked storage errors in private browsing).
 2. **Apply First, Verify Second:** Updated `initialize()`:
    - Immediately applies the saved provider and model without blocking on availability.
    - Spawns a background verification retry loop (up to 5 retries, 2 seconds apart).
-   - If available: dispatches `sentinel:ai-status-changed` and marks `isReady: true`.
+   - If available: dispatches `cero:ai-status-changed` and marks `isReady: true`.
    - If unavailable after all retries: keeps the user's choice, marks `isReady: false`, sets `unavailableReason: string` (e.g. "Ollama is not running"), and never silently overwrites preferences with the embedded engine.
 3. **Startup Ordering in `App.tsx`:** Added an initial startup effect that loads `CloudApiProvider.getInstance().getActiveConfig()` before invoking `ModelManager.getInstance().initialize()`.
 4. **UI Fallback & Warning:**
@@ -73,7 +73,7 @@ All four tasks specified in `docs/roadmap.md` under Phase 1 (Tasks 1.1 through 1
 - 9 unit tests in [`src/ai/__tests__/ModelManager.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/__tests__/ModelManager.test.ts):
   - Applies saved provider and model immediately on `initialize()` and successfully verifies in background using fake timers.
   - Keeps saved provider and model when availability checks persistently fail, populates `unavailableReason`, and retains localStorage keys.
-  - `setModel()` writes `sentinel_active_ai_model` to localStorage.
+  - `setModel()` writes `cero_active_ai_model` to localStorage.
   - Storage errors (`localStorage.setItem` throwing) handled gracefully without throwing.
   - Catalog scoring, checksum verification, and rollback history tests.
 
@@ -100,7 +100,7 @@ All four tasks specified in `docs/roadmap.md` under Phase 1 (Tasks 1.1 through 1
    - In [`src/ui/components/StatusBar.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/StatusBar.tsx), bound button `title` directly to `aiBadge.detail`.
    - Unified background (`rgba(255,255,255,0.08)` for ready, `0.04` for starting, `0.02` for dim), border, and text colors directly to `aiBadge.state`.
    - Replaced color-only states with `ShieldAlert` icon from `lucide-react` for `unavailable` states.
-4. **Reactive Event Listener:** Subscribed `StatusBar.tsx` to `sentinel:ai-status-changed` events dispatched by `ModelManager`.
+4. **Reactive Event Listener:** Subscribed `StatusBar.tsx` to `cero:ai-status-changed` events dispatched by `ModelManager`.
 
 **Automated Verification:**
 - 11 unit tests in [`src/ai/management/AiStatus.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/management/AiStatus.test.ts):
@@ -149,7 +149,7 @@ All four tasks specified in `docs/roadmap.md` under Phase 1 (Tasks 1.1 through 1
    - Gates ghost recomputation strictly on printable characters and Backspace when the cursor remains at the end.
 5. **Configurable User Preference:**
    - Added "Accept suggestion with Right arrow" toggle card in [`src/ui/components/AiSettingsPage.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/AiSettingsPage.tsx).
-   - Defaults to `true` and persists under `sentinel_ghost_accept_right`.
+   - Defaults to `true` and persists under `cero_ghost_accept_right`.
 
 **Automated Verification:**
 - 19 unit tests in [`src/presentation/ghostKeys.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/ghostKeys.test.ts): all key branches, mid-line vs end-of-line, and `acceptRight` flag toggles.
@@ -162,14 +162,14 @@ All four tasks specified in `docs/roadmap.md` under Phase 1 (Tasks 1.1 through 1
 - **Unit Tests:** `npm test` passed with 243/243 test files passing, 2,097 tests passed, 1 skipped.
 - **Frontend Build:** `npm run build` compiled clean with zero TypeScript or Vite bundle errors.
 - **Backend Cargo Check:** `cargo check --manifest-path src-tauri/Cargo.toml` exited with code 0.
-- **Desktop Application Bundle:** Successfully built and packaged at `src-tauri/target/debug/bundle/macos/Sentinel Terminal.app`.
+- **Desktop Application Bundle:** Successfully built and packaged at `src-tauri/target/debug/bundle/macos/Cero.app`.
 
 ### Manual Testing Guide for the Built Application
 To test the built desktop application directly on macOS:
 1. **Launch the Application:**
-   - Double-click `src-tauri/target/debug/bundle/macos/Sentinel Terminal.app`, or run:
+   - Double-click `src-tauri/target/debug/bundle/macos/Cero.app`, or run:
      ```bash
-     open "src-tauri/target/debug/bundle/macos/Sentinel Terminal.app"
+     open "src-tauri/target/debug/bundle/macos/Cero.app"
      ```
    - Alternatively, for hot-reloading development mode, run:
      ```bash
@@ -261,9 +261,9 @@ To test the built desktop application directly on macOS:
 **Solution:**
 - Created [`src/presentation/PromptQueue.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/PromptQueue.ts): singleton observable queue with items `{ id, label, addedAt, kind }`, methods `enqueue`, `add`, `list`, `remove`, `move`, `clear`, `takeNext`, `subscribe`, `isPaused`, `setPaused`, `togglePaused`, and running item tracking (`getRunningItem`, `setRunningItem`).
 - Natural language and command parsing for `/queue`, `/queue clear`, `/queue remove <N>`, `/queue pause`, `/queue resume`, and plain English "show the queue", "cancel the second queued request", "clear the queue", "pause the queue", "resume the queue".
-- Created [`src/ui/components/QueuePanel.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/QueuePanel.tsx): dark grayscale matte UI (`#090b10`, `#0c0d12`, muted whites, 5-15% white borders), zero emojis (monochrome `lucide-react` icons: `StopCircle`, `ArrowUp`, `X`, `Pause`, `Play`, `Trash2`), displaying active running task with a `Stop` button (`sentinel:abort-active-run`), queued tasks with `Run Next` and `Remove` buttons, "Pause Queue" toggle, "Clear All" button, tooltip with full task label, and note "Queued prompts do not persist across restarts".
+- Created [`src/ui/components/QueuePanel.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/QueuePanel.tsx): dark grayscale matte UI (`#090b10`, `#0c0d12`, muted whites, 5-15% white borders), zero emojis (monochrome `lucide-react` icons: `StopCircle`, `ArrowUp`, `X`, `Pause`, `Play`, `Trash2`), displaying active running task with a `Stop` button (`cero:abort-active-run`), queued tasks with `Run Next` and `Remove` buttons, "Pause Queue" toggle, "Clear All" button, tooltip with full task label, and note "Queued prompts do not persist across restarts".
 - Wired `Queue: N items` indicator into [`src/ui/components/StatusBar.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/StatusBar.tsx) (visible when items are queued, clicking opens the queue panel).
-- Wired `sentinel:abort-active-run` and `sentinel:queue-resumed` listeners in [`src/presentation/TerminalView.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/TerminalView.tsx).
+- Wired `cero:abort-active-run` and `cero:queue-resumed` listeners in [`src/presentation/TerminalView.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/TerminalView.tsx).
 - Flow queueing enabled in `submitRef.current`: busy state now queues flows `{ kind: 'flow', flowPlan, source }` rather than refusing them.
 - Deterministic queue routes in [`src/ai/agent/AgentLoop.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/AgentLoop.ts): defined `QueueIO` interface, `defaultQueueIO`, and `setQueueIO(io: QueueIO)`, routing "show the queue", "cancel the second queued request", "clear the queue" directly without invoking the LLM.
 
@@ -397,9 +397,9 @@ All eight tasks specified in `docs/roadmap.md` under Phase 4 (Tasks 4.1 through 
 |---|---|---|---|---|
 | **4.1** | One writer that always makes `.flow`, lossless roundtrip, legacy `.json` migration, cleanup fake fast paths | `src/workflows/flow/FlowExport.ts`<br>`src/workflows/storage/FlowImport.ts`<br>`src/workflows/storage/DiskWorkflowStorage.ts`<br>`src/ai/agent/AgentLoop.ts`<br>`src/ui/components/WorkflowManagerDrawer.tsx` | `src/workflows/flow/FlowExport.test.ts` (2 tests)<br>`src/workflows/storage/FlowImport.test.ts` (6 tests)<br>`src/workflows/storage/DiskWorkflowStorage.test.ts` (11 tests)<br>`src/ai/agent/AgentLoopWorkflow.test.ts` (7 tests) | **100% COMPLETE** |
 | **4.2** | Grayscale vector marks (`flow-icon.svg`, `flow-icon-small.svg`), PNG rasterization 16..1024, `flow.ico`, `flow.icns`, Linux scalable SVG, contact sheet | `assets/brand/flow-icon.svg`<br>`assets/brand/flow-icon-small.svg`<br>`scripts/icons/pack-ico.mjs`<br>`scripts/icons/make-flow-icons.mjs`<br>`src-tauri/icons/flow/*`<br>`docs/brand/flow-icon-preview.png` | Contact sheet verified, 16..1024 PNGs, ICO, ICNS generated | **100% COMPLETE** |
-| **4.3** | macOS association & icon: UTI `com.sentinel.flow`, document icon `flow.icns`, `Info.plist` declarations, rank Owner | `src-tauri/tauri.conf.json`<br>`src-tauri/Info.plist` | Verified via `cargo check` and LaunchServices configuration | **IMPLEMENTED - NOT YET VERIFIED ON macOS Finder** |
-| **4.4** | Windows association & icon: `installer-hooks.nsh` NSIS macros for `Sentinel.Flow` and `DefaultIcon`, icon resource | `src-tauri/windows/installer-hooks.nsh`<br>`src-tauri/tauri.conf.json` | Tested argument handling and NSIS hook registry specifications | **IMPLEMENTED - NOT YET VERIFIED ON WINDOWS** |
-| **4.5** | Linux association & packages: `sentinel-terminal-mime.xml` (text/plain sub-class), icon mappings, `postinst.sh`, `postrm.sh`, PKGBUILD, Flatpak | `packaging/linux/sentinel-terminal-mime.xml`<br>`packaging/linux/sentinel-terminal.desktop.hbs`<br>`packaging/linux/postinst.sh`<br>`packaging/linux/postrm.sh`<br>`packaging/arch/PKGBUILD`<br>`packaging/flatpak/org.sentinel.terminal.yml`<br>`packaging/flatpak/org.sentinel.terminal.desktop`<br>`packaging/flatpak/org.sentinel.terminal.metainfo.xml` | Package manifest validations, cache update hooks | **IMPLEMENTED - NOT YET VERIFIED ON LINUX** |
+| **4.3** | macOS association & icon: UTI `com.cero.flow`, document icon `flow.icns`, `Info.plist` declarations, rank Owner | `src-tauri/tauri.conf.json`<br>`src-tauri/Info.plist` | Verified via `cargo check` and LaunchServices configuration | **IMPLEMENTED - NOT YET VERIFIED ON macOS Finder** |
+| **4.4** | Windows association & icon: `installer-hooks.nsh` NSIS macros for `Cero.Flow` and `DefaultIcon`, icon resource | `src-tauri/windows/installer-hooks.nsh`<br>`src-tauri/tauri.conf.json` | Tested argument handling and NSIS hook registry specifications | **IMPLEMENTED - NOT YET VERIFIED ON WINDOWS** |
+| **4.5** | Linux association & packages: `cero-terminal-mime.xml` (text/plain sub-class), icon mappings, `postinst.sh`, `postrm.sh`, PKGBUILD, Flatpak | `packaging/linux/cero-terminal-mime.xml`<br>`packaging/linux/cero-terminal.desktop.hbs`<br>`packaging/linux/postinst.sh`<br>`packaging/linux/postrm.sh`<br>`packaging/arch/PKGBUILD`<br>`packaging/flatpak/org.cero.terminal.yml`<br>`packaging/flatpak/org.cero.terminal.desktop`<br>`packaging/flatpak/org.cero.terminal.metainfo.xml` | Package manifest validations, cache update hooks | **IMPLEMENTED - NOT YET VERIFIED ON LINUX** |
 | **4.6** | Linux AppImage self-registration: `file_association.rs`, desktop & MIME files in `~/.local/share/`, ask once prompt, Settings toggle | `src-tauri/src/file_association.rs`<br>`src-tauri/src/lib.rs`<br>`src/ui/components/FileAssociationPrompt.tsx`<br>`src/ui/components/AiSettingsPage.tsx`<br>`src/App.tsx` | `src-tauri/src/file_association.rs` (3 Rust unit tests passing) | **IMPLEMENTED - NOT YET VERIFIED ON LINUX** |
 | **4.7** | Single-instance handling: `tauri-plugin-single-instance` in `lib.rs`, `filter_flow_argv`, sequential flow queueing when busy | `src-tauri/src/lib.rs`<br>`src-tauri/src/launch.rs`<br>`src/presentation/PromptQueue.ts`<br>`src/presentation/TerminalView.tsx` | `src-tauri/src/launch.rs` (2 Rust unit tests passing)<br>`src/presentation/PromptQueue.test.ts` (10 tests passing) | **100% COMPLETE** |
 | **4.8** | Documentation updates: `docs/FLOW_FILES.md` and `docs/completed_roadmap.md` | `docs/FLOW_FILES.md`<br>`docs/completed_roadmap.md` | Documentation verified | **100% COMPLETE** |
@@ -417,32 +417,32 @@ All eight tasks specified in `docs/roadmap.md` under Phase 4 (Tasks 4.1 through 
 ### Task 4.2 — Design the icon
 **Status:** COMPLETE (Fully Verified)
 - Designed master SVG [`assets/brand/flow-icon.svg`](file:///Users/pranav/Project%20Folder/AI%20Terminal/assets/brand/flow-icon.svg) and small-size SVG [`assets/brand/flow-icon-small.svg`](file:///Users/pranav/Project%20Folder/AI%20Terminal/assets/brand/flow-icon-small.svg) conforming strictly to matte grayscale design rules (`#0c0d12` page, 14px border, 6px contrast shadow, 190px folded corner `#1a1c24`, 3 stepping circles with connector line, 76px run ring, and outlined `FLOW` text).
-- Created pure Node scripts [`scripts/icons/pack-ico.mjs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/icons/pack-ico.mjs) and [`scripts/icons/make-flow-icons.mjs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/icons/make-flow-icons.mjs) rendering crisp, anti-aliased PNGs across all resolutions (16, 24, 32, 48, 64, 96, 128, 256, 512, 1024), packing Windows `flow.ico`, generating macOS `flow.icns`, copying `application-x-sentinel-workflow.svg`, and producing [`docs/brand/flow-icon-preview.png`](file:///Users/pranav/Project%20Folder/AI%20Terminal/docs/brand/flow-icon-preview.png).
+- Created pure Node scripts [`scripts/icons/pack-ico.mjs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/icons/pack-ico.mjs) and [`scripts/icons/make-flow-icons.mjs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/icons/make-flow-icons.mjs) rendering crisp, anti-aliased PNGs across all resolutions (16, 24, 32, 48, 64, 96, 128, 256, 512, 1024), packing Windows `flow.ico`, generating macOS `flow.icns`, copying `application-x-cero-workflow.svg`, and producing [`docs/brand/flow-icon-preview.png`](file:///Users/pranav/Project%20Folder/AI%20Terminal/docs/brand/flow-icon-preview.png).
 
 ### Task 4.3 — macOS association and icon
 **Status:** IMPLEMENTED (config and code checked; not yet run on a built macOS app - see Phase 8)
-- Configured `bundle.fileAssociations` in [`src-tauri/tauri.conf.json`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/tauri.conf.json) for `ext: ["flow"]`, `name: "Sentinel Flow"`, `role: "Editor"`, `mimeType: "application/x-sentinel-workflow"`.
+- Configured `bundle.fileAssociations` in [`src-tauri/tauri.conf.json`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/tauri.conf.json) for `ext: ["flow"]`, `name: "Cero Flow"`, `role: "Editor"`, `mimeType: "application/x-cero-workflow"`.
 - Added `"Resources/flow.icns": "icons/flow/flow.icns"` to `bundle.macOS.files`.
-- Configured [`src-tauri/Info.plist`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/Info.plist) declaring `UTExportedTypeDeclarations` for `com.sentinel.flow` (`UTTypeIconFile = flow`) and `CFBundleDocumentTypes` (`CFBundleTypeIconFile = flow`, `LSHandlerRank = Owner`).
+- Configured [`src-tauri/Info.plist`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/Info.plist) declaring `UTExportedTypeDeclarations` for `com.cero.flow` (`UTTypeIconFile = flow`) and `CFBundleDocumentTypes` (`CFBundleTypeIconFile = flow`, `LSHandlerRank = Owner`).
 
 ### Task 4.4 — Windows association and icon
 **Status:** IMPLEMENTED (config and code checked; not yet run on Windows - see Phase 8)
-- Created [`src-tauri/windows/installer-hooks.nsh`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/windows/installer-hooks.nsh) implementing `NSIS_HOOK_POSTINSTALL` and `NSIS_HOOK_PREUNINSTALL` writing `Software\Classes\.flow`, `Content Type`, `Sentinel.Flow`, `DefaultIcon "$INSTDIR\flow.ico,0"`, and shell open command with `SHChangeNotify`.
+- Created [`src-tauri/windows/installer-hooks.nsh`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/windows/installer-hooks.nsh) implementing `NSIS_HOOK_POSTINSTALL` and `NSIS_HOOK_PREUNINSTALL` writing `Software\Classes\.flow`, `Content Type`, `Cero.Flow`, `DefaultIcon "$INSTDIR\flow.ico,0"`, and shell open command with `SHChangeNotify`.
 - Pointed `bundle.windows.nsis.installerHooks` to `windows/installer-hooks.nsh` and mapped `resources: { "icons/flow/flow.ico": "flow.ico" }` in `tauri.conf.json`.
 
 ### Task 4.5 — Linux association and icon
 **Status:** IMPLEMENTED (config and code checked; not yet run on Linux - see Phase 8)
-- Updated [`packaging/linux/sentinel-terminal-mime.xml`](file:///Users/pranav/Project%20Folder/AI%20Terminal/packaging/linux/sentinel-terminal-mime.xml) with `application/x-sentinel-workflow`, icon `application-x-sentinel-workflow`, `sub-class-of text/plain`, and `*.flow` glob with weight 80.
+- Updated [`packaging/linux/cero-terminal-mime.xml`](file:///Users/pranav/Project%20Folder/AI%20Terminal/packaging/linux/cero-terminal-mime.xml) with `application/x-cero-workflow`, icon `application-x-cero-workflow`, `sub-class-of text/plain`, and `*.flow` glob with weight 80.
 - Created [`packaging/linux/postinst.sh`](file:///Users/pranav/Project%20Folder/AI%20Terminal/packaging/linux/postinst.sh) and [`packaging/linux/postrm.sh`](file:///Users/pranav/Project%20Folder/AI%20Terminal/packaging/linux/postrm.sh) refreshing MIME, desktop, and icon caches with failure tolerance (`|| true`).
 - Mapped all PNG icon sizes (16..512) and scalable SVG into `bundle.linux.deb.files` and `bundle.linux.rpm.files` in `tauri.conf.json`.
-- Updated `packaging/arch/PKGBUILD` and Flatpak manifest (`packaging/flatpak/org.sentinel.terminal.yml`, desktop file, and metainfo).
+- Updated `packaging/arch/PKGBUILD` and Flatpak manifest (`packaging/flatpak/org.cero.terminal.yml`, desktop file, and metainfo).
 
 ### Task 4.6 — Linux AppImage self-registration
 **Status:** IMPLEMENTED (config and code checked; not yet run on Linux - see Phase 8)
 - Implemented [`src-tauri/src/file_association.rs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/src/file_association.rs) embedding MIME XML, desktop file template, and icons.
 - `ensure_registered` activates when `APPIMAGE` is present and no system copy exists: writes user files into `~/.local/share/` and refreshes user caches.
 - Dynamic repair: updates desktop file `Exec` command if the AppImage path changes.
-- "Ask once" full-screen prompt implemented in [`src/ui/components/FileAssociationPrompt.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/FileAssociationPrompt.tsx) storing the decision in `~/.sentinel/association.json`.
+- "Ask once" full-screen prompt implemented in [`src/ui/components/FileAssociationPrompt.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/FileAssociationPrompt.tsx) storing the decision in `~/.cero/association.json`.
 - Added manual toggle in **Settings > General** in [`src/ui/components/AiSettingsPage.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/AiSettingsPage.tsx).
 
 ### Task 4.7 — Single-instance handling
@@ -450,12 +450,12 @@ All eight tasks specified in `docs/roadmap.md` under Phase 4 (Tasks 4.1 through 
 - Added `tauri-plugin-single-instance = "2.5.2"` to [`src-tauri/Cargo.toml`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/Cargo.toml).
 - Registered `tauri_plugin_single_instance::init` first in `src-tauri/src/lib.rs`.
 - Implemented `launch::filter_flow_argv()` in [`src-tauri/src/launch.rs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/src/launch.rs) dropping flags, missing files, and non-flow files while preserving valid flow paths (including paths with spaces).
-- Passes `.flow` paths to `remember_opened` and emits `sentinel-url`, focusing the main window if not a desktop-only flow.
+- Passes `.flow` paths to `remember_opened` and emits `cero-url`, focusing the main window if not a desktop-only flow.
 - Verified frontend queueing: flows arriving while the terminal/agent is busy are queued into `PromptQueue` and executed sequentially.
 
 ### Task 4.8 — Documentation
 **Status:** COMPLETE (Fully Verified)
-- Updated [`docs/FLOW_FILES.md`](file:///Users/pranav/Project%20Folder/AI%20Terminal/docs/FLOW_FILES.md) with comprehensive "Sentinel only writes `.flow`" and "Opening flows" sections detailing macOS, Windows, Linux, AppImage self-registration, cache reset commands, and single-instance queueing.
+- Updated [`docs/FLOW_FILES.md`](file:///Users/pranav/Project%20Folder/AI%20Terminal/docs/FLOW_FILES.md) with comprehensive "Cero only writes `.flow`" and "Opening flows" sections detailing macOS, Windows, Linux, AppImage self-registration, cache reset commands, and single-instance queueing.
 - Verified `README.md` contains no legacy `.json` workflow references.
 
 ---
@@ -465,7 +465,7 @@ All eight tasks specified in `docs/roadmap.md` under Phase 4 (Tasks 4.1 through 
 | Task | What changed | Files | Tests |
 |---|---|---|---|
 | **5.1** | `parseSaveIntent` understands the save clause at the start, middle or end, with or without a name, quoted names, `on the desktop`, the old `::` form, and refuses questions and talk about workflows. `extractSaveAsDirective` and `parseScopedWorkflowSave` are thin wrappers over it. It yields to the "make me a workflow..." route. | `src/workflows/engine/SaveIntent.ts`, `MultistagePromptDecomposer.ts` | `SaveIntent.test.ts` (44 rows incl. 14 negatives) |
-| **5.2** | After the task runs, `actionsFromSteps` turns the steps that really ran into portable `.flow` actions (app, command), skipping failed, declined and internal steps. App launches record `{type:'app'}`. One shared `saveDraftWithDialog` serves both this and "make me a workflow". Every request ends with `Saved workflow ... to <path>` or `Not saved: <reason>`; a half-failed task offers to keep the steps that worked; no name asks for one; with no screen to ask on it saves to `~/.sentinel/workflows`. The old behaviour wrote an empty workflow without telling anyone; that is fixed. | `src/ai/agent/AgentLoop.ts`, `src/workflows/flow/FlowFromSteps.ts`, `DiskWorkflowStorage.saveFlowText` | `AgentLoopSaveWorkflow.test.ts` (9), existing workflow tests updated to the new wording |
+| **5.2** | After the task runs, `actionsFromSteps` turns the steps that really ran into portable `.flow` actions (app, command), skipping failed, declined and internal steps. App launches record `{type:'app'}`. One shared `saveDraftWithDialog` serves both this and "make me a workflow". Every request ends with `Saved workflow ... to <path>` or `Not saved: <reason>`; a half-failed task offers to keep the steps that worked; no name asks for one; with no screen to ask on it saves to `~/.cero/workflows`. The old behaviour wrote an empty workflow without telling anyone; that is fixed. | `src/ai/agent/AgentLoop.ts`, `src/workflows/flow/FlowFromSteps.ts`, `DiskWorkflowStorage.saveFlowText` | `AgentLoopSaveWorkflow.test.ts` (9), existing workflow tests updated to the new wording |
 | **5.3** | The step line says `Will save as a workflow when done`; the result shows the path and `run the workflow <name>`; `docs/FLOW_FILES.md` documents the phrasings. | `AgentLoop.ts`, `docs/FLOW_FILES.md` | covered above |
 
 Decisions: read-only commands (`ls`, `git status`, ...) are left out of a longer recipe but kept when they are all the
@@ -480,7 +480,7 @@ user did. Folder-open steps are recorded once Phase 6 lands (the mapper already 
 | **6.1** | One name scorer: `gitBrains`, `git-brains`, `git_brains`, `Git Brains` are the same name (95+); prefix, word, contains and typo levels (a swapped pair of letters counts as one slip). `AppControl` now shares its edit distance. | `src/domain/system/NameMatch.ts` | `NameMatch.test.ts` (7) |
 | **6.2** | `parseOpenRequest` reads the report 6 sentence (including the location in a second sentence), editor words, quoted names, files and `create it if missing`; it ignores "open the door". `PathResolver` tries the exact path, the named place (as written, under home, and by its last two parts), the current folder, the usual project folders, then home; it never creates anything. Rust `find_paths` is a bounded breadth-first search (skips `node_modules`, `.git`, hidden folders, caps entries, time and depth). `openCommand` gives the right command per editor and OS, checks the program exists before a detached launch, falls back to Flatpak, Snap, then `xdg-open`, and never passes a "new window" flag. `AgentLoop.runOpen` wires it: ask when unsure, open once, check the editor started, record an app action for "save as workflow". The old Hyprland "open X and Y in Z" fast path and `FolderOpenParser` are removed. | `OpenRequest.ts`, `PathResolver.ts`, `OpenInApp.ts`, `appPathProbe.ts`, `src-tauri/src/path_search.rs`, `AgentLoop.ts` | `OpenRequest.test.ts` (25), `PathResolver.test.ts` (13), `OpenInApp.test.ts` (6), `AgentLoopOpen.test.ts` (8 folder cases), 4 Rust tests |
 | **6.3** | `AppCatalog` lists installed apps (desktop entries on Linux, `/Applications` on macOS, `Get-StartApps` on Windows), caches for 5 minutes, and `resolveApp` scores names, generic names, keywords and a small alias table (`vs code`, `crome`, `file manager`). `runAppLaunch` now starts the real entry, asks about typos and duplicate copies (deb and Flatpak), and says plainly when an app is not installed; if the list cannot be read it behaves as before. | `AppCatalog.ts`, `appAliases.ts`, `AgentLoop.ts` | `AppCatalog.test.ts` (11, with a saved `.desktop` sample), `appAliases.test.ts`, `AgentLoopOpen.test.ts` (4 app cases) |
-| **6.4** | Fixed question wording; answers are remembered in `~/.sentinel/aliases.json` (owner-only, 200 entries) and asked once; "what do you remember about X", "forget X", "forget my folder shortcuts"; `cd gitbrains` finds the folder from anywhere. | `AliasStore.ts`, `AgentLoop.ts` | `AliasStore.test.ts` (6), `AgentLoopOpen.test.ts` (3 cd/remember cases) |
+| **6.4** | Fixed question wording; answers are remembered in `~/.cero/aliases.json` (owner-only, 200 entries) and asked once; "what do you remember about X", "forget X", "forget my folder shortcuts"; `cd gitbrains` finds the folder from anywhere. | `AliasStore.ts`, `AgentLoop.ts` | `AliasStore.test.ts` (6), `AgentLoopOpen.test.ts` (3 cd/remember cases) |
 
 Decisions that differ from the plan text: a match inside the place the person named wins over an equal match elsewhere (the plan's by-hand check expected two choices; asking would contradict "the named place wins"). Typo-level matches are collected from score 40, not 60, because a typo scores below 60 by the plan's own formula. "Show more" in the question is not built; the list shows the best five and "None of these". The 1.5 second editor check uses `pgrep` and is skipped on Windows. Not yet exercised on a real Linux desktop (see Phase 8).
 
@@ -491,10 +491,10 @@ Decisions that differ from the plan text: a match inside the place the person na
 | Task | What changed | Files | Tests |
 |---|---|---|---|
 | **7.1** | One place decides sampling: `samplingFor` / `resolveSampling` / `wireSampling`. The agent's decision call, the built-in engine, Ollama and the cloud API all read it; each provider only renames fields. Disagreeing defaults are gone (cloud `0.2` / `1024`, built-in `256`, Ollama `1024`). Anthropic now gets the same temperature. A test fails if a provider file sets its own sampling numbers. | `src/ai/provider/DecisionRequest.ts`, the three providers, `DecisionCall.ts` | `DecisionRequest.test.ts` (6) |
-| **7.2** | `npm run eval:model -- --provider embedded|ollama|cloud` (cloud reads `SENTINEL_EVAL_API_*` from the environment only, warns about cost and needs `--yes`); `--compare a.json b.json` prints the case table and the gap list. | `scripts/eval/reliability.mts`, `src/ai/eval/compareReports.ts` | `compareReports.test.ts` (3) |
+| **7.2** | `npm run eval:model -- --provider embedded|ollama|cloud` (cloud reads `CERO_EVAL_API_*` from the environment only, warns about cost and needs `--yes`); `--compare a.json b.json` prints the case table and the gap list. | `scripts/eval/reliability.mts`, `src/ai/eval/compareReports.ts` | `compareReports.test.ts` (3) |
 | **7.3** | One tolerant reply parser for every model: fenced blocks, prose around one object, think-tags (including an unclosed one), `tool`/`params`, `action`/`arguments`, native tool calls and whole chat replies, one repair for trailing commas, single quotes and a reply cut off by the token limit. An unusable reply is written to the local debug log only. | `src/ai/agent/ModelReply.ts`, `AgentLoop.parseLLMResponse` | `ModelReply.test.ts` (19) |
 | **7.4** | When the built-in model fails the action check twice and an API model or Ollama is available, it asks once per request: "Try it with <provider (model)>?", names that a cloud service receives the request, and never remembers "always". | `AgentLoop.offerExternalRetry` | `AgentLoopExternalRetry.test.ts` (3) |
-| **7.5** | (extra, not from the reports) API keys move to the OS keychain: macOS Keychain, Windows Credential Manager, a `0600` file `~/.sentinel/secrets.json` on Linux (the Secret Service needs system libraries a bare window manager may lack, and adding them could break the Linux build; a Secret Service backend is a possible later step). A key leaves browser storage only after the keychain was written and read back; a failing keychain loses nothing. Settings says where the key lives. | `src-tauri/src/secrets.rs`, `SecretStore.ts`, `CloudApiProvider.ts`, `App.tsx`, `AiSettingsPage.tsx` | 3 Rust tests, `CloudApiSecrets.test.ts` (6) |
+| **7.5** | (extra, not from the reports) API keys move to the OS keychain: macOS Keychain, Windows Credential Manager, a `0600` file `~/.cero/secrets.json` on Linux (the Secret Service needs system libraries a bare window manager may lack, and adding them could break the Linux build; a Secret Service backend is a possible later step). A key leaves browser storage only after the keychain was written and read back; a failing keychain loses nothing. Settings says where the key lives. | `src-tauri/src/secrets.rs`, `SecretStore.ts`, `CloudApiProvider.ts`, `App.tsx`, `AiSettingsPage.tsx` | 3 Rust tests, `CloudApiSecrets.test.ts` (6) |
 
 Not done on purpose: asking cloud APIs for a strict `json_schema` (it varies by service and a rejected schema would turn working requests into errors; JSON mode stays). The keychain path was only run through a fake keychain and the file backend; the real macOS and Windows keychains were not exercised here.
 

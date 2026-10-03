@@ -1,6 +1,6 @@
-# Sentinel Terminal — AI Tool Calling Comprehensive Test Suite
+# Cero — AI Tool Calling Comprehensive Test Suite
 
-This document defines the complete **AI Tool Calling Test Suite** for Sentinel Terminal. It provides test cases for all **101 autonomous capabilities** currently supported across **11 operational domains**.
+This document defines the complete **AI Tool Calling Test Suite** for Cero. It provides test cases for all **101 autonomous capabilities** currently supported across **11 operational domains**.
 
 Every capability includes real-world natural language prompts, expected JSON tool-call invocations, expected parameter schemas, and verification criteria.
 
@@ -35,7 +35,7 @@ Every capability includes real-world natural language prompts, expected JSON too
 
 ## 🧠 Tool Calling Execution Model
 
-When a user submits a prompt in Sentinel Terminal:
+When a user submits a prompt in Cero:
 1. **Fast-Path Engine**: Evaluates high-frequency deterministic regex shortcuts (e.g., instant navigation `cd`, `turn on bluetooth`, `system info`) for sub-millisecond execution.
 2. **ReAct Agent Loop (`AgentLoop.ts`)**: When complex or natural language objectives are supplied, the local LLM evaluates the system prompt containing registered tool definitions.
 3. **Structured JSON Output**: The LLM emits a single tool execution action:
@@ -1308,7 +1308,7 @@ When a user submits a prompt in Sentinel Terminal:
 
 ## 🔄 Multi-Step Autonomous Workflows
 
-Sentinel Terminal's agent loop automatically decomposes complex multi-step objectives into sequences of tool calls:
+Cero's agent loop automatically decomposes complex multi-step objectives into sequences of tool calls:
 
 ### 🎧 Complete Bluetooth Connection Flow
 1. **User Objective**: *"Connect my Soundcore Space One headphones"*
@@ -1349,7 +1349,7 @@ Sentinel Terminal's agent loop automatically decomposes complex multi-step objec
 ## 🧪 How to Execute & Verify These Test Cases
 
 ### 1. Interactive Terminal Verification
-Type any test prompt verbatim directly into the Sentinel Terminal prompt:
+Type any test prompt verbatim directly into the Cero prompt:
 ```bash
 # Example:
 connect soundcore space one headphone

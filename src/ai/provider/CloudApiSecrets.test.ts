@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { CloudApiProvider } from './CloudApiProvider';
 import { setSecretBackend, type SecretBackend } from './SecretStore';
 
-const STORAGE_KEY = 'sentinel_cloud_api_keys';
+const STORAGE_KEY = 'cero_cloud_api_keys';
 
 function fakeKeychain(opts: { failWrites?: boolean; lie?: boolean } = {}): SecretBackend & { items: Map<string, string> } {
   const items = new Map<string, string>();
@@ -51,7 +51,7 @@ describe('API keys and the keychain', () => {
     const result = await provider.hydrateSecrets();
     expect(result).toMatchObject({ failed: 0 });
     expect(result.migrated).toBeGreaterThan(0);
-    expect(keychain.items.get('sentinel.cloud_api:openai')).toBe('sk-old');
+    expect(keychain.items.get('cero.cloud_api:openai')).toBe('sk-old');
     expect(stored().openai.apiKey).toBe('');
     // the app still sees the key
     expect(provider.getActiveConfig()?.apiKey).toBe('sk-old');
@@ -92,8 +92,20 @@ describe('API keys and the keychain', () => {
     provider.saveConfig(cfg('sk-new'));
     expect(stored().openai.apiKey).toBe('sk-new');
     await new Promise(r => setTimeout(r, 20));
-    expect(keychain.items.get('sentinel.cloud_api:openai')).toBe('sk-new');
+    expect(keychain.items.get('cero.cloud_api:openai')).toBe('sk-new');
     expect(stored().openai.apiKey).toBe('');
+  });
+
+  it('a key stored under the old app name is moved to the new name', async () => {
+    const keychain = fakeKeychain();
+    keychain.items.set('sentinel.cloud_api:openai', 'sk-legacy');
+    setSecretBackend(keychain);
+    store.set(STORAGE_KEY, JSON.stringify({ openai: cfg('') }));
+    const provider = resetProvider();
+    await provider.hydrateSecrets();
+    expect(provider.getActiveConfig()?.apiKey).toBe('sk-legacy');
+    expect(keychain.items.get('cero.cloud_api:openai')).toBe('sk-legacy');
+    expect(keychain.items.has('sentinel.cloud_api:openai')).toBe(false);
   });
 
   it('clearing a key removes it from the keychain', async () => {

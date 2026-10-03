@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Session Persistence Engine
+ * Cero — Session Persistence Engine
  *
  * Provides crash-proof workspace state serialization for multi-tab and split-pane
  * layouts. Preserves open tabs, hierarchy of split terminals, working directories (cwd),
@@ -7,7 +7,7 @@
  *
  * Storage targets:
  * 1. Synchronous localStorage cache for zero-flicker UI initialization.
- * 2. Asynchronous disk file ~/.sentinel/sessions/last_session.json (and named sessions) for cross-session longevity.
+ * 2. Asynchronous disk file ~/.cero/sessions/last_session.json (and named sessions) for cross-session longevity.
  */
 
 export interface SerializedTab {
@@ -28,7 +28,7 @@ export interface SerializedSessionState {
 
 export class SessionPersistenceEngine {
   private static instance: SessionPersistenceEngine;
-  private static STORAGE_KEY = 'sentinel_session_state';
+  private static STORAGE_KEY = 'cero_session_state';
   private saveDebounceTimer: any = null;
 
   public static getInstance(): SessionPersistenceEngine {
@@ -76,11 +76,11 @@ export class SessionPersistenceEngine {
     const home = (typeof process !== 'undefined' && process.env?.HOME)
       ? process.env.HOME
       : '/tmp';
-    return `${home}/.sentinel/sessions`;
+    return `${home}/.cero/sessions`;
   }
 
   /**
-   * Save session state to disk at ~/.sentinel/sessions/<filename>
+   * Save session state to disk at ~/.cero/sessions/<filename>
    */
   public async saveSessionToFile(state: SerializedSessionState, filename = 'last_session.json'): Promise<boolean> {
     try {
@@ -223,7 +223,7 @@ export class SessionPersistenceEngine {
           storage.setItem(SessionPersistenceEngine.STORAGE_KEY, JSON.stringify(state));
         }
 
-        // Asynchronously persist to disk (~/.sentinel/sessions/last_session.json)
+        // Asynchronously persist to disk (~/.cero/sessions/last_session.json)
         this.saveSessionToFile(state).catch(() => {});
       } catch (err) {
         console.warn('[SessionPersistence] Failed to serialize session state:', err);

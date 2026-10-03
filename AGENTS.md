@@ -1,6 +1,6 @@
-# Sentinel Terminal - Agent Guidelines & Operational Rules
+# Cero - Agent Guidelines & Operational Rules
 
-These rules are active across all coding tasks, refactorings, and pair programming sessions for Sentinel Terminal.
+These rules are active across all coding tasks, refactorings, and pair programming sessions for Cero.
 For the complete development rules documentation, see [docs/rules.md](docs/rules.md).
 
 ---

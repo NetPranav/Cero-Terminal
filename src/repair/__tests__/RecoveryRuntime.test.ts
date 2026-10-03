@@ -21,7 +21,7 @@ describe('AdaptiveExecutionEngine & RecoveryEngine — End-to-End Resilient Runt
   it('should complete cleanly on first attempt when driver execution and verification succeed', async () => {
     const mockSuccess: CapabilityResult = {
       success: true,
-      outputs: { connectedSSID: 'Sentinel_5G_Network' },
+      outputs: { connectedSSID: 'Cero_5G_Network' },
       warnings: [],
       timings: { executionMs: 5, dispatchMs: 0 },
     };
@@ -52,7 +52,7 @@ describe('AdaptiveExecutionEngine & RecoveryEngine — End-to-End Resilient Runt
       mockFailureCallback,
       undefined,
       undefined,
-      { type: 'isConnected', target: 'Sentinel_5G_Network', expectedValue: true },
+      { type: 'isConnected', target: 'Cero_5G_Network', expectedValue: true },
       'RetryStrategy'
     );
 

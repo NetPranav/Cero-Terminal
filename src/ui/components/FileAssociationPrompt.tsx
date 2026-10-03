@@ -75,7 +75,7 @@ export const FileAssociationPrompt: React.FC<FileAssociationPromptProps> = ({ on
             margin: '0 0 28px 0'
           }}
         >
-          Open .flow files with Sentinel Terminal? This adds a launcher and a file type to your user folders.
+          Open .flow files with Cero? This adds a launcher and a file type to your user folders.
         </p>
 
         <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'center' }}>

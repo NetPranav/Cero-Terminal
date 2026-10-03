@@ -2,7 +2,7 @@
  * Provider.ts — Pluggable Model Provider Layer
  * 
  * Defines the foundational interface for local and pluggable model inference providers.
- * Sentinel's planner and intent systems never depend directly on Ollama or Llama.cpp.
+ * Cero's planner and intent systems never depend directly on Ollama or Llama.cpp.
  */
 
 export interface GenerateOptions {

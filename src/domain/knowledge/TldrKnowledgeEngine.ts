@@ -637,7 +637,7 @@ export class TldrKnowledgeEngine {
     
     const candidatePaths = [
       this.customCachePath,
-      path.join(home, '.sentinel', 'knowledge', 'tldr_pages.json'),
+      path.join(home, '.cero', 'knowledge', 'tldr_pages.json'),
       path.join(home, '.tldr', 'cache', 'pages')
     ].filter(Boolean) as string[];
 

@@ -14,7 +14,7 @@ import { AgentLoop, AgentPlan, AgentResult } from '../ai/agent/AgentLoop';
 import { PromptProgressManager } from '../ai/agent/PromptProgressManager';
 import { DemonstrationLearningEngine, isPlausibleDemonstration } from '../domain/learning/DemonstrationLearningEngine';
 import { EpisodicMemoryEngine } from '../domain/learning/EpisodicMemoryEngine';
-import { SentinelSerlCoordinator } from '../domain/learning/SentinelSerlCoordinator';
+import { CeroSerlCoordinator } from '../domain/learning/CeroSerlCoordinator';
 import { PtyOutputObserver, type RemediationPrompt } from '../domain/observer/PtyOutputObserver';
 import { ErrorWatchService } from '../domain/watch/ErrorWatchService';
 import { formatAgentEvent, formatDataOutput, formatWatchEvent, formatRemediationNotice, AgentEventRenderer, S } from './OutputFormatter';
@@ -185,8 +185,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   const planExecutionStatusRef = useRef<'running' | 'completed' | 'failed'>('running');
   const lastGoalRef = useRef<string>('');
   const [reportCopied, setReportCopied] = useState(false);
-  const [hudPlanEnabled, setHudPlanEnabled] = useState<boolean>(() => localStorage.getItem('sentinel_hud_plan_enabled') !== 'false');
-  const [hudPlanDuration, setHudPlanDuration] = useState<string>(() => localStorage.getItem('sentinel_hud_plan_duration') || '8');
+  const [hudPlanEnabled, setHudPlanEnabled] = useState<boolean>(() => localStorage.getItem('cero_hud_plan_enabled') !== 'false');
+  const [hudPlanDuration, setHudPlanDuration] = useState<string>(() => localStorage.getItem('cero_hud_plan_duration') || '8');
   const planDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isHoveringPlanRef = useRef<boolean>(false);
 
@@ -199,8 +199,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
   const schedulePlanDismiss = useCallback(() => {
     clearPlanDismissTimer();
-    const enabled = localStorage.getItem('sentinel_hud_plan_enabled') !== 'false';
-    const duration = localStorage.getItem('sentinel_hud_plan_duration') || '8';
+    const enabled = localStorage.getItem('cero_hud_plan_enabled') !== 'false';
+    const duration = localStorage.getItem('cero_hud_plan_duration') || '8';
     if (!enabled || duration === 'disabled') {
       setLatestPlan(null);
       return;
@@ -221,8 +221,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
   useEffect(() => {
     const handleSettingsChange = () => {
-      const enabled = localStorage.getItem('sentinel_hud_plan_enabled') !== 'false';
-      const duration = localStorage.getItem('sentinel_hud_plan_duration') || '8';
+      const enabled = localStorage.getItem('cero_hud_plan_enabled') !== 'false';
+      const duration = localStorage.getItem('cero_hud_plan_duration') || '8';
       setHudPlanEnabled(enabled);
       setHudPlanDuration(duration);
       if (!enabled || duration === 'disabled') {
@@ -231,9 +231,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       }
     };
 
-    window.addEventListener('sentinel:hud-settings-changed', handleSettingsChange);
+    window.addEventListener('cero:hud-settings-changed', handleSettingsChange);
     return () => {
-      window.removeEventListener('sentinel:hud-settings-changed', handleSettingsChange);
+      window.removeEventListener('cero:hud-settings-changed', handleSettingsChange);
       clearPlanDismissTimer();
     };
   }, [clearPlanDismissTimer]);
@@ -295,7 +295,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   };
 
   // High-risk commands (stopping processes, deleting, super-user) need an explicit click on Run.
-  // Sentinel never asks for the login password: it was collected in this window and checked by putting
+  // Cero never asks for the login password: it was collected in this window and checked by putting
   // it on a command line, where other local processes could read it, and it granted nothing (the command
   // runs as the user either way). Super-user commands ask in the terminal itself, where sudo belongs.
   const needsExplicitClick = (plan: any) => Boolean(plan?.requiresPassword || plan?.requiresClick);
@@ -483,7 +483,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         if (event.type === 'keydown') {
           event.preventDefault();
           event.stopPropagation();
-          window.dispatchEvent(new CustomEvent('sentinel:toggle-history'));
+          window.dispatchEvent(new CustomEvent('cero:toggle-history'));
         }
         return false;
       }
@@ -513,7 +513,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     const handleToggleSearch = () => {
       setIsSearchOpen(prev => !prev);
     };
-    window.addEventListener('sentinel:toggle-search', handleToggleSearch);
+    window.addEventListener('cero:toggle-search', handleToggleSearch);
     // "search the terminal for ERROR": only the pane the request came from opens its search
     const handleFindRequest = (event: Event) => {
       const detail = (event as CustomEvent<{ paneId?: string; query?: string }>).detail || {};
@@ -522,11 +522,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       setIsSearchOpen(true);
       if (detail.query) setSearchRequest({ text: detail.query, id: Date.now() });
     };
-    window.addEventListener('sentinel:find-in-terminal', handleFindRequest);
+    window.addEventListener('cero:find-in-terminal', handleFindRequest);
 
     term.open(terminalRef.current);
 
-    // End-of-step reports from .flow runs (OSC 777 "sentinel-step;<code>"): invisible, never drawn
+    // End-of-step reports from .flow runs (OSC 777 "cero-step;<code>"): invisible, never drawn
     term.parser.registerOscHandler(777, (payload) => {
       const code = parseStepMarker(payload);
       if (code === null) return false;
@@ -656,7 +656,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           // Discarding a `>` request line makes the shell print a fresh prompt; hide that redraw so
           // agent output follows the request directly (the final prompt is printed at the end)
           if (Date.now() < shellRedrawMuteUntil) { shellRedrawSeen = true; return; }
-          // SessionManager already recorded this shell output; only Sentinel's own text is
+          // SessionManager already recorded this shell output; only Cero's own text is
           // recorded by writeTerm (recording both doubled every restored screen)
           term.write(text.replace(/\r?\n/g, '\r\n'));
           outputObserverRef.current.ingest(text, currentPathRef.current);
@@ -728,8 +728,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         autocompleteEngine.registerProvider(workspaceContextProvider);
         autocompleteEngine.registerProvider(new SystemSettingsProvider());
         
-        // Start Tier 4 Sentinel-SERL Autonomous Orchestrator
-        SentinelSerlCoordinator.getInstance().startCoordinator();
+        // Start Tier 4 Cero-SERL Autonomous Orchestrator
+        CeroSerlCoordinator.getInstance().startCoordinator();
 
         const ghostText = new GhostTextRenderer(term);
         ghostText.attach(terminalRef.current!);
@@ -808,8 +808,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               PromptProgressManager.getInstance().updateStage(event.message || 'Thinking...', 30);
             } else if (event.type === 'plan') {
               PromptProgressManager.getInstance().updateStage('Planning...', 50);
-              const enabled = localStorage.getItem('sentinel_hud_plan_enabled') !== 'false';
-              const duration = localStorage.getItem('sentinel_hud_plan_duration') || '8';
+              const enabled = localStorage.getItem('cero_hud_plan_enabled') !== 'false';
+              const duration = localStorage.getItem('cero_hud_plan_duration') || '8';
               if (!enabled || duration === 'disabled') {
                 return;
               }
@@ -971,7 +971,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               os,
               shell,
               type: async (text) => {
-                if (!text.startsWith('__sentinel_step') && !text.startsWith('function __sentinel_step')) ptyTrackerRef.current.notifyCommandStarted(text);
+                if (!text.startsWith('__cero_step') && !text.startsWith('function __cero_step')) ptyTrackerRef.current.notifyCommandStarted(text);
                 await sessionManager.write(currentSessionId!, text);
               },
               nextStepResult: () => new Promise<number | null>((resolve) => {
@@ -1088,7 +1088,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
         term.onData(async (data) => {
           if (!currentSessionId) return;
-          SentinelSerlCoordinator.getInstance().markActivity();
+          CeroSerlCoordinator.getInstance().markActivity();
 
           // Stop key decision (Task 2.2: Ctrl+C stops a running task or copies selection)
           const stopAction = decideStopKey({
@@ -1162,7 +1162,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           const ghostAction = decideGhostKey(data, {
             cursorAtEnd: cursorEndInfo.atEnd,
             hasGhost: !!ghostText.getRemaining(),
-            acceptRight: localStorage.getItem('sentinel_ghost_accept_right') !== 'false',
+            acceptRight: localStorage.getItem('cero_ghost_accept_right') !== 'false',
           });
 
           if (ghostAction === 'accept-ghost') {
@@ -1262,7 +1262,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                   AppAliasRegistry.getInstance().setAlias(match[1], match[2]);
                   writeTerm(`\r\n\x1b[1;32m[App Registry] Successfully registered application mapping:\x1b[0m\r\n`);
                   writeTerm(`  • Alias: \x1b[1;36m"${match[1]}"\x1b[0m ──► Application: \x1b[1;33m"${match[2]}"\x1b[0m\r\n`);
-                  writeTerm(`\x1b[37m[App Registry] Saved to persistent storage (~/.sentinel/app_aliases.json).\x1b[0m\r\n\r\n`);
+                  writeTerm(`\x1b[37m[App Registry] Saved to persistent storage (~/.cero/app_aliases.json).\x1b[0m\r\n\r\n`);
                 } else {
                   writeTerm(`\r\n\x1b[1;35m[App Registry] Currently Registered Application Mappings:\x1b[0m\r\n`);
                   const aliases = AppAliasRegistry.getInstance().getAll();
@@ -1282,7 +1282,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                   const patterns = DemonstrationLearningEngine.getInstance().getAllPatterns();
                   if (patterns.length === 0) {
                     writeTerm(`\r\n\x1b[33m[Learning Engine] No custom patterns learned yet.\x1b[0m\r\n`);
-                    writeTerm(`\x1b[37mTeach Sentinel via:\x1b[0m \x1b[1;32m/learn <goal> -> <command>\x1b[0m\r\n\r\n`);
+                    writeTerm(`\x1b[37mTeach Cero via:\x1b[0m \x1b[1;32m/learn <goal> -> <command>\x1b[0m\r\n\r\n`);
                   } else {
                     writeTerm(`\r\n\x1b[1;35m[Learning Engine] Currently Learned Workflows (${patterns.length}):\x1b[0m\r\n`);
                     patterns.forEach((p, idx) => {
@@ -1314,7 +1314,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                     writeTerm(`\r\n\x1b[1;32m[Learning Engine] Successfully learned new workflow:\x1b[0m\r\n`);
                     writeTerm(`  • Trigger: \x1b[1;36m"${pattern.originalGoal}"\x1b[0m\r\n`);
                     writeTerm(`  • Command: \x1b[1;33m${pattern.commandTemplate}\x1b[0m\r\n`);
-                    writeTerm(`\x1b[37m[Learning Engine] Saved to persistent storage (~/.sentinel/learned_patterns.json & episodic memory).\x1b[0m\r\n\r\n`);
+                    writeTerm(`\x1b[37m[Learning Engine] Saved to persistent storage (~/.cero/learned_patterns.json & episodic memory).\x1b[0m\r\n\r\n`);
                   } else {
                     writeTerm(`\r\n\x1b[37mUsage:\x1b[0m \x1b[1;32m/learn <natural language goal> -> <command>\x1b[0m\r\n`);
                     writeTerm(`Example: \x1b[36m/learn compress backups -> tar -czvf backups.tar.gz ./backups\x1b[0m\r\n\r\n`);
@@ -1367,8 +1367,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                     source: 'demonstration'
                   }
                 );
-                // Tier 4: Feed human demonstration into Sentinel-SERL closed-loop
-                SentinelSerlCoordinator.getInstance().onHumanDemonstration(
+                // Tier 4: Feed human demonstration into Cero-SERL closed-loop
+                CeroSerlCoordinator.getInstance().onHumanDemonstration(
                   lastUnresolvedGoalRef.current.goal,
                   cleanCmd,
                   `Human demonstration in ${currentPathRef.current || '~'}`
@@ -1376,7 +1376,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 if (learned) {
                   writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Learned from your command${S.reset}\r\n`);
                   writeTerm(`    ${S.muted}when you ask${S.reset}  ${S.soft}${lastUnresolvedGoalRef.current.goal}${S.reset}\r\n`);
-                  writeTerm(`    ${S.muted}Sentinel runs${S.reset} ${S.code}${cleanCmd}${S.reset}\r\n`);
+                  writeTerm(`    ${S.muted}Cero runs${S.reset} ${S.code}${cleanCmd}${S.reset}\r\n`);
                   writeTerm(`    ${S.muted}Undo with /forget ${learned.id}${S.reset}\r\n\r\n`);
                   lastUnresolvedGoalRef.current = null;
                 }
@@ -1401,7 +1401,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               if (queueCmd) {
                 await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
                 if (queueCmd.type === 'open-panel') {
-                  window.dispatchEvent(new CustomEvent('sentinel:open-queue'));
+                  window.dispatchEvent(new CustomEvent('cero:open-queue'));
                   afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
                   return;
                 }
@@ -1516,10 +1516,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           }
         });
       } catch (error: any) {
-        console.warn("[Sentinel] Native backend unavailable, running in preview mode:", error);
+        console.warn("[Cero] Native backend unavailable, running in preview mode:", error);
         term.write('\x1b[1;32m❯\x1b[0m \x1b[1mcargo check --workspace\x1b[0m\r\n');
-        term.write('   \x1b[34mCompiling\x1b[0m sentinel v2.0.0 (/home/dev/workspace/sentinel)\r\n');
-        term.write('    \x1b[32mChecking\x1b[0m sentinel-core v2.0.0\r\n');
+        term.write('   \x1b[34mCompiling\x1b[0m cero v2.0.0 (/home/dev/workspace/cero)\r\n');
+        term.write('    \x1b[32mChecking\x1b[0m cero-core v2.0.0\r\n');
         term.write('    \x1b[32mFinished\x1b[0m dev [optimized + debuginfo] target(s) in 0.38s\r\n\r\n');
         term.write('\x1b[1;32m❯\x1b[0m \x1b[1mgit status\x1b[0m\r\n');
         term.write('On branch main\r\n');
@@ -1570,7 +1570,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         }
       }
     };
-    window.addEventListener('sentinel:abort-active-run', handleAbortActiveRun);
+    window.addEventListener('cero:abort-active-run', handleAbortActiveRun);
 
     const handleQueueResumed = () => {
       if (!aiBusyRef.current) {
@@ -1578,12 +1578,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         if (next) setTimeout(() => runQueuedItemRef.current?.(next), 150);
       }
     };
-    window.addEventListener('sentinel:queue-resumed', handleQueueResumed);
+    window.addEventListener('cero:queue-resumed', handleQueueResumed);
 
     return () => {
       runQueuedItemRef.current = null;
-      window.removeEventListener('sentinel:abort-active-run', handleAbortActiveRun);
-      window.removeEventListener('sentinel:queue-resumed', handleQueueResumed);
+      window.removeEventListener('cero:abort-active-run', handleAbortActiveRun);
+      window.removeEventListener('cero:queue-resumed', handleQueueResumed);
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
       if (currentSessionId && outputCallback) {
@@ -1597,8 +1597,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       detachDisplay?.();
       if (paneId) TerminalWorkspace.getInstance().unregister(paneId);
       ConsentQueue.getInstance().clearQueue(currentSessionId);
-      window.removeEventListener('sentinel:toggle-search', handleToggleSearch);
-      window.removeEventListener('sentinel:find-in-terminal', handleFindRequest);
+      window.removeEventListener('cero:toggle-search', handleToggleSearch);
+      window.removeEventListener('cero:find-in-terminal', handleFindRequest);
       searchAddon.dispose();
       term.dispose();
     };
@@ -2133,10 +2133,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
             <p style={{ fontSize: '13px', lineHeight: '1.55', color: 'rgba(255, 255, 255, 0.75)', margin: '0 0 18px 0' }}>
               {securityModalPlan.plan.requiresPassword
-                ? 'This can stop or change things on your computer. Sentinel will run exactly what is shown below, only after you click Run. It never asks for your password.'
+                ? 'This can stop or change things on your computer. Cero will run exactly what is shown below, only after you click Run. It never asks for your password.'
                 : securityModalPlan.plan.requiresClick
-                  ? 'These commands come from a file. Sentinel will run exactly what is shown below, only after you click Run.'
-                  : 'Sentinel will run exactly what is shown below. Nothing runs until you approve.'}
+                  ? 'These commands come from a file. Cero will run exactly what is shown below, only after you click Run.'
+                  : 'Cero will run exactly what is shown below. Nothing runs until you approve.'}
             </p>
 
             <div style={{

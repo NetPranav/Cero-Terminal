@@ -7,7 +7,7 @@ pub fn init() {
     let mut debug_enabled = false;
 
     // Check environment variable
-    if let Ok(val) = std::env::var("SENTINEL_DEBUG") {
+    if let Ok(val) = std::env::var("CERO_DEBUG") {
         if val == "1" || val.eq_ignore_ascii_case("true") || val.eq_ignore_ascii_case("debug") {
             debug_enabled = true;
         }
@@ -26,7 +26,7 @@ pub fn init() {
     if debug_enabled {
         let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
         eprintln!("================================================================================");
-        eprintln!("[{}] [SYSTEM] Sentinel Terminal Diagnostic Logging ACTIVE (PID: {})", now, std::process::id());
+        eprintln!("[{}] [SYSTEM] Cero Diagnostic Logging ACTIVE (PID: {})", now, std::process::id());
         eprintln!("[{}] [SYSTEM] OS: {} | Arch: {} | Release: {}", now, std::env::consts::OS, std::env::consts::ARCH, env!("CARGO_PKG_VERSION"));
         eprintln!("================================================================================");
     }

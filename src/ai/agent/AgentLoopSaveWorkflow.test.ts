@@ -15,7 +15,7 @@ describe('Saving a workflow from inside a prompt', () => {
   let generate: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-save-intent-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-save-intent-'));
     DiskWorkflowStorage.getInstance().setCustomBaseDir(tmpDir);
     files = new Map();
     generate = vi.fn().mockResolvedValue('Mock answer');
@@ -88,7 +88,7 @@ describe('Saving a workflow from inside a prompt', () => {
     expect(r.summary).toContain('Not saved: you chose not to.');
   });
 
-  it('with no screen to ask on, still saves into the Sentinel workflows folder and reports the path', async () => {
+  it('with no screen to ask on, still saves into the Cero workflows folder and reports the path', async () => {
     const r = await loop.run('open spotify and save this as a workflow called music', ctx);
     expect(r.summary).toContain(`Saved workflow "music" (1 step) to ${path.join(tmpDir, 'music.flow')}`);
     expect(fs.existsSync(path.join(tmpDir, 'music.flow'))).toBe(true);

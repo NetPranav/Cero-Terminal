@@ -1,11 +1,11 @@
 /**
  * DreamStateScheduler.ts — The "Dream-State" Nightly Autonomous Self-Play Engine
  * 
- * Part of Sentinel-SERL (Self-Evolving Reflexion Loop):
+ * Part of Cero-SERL (Self-Evolving Reflexion Loop):
  * Breakthrough 4: Nightly Autonomous Self-Play on Apple Silicon.
  * 
  * When the Mac is connected to power and idle (e.g. at 2:00 AM or idle >20 minutes),
- * Sentinel probes the local system environment, synthesizes personalized system puzzles,
+ * Cero probes the local system environment, synthesizes personalized system puzzles,
  * solves them in the Shadow-PTY sandbox, and creates high-reward DPO training pairs
  * for on-device fine-tuning before morning.
  */
@@ -130,7 +130,7 @@ export class DreamStateScheduler {
 
   constructor(options?: DreamStateSchedulerOptions) {
     const homeDir = typeof process !== 'undefined' && process.env ? (process.env.HOME || process.env.USERPROFILE || '/tmp') : '/tmp';
-    this.storageDir = options?.storageDir || path.join(homeDir, '.sentinel', 'training');
+    this.storageDir = options?.storageDir || path.join(homeDir, '.cero', 'training');
 
     this.shadowSimulator = options?.shadowSimulator || ShadowPtySimulator.getInstance();
     this.dpoEngine = options?.dpoEngine || DpoDatasetEngine.getInstance();
@@ -731,7 +731,7 @@ export class DreamStateScheduler {
   }
 
   /**
-   * Persists summary of the dream cycle to ~/.sentinel/training/dream_state_dataset.jsonl
+   * Persists summary of the dream cycle to ~/.cero/training/dream_state_dataset.jsonl
    */
   private async persistDreamDataset(report: DreamCycleReport): Promise<void> {
     try {

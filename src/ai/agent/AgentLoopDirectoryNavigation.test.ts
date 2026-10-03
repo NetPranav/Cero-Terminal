@@ -6,11 +6,11 @@ describe('AgentLoop Directory Navigation Integration', () => {
   let agentLoop: AgentLoop;
   const mockScanner: DirectoryScanner = {
     listSubdirectories: async (dir: string) => {
-      if (dir === '/workspace') return ['sentinel', 'backend', 'docs'];
+      if (dir === '/workspace') return ['cero', 'backend', 'docs'];
       return [];
     },
     directoryExists: async (p: string) => {
-      const existing = ['/workspace/sentinel', '/workspace/backend', '/workspace/docs'];
+      const existing = ['/workspace/cero', '/workspace/backend', '/workspace/docs'];
       return existing.includes(p);
     },
     mkdir: async () => true
@@ -46,9 +46,9 @@ describe('AgentLoop Directory Navigation Integration', () => {
       return {
         type: 'did_you_mean',
         rawTarget: 'sentinal',
-        cdPath: '/workspace/sentinel',
-        question: "Directory 'sentinal' not found. Did you mean 'sentinel' (/workspace/sentinel)?",
-        summary: "Did you mean 'sentinel'?"
+        cdPath: '/workspace/cero',
+        question: "Directory 'sentinal' not found. Did you mean 'cero' (/workspace/cero)?",
+        summary: "Did you mean 'cero'?"
       };
     });
 
@@ -58,14 +58,14 @@ describe('AgentLoop Directory Navigation Integration', () => {
     // Turn 1: User says "switch to sentinal"
     const turn1 = await agentLoop.run('switch to sentinal', { os: 'linux', cwd: '/workspace' });
     expect(turn1.awaitingInput).toBe(true);
-    expect(turn1.summary).toContain("Did you mean 'sentinel'");
+    expect(turn1.summary).toContain("Did you mean 'cero'");
     expect(agentLoop.hasPendingQuestion()).toBe(true);
-    expect(events.some(e => e.type === 'question' && e.message.includes("Did you mean 'sentinel'"))).toBe(true);
+    expect(events.some(e => e.type === 'question' && e.message.includes("Did you mean 'cero'"))).toBe(true);
 
     // Turn 2: User responds "yes"
     const turn2 = await agentLoop.run('yes', { os: 'linux', cwd: '/workspace' });
     expect(turn2.success).toBe(true);
-    expect(turn2.cdPath).toBe('/workspace/sentinel');
+    expect(turn2.cdPath).toBe('/workspace/cero');
     expect(agentLoop.hasPendingQuestion()).toBe(false);
   });
 

@@ -170,7 +170,7 @@ describe('Task 1.2 — Persistence and Resilience', () => {
     }
   });
 
-  it('setModel writes sentinel_active_ai_model to localStorage', async () => {
+  it('setModel writes cero_active_ai_model to localStorage', async () => {
     const prov = provider('mock', ['test-model']);
     const manager = new ModelManager([prov as any]);
     await manager.setModel('test-model', 'mock');

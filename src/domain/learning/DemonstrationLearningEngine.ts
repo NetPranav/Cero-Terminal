@@ -1,13 +1,13 @@
 /**
- * Sentinel Terminal — Autonomous Demonstration & Pattern Learning Engine
+ * Cero — Autonomous Demonstration & Pattern Learning Engine
  *
- * Enables Sentinel to learn new terminal workflows directly from human demonstrations
+ * Enables Cero to learn new terminal workflows directly from human demonstrations
  * or explicit instruction. When an AI goal fails or is unknown, and the user executes
  * the manual solution in the terminal, this engine correlates the intent with the command,
  * extracts generalized variable placeholders, and persists the learned pattern across sessions.
  */
 
-import { readSentinelFile, writeSentinelFile } from '../../infrastructure/storage/SentinelFiles';
+import { readCeroFile, writeCeroFile } from '../../infrastructure/storage/CeroFiles';
 import { invoke } from '@tauri-apps/api/core';
 import { isClearlyMutating } from '../security/ReadOnlyCommandPolicy';
 import { safeBase64Encode } from '../../utils/encodingUtils';
@@ -150,7 +150,7 @@ export class DemonstrationLearningEngine {
   }
 
   /**
-   * Explicitly teaches Sentinel a new goal-to-command pattern.
+   * Explicitly teaches Cero a new goal-to-command pattern.
    * e.g. /learn sync drone logs -> rsync -avz pi@rover:/logs/ ./rover_logs/
    */
   public learnExplicit(triggerGoal: string, command: string, explanation?: string, cwd?: string): LearnedPattern {
@@ -351,7 +351,7 @@ export class DemonstrationLearningEngine {
   }
 
   /**
-   * Load patterns from ~/.sentinel/learned_patterns.json.
+   * Load patterns from ~/.cero/learned_patterns.json.
    */
   public async loadPatterns(): Promise<void> {
     if (this.isLoaded) return;
@@ -362,7 +362,7 @@ export class DemonstrationLearningEngine {
     }
 
     try {
-      const output = { stdout: readSentinelFile('learned_patterns.json') ?? '' };
+      const output = { stdout: readCeroFile('learned_patterns.json') ?? '' };
 
       if (output.stdout && output.stdout.trim()) {
         const parsed: LearnedPattern[] = JSON.parse(output.stdout.trim());
@@ -378,7 +378,7 @@ export class DemonstrationLearningEngine {
   }
 
   /**
-   * Persist patterns to ~/.sentinel/learned_patterns.json.
+   * Persist patterns to ~/.cero/learned_patterns.json.
    */
   public async savePatterns(): Promise<void> {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
@@ -388,7 +388,7 @@ export class DemonstrationLearningEngine {
     try {
       const all = Array.from(this.patterns.values());
       const jsonStr = JSON.stringify(all, null, 2);
-      writeSentinelFile('learned_patterns.json', jsonStr);
+      writeCeroFile('learned_patterns.json', jsonStr);
     } catch {
       // ignore persistence error in headless environments
     }

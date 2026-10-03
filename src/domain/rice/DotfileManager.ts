@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Safe Dotfile & Rice Configuration Manager
+ * Cero — Safe Dotfile & Rice Configuration Manager
  *
  * Provides safe, non-destructive configuration editing for window managers
  * (Hyprland, i3, Sway), terminal emulators, shells, and autostart files.
@@ -153,7 +153,7 @@ export class DotfileManager {
         if (!enable) {
           // DISABLING: Comment out if currently active
           if (!trimmed.startsWith('#')) {
-            newLines.push(`# ${line} # Disabled by Sentinel`);
+            newLines.push(`# ${line} # Disabled by Cero`);
             modified = true;
             actionTaken = `Commented out autostart for "${cleanApp}"`;
             continue;
@@ -161,7 +161,7 @@ export class DotfileManager {
         } else {
           // ENABLING: Uncomment if commented
           if (trimmed.startsWith('#')) {
-            const uncommented = line.replace(/^\s*#\s*/, '').replace(/\s*#\s*Disabled by Sentinel.*$/, '');
+            const uncommented = line.replace(/^\s*#\s*/, '').replace(/\s*#\s*Disabled by Cero.*$/, '');
             newLines.push(uncommented);
             modified = true;
             actionTaken = `Uncommented autostart for "${cleanApp}"`;
@@ -183,7 +183,7 @@ export class DotfileManager {
         directive = `${cleanApp} &`;
       }
       newLines.push('');
-      newLines.push(`# Added by Sentinel`);
+      newLines.push(`# Added by Cero`);
       newLines.push(directive);
       modified = true;
       actionTaken = `Added new autostart directive: "${directive}"`;

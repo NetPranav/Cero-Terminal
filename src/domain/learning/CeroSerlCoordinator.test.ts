@@ -1,5 +1,5 @@
 /**
- * SentinelSerlCoordinator.test.ts — Full End-to-End Test Suite for SERL Coordinator
+ * CeroSerlCoordinator.test.ts — Full End-to-End Test Suite for SERL Coordinator
  * 
  * Verifies closed-loop synchronization across all 8 Tier 4 subsystems:
  * - ShadowPtySimulator (Phase 4.1)
@@ -15,7 +15,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { SentinelSerlCoordinator } from './SentinelSerlCoordinator';
+import { CeroSerlCoordinator } from './CeroSerlCoordinator';
 import { KnowledgeDeficitLogger } from './KnowledgeDeficitLogger';
 import { DpoDatasetEngine } from './DpoDatasetEngine';
 import { ActivationSteeringManager } from '../../ai/models/ActivationSteeringManager';
@@ -25,9 +25,9 @@ import { EmbeddedEngineManager } from '../../ai/models/EmbeddedEngineManager';
 import { EpisodicMemoryEngine } from './EpisodicMemoryEngine';
 import { ShadowPtySimulator } from '../../ai/agent/ShadowPtySimulator';
 
-describe('SentinelSerlCoordinator — End-to-End Orchestrator', () => {
+describe('CeroSerlCoordinator — End-to-End Orchestrator', () => {
   let tempDir: string;
-  let coordinator: SentinelSerlCoordinator;
+  let coordinator: CeroSerlCoordinator;
   let deficitLogger: KnowledgeDeficitLogger;
   let dpoEngine: DpoDatasetEngine;
   let steeringManager: ActivationSteeringManager;
@@ -64,7 +64,7 @@ describe('SentinelSerlCoordinator — End-to-End Orchestrator', () => {
 
     episodicMemory = new EpisodicMemoryEngine();
 
-    coordinator = new SentinelSerlCoordinator({
+    coordinator = new CeroSerlCoordinator({
       shadowSimulator,
       deficitLogger,
       reflexionEngine,
@@ -236,12 +236,12 @@ describe('SentinelSerlCoordinator — End-to-End Orchestrator', () => {
 
       const result = await coordinator.triggerDistillationAndHotReload({ dryRun: true });
       expect(result.success).toBe(true);
-      expect(result.adapterPath).toContain('sentinel_mlx_lora.gguf');
+      expect(result.adapterPath).toContain('cero_mlx_lora.gguf');
       expect(embeddedEngine.hotReloadLora).toHaveBeenCalled();
     });
 
     it('handles MLX execution errors gracefully', async () => {
-      const failingCoordinator = new SentinelSerlCoordinator({
+      const failingCoordinator = new CeroSerlCoordinator({
         shadowSimulator,
         deficitLogger,
         reflexionEngine,
@@ -316,7 +316,7 @@ describe('SentinelSerlCoordinator — End-to-End Orchestrator', () => {
   });
 
   describe('4b. Background work budget', () => {
-    const buildCoordinator = (onAcPower: boolean) => new SentinelSerlCoordinator({
+    const buildCoordinator = (onAcPower: boolean) => new CeroSerlCoordinator({
       shadowSimulator, deficitLogger, reflexionEngine, dpoEngine, steeringManager, dreamScheduler, embeddedEngine, episodicMemory,
       powerChecker: async () => ({ onAcPower, batteryLevelPercent: onAcPower ? 100 : 40 }),
     });
@@ -424,12 +424,12 @@ describe('SentinelSerlCoordinator — End-to-End Orchestrator', () => {
 
     it('rolls back successfully to previous version when registered', async () => {
       const manifestMgr = coordinator.getManifestManager();
-      manifestMgr.registerVersion('coder', '/tmp/c1.gguf', { version: 'sentinel-coder-v2.1.0', passedRegressionGate: true });
-      manifestMgr.registerVersion('coder', '/tmp/c2.gguf', { version: 'sentinel-coder-v2.2.0', passedRegressionGate: true });
+      manifestMgr.registerVersion('coder', '/tmp/c1.gguf', { version: 'cero-coder-v2.1.0', passedRegressionGate: true });
+      manifestMgr.registerVersion('coder', '/tmp/c2.gguf', { version: 'cero-coder-v2.2.0', passedRegressionGate: true });
 
       const res = await coordinator.handleModelRollback('coder');
       expect(res.success).toBe(true);
-      expect(res.rolledBackTo).toBe('sentinel-coder-v2.1.0');
+      expect(res.rolledBackTo).toBe('cero-coder-v2.1.0');
     });
   });
 });

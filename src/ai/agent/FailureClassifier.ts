@@ -38,8 +38,8 @@ export class FailureClassifier {
     const raw = (errorText || '').trim();
     const lower = raw.toLowerCase();
 
-    // 0. Killed by Sentinel's execution timeout (exit 124, same convention as coreutils `timeout`)
-    if (lower.includes('[sentinel] command timed out') || lower.includes('command timed out and was terminated')) {
+    // 0. Killed by Cero's execution timeout (exit 124, same convention as coreutils `timeout`)
+    if (lower.includes('[cero] command timed out') || lower.includes('command timed out and was terminated')) {
       return {
         category: 'TIMEOUT',
         recoverable: true,

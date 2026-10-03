@@ -77,9 +77,9 @@ rust_desc={
  'main.rs':'Binary entry point; calls the library run().',
  'lib.rs':'Tauri setup: plugins, managed state, command registration, window and exit handling.',
  'pty.rs':'Pseudo-terminal sessions (portable-pty): spawn the user shell, stream output, resize, kill.',
- 'process_cmds.rs':'execute_command (timeout, process-group kill, closed stdin, output cap), process list/kill, system stats, file helpers, ~/.sentinel store commands.',
+ 'process_cmds.rs':'execute_command (timeout, process-group kill, closed stdin, output cap), process list/kill, system stats, file helpers, ~/.cero store commands.',
  'embedded_server.rs':'llama-server lifecycle: binary/model discovery, launch flags, stderr log, status, inference slot bookkeeping, SHA-256 verification.',
- 'watcher.rs':'Error watcher backend: file tailing (rotation/truncation aware) and journalctl streaming, emitted as sentinel-watch-lines events.',
+ 'watcher.rs':'Error watcher backend: file tailing (rotation/truncation aware) and journalctl streaming, emitted as cero-watch-lines events.',
  'logger.rs':'Diagnostic logging to file for release builds.',
 }
 for f in sorted(os.listdir('src-tauri/src')):

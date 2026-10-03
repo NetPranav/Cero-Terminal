@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Remote SSH Manager
+ * Cero — Remote SSH Manager
  *
  * Discovers and parses remote SSH hosts from ~/.ssh/config, providing
  * one-click remote multiplexing and connection across cloud GPUs, servers, and robots.
@@ -78,7 +78,7 @@ export class RemoteSSHManager {
       return [
         { host: 'gpu-server', hostName: '192.168.1.120', user: 'ubuntu', port: 22 },
         { host: 'ros2-robot', hostName: '10.0.0.45', user: 'robot', port: 2222 },
-        { host: 'cloud-staging', hostName: 'staging.sentinel.dev', user: 'deploy' }
+        { host: 'cloud-staging', hostName: 'staging.cero.dev', user: 'deploy' }
       ];
     }
 

@@ -1,7 +1,7 @@
 /**
  * DiskWorkflowStorage.ts — File Persistence for .flow Workflows and Legacy Migration
  *
- * Persists and loads workflows to/from `~/.sentinel/workflows/<name>.flow`.
+ * Persists and loads workflows to/from `~/.cero/workflows/<name>.flow`.
  * Uses canonical FlowActionDocument (.flow) format, provides automatic legacy .json
  * migration, and deduplicates workflows so .flow always takes precedence.
  */
@@ -40,14 +40,14 @@ export class DiskWorkflowStorage {
   }
 
   /**
-   * Get the directory where workflows are stored (~/.sentinel/workflows)
+   * Get the directory where workflows are stored (~/.cero/workflows)
    */
   public getWorkflowsDir(): string {
     if (this.customBaseDir) {
       return this.customBaseDir;
     }
     const home = (typeof process !== 'undefined' && process.env && (process.env.HOME || process.env.USERPROFILE)) || '~';
-    return path.join(home, '.sentinel', 'workflows');
+    return path.join(home, '.cero', 'workflows');
   }
 
   /**
@@ -185,7 +185,7 @@ export class DiskWorkflowStorage {
   }
 
   /**
-   * Ensure ~/.sentinel/workflows directory exists.
+   * Ensure ~/.cero/workflows directory exists.
    */
   private async ensureDirExists(): Promise<void> {
     const dir = this.getWorkflowsDir();
@@ -380,7 +380,7 @@ export class DiskWorkflowStorage {
     // 2. Check for future unsupported schema
     if (typeof raw.schemaVersion === 'number' && raw.schemaVersion > CURRENT_WORKFLOW_SCHEMA_VERSION) {
       throw new Error(
-        `Unsupported workflow schema version ${raw.schemaVersion} for workflow "${raw.name}". Sentinel supports up to version ${CURRENT_WORKFLOW_SCHEMA_VERSION}.`
+        `Unsupported workflow schema version ${raw.schemaVersion} for workflow "${raw.name}". Cero supports up to version ${CURRENT_WORKFLOW_SCHEMA_VERSION}.`
       );
     }
 
@@ -644,7 +644,7 @@ export class DiskWorkflowStorage {
 
   /**
    * Migration of old files:
-   * Guarded by marker file ~/.sentinel/workflows/.migrated-flow.
+   * Guarded by marker file ~/.cero/workflows/.migrated-flow.
    * For every x.json in the workflows folder that parses as a workflow and has no
    * x.flow next to it: write x.flow, then rename the original to x.json.bak. Never delete.
    * Returns count of converted workflows.
