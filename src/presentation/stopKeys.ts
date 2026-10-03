@@ -9,6 +9,8 @@ export interface StopKeyContext {
   isAiBusy: boolean;
   lastInterruptTime?: number;
   now?: number;
+  /** Prompts of this pane still waiting in the queue */
+  queueWaiting?: number;
 }
 
 export type StopKeyAction =
@@ -16,7 +18,11 @@ export type StopKeyAction =
   | 'pass-to-pty'
   | 'abort-ai-task'
   | 'force-kill-ai-task'
+  | 'clear-queue'
   | 'ignore';
+
+/** A second Ctrl+C this soon after stopping a task clears the queue it left paused */
+export const CLEAR_QUEUE_WINDOW_MS = 1500;
 
 export function decideStopKey(ctx: StopKeyContext): StopKeyAction {
   if (ctx.data !== '\x03') {
@@ -30,6 +36,11 @@ export function decideStopKey(ctx: StopKeyContext): StopKeyAction {
 
   // When Cero is idle and only shell commands run in PTY, pass Ctrl+C to PTY
   if (!ctx.isAiBusy) {
+    // Stopping a task pauses the queue behind it; pressing again right away empties it
+    const sinceStop = (ctx.now ?? Date.now()) - (ctx.lastInterruptTime ?? 0);
+    if (ctx.lastInterruptTime && sinceStop <= CLEAR_QUEUE_WINDOW_MS && (ctx.queueWaiting ?? 0) > 0) {
+      return 'clear-queue';
+    }
     return 'pass-to-pty';
   }
 

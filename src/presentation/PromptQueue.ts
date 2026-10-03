@@ -14,6 +14,8 @@ export interface QueuedItem {
   runner?: (context: any) => Promise<any>;
   flowPlan?: any;
   source?: string;
+  /** The pane that queued it. Only that pane runs it; unset means any pane may. */
+  ownerId?: string;
   timestamp: number;
   addedAt: number;
 }
@@ -29,7 +31,8 @@ export type QueueCommand =
 export class PromptQueue {
   private static instance: PromptQueue;
   private items: QueuedItem[] = [];
-  private runningItem: QueuedItem | null = null;
+  /** One running item per pane: panes run independently of each other */
+  private running: Map<string, QueuedItem> = new Map();
   private paused: boolean = false;
   private listeners: Set<(items: QueuedItem[]) => void> = new Set();
   private nextId = 1;
@@ -42,9 +45,10 @@ export class PromptQueue {
   }
 
   public enqueue(
-    goalOrItem: string | { label: string; kind?: QueuedPromptKind; runner?: (context: any) => Promise<any>; flowPlan?: any; source?: string },
+    goalOrItem: string | { label: string; kind?: QueuedPromptKind; runner?: (context: any) => Promise<any>; flowPlan?: any; source?: string; ownerId?: string },
     runner?: (context: any) => Promise<any>,
-    kind: QueuedPromptKind = 'goal'
+    kind: QueuedPromptKind = 'goal',
+    ownerId?: string
   ): QueuedItem {
     const now = Date.now();
     let label = '';
@@ -52,6 +56,7 @@ export class PromptQueue {
     let actualRunner = runner;
     let flowPlan: any = undefined;
     let source: string | undefined = undefined;
+    let owner: string | undefined = ownerId;
 
     if (typeof goalOrItem === 'string') {
       label = goalOrItem;
@@ -61,6 +66,7 @@ export class PromptQueue {
       actualRunner = goalOrItem.runner || runner;
       flowPlan = goalOrItem.flowPlan;
       source = goalOrItem.source;
+      owner = goalOrItem.ownerId ?? ownerId;
     }
 
     const item: QueuedItem = {
@@ -71,6 +77,7 @@ export class PromptQueue {
       runner: actualRunner,
       flowPlan,
       source,
+      ownerId: owner,
       timestamp: now,
       addedAt: now,
     };
@@ -80,23 +87,29 @@ export class PromptQueue {
     return item;
   }
 
-  public add(item: { label: string; kind?: QueuedPromptKind; runner?: (context: any) => Promise<any>; flowPlan?: any; source?: string }): QueuedItem {
+  public add(item: { label: string; kind?: QueuedPromptKind; runner?: (context: any) => Promise<any>; flowPlan?: any; source?: string; ownerId?: string }): QueuedItem {
     return this.enqueue(item);
   }
 
-  public dequeue(): QueuedItem | undefined {
-    const item = this.items.shift();
-    if (item) {
-      this.notify();
-    }
+  /** Does `ownerId` run this item? A pane never takes another pane's prompt. */
+  private runnableBy(item: QueuedItem, ownerId?: string): boolean {
+    return ownerId === undefined || !item.ownerId || item.ownerId === ownerId;
+  }
+
+  public dequeue(ownerId?: string): QueuedItem | undefined {
+    const idx = this.items.findIndex(it => this.runnableBy(it, ownerId));
+    if (idx === -1) return undefined;
+    const [item] = this.items.splice(idx, 1);
+    this.notify();
     return item;
   }
 
-  public takeNext(): QueuedItem | undefined {
+  /** The next item `ownerId` should run, or undefined while paused or when it has none waiting. */
+  public takeNext(ownerId?: string): QueuedItem | undefined {
     if (this.paused) {
       return undefined;
     }
-    return this.dequeue();
+    return this.dequeue(ownerId);
   }
 
   public peek(): QueuedItem | undefined {
@@ -135,9 +148,11 @@ export class PromptQueue {
     return true;
   }
 
-  public clear(): void {
-    if (this.items.length > 0) {
-      this.items = [];
+  /** Remove everything waiting, or only what `ownerId` queued (other panes keep theirs). */
+  public clear(ownerId?: string): void {
+    const kept = ownerId === undefined ? [] : this.items.filter(it => it.ownerId && it.ownerId !== ownerId);
+    if (kept.length !== this.items.length) {
+      this.items = kept;
       this.notify();
     }
   }
@@ -161,12 +176,19 @@ export class PromptQueue {
     return this.paused;
   }
 
-  public getRunningItem(): QueuedItem | null {
-    return this.runningItem;
+  public getRunningItem(ownerId?: string): QueuedItem | null {
+    if (ownerId !== undefined) return this.running.get(ownerId) ?? null;
+    return this.running.values().next().value ?? null;
   }
 
-  public setRunningItem(item: QueuedItem | null): void {
-    this.runningItem = item;
+  public getRunningItems(): QueuedItem[] {
+    return Array.from(this.running.values());
+  }
+
+  /** Record what `ownerId` is running now (null when it finishes or is cancelled). */
+  public setRunningItem(item: QueuedItem | null, ownerId: string = ''): void {
+    if (item) this.running.set(ownerId, { ...item, ownerId: item.ownerId ?? (ownerId || undefined) });
+    else this.running.delete(ownerId);
     this.notify();
   }
 
@@ -178,8 +200,9 @@ export class PromptQueue {
     return [...this.items];
   }
 
-  public size(): number {
-    return this.items.length;
+  public size(ownerId?: string): number {
+    if (ownerId === undefined) return this.items.length;
+    return this.items.filter(it => this.runnableBy(it, ownerId)).length;
   }
 
   public subscribe(listener: (items: QueuedItem[]) => void): () => void {

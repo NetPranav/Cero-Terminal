@@ -49,4 +49,13 @@ describe('decideStopKey (Task 2.2)', () => {
       now: t0 + 501
     })).toBe('abort-ai-task');
   });
+
+  it('a second Ctrl+C soon after a stop clears the paused queue instead of reaching the shell', () => {
+    const t0 = 5000;
+    const base = { data: '\x03', hasSelection: false, isAiBusy: false, lastInterruptTime: t0 };
+    expect(decideStopKey({ ...base, now: t0 + 900, queueWaiting: 2 })).toBe('clear-queue');
+    expect(decideStopKey({ ...base, now: t0 + 1501, queueWaiting: 2 })).toBe('pass-to-pty');
+    expect(decideStopKey({ ...base, now: t0 + 900, queueWaiting: 0 })).toBe('pass-to-pty');
+    expect(decideStopKey({ ...base, now: t0 + 900 })).toBe('pass-to-pty');
+  });
 });

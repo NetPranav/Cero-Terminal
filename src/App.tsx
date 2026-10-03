@@ -1467,7 +1467,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
         onOpenWorkflows={() => setShowWorkflowManager(true)}
         onOpenHelp={() => setShowHelpModal(true)}
         onOpenAiSettings={() => setShowAiSettings(true)}
-        onOpenQueue={() => setShowQueuePanel(true)}
+        onOpenQueue={() => setShowQueuePanel(prev => !prev)}
         uiMode={uiMode}
         highlightHelp={showZenCallout}
       />

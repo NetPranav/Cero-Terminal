@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ListOrdered, X, Trash2, ArrowUp, Pause, Play, Square } from 'lucide-react';
+import { ChevronDown, ChevronUp, ListOrdered, Pause, Play, Square, Trash2, X } from 'lucide-react';
 import { PromptQueue, QueuedItem } from '../../presentation/PromptQueue';
 
 export interface QueuePanelProps {
@@ -7,203 +7,166 @@ export interface QueuePanelProps {
   onClose: () => void;
 }
 
+export interface QueuePanelViewProps {
+  running: QueuedItem[];
+  items: QueuedItem[];
+  paused: boolean;
+  onStop: (item: QueuedItem) => void;
+  onRemove: (id: string) => void;
+  onMove: (id: string, toIndex: number) => void;
+  onClear: () => void;
+  onTogglePause: () => void;
+  onClose: () => void;
+}
+
+/** What the state column says for a waiting prompt */
+export function queueItemState(index: number, paused: boolean): 'Paused' | 'Next' | 'Waiting' {
+  if (paused) return 'Paused';
+  return index === 0 ? 'Next' : 'Waiting';
+}
+
+const KIND_LABEL: Record<string, string> = { goal: '', workflow: 'workflow', flow: 'flow' };
+
+// Compact grayscale styling in the app's inline-style convention (the app has no utility-class CSS)
+const ICON = 12;
+const iconButton: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  width: 20, height: 20, padding: 0, border: 'none', borderRadius: 4,
+  background: 'transparent', color: 'rgba(255, 255, 255, 0.55)', cursor: 'pointer', flexShrink: 0,
+};
+const textButton: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 4, height: 20, padding: '0 6px',
+  border: 'none', borderRadius: 4, background: 'transparent', color: 'rgba(255, 255, 255, 0.7)',
+  fontSize: 11, cursor: 'pointer', flexShrink: 0,
+};
+const badge: React.CSSProperties = {
+  fontSize: 10, lineHeight: '14px', padding: '0 5px', borderRadius: 3,
+  background: 'rgba(255, 255, 255, 0.08)', color: 'rgba(255, 255, 255, 0.75)', flexShrink: 0,
+};
+const row: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 6, height: 26, padding: '0 8px', boxSizing: 'border-box',
+};
+const labelStyle: React.CSSProperties = {
+  flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  fontFamily: 'monospace', fontSize: 11.5, color: 'rgba(255, 255, 255, 0.9)',
+};
+
+export const QueuePanelView: React.FC<QueuePanelViewProps> = ({
+  running, items, paused, onStop, onRemove, onMove, onClear, onTogglePause, onClose,
+}) => {
+  return (
+    <div
+      role="region"
+      aria-label="Queued prompts"
+      data-testid="queue-panel"
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        // Only while focus is inside the panel: the terminal keeps its own Escape
+        if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
+      }}
+      style={{
+        position: 'fixed', right: 16, bottom: 52, zIndex: 8000, width: 360, maxWidth: 'calc(100vw - 32px)',
+        maxHeight: '50vh', display: 'flex', flexDirection: 'column', boxSizing: 'border-box',
+        background: 'rgba(12, 13, 18, 0.97)', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: 8,
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)', color: '#e5e7eb', outline: 'none',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      }}
+    >
+      <div style={{ ...row, height: 28, borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+        <ListOrdered size={ICON} style={{ opacity: 0.7 }} />
+        <span style={{ fontSize: 12, fontWeight: 600 }}>Queue</span>
+        <span style={badge} title="Waiting prompts">{items.length}</span>
+        {paused && <span style={{ ...badge, background: 'rgba(255, 255, 255, 0.16)', color: '#fff' }}>Paused</span>}
+        <span style={{ flex: 1 }} />
+        <button type="button" style={textButton} onClick={onTogglePause} title={paused ? 'Resume the queue' : 'Pause the queue'}>
+          {paused ? <Play size={ICON} /> : <Pause size={ICON} />}
+          <span>{paused ? 'Resume' : 'Pause'}</span>
+        </button>
+        {items.length > 0 && (
+          <button type="button" style={iconButton} onClick={onClear} title="Remove all waiting prompts" aria-label="Clear queue">
+            <Trash2 size={ICON} />
+          </button>
+        )}
+        <button type="button" style={iconButton} onClick={onClose} title="Close" aria-label="Close queue panel">
+          <X size={ICON} />
+        </button>
+      </div>
+
+      <div style={{ overflowY: 'auto', minHeight: 0 }}>
+        {running.map((item) => (
+          <div key={item.id} data-testid="queue-running" style={{ ...row, background: 'rgba(255, 255, 255, 0.04)' }}>
+            <span aria-hidden style={{ width: 6, height: 6, borderRadius: 3, background: '#fff', flexShrink: 0 }} />
+            <span style={{ ...labelStyle }} title={item.label || item.goal}>{item.label || item.goal}</span>
+            <span style={badge}>Running</span>
+            <button type="button" style={iconButton} onClick={() => onStop(item)} title="Stop this task (Ctrl+C)" aria-label="Stop running task">
+              <Square size={ICON - 1} fill="currentColor" />
+            </button>
+          </div>
+        ))}
+
+        {items.length === 0 && running.length === 0 && (
+          <div style={{ ...row, color: 'rgba(255, 255, 255, 0.4)', fontSize: 11.5 }}>No queued prompts</div>
+        )}
+
+        <ol role="list" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          {items.map((item, idx) => {
+            const kind = KIND_LABEL[item.kind] ?? '';
+            return (
+              <li key={item.id} data-testid="queue-item" style={row}>
+                <span style={{ width: 16, textAlign: 'right', fontSize: 10.5, color: 'rgba(255, 255, 255, 0.4)', flexShrink: 0 }}>{idx + 1}</span>
+                <span style={labelStyle} title={item.label || item.goal}>{item.label || item.goal}</span>
+                {kind && <span style={badge}>{kind}</span>}
+                <span style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.45)', width: 44, textAlign: 'right', flexShrink: 0 }}>
+                  {queueItemState(idx, paused)}
+                </span>
+                <button type="button" style={{ ...iconButton, opacity: idx === 0 ? 0.25 : 1 }} disabled={idx === 0}
+                  onClick={() => onMove(item.id, idx - 1)} title="Move up" aria-label={`Move item ${idx + 1} up`}>
+                  <ChevronUp size={ICON} />
+                </button>
+                <button type="button" style={{ ...iconButton, opacity: idx === items.length - 1 ? 0.25 : 1 }} disabled={idx === items.length - 1}
+                  onClick={() => onMove(item.id, idx + 1)} title="Move down" aria-label={`Move item ${idx + 1} down`}>
+                  <ChevronDown size={ICON} />
+                </button>
+                <button type="button" style={iconButton} onClick={() => onRemove(item.id)} title="Remove from the queue" aria-label={`Remove item ${idx + 1}`}>
+                  <X size={ICON} />
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </div>
+  );
+};
+
 export const QueuePanel: React.FC<QueuePanelProps> = ({ isOpen, onClose }) => {
-  const [items, setItems] = useState<QueuedItem[]>(() => PromptQueue.getInstance().getItems());
-  const [paused, setPaused] = useState<boolean>(() => PromptQueue.getInstance().isPaused());
-  const [runningItem, setRunningItem] = useState<QueuedItem | null>(() => PromptQueue.getInstance().getRunningItem());
+  const queue = PromptQueue.getInstance();
+  const [items, setItems] = useState<QueuedItem[]>(() => queue.getItems());
+  const [running, setRunning] = useState<QueuedItem[]>(() => queue.getRunningItems());
+  const [paused, setPaused] = useState<boolean>(() => queue.isPaused());
 
   useEffect(() => {
     if (!isOpen) return;
-    const unsubscribe = PromptQueue.getInstance().subscribe((updated) => {
+    return queue.subscribe((updated) => {
       setItems(updated);
-      setPaused(PromptQueue.getInstance().isPaused());
-      setRunningItem(PromptQueue.getInstance().getRunningItem());
+      setRunning(queue.getRunningItems());
+      setPaused(queue.isPaused());
     });
-    return unsubscribe;
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, queue]);
 
   if (!isOpen) return null;
 
-  const handleRemove = (id: string) => {
-    PromptQueue.getInstance().remove(id);
-  };
-
-  const handleClear = () => {
-    PromptQueue.getInstance().clear();
-  };
-
-  const handleMoveToTop = (id: string) => {
-    PromptQueue.getInstance().move(id, 0);
-  };
-
-  const handleTogglePause = () => {
-    const next = PromptQueue.getInstance().togglePaused();
-    setPaused(next);
-  };
-
-  const handleStopRunning = () => {
-    window.dispatchEvent(new CustomEvent('cero:abort-active-run'));
-  };
-
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="queue-panel-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="relative w-full max-w-lg bg-[#090b10] border border-white/10 rounded-lg shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0c0d12]">
-          <div className="flex items-center gap-2">
-            <ListOrdered className="w-4 h-4 text-white/70" />
-            <h2 id="queue-panel-title" className="text-sm font-semibold tracking-wide text-white">
-              Queued Prompts
-            </h2>
-            <span className="px-2 py-0.5 text-xs font-mono font-medium rounded-full bg-white/10 text-white/80">
-              {items.length}
-            </span>
-            {paused && (
-              <span className="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider font-semibold rounded bg-white/15 text-white/90">
-                Paused
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleTogglePause}
-              className="flex items-center gap-1 px-2.5 py-1 text-xs text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors"
-              title={paused ? 'Resume queue' : 'Pause queue'}
-            >
-              {paused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
-              <span>{paused ? 'Resume' : 'Pause'}</span>
-            </button>
-
-            {items.length > 0 && (
-              <button
-                type="button"
-                onClick={handleClear}
-                className="flex items-center gap-1 px-2.5 py-1 text-xs text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors"
-                title="Clear all queued prompts"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Clear All</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded transition-colors"
-              aria-label="Close"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-4 overflow-y-auto flex-1">
-          {/* Running item header block */}
-          {runningItem && (
-            <div className="mb-4 p-3 rounded bg-white/[0.04] border border-white/10 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-white animate-pulse shrink-0" />
-                <div className="min-w-0">
-                  <span className="text-[10px] uppercase tracking-wider font-semibold text-white/50 block">
-                    Running now
-                  </span>
-                  <span
-                    className="text-xs font-mono text-white truncate block"
-                    title={runningItem.label || runningItem.goal}
-                  >
-                    {runningItem.label || runningItem.goal}
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleStopRunning}
-                className="flex items-center gap-1 px-2.5 py-1 text-xs text-white/80 hover:text-white bg-white/10 hover:bg-white/15 border border-white/15 rounded transition-colors shrink-0"
-                title="Stop running task"
-              >
-                <Square className="w-3 h-3 fill-current" />
-                <span>Stop</span>
-              </button>
-            </div>
-          )}
-
-          {items.length === 0 ? (
-            <div className="py-8 text-center text-sm text-white/40 font-mono">
-              The queue is empty.
-            </div>
-          ) : (
-            <div className="divide-y divide-white/5">
-              {items.map((item, idx) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between gap-3 py-2.5 group hover:bg-white/[0.02] px-2 rounded transition-colors"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <span className="text-xs font-mono text-white/40 select-none w-5 shrink-0 text-right">
-                      {idx + 1}.
-                    </span>
-                    <p
-                      className="text-xs font-mono text-white/90 truncate flex-1"
-                      title={item.label || item.goal}
-                    >
-                      {item.label || item.goal}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {idx > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => handleMoveToTop(item.id)}
-                        className="p-1 text-white/40 hover:text-white hover:bg-white/10 rounded transition-colors"
-                        title="Run next"
-                        aria-label={`Run item ${idx + 1} next`}
-                      >
-                        <ArrowUp className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleRemove(item.id)}
-                      className="p-1 text-white/30 hover:text-white hover:bg-white/10 rounded transition-colors"
-                      title={`Remove item ${idx + 1}`}
-                      aria-label={`Remove item ${idx + 1}`}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 py-2.5 border-t border-white/10 bg-[#0c0d12] flex items-center justify-between text-xs text-white/40">
-          <span>Queued prompts do not persist across restarts</span>
-          <span className="font-mono">Press Esc to close</span>
-        </div>
-      </div>
-    </div>
+    <QueuePanelView
+      running={running}
+      items={items}
+      paused={paused}
+      onStop={(item) => window.dispatchEvent(new CustomEvent('cero:abort-active-run', { detail: { ownerId: item.ownerId } }))}
+      onRemove={(id) => { queue.remove(id); }}
+      onMove={(id, toIndex) => { queue.move(id, toIndex); }}
+      onClear={() => queue.clear()}
+      onTogglePause={() => setPaused(queue.togglePaused())}
+      onClose={onClose}
+    />
   );
 };

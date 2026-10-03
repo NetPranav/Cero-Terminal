@@ -53,11 +53,13 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 }) => {
   const displayShell = currentShell || (isLinux() ? 'bash' : 'zsh');
   const [queueCount, setQueueCount] = useState<number>(() => PromptQueue.getInstance().size());
+  const [queuePaused, setQueuePaused] = useState<boolean>(() => PromptQueue.getInstance().isPaused());
   const [hasRunningTask, setHasRunningTask] = useState<boolean>(() => PromptQueue.getInstance().getRunningItem() !== null);
 
   useEffect(() => {
     return PromptQueue.getInstance().subscribe(items => {
       setQueueCount(items.length);
+      setQueuePaused(PromptQueue.getInstance().isPaused());
       setHasRunningTask(PromptQueue.getInstance().getRunningItem() !== null);
     });
   }, []);
@@ -401,7 +403,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               title="View queued prompts (/queue)"
             >
               <ListOrdered size={11} style={{ opacity: 0.8 }} />
-              <span>Queue: {queueCount} {queueCount === 1 ? 'item' : 'items'}</span>
+              <span>{queuePaused ? 'Queue paused' : 'Queue'}: {queueCount} {queueCount === 1 ? 'item' : 'items'}</span>
             </button>
             <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>
           </>

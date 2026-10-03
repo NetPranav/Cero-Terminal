@@ -49,6 +49,7 @@ import { decideGhostKey, isSingleEditKey } from './ghostKeys';
 import { readGhostAcceptRight } from './ghostPrefs';
 import { decideStopKey } from './stopKeys';
 import { PromptQueue, parseQueueCommand, type QueuedItem } from './PromptQueue';
+import { PaneRunController } from './PaneRunController';
 import { TerminalWorkspace } from '../domain/terminal/TerminalWorkspace';
 import { claimTerminalRequests, releaseTerminalRequests, TerminalRequest } from './TerminalRequests';
 import { claimChoiceRequests, releaseChoiceRequests, type ChoiceRequest, type ChoiceResult } from './ChoiceRequests';
@@ -198,8 +199,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   }, [securityModalPlan]);
   const [latestPlan, setLatestPlan] = useState<AgentPlan | null>(null);
   const [isPlanOpen, setIsPlanOpen] = useState(true);
-  const [planExecutionStatus, setPlanExecutionStatus] = useState<'running' | 'completed' | 'failed'>('running');
-  const planExecutionStatusRef = useRef<'running' | 'completed' | 'failed'>('running');
+  const [planExecutionStatus, setPlanExecutionStatus] = useState<'running' | 'completed' | 'failed' | 'cancelled'>('running');
+  const planExecutionStatusRef = useRef<'running' | 'completed' | 'failed' | 'cancelled'>('running');
   const lastGoalRef = useRef<string>('');
   const [reportCopied, setReportCopied] = useState(false);
   const [hudPlanEnabled, setHudPlanEnabled] = useState<boolean>(() => localStorage.getItem('cero_hud_plan_enabled') !== 'false');
@@ -263,8 +264,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   const consentOpenRef = useRef(false);
   const inputLineRef = useRef<InputLineTracker>(new InputLineTracker());
   const ghostTextRef = useRef<GhostTextRenderer | null>(null);
-  const aiBusyRef = useRef(false);
-  const activeRunAbortControllerRef = useRef<AbortController | null>(null);
+  // One request at a time per pane: run identity, cancel, and who may clean up afterwards
+  // and this pane's share of the global prompt queue: it only ever runs what it queued
+  const runControllerRef = useRef<PaneRunController | null>(null);
+  if (!runControllerRef.current) {
+    runControllerRef.current = new PaneRunController(paneId ?? `pane_${Math.random().toString(36).slice(2, 9)}`);
+  }
+  const runControl = runControllerRef.current;
   const lastInterruptTimeRef = useRef<number>(0);
   // Runs a request handed over by the app (Workflow Manager, opened workflow file)
   const submitRef = useRef<((request: TerminalRequest) => void) | null>(null);
@@ -278,9 +284,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
   // "Where should this file go?": the agent asks, this pane shows the dialog
   const [choiceRequest, setChoiceRequest] = useState<{ request: ChoiceRequest; resolve: (r: ChoiceResult) => void } | null>(null);
+  // The open dialog, readable from the cancel path (state would be stale inside that closure)
+  const choiceRequestRef = useRef<{ resolve: (r: ChoiceResult) => void } | null>(null);
   useEffect(() => {
     if (!paneId || !isFocused || !sessionReady) return;
-    claimChoiceRequests(paneId, (request) => new Promise<ChoiceResult>((resolve) => setChoiceRequest({ request, resolve })));
+    claimChoiceRequests(paneId, (request) => new Promise<ChoiceResult>((resolve) => {
+      const entry = { request, resolve };
+      choiceRequestRef.current = entry;
+      setChoiceRequest(entry);
+    }));
     return () => releaseChoiceRequests(paneId);
   }, [paneId, isFocused, sessionReady]);
   useEffect(() => {
@@ -608,6 +620,53 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     let unsubConsent: (() => void) | null = null;
     let unsubWatch: (() => void) | null = null;
 
+    /**
+     * Stop what this pane is running, from Ctrl+C, a double Ctrl+C ('kill') or the queue panel.
+     * One routine so every way of cancelling leaves the same state: the run's signal aborted
+     * (model call, tools, shell steps), its approval dialogs closed, the queue never advancing
+     * on its own, and the UI showing a cancelled task.
+     */
+    const cancelActiveRun = async (mode: 'stop' | 'kill'): Promise<boolean> => {
+      if (!runControl.busy) return false;
+      const sid = currentSessionId;
+
+      // Aborts the run's signal (model call, tools, shell steps), settles the pane at once, and
+      // pauses (stop) or empties (kill) this pane's queue instead of starting the next prompt
+      const outcome = runControl.cancel(mode);
+      // Dialogs raised by the run must not outlive it
+      if (sid) ConsentQueue.getInstance().clearQueue(sid);
+      if (choiceRequestRef.current) {
+        choiceRequestRef.current.resolve(null);
+        choiceRequestRef.current = null;
+        setChoiceRequest(null);
+      }
+      agentLoopRef.current?.cancelPendingQuestion();
+      if (mode === 'kill') {
+        try { await invoke('cancel_command', { runId: '*' }); } catch { /* not running under Tauri */ }
+      }
+
+      // A program still running in the terminal (steps of a .flow, a command the run started there)
+      // gets Ctrl+C. An idle shell does not: it would throw away whatever the user is typing.
+      if (sid && ptyTrackerRef.current.isProcessRunning()) {
+        inputLineRef.current.reset(); // the shell discards its line on ^C
+        await sessionManager.write(sid, '\x03');
+        if (mode === 'kill') await sessionManager.write(sid, '\x03');
+      }
+
+      const queueNote = outcome.pausedQueue
+        ? `  ${S.muted}Queue paused (${outcome.waiting} waiting). Resume with /queue resume or from the queue panel.${S.reset}\r\n`
+        : '';
+      const leftover = activeRenderer?.finish() ?? '';
+      activeRenderer = null;
+      writeTerm(`${leftover}\r\n  ${mode === 'kill' ? S.err : S.muted}${mode === 'kill' ? 'Force killed.' : 'Cancelled.'}${S.reset}\r\n${queueNote}`);
+      PromptProgressManager.getInstance().completePrompt(false, mode === 'kill' ? 'Killed.' : 'Cancelled.');
+      setPlanExecutionStatus('cancelled');
+      planExecutionStatusRef.current = 'cancelled';
+      schedulePlanDismiss();
+      afterShellRedraw(redrawPromptIfIdle);
+      return true;
+    };
+
     const initSession = async () => {
       try {
         if (!currentSessionId) {
@@ -691,7 +750,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         // A notice that arrives while the shell sits at an empty prompt goes above a fresh prompt
         // (otherwise the next keystrokes would echo after the notice, away from the prompt)
         const writeNotice = (text: string) => {
-          const atEmptyPrompt = ptyTrackerRef.current.isIdleAtPrompt() && !inputLineRef.current.hasAnchor() && !aiBusyRef.current;
+          const atEmptyPrompt = ptyTrackerRef.current.isIdleAtPrompt() && !inputLineRef.current.hasAnchor() && !runControl.busy;
           if (atEmptyPrompt && currentSessionId) {
             writeTerm(`\r\x1b[2K${text.replace(/^(\r\n)+/, '')}`);
             sessionManager.write(currentSessionId, '\r');
@@ -816,18 +875,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         const runAiGoal = async (aiGoal: string, runner?: AgentRunner) => {
           lastGoalRef.current = aiGoal;
           // Busy before the first await, so a second Enter is queued rather than run alongside
-          aiBusyRef.current = true;
-          const abortController = new AbortController();
-          activeRunAbortControllerRef.current = abortController;
-          PromptQueue.getInstance().setRunningItem({
-            id: `running_${Date.now()}`,
-            goal: aiGoal,
-            label: aiGoal,
-            kind: runner ? 'workflow' : 'goal',
-            runner,
-            timestamp: Date.now(),
-            addedAt: Date.now(),
-          });
+          const run = runControl.begin({ label: aiGoal, kind: runner ? 'workflow' : 'goal', runner });
           const cwd = (await syncCwd()) || currentPathRef.current || currentPath || '~';
           // Initiate live progress tracking in the bottom bar
           PromptProgressManager.getInstance().startPrompt(aiGoal);
@@ -836,7 +884,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
           // Set up event listener for live output
           agentLoop.onEvent((event) => {
-            if (abortController.signal.aborted) return;
+            if (run.signal.aborted) return;
             if (event.type === 'thinking') {
               PromptProgressManager.getInstance().updateStage(event.message || 'Thinking...', 30);
             } else if (event.type === 'plan') {
@@ -907,8 +955,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           });
 
           // Run the agent loop
-          (runner ? runner({ os: getPlatform(), cwd, paneId, signal: abortController.signal }) : agentLoop.run(aiGoal, { os: getPlatform(), cwd, paneId, signal: abortController.signal })).then(result => {
-            if (abortController.signal.aborted || result.cancelled) {
+          (runner ? runner({ os: getPlatform(), cwd, paneId, signal: run.signal }) : agentLoop.run(aiGoal, { os: getPlatform(), cwd, paneId, signal: run.signal })).then(result => {
+            if (run.signal.aborted || result.cancelled) {
               return;
             }
             const leftover = renderer.finish();
@@ -954,7 +1002,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               afterShellRedraw(redrawPromptIfIdle);
             }
           }).catch(err => {
-            if (abortController.signal.aborted) {
+            if (run.signal.aborted) {
               return;
             }
             const leftover = renderer.finish();
@@ -967,32 +1015,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             writeTerm(`\r\n${formatAgentEvent({ type: 'error', message: err.message || 'Something went wrong' })}\r\n`);
             afterShellRedraw(redrawPromptIfIdle);
           }).finally(() => {
-            PromptQueue.getInstance().setRunningItem(null);
-            if (activeRunAbortControllerRef.current === abortController) {
-              activeRunAbortControllerRef.current = null;
-            }
-            aiBusyRef.current = false;
+            // A cancelled run was settled by cancelActiveRun; its late finish must not clear a newer
+            // run's state or start the next queued prompt
+            const { owned, next } = runControl.finish(run);
+            if (!owned) return;
             activeRenderer = null;
-            const next = PromptQueue.getInstance().takeNext();
             if (next) setTimeout(() => runQueuedItem(next), 150);
           });
         };
 
         // .flow files that install or run things: typed into this terminal step by step
         const runFlow = async (originalPlan: FlowPlan, source?: string) => {
-          aiBusyRef.current = true;
-          const abortController = new AbortController();
-          activeRunAbortControllerRef.current = abortController;
-          PromptQueue.getInstance().setRunningItem({
-            id: `running_${Date.now()}`,
-            goal: `Flow: ${originalPlan.name}`,
-            label: `Flow: ${originalPlan.name}`,
-            kind: 'flow',
-            flowPlan: originalPlan,
-            source,
-            timestamp: Date.now(),
-            addedAt: Date.now(),
-          });
+          const run = runControl.begin({ label: `Flow: ${originalPlan.name}`, kind: 'flow', flowPlan: originalPlan, source });
           const os = flowOsOf(getPlatform());
           let plan = originalPlan;
           try {
@@ -1006,7 +1040,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             }
             // A pane opened for this flow may still be starting its shell
             for (let waited = 0; waited < 15000 && !ptyTrackerRef.current.isIdleAtPrompt(); waited += 250) {
-              if (abortController.signal.aborted) break;
+              if (run.signal.aborted) break;
               await new Promise(r => setTimeout(r, 250));
             }
             await runFlowInTerminal(plan, {
@@ -1030,7 +1064,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 flowStepWaiter = finish;
                 // No marker and the prompt has been back for 8 s: the step was interrupted (Ctrl+C)
                 const watch = setInterval(() => {
-                  if (abortController.signal.aborted) {
+                  if (run.signal.aborted) {
                     finish(null);
                   }
                   if (Date.now() - started < 2000) return;
@@ -1063,22 +1097,20 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 const color = tone === 'error' ? S.err : tone === 'ok' ? S.ok : S.muted;
                 writeTerm(`\r\n  ${color}${tone === 'error' ? '✗' : tone === 'ok' ? '✓' : '›'}${S.reset} ${S.text}${text}${S.reset}\r\n`);
               },
-              signal: abortController.signal
+              signal: run.signal
             }, source);
           } catch (err: any) {
-            if (!abortController.signal.aborted) {
+            if (!run.signal.aborted) {
               writeTerm(`\r\n  ${S.err}✗${S.reset} Flow "${plan.name}" failed: ${err?.message || err}\r\n`);
             }
           } finally {
-            PromptQueue.getInstance().setRunningItem(null);
-            if (activeRunAbortControllerRef.current === abortController) {
-              activeRunAbortControllerRef.current = null;
+            // Cancelled flows were settled by cancelActiveRun (see runAiGoal)
+            const { owned, next } = runControl.finish(run);
+            if (owned) {
+              // The result line was written below the last prompt: ask the shell for a fresh one
+              redrawPromptIfIdle();
+              if (next) setTimeout(() => runQueuedItem(next), 150);
             }
-            // The result line was written below the last prompt: ask the shell for a fresh one
-            redrawPromptIfIdle();
-            aiBusyRef.current = false;
-            const next = PromptQueue.getInstance().takeNext();
-            if (next) setTimeout(() => runQueuedItem(next), 150);
           }
         };
 
@@ -1094,8 +1126,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         submitRef.current = (request: TerminalRequest) => {
           if (request.kind === 'flow') {
             writeTerm(`\r\n  ${S.muted}›${S.reset} ${S.text}Flow "${request.plan.name}"${request.source ? ` from ${request.source.split(/[\\/]/).pop()}` : ''}${S.reset}`);
-            if (aiBusyRef.current) {
-              PromptQueue.getInstance().enqueue({
+            if (runControl.busy) {
+              runControl.enqueue({
                 label: `Flow: ${request.plan.name}`,
                 kind: 'flow',
                 flowPlan: request.plan,
@@ -1114,8 +1146,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           const runner: AgentRunner | undefined = request.kind === 'workflow'
             ? (ctx) => agentLoop.runWorkflow(request.definition, {}, ctx)
             : undefined;
-          if (aiBusyRef.current) {
-            PromptQueue.getInstance().enqueue({
+          if (runControl.busy) {
+            runControl.enqueue({
               label,
               kind: request.kind === 'workflow' ? 'workflow' : 'goal',
               runner,
@@ -1137,8 +1169,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           const stopAction = decideStopKey({
             data,
             hasSelection: term.hasSelection(),
-            isAiBusy: aiBusyRef.current,
+            isAiBusy: runControl.busy,
             lastInterruptTime: lastInterruptTimeRef.current,
+            queueWaiting: PromptQueue.getInstance().size(runControl.ownerId),
           });
 
           if (stopAction === 'copy-selection') {
@@ -1151,48 +1184,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             return;
           }
 
-          if (stopAction === 'abort-ai-task') {
-            lastInterruptTimeRef.current = Date.now();
-            inputLineRef.current.reset(); // the \x03 below discards the line the user had typed
-            activeRunAbortControllerRef.current?.abort();
-            PromptQueue.getInstance().setRunningItem(null);
-            if (currentSessionId) {
-              await sessionManager.write(currentSessionId, '\x03');
-            }
-            const leftover = activeRenderer?.finish() ?? '';
-            writeTerm(`${leftover}\r\n  ${S.muted}Stopped.${S.reset}\r\n`);
-            PromptProgressManager.getInstance().completePrompt(false, 'Stopped.');
-            setPlanExecutionStatus('failed');
-            planExecutionStatusRef.current = 'failed';
-            schedulePlanDismiss();
-            aiBusyRef.current = false;
-            activeRunAbortControllerRef.current = null;
+          if (stopAction === 'clear-queue') {
+            lastInterruptTimeRef.current = 0;
+            const dropped = runControl.clearWaiting();
+            writeTerm(`\r\n  ${S.muted}Queue cleared (${dropped}).${S.reset}\r\n`);
             afterShellRedraw(redrawPromptIfIdle);
             return;
           }
 
-          if (stopAction === 'force-kill-ai-task') {
-            lastInterruptTimeRef.current = 0;
-            inputLineRef.current.reset();
-            activeRunAbortControllerRef.current?.abort();
-            PromptQueue.getInstance().setRunningItem(null);
-            PromptQueue.getInstance().clear();
-            if (currentSessionId) {
-              await sessionManager.write(currentSessionId, '\x03');
-              await sessionManager.write(currentSessionId, '\x03');
-            }
-            try {
-              await invoke('cancel_command', { runId: '*' }).catch(() => {});
-            } catch { /* ignore */ }
-            const leftover = activeRenderer?.finish() ?? '';
-            writeTerm(`${leftover}\r\n  ${S.err}Force killed.${S.reset}\r\n`);
-            PromptProgressManager.getInstance().completePrompt(false, 'Killed.');
-            setPlanExecutionStatus('failed');
-            planExecutionStatusRef.current = 'failed';
-            schedulePlanDismiss();
-            aiBusyRef.current = false;
-            activeRunAbortControllerRef.current = null;
-            afterShellRedraw(redrawPromptIfIdle);
+          if (stopAction === 'abort-ai-task' || stopAction === 'force-kill-ai-task') {
+            const force = stopAction === 'force-kill-ai-task';
+            lastInterruptTimeRef.current = force ? 0 : Date.now();
+            await cancelActiveRun(force ? 'kill' : 'stop');
             return;
           }
 
@@ -1512,8 +1515,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
 
                 // One request at a time: the agent keeps a single transcript and event listener
-                if (aiBusyRef.current) {
-                  PromptQueue.getInstance().enqueue(aiGoal);
+                if (runControl.busy) {
+                  runControl.enqueue({ label: aiGoal });
                   const settled = activeRenderer?.finish() ?? '';
                   const newline = !settled && term.buffer.active.cursorX > 0 ? '\r\n' : '';
                   writeTerm(`${settled}${newline}  ${S.muted}Queued: ${aiGoal}${S.reset}\r\n`);
@@ -1605,31 +1608,23 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       resizeObserver.observe(terminalRef.current);
     }
 
-    const handleAbortActiveRun = () => {
-      if (activeRunAbortControllerRef.current) {
-        activeRunAbortControllerRef.current.abort();
-        writeTerm(`\r\n  ${S.muted}Stopped.${S.reset}\r\n`);
-        PromptProgressManager.getInstance().completePrompt(false, 'Stopped.');
-        setPlanExecutionStatus('failed');
-        planExecutionStatusRef.current = 'failed';
-        schedulePlanDismiss();
-        aiBusyRef.current = false;
-        activeRunAbortControllerRef.current = null;
-        PromptQueue.getInstance().setRunningItem(null);
-        redrawPromptIfIdle();
-      }
+    const handleAbortActiveRun = (e: Event) => {
+      // The queue panel names the pane whose task to stop; without a name, only the focused pane's
+      const target = (e as CustomEvent<{ ownerId?: string }>).detail?.ownerId;
+      if (target !== undefined ? target !== runControl.ownerId : !isFocusedRef.current) return;
+      void cancelActiveRun('stop');
     };
     window.addEventListener('cero:abort-active-run', handleAbortActiveRun);
 
     const handleQueueResumed = () => {
-      if (!aiBusyRef.current) {
-        const next = PromptQueue.getInstance().takeNext();
-        if (next) setTimeout(() => runQueuedItemRef.current?.(next), 150);
-      }
+      const next = runControl.takeNextIfIdle();
+      if (next) setTimeout(() => runQueuedItemRef.current?.(next), 150);
     };
     window.addEventListener('cero:queue-resumed', handleQueueResumed);
 
     return () => {
+      // Closing the pane ends its run and drops what it had queued: nothing else would ever run it
+      runControl.dispose();
       runQueuedItemRef.current = null;
       window.removeEventListener('cero:abort-active-run', handleAbortActiveRun);
       window.removeEventListener('cero:queue-resumed', handleQueueResumed);
@@ -1776,7 +1771,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 color: planExecutionStatus === 'failed' ? 'rgba(255, 255, 255, 0.9)' : '#ffffff',
                 fontSize: '13px'
               }}>
-                {planExecutionStatus === 'completed' ? '✓' : planExecutionStatus === 'failed' ? '✗' : '▸'}
+                {planExecutionStatus === 'completed' ? '✓' : planExecutionStatus === 'failed' ? '✗' : planExecutionStatus === 'cancelled' ? '–' : '▸'}
               </span>
               <span style={{ 
                 fontWeight: 600, 
@@ -1811,6 +1806,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                   fontWeight: 500
                 }}>
                   Failed
+                </span>
+              )}
+              {planExecutionStatus === 'cancelled' && (
+                <span style={{
+                  fontSize: '10px',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                  fontWeight: 500
+                }}>
+                  Cancelled
                 </span>
               )}
               {planExecutionStatus === 'running' && latestPlan.activePhaseId && (
@@ -2091,7 +2099,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       {choiceRequest && (
         <ChoiceDialog
           request={choiceRequest.request}
-          onResult={(result) => { choiceRequest.resolve(result); setChoiceRequest(null); }}
+          onResult={(result) => { choiceRequest.resolve(result); choiceRequestRef.current = null; setChoiceRequest(null); }}
         />
       )}
 

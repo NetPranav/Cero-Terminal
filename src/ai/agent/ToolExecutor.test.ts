@@ -80,4 +80,55 @@ describe('ToolExecutor security integration', () => {
     expect(result.error).toContain('timed out after 50ms');
     expect(mockSlowDriver.cancel).toHaveBeenCalled();
   });
+
+  it('a cancelled run can never execute its command, even if the approval is granted afterwards', async () => {
+    const executor = new ToolExecutor();
+    const driver = (executor['sdk'] as any).getDriver('shell.execute');
+    const run = vi.spyOn(driver, 'execute').mockResolvedValue({ success: true, data: { stdout: '', stderr: '', code: 0 } } as any);
+
+    let release!: (approved: boolean) => void;
+    const approval = new Promise<boolean>((resolve) => { release = resolve; });
+    const ask = vi.fn().mockReturnValue(approval);
+    const controller = new AbortController();
+
+    const pending = executor.execute(
+      'shell.execute',
+      { command: 'ffmpeg -i a.mp4 b.mp3', explanation: 'Convert a.mp4 to b.mp3' },
+      '.',
+      ask,
+      undefined,
+      controller.signal
+    );
+    await vi.waitFor(() => expect(ask).toHaveBeenCalledOnce());
+
+    controller.abort(); // Ctrl+C while the approval dialog is open
+    const result = await pending;
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe('CANCELLED');
+
+    release(true); // the user clicks Run on the stale dialog
+    await new Promise((r) => setTimeout(r, 30));
+    expect(run).not.toHaveBeenCalled();
+    run.mockRestore();
+  });
+
+  it('an approval that resolves after the abort is treated as declined', async () => {
+    const executor = new ToolExecutor();
+    const driver = (executor['sdk'] as any).getDriver('shell.execute');
+    const run = vi.spyOn(driver, 'execute').mockResolvedValue({ success: true, data: { stdout: '', stderr: '', code: 0 } } as any);
+    const controller = new AbortController();
+    const ask = vi.fn().mockImplementation(async () => { controller.abort(); return true; });
+
+    const result = await executor.execute(
+      'shell.execute',
+      { command: 'ffmpeg -i a.mp4 b.mp3', explanation: 'Convert' },
+      '.',
+      ask,
+      undefined,
+      controller.signal
+    );
+    expect(result.success).toBe(false);
+    expect(run).not.toHaveBeenCalled();
+    run.mockRestore();
+  });
 });

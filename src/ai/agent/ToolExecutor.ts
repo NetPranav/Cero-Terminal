@@ -118,10 +118,30 @@ export class ToolExecutor {
         }
       });
 
+      // An approval dialog outlives the run that raised it. Once the run is cancelled, a pending
+      // dialog resolves as declined, and an approval granted after the cancel is ignored, so a
+      // cancelled task can never go on to run its command.
+      const guardedAsk = onAskPermission && signal
+        ? async (plan: ExecutionPreviewPlan): Promise<boolean> => {
+            if (signal.aborted) return false;
+            let onAbort: (() => void) | undefined;
+            const aborted = new Promise<boolean>((resolve) => {
+              onAbort = () => resolve(false);
+              signal.addEventListener('abort', onAbort, { once: true });
+            });
+            try {
+              const approved = await Promise.race([onAskPermission(plan), aborted]);
+              return approved && !signal.aborted;
+            } finally {
+              if (onAbort) signal.removeEventListener('abort', onAbort);
+            }
+          }
+        : onAskPermission;
+
       const execPromise = (async (): Promise<ToolExecutionResult> => {
         const result = await this.executionEngine.execute(toolId, params, {
           cwd,
-          onAskPermission,
+          onAskPermission: guardedAsk,
           timeoutMs: effectiveTimeout
         });
 
