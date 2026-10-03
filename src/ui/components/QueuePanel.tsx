@@ -74,7 +74,7 @@ export const QueuePanelView: React.FC<QueuePanelViewProps> = ({
     >
       <div style={{ ...row, height: 28, borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
         <ListOrdered size={ICON} style={{ opacity: 0.7 }} />
-        <span style={{ fontSize: 12, fontWeight: 600 }}>Queue</span>
+        <span style={{ fontSize: 12, fontWeight: 600 }} title="Queued prompts are not kept when Cero restarts">Queue</span>
         <span style={badge} title="Waiting prompts">{items.length}</span>
         {paused && <span style={{ ...badge, background: 'rgba(255, 255, 255, 0.16)', color: '#fff' }}>Paused</span>}
         <span style={{ flex: 1 }} />

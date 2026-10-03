@@ -51,6 +51,10 @@ describe('QueuePanelView', () => {
     expect(html).not.toContain('>Next<');
   });
 
+  it('says on hover that the queue is not kept across restarts', () => {
+    expect(render()).toContain('Queued prompts are not kept when Cero restarts');
+  });
+
   it('has an empty state and hides Clear when there is nothing to clear', () => {
     const html = render();
     expect(html).toContain('No queued prompts');
