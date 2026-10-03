@@ -76,7 +76,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     const fetchAiStatus = async () => {
       try {
         const s = await EmbeddedEngineManager.getInstance().getStatus();
-        if (isMounted) setAiStatus(s);
+        if (isMounted) {
+          setAiStatus(s);
+          // Backstop: also re-read the active model, in case a change event was missed
+          setActiveModel(ModelManager.getInstance().getActiveModel());
+        }
       } catch {
         // Ignore status fetch errors
       }

@@ -220,30 +220,21 @@ export class ModelManager {
           for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
             try {
               if (await match.isAvailable()) {
-                if (this.activeModelInfo && this.activeModelInfo.providerId === savedProviderId) {
-                  this.activeModelInfo.isReady = true;
-                  this.activeModelInfo.unavailableReason = undefined;
-                }
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
-                }
+                this.patchActive(savedProviderId, { isReady: true, unavailableReason: undefined });
                 return;
               }
             } catch { /* ignore */ }
             await new Promise(r => setTimeout(r, RETRY_DELAY));
           }
           // Provider never became available: keep the saved choice, mark unavailable
-          if (this.activeModelInfo && this.activeModelInfo.providerId === savedProviderId) {
-            this.activeModelInfo.isReady = false;
-            this.activeModelInfo.unavailableReason =
+          // Do NOT clear the saved keys and do NOT silently switch to embedded
+          this.patchActive(savedProviderId, {
+            isReady: false,
+            unavailableReason:
               savedProviderId === 'ollama' ? 'Ollama is not running'
               : savedProviderId === 'cloud_api' ? 'API provider not reachable'
-              : 'Provider not available';
-          }
-          // Do NOT clear the saved keys and do NOT silently switch to embedded
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
-          }
+              : 'Provider not available',
+          });
         };
         void verifyInBackground();
         return this.activeModelInfo!;
@@ -377,10 +368,6 @@ export class ModelManager {
       isReady: true,
       lastVerified: Date.now()
     });
-
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
-    }
     return true;
   }
 
@@ -416,6 +403,25 @@ export class ModelManager {
       if (this.modelHistory.length > 10) this.modelHistory.shift();
     }
     this.activeModelInfo = info;
+    this.notifyChanged();
+  }
+
+  /**
+   * Replace the active-model snapshot with an updated copy (never mutate it in place, or a
+   * subscriber holding the old reference cannot tell anything changed). No-op when the active
+   * provider is no longer `providerId`, e.g. the user switched while a check was running.
+   */
+  private patchActive(providerId: string, patch: Partial<ActiveModelInfo>): void {
+    if (!this.activeModelInfo || this.activeModelInfo.providerId !== providerId) return;
+    this.activeModelInfo = { ...this.activeModelInfo, ...patch };
+    this.notifyChanged();
+  }
+
+  /** The status bar and Settings listen for this; every change of the active model fires it. */
+  private notifyChanged(): void {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
+    }
   }
 
   /**
@@ -447,6 +453,7 @@ export class ModelManager {
     // switch active provider if different
     const prov = this.providers.find(p => p.providerId === previous.providerId);
     if (prov) this.activeProvider = prov;
+    this.notifyChanged();
     return this.activeModelInfo;
   }
 
@@ -479,9 +486,6 @@ export class ModelManager {
     };
     this.setActiveModel(newInfo);
     this.persistChoice(this.activeProvider.providerId, modelId);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
-    }
     return newInfo;
   }
 
