@@ -24,7 +24,34 @@ describe('ToolExecutor security integration', () => {
 
     expect(requestApproval).toHaveBeenCalledOnce();
     expect(result.success).toBe(false);
-    expect(result.error).toContain('User denied execution');
+    expect(result.error).toContain('Declined in the confirmation dialog');
+  });
+
+  it('requires explicit user approval and presents 1-line explanation for generative shell commands', async () => {
+    let capturedPlan: any = null;
+    const requestApproval = vi.fn().mockImplementation(async (plan) => {
+      capturedPlan = plan;
+      return true; // Approve
+    });
+    const executor = new ToolExecutor();
+
+    const result = await executor.execute(
+      'shell.execute',
+      {
+        command: 'ffmpeg -i video.mp4 -vn output.mp3',
+        explanation: 'Converts video.mp4 to audio file output.mp3'
+      },
+      '.',
+      requestApproval
+    );
+
+    expect(requestApproval).toHaveBeenCalledOnce();
+    expect(capturedPlan).toBeDefined();
+    expect(capturedPlan.riskLevel).toBe('SENSITIVE');
+    expect(capturedPlan.requiresConsent).toBe(true);
+    expect(capturedPlan.requiresPassword).toBe(false);
+    expect(capturedPlan.explanation).toBe('Converts video.mp4 to audio file output.mp3');
+    expect(result.success).toBe(true);
   });
 
   it('enforces execution timeout and cancels active driver when a command exceeds timeoutMs', async () => {

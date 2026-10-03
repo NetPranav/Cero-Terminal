@@ -7,7 +7,7 @@ export class PromptBuilder {
     ).join('\n');
 
     return `
-You are the AI Planning Engine for Sentinel Terminal.
+You are the AI Planning Engine for Cero.
 Your goal is to translate a user request into a deterministic JSON workflow.
 You MUST ONLY use the capabilities provided in the AVAILABLE TOOLS section. DO NOT invent shell commands.
 

@@ -4,6 +4,7 @@ import { ISecurityEngine } from './SecurityEngine';
 import { IPolicyEngine } from './PolicyEngine';
 import { IAuditLogger } from './AuditLogger';
 import { CapabilityRegistrySDK } from '../../sdk/capabilities/CapabilityRegistrySDK';
+import { ConsentQueue } from './ConsentQueue';
 
 export interface ExecutionOptions {
   isDryRun?: boolean;
@@ -11,6 +12,8 @@ export interface ExecutionOptions {
   onAskPermission?: (plan: ExecutionPreviewPlan) => Promise<boolean>;
   cwd?: string; // Terminal current working directory for SDK capabilities
   timeoutMs?: number;
+  tabId?: string;
+  consentQueue?: ConsentQueue;
 }
 
 export interface ExecutionPreviewPlan {
@@ -25,13 +28,49 @@ export interface ExecutionPreviewPlan {
 }
 
 export class ExecutionEngine {
+  private consentQueue: ConsentQueue;
+
   constructor(
     private capabilityManager: CapabilityManager,
     private permissionManager: IPermissionManager,
     private securityEngine: ISecurityEngine,
     private policyEngine: IPolicyEngine,
-    private auditLogger: IAuditLogger
-  ) {}
+    private auditLogger: IAuditLogger,
+    consentQueue?: ConsentQueue
+  ) {
+    this.consentQueue = consentQueue || ConsentQueue.getInstance();
+  }
+
+  public getConsentQueue(): ConsentQueue {
+    return this.consentQueue;
+  }
+
+  private async requestConsent(
+    plan: ExecutionPreviewPlan,
+    options: ExecutionOptions,
+    startTime: number
+  ): Promise<boolean> {
+    const queue = options.consentQueue || this.consentQueue;
+
+    if (options.onAskPermission) {
+      return await options.onAskPermission(plan);
+    }
+
+    if (queue.isAutoApprove()) {
+      return await queue.enqueue(plan, options.tabId);
+    }
+
+    if (queue.hasListeners()) {
+      return await queue.enqueue(plan, options.tabId);
+    }
+
+    if (typeof process === 'undefined' || process.env.NODE_ENV !== 'test') {
+      return await queue.enqueue(plan, options.tabId);
+    }
+
+    // In unit test environment without callback or consent queue listeners, default to allow
+    return true;
+  }
 
   public static resolvePermissionCategory(capabilityId: string): PermissionCategory {
     if (capabilityId === 'filesystem.delete' || capabilityId === 'filesystem.trash') {
@@ -120,34 +159,36 @@ export class ExecutionEngine {
         }
 
         const risk = this.securityEngine.calculateRisk(capabilityId, input);
+        const categoryPolicyResult = this.policyEngine.evaluateCategories(risk.categories || []);
+        if (categoryPolicyResult === 'Deny') {
+          await this.logAudit(capabilityId, input, 100, 'Denied', startTime);
+          return this.errorResult('POLICY_DENIED', 'Execution denied by categorical policy rules.', startTime);
+        }
         const isSafeAction = risk.level === 'SAFE';
-        const needsAsk = (!isSafeAction && permState === 'AskEveryTime') || policyResult === 'Ask' || risk.level === 'CRITICAL' || risk.level === 'ADMIN' || risk.requiresConsent || risk.requiresPassword || capabilityId === 'filesystem.delete' || capabilityId === 'filesystem.trash';
+        const isAlwaysAllow = permState === 'AlwaysAllow';
+        const capturesPrivateData = (risk.categories || []).includes('privacy-capture');
+        const needsAsk = (!isSafeAction && permState === 'AskEveryTime') || policyResult === 'Ask' || (!isAlwaysAllow && (categoryPolicyResult === 'Ask' || risk.requiresConsent)) || risk.level === 'CRITICAL' || risk.level === 'ADMIN' || risk.requiresPassword || capturesPrivateData || capabilityId === 'filesystem.delete' || capabilityId === 'filesystem.trash';
         if (needsAsk) {
-          if (!options.onAskPermission && (typeof process === 'undefined' || process.env.NODE_ENV !== 'test')) {
-            await this.logAudit(capabilityId, input, risk.score, 'Denied', startTime);
-            return this.errorResult('PERMISSION_REQUIRED', 'Destructive/admin capability execution requires explicit user consent and password authentication.', startTime);
-          }
-          if (options.onAskPermission) {
-            const requiresAuth = risk.requiresPassword ?? (risk.level === 'CRITICAL' || risk.level === 'ADMIN');
-            const requiresConsent = risk.requiresConsent ?? (risk.level === 'CRITICAL' || risk.level === 'ADMIN');
-            const authPerms = requiresAuth ? ['system.password_auth', 'user_consent'] : [];
-            const fsAdmin = (capabilityId.startsWith('filesystem.') && (risk.level === 'CRITICAL' || risk.level === 'ADMIN')) ? ['filesystem.admin'] : [];
+          const requiresAuth = risk.requiresPassword ?? (risk.level === 'CRITICAL' || risk.level === 'ADMIN');
+          const requiresConsent = risk.requiresConsent ?? (risk.level === 'CRITICAL' || risk.level === 'ADMIN');
+          const authPerms = requiresAuth ? ['system.password_auth', 'user_consent'] : [];
+          const fsAdmin = (capabilityId.startsWith('filesystem.') && (risk.level === 'CRITICAL' || risk.level === 'ADMIN')) ? ['filesystem.admin'] : [];
 
-            const plan: ExecutionPreviewPlan = {
-              capabilityId,
-              parameters: input,
-              riskLevel: risk.level,
-              riskScore: risk.score,
-              permissionsRequired: [permCategory, ...fsAdmin, ...authPerms],
-              explanation: risk.explanation,
-              requiresPassword: requiresAuth,
-              requiresConsent
-            };
-            const approved = await options.onAskPermission(plan);
-            if (!approved) {
-              await this.logAudit(capabilityId, input, risk.score, 'Denied', startTime);
-              return this.errorResult('USER_CANCELLED', 'User denied execution or failed security password authentication.', startTime);
-            }
+          const plan: ExecutionPreviewPlan = {
+            capabilityId,
+            parameters: input,
+            riskLevel: risk.level,
+            riskScore: risk.score,
+            permissionsRequired: [permCategory, ...fsAdmin, ...authPerms],
+            explanation: risk.explanation,
+            requiresPassword: requiresAuth,
+            requiresConsent
+          };
+
+          const approved = await this.requestConsent(plan, options, startTime);
+          if (!approved) {
+            await this.logAudit(capabilityId, input, risk.score, 'Denied', startTime);
+            return this.errorResult('USER_CANCELLED', 'Declined in the confirmation dialog.', startTime);
           }
         }
         const res = await sdkDriver.execute(input, { isDryRun: options.isDryRun, cwd: options.cwd, timeoutMs: options.timeoutMs });
@@ -185,10 +226,16 @@ export class ExecutionEngine {
 
       // 3. Risk Analysis
       const risk = this.securityEngine.calculateRisk(capabilityId, input);
+      const categoryPolicyResult = this.policyEngine.evaluateCategories(risk.categories || []);
+      if (categoryPolicyResult === 'Deny') {
+        await this.logAudit(capabilityId, input, 100, 'Denied', startTime);
+        return this.errorResult('POLICY_DENIED', 'Execution denied by categorical policy rules.', startTime);
+      }
 
       // 4. Check Permissions
       let permissionResult: 'Granted' | 'Denied' | 'Bypassed' = 'Granted';
-      let needsAsk = policyResult === 'Ask' || risk.level === 'CRITICAL' || risk.level === 'ADMIN' || risk.requiresConsent || risk.requiresPassword;
+      let hasAlwaysAllow = capability.metadata.requiredPermissions.length > 0;
+      let hasAskEveryTime = false;
 
       for (const requiredPerm of capability.metadata.requiredPermissions) {
         const state = this.permissionManager.checkPermission(requiredPerm as PermissionCategory);
@@ -197,34 +244,32 @@ export class ExecutionEngine {
           return this.errorResult('PERMISSION_DENIED', `Permission ${requiredPerm} is always denied.`, startTime);
         }
         if (state === 'AskEveryTime') {
-          needsAsk = true;
+          hasAskEveryTime = true;
+        }
+        if (state !== 'AlwaysAllow') {
+          hasAlwaysAllow = false;
         }
       }
 
+      let needsAsk = policyResult === 'Ask' || hasAskEveryTime || (!hasAlwaysAllow && (categoryPolicyResult === 'Ask' || risk.requiresConsent)) || risk.level === 'CRITICAL' || risk.level === 'ADMIN' || risk.requiresPassword;
+
       // 5. Preview & Ask User
       if (needsAsk) {
-        if (!options.onAskPermission && (typeof process === 'undefined' || process.env.NODE_ENV !== 'test')) {
-           await this.logAudit(capabilityId, input, risk.score, 'Denied', startTime);
-           return this.errorResult('PERMISSION_REQUIRED', 'Interactive permission required but no UI callback provided.', startTime);
-        }
+        const plan: ExecutionPreviewPlan = {
+          capabilityId,
+          parameters: input,
+          riskLevel: risk.level,
+          riskScore: risk.score,
+          permissionsRequired: [...capability.metadata.requiredPermissions, ...(risk.requiresPassword ? ['system.password_auth', 'user_consent'] : [])],
+          explanation: risk.explanation,
+          requiresPassword: risk.requiresPassword ?? (risk.level === 'CRITICAL' || risk.level === 'ADMIN'),
+          requiresConsent: risk.requiresConsent ?? (risk.level === 'CRITICAL' || risk.level === 'ADMIN')
+        };
 
-        if (options.onAskPermission) {
-          const plan: ExecutionPreviewPlan = {
-            capabilityId,
-            parameters: input,
-            riskLevel: risk.level,
-            riskScore: risk.score,
-            permissionsRequired: [...capability.metadata.requiredPermissions, ...(risk.requiresPassword ? ['system.password_auth', 'user_consent'] : [])],
-            explanation: risk.explanation,
-            requiresPassword: risk.requiresPassword ?? (risk.level === 'CRITICAL' || risk.level === 'ADMIN'),
-            requiresConsent: risk.requiresConsent ?? (risk.level === 'CRITICAL' || risk.level === 'ADMIN')
-          };
-
-          const approved = await options.onAskPermission(plan);
-          if (!approved) {
-            await this.logAudit(capabilityId, input, risk.score, 'Denied', startTime);
-            return this.errorResult('USER_CANCELLED', 'User denied execution or failed security password authentication.', startTime);
-          }
+        const approved = await this.requestConsent(plan, options, startTime);
+        if (!approved) {
+          await this.logAudit(capabilityId, input, risk.score, 'Denied', startTime);
+          return this.errorResult('USER_CANCELLED', 'Declined in the confirmation dialog.', startTime);
         }
       }
 

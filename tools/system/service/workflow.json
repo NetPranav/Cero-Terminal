@@ -1,0 +1,24 @@
+{
+  "toolId": "system.service",
+  "version": "1.0.0",
+  "description": "Executes native driver for Manage System Service.",
+  "steps": [
+    {
+      "id": "step_exec_main",
+      "name": "Execute Manage System Service",
+      "type": "ExecuteCapability",
+      "capabilityId": "system.service",
+      "parameters": {
+        "service": "{{service}}",
+        "action": "{{action}}"
+      },
+      "dependencies": [],
+      "onError": "fail"
+    }
+  ],
+  "successCondition": "step:step_exec_main:success",
+  "errorHandling": {
+    "strategy": "fail_fast",
+    "maxRetries": 0
+  }
+}

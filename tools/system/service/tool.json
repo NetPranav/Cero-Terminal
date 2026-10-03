@@ -1,0 +1,62 @@
+{
+  "id": "system.service",
+  "version": "1.0.0",
+  "displayName": "Manage System Service",
+  "description": "Starts, stops, restarts, enables, disables, or inspects status of background system services (systemd, launchctl, Windows Services).",
+  "domain": "system",
+  "category": "System",
+  "tags": [
+    "system",
+    "service",
+    "daemon",
+    "systemctl",
+    "launchctl",
+    "systemd",
+    "startup",
+    "background"
+  ],
+  "aliases": [
+    "start service",
+    "stop service",
+    "restart service",
+    "enable service",
+    "disable service",
+    "service status",
+    "check service",
+    "systemctl",
+    "launchctl"
+  ],
+  "supportedPlatforms": [
+    "macos",
+    "windows",
+    "linux"
+  ],
+  "requiredPermissions": [
+    "SystemServices"
+  ],
+  "securityRisk": "MEDIUM",
+  "parameters": [
+    {
+      "name": "service",
+      "type": "string",
+      "description": "Name of the system service (e.g. docker, postgresql, bluetooth, nginx)",
+      "required": true
+    },
+    {
+      "name": "action",
+      "type": "string",
+      "description": "Action to perform: start, stop, restart, enable, disable, status",
+      "required": true
+    }
+  ],
+  "optionalParameters": [
+    {
+      "name": "userScope",
+      "type": "boolean",
+      "description": "Whether to run in user scope (e.g. systemctl --user)"
+    }
+  ],
+  "estimatedExecutionTime": "2s",
+  "confirmationRequired": false,
+  "undoable": true
+}

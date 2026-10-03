@@ -3,7 +3,7 @@
   "tests": [
     {
       "id": "browser-bookmarks-test-1",
-      "userRequest": "show bookmarks for sentinel",
+      "userRequest": "show bookmarks for cero",
       "expectedIntent": {
         "domain": "browser",
         "action": "bookmarks"

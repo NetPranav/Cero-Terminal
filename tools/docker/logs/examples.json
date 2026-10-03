@@ -1,0 +1,16 @@
+{
+  "toolId": "docker.logs",
+  "examples": [
+    {
+      "input": "check logs for container redis_db",
+      "expectedIntent": {
+        "domain": "docker",
+        "action": "logs"
+      },
+      "expectedEntities": {
+        "container": "sample_val"
+      },
+      "description": "Example execution of Retrieve Container Logs"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "toolId": "system.dotfile",
+  "aliases": [
+    "toggle autostart",
+    "turn on in rice",
+    "turn off in rice",
+    "disable on startup",
+    "enable on startup",
+    "hyprland config",
+    "rice config"
+  ],
+  "synonyms": [
+    "please turn off in rice",
+    "please enable on startup",
+    "manage autostart"
+  ],
+  "commonUserWording": [
+    "turn off gazebo in hyprland",
+    "disable waybar on startup",
+    "enable picom in i3"
+  ],
+  "commonMistakes": [],
+  "entityHints": {
+    "app": ["gazebo", "waybar", "picom", "nm-applet", "dunst"],
+    "target": ["hyprland", "i3", "sway", "bashrc", "zshrc"]
+  },
+  "deviceNamingPatterns": [],
+  "commonAbbreviations": {},
+  "languageVariations": [
+    "turn off gazebo in rice",
+    "remove gazebo from startup"
+  ],
+  "relatedTools": ["system.service"]
+}

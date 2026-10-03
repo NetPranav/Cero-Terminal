@@ -1,0 +1,19 @@
+{
+  "toolId": "system.service",
+  "tests": [
+    {
+      "id": "system-service-test-1",
+      "userRequest": "restart docker service",
+      "expectedIntent": {
+        "domain": "system",
+        "action": "service"
+      },
+      "expectedToolId": "system.service",
+      "expectedEntities": {
+        "service": "docker",
+        "action": "restart"
+      },
+      "description": "Restart system service test"
+    }
+  ]
+}

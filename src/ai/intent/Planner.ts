@@ -488,7 +488,7 @@ export class Planner {
 
   private splitIntoClauses(text: string): string[] {
     const cleaned = text
-      .replace(/^(?:hey|hi|hello|please|sentinel)[\s,]+/i, '')
+      .replace(/^(?:hey|hi|hello|please|cero)[\s,]+/i, '')
       .replace(/\.\s+/g, '|')
       .replace(/\.$/, '')
       .replace(/;\s*/g, '|')

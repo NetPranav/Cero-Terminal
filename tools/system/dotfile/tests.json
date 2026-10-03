@@ -1,0 +1,20 @@
+{
+  "toolId": "system.dotfile",
+  "tests": [
+    {
+      "id": "system-dotfile-test-1",
+      "userRequest": "turn off gazebo in hyprland",
+      "expectedIntent": {
+        "domain": "system",
+        "action": "dotfile"
+      },
+      "expectedToolId": "system.dotfile",
+      "expectedEntities": {
+        "app": "gazebo",
+        "enable": false,
+        "target": "hyprland"
+      },
+      "description": "Disable application autostart test"
+    }
+  ]
+}

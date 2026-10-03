@@ -1,0 +1,53 @@
+{
+  "id": "docker.logs",
+  "version": "1.0.0",
+  "displayName": "Retrieve Container Logs",
+  "description": "Retrieves stdout/stderr runtime logs from a specified Docker container.",
+  "domain": "docker",
+  "category": "Docker",
+  "tags": [
+    "docker",
+    "logs",
+    "docker.logs",
+    "retrieve",
+    "container",
+    "check",
+    "view"
+  ],
+  "aliases": [
+    "docker logs",
+    "check container logs",
+    "view docker logs"
+  ],
+  "supportedPlatforms": [
+    "macos",
+    "windows",
+    "linux"
+  ],
+  "requiredPermissions": [
+    "ShellExecution"
+  ],
+  "securityRisk": "SAFE",
+  "parameters": [
+    {
+      "name": "container",
+      "type": "string",
+      "description": "Container ID or name",
+      "required": true
+    }
+  ],
+  "optionalParameters": [
+    {
+      "name": "tail",
+      "type": "number",
+      "description": "Number of recent log lines to show",
+      "required": false,
+      "default": 50
+    }
+  ],
+  "estimatedExecutionTime": "1s",
+  "confirmationRequired": false,
+  "rollbackAvailable": false,
+  "verificationSupported": true,
+  "deprecationStatus": "stable"
+}

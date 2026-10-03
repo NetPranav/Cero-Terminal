@@ -1,0 +1,18 @@
+{
+  "toolId": "docker.logs",
+  "tests": [
+    {
+      "id": "docker-logs-test-1",
+      "userRequest": "check logs for container redis_db",
+      "expectedIntent": {
+        "domain": "docker",
+        "action": "logs"
+      },
+      "expectedToolId": "docker.logs",
+      "expectedEntities": {
+        "container": "sample_val"
+      },
+      "description": "Automated test case for Retrieve Container Logs"
+    }
+  ]
+}

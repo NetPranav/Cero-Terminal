@@ -1,0 +1,18 @@
+{
+  "toolId": "system.dotfile",
+  "examples": [
+    {
+      "input": "turn off gazebo in hyprland",
+      "expectedIntent": {
+        "domain": "system",
+        "action": "dotfile"
+      },
+      "expectedEntities": {
+        "app": "gazebo",
+        "enable": false,
+        "target": "hyprland"
+      },
+      "description": "Disable gazebo autostart in hyprland"
+    }
+  ]
+}
