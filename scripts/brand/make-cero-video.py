@@ -2,9 +2,8 @@
 """
 make-cero-video.py: the Cero logo animation as a video, built from the real logo photo so every texture is kept.
 
-  The sphere starts in the logo's own shape and texture (lit, with the fine etched surface of the photo) and the glow
-  is there all the time. Then the surface turns into dots: they form first at the edge and the change moves
-  inward, until the picture is exactly the logo.
+  The sphere is the logo's own body (its default texture, nothing added) with the glow around it from the start.
+  Dots then form, first at the edge and moving inward, until the picture is exactly the logo.
 
   python3 scripts/brand/make-cero-video.py [--preview] [--fps 30]
 Reads  assets/brand/Application_LOGO.jpeg   Writes  assets/brand/cero-logo-animation.mp4
@@ -45,13 +44,13 @@ band = (dist > RAD - 26) & (dist < RAD + 10) & (~crescent_zone) & (gray > 0.40)
 bright_c = (((tophat > 0.30) & (dist < RAD + 9) & (~crescent_zone)) | band).astype(np.uint8)
 bright_c = cv2.morphologyEx(bright_c, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
 # the dim dots are what is left once the bright ones (and their glow) are set aside
-dim_c = ((tophat > 0.06) & (dist < RAD + 9) & (~crescent_zone) & (cv2.dilate(bright_c, np.ones((13, 13), np.uint8)) == 0)).astype(np.uint8)
+dim_c = ((tophat > 0.09) & (dist < RAD + 9) & (~crescent_zone) & (toward_light < 0.12) & (cv2.dilate(bright_c, np.ones((13, 13), np.uint8)) == 0)).astype(np.uint8)
 dim_c = cv2.morphologyEx(dim_c, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
 dot_list = []                                  # (bounding box, mask inside it, centre)
-for cand_mask, max_area in ((bright_c, 3000), (dim_c, 500)):
+for cand_mask, max_area, min_area in ((bright_c, 3000, 5), (dim_c, 500, 14)):
     n, lab, stats, cents = cv2.connectedComponentsWithStats(cand_mask, connectivity=8)
     for i in range(1, n):
-        if 5 <= stats[i, cv2.CC_STAT_AREA] <= max_area:
+        if min_area <= stats[i, cv2.CC_STAT_AREA] <= max_area:
             x, y, w, h = stats[i, cv2.CC_STAT_LEFT], stats[i, cv2.CC_STAT_TOP], stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
             dot_list.append(((x, y, w, h), (lab[y:y + h, x:x + w] == i), (float(cents[i][0]), float(cents[i][1]))))
 dot_mask = np.zeros((H, W), np.uint8)
@@ -66,24 +65,11 @@ REST = rest8[:, :, ::-1].astype(np.float32) / 255.0
 DOTS = P * dot_alpha[:, :, None]                                     # premultiplied
 print(f'{len(dot_list)} dots')
 
-# ---------------------------------------------------------------- 2. the textured sphere the animation starts from
-# the photo's own surface texture, lit more strongly so it reads like the grey etched surface near the rim
-nx, ny = (xx - CX) / RAD, (yy - CY) / RAD
-r2 = np.clip(nx * nx + ny * ny, 0, 1)
-nz = np.sqrt(1 - r2)
-Ldir = np.array([0.62, -0.55, 0.56]); Ldir /= np.linalg.norm(Ldir)
-lam = np.clip(nx * Ldir[0] + ny * Ldir[1] + nz * Ldir[2], 0, 1)
-tex_src = cv2.cvtColor((REST * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
-tex = tex_src - cv2.GaussianBlur(tex_src, (0, 0), 2.2)
-tex = np.where(dist < RAD - 10, tex, 0)
-tex_fine = tex_src - cv2.GaussianBlur(tex_src, (0, 0), 6)
-lit = (0.04 + 0.52 * lam ** 2.2)                                      # grey toward the light, dark away from it
-LIT_BODY = np.clip(tex_src * 0.6 + lit * (1.0 + 7.0 * tex + 4.0 * tex_fine), 0, 1)[:, :, None] * np.ones(3, np.float32)
+# ---------------------------------------------------------------- 2. the body is the logo's own body, unchanged
 IN_R = RAD - 8
 disc = smooth(IN_R + 3, IN_R - 3, dist)[:, :, None]                   # 1 inside, 0 outside, soft edge
 GLOW = REST * (1 - disc)
 REST_IN = REST * disc
-depth = np.clip((RAD - dist) / RAD, 0, 1)                             # 0 at the rim, 1 in the middle
 
 # ---------------------------------------------------------------- 3. dots
 sprites = []
@@ -102,7 +88,7 @@ dmax = max(sp[8] for sp in sprites)
 FPS = args.fps
 T_END = 12.0
 T_GLOW = (0.0, 0.8)          # the glow arrives and stays
-T_WAVE = (1.6, 9.2)          # dots form from the edge inward
+T_WAVE = (1.4, 9.2)          # dots form from the edge inward
 T_FINAL = (9.8, 10.6)        # last blend to the exact logo
 DOT_TIME = 1.3
 rng2 = np.random.default_rng(11)
@@ -132,12 +118,7 @@ def blit(canvas, patch_rgb, patch_a, box, center, scale, opacity):
 def frame(t):
     glow_k = ease(lin(t, *T_GLOW)) * (1.0 + 0.03 * np.sin(t * 2.0))
     canvas = GLOW * glow_k
-    # the surface settles from its lit, textured look to the dark body of the logo as the wave of dots passes inward
-    front = -0.12 + 1.5 * lin(t, T_WAVE[0], T_WAVE[1] - 1.8)
-    settled = smooth(0.0, 0.22, front - depth)[:, :, None]            # 1 where the wave has passed
-    breathe = 1.0 + 0.03 * np.sin(t * 1.6)
-    body = (LIT_BODY * breathe) * (1 - settled) + REST_IN * settled
-    canvas = canvas + body * disc * (ease(lin(t, 0.2, 1.0)))
+    canvas = canvas + REST_IN * ease(lin(t, 0.2, 1.0))                # the logo's own dark body, from the first moment
     for k, d in enumerate(sprites):
         s = lin(t, ts[k], ts[k] + DOT_TIME)
         if s <= 0: continue
