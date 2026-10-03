@@ -85,6 +85,16 @@ export class InputLineTracker {
     return this.anchor !== null && this.typedAhead;
   }
 
+  /**
+   * The user has text on the current input line that has not been submitted. Anything Cero writes
+   * to the shell on its own (a bare Enter to redraw the prompt, a `cd`) would submit or extend that
+   * text, so those writes must wait or be skipped while this is true.
+   */
+  public hasDraft(): boolean {
+    if (!this.anchor) return false;
+    return !this.shadowExact || this.shadow.length > 0;
+  }
+
   public hasAnchor(): boolean {
     return this.anchor !== null && !this.typedAhead;
   }

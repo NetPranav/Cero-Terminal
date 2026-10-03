@@ -53,6 +53,8 @@ import { TerminalWorkspace } from '../domain/terminal/TerminalWorkspace';
 import { claimTerminalRequests, releaseTerminalRequests, TerminalRequest } from './TerminalRequests';
 import { claimChoiceRequests, releaseChoiceRequests, type ChoiceRequest, type ChoiceResult } from './ChoiceRequests';
 import { ChoiceDialog } from '../ui/components/ChoiceDialog';
+import { ApprovalDock } from '../ui/components/ApprovalDock';
+import { decideApprovalPresentation, decideModalKey } from './approvalPresentation';
 import { createPortal } from 'react-dom';
 
 type AgentRunner = (context: { os: string; cwd: string; paneId?: string; signal?: AbortSignal }) => Promise<AgentResult>;
@@ -174,7 +176,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     plan: any;
     resolve: (approved: boolean) => void;
     requestId?: string;
+    /** Shown as a card that never takes keyboard focus (the user is writing a prompt) */
+    docked?: boolean;
   } | null>(null);
+  // Last key the user pressed here: an approval that arrives mid-typing must not take over the keyboard
+  const lastKeystrokeAtRef = useRef(0);
   // When the dialog appeared and when the last stray keystroke hit it. A dialog that opens while
   // the user is typing must not be approved by the Enter that finishes their command.
   const consentShownAtRef = useRef(0);
@@ -591,6 +597,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       };
       poll();
     };
+    // Ask the shell for a fresh prompt after Cero printed below it. Skipped while the user has an
+    // unsubmitted draft: a bare Enter would run whatever they have typed so far.
+    const redrawPromptIfIdle = () => {
+      if (!currentSessionId || inputLineRef.current.hasDraft()) return;
+      void sessionManager.write(currentSessionId, '\r');
+    };
     let activeRenderer: AgentEventRenderer | null = null;
     let unsubRemediation: (() => void) | null = null;
     let unsubConsent: (() => void) | null = null;
@@ -705,7 +717,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         unsubConsent = ConsentQueue.getInstance().subscribe((pending) => {
           const matching = pending.find(r => !r.tabId || r.tabId === currentSessionId);
           if (matching) {
-            setSecurityModalPlan({
+            const docked = decideApprovalPresentation({
+              hasDraft: inputLineRef.current.hasDraft(),
+              msSinceLastKeystroke: lastKeystrokeAtRef.current ? Date.now() - lastKeystrokeAtRef.current : Infinity,
+            }) === 'dock';
+            // The queue notifies on every change: keep the card the user already sees as it is
+            setSecurityModalPlan((prev) => prev?.requestId === matching.id ? prev : {
               plan: matching.plan,
               resolve: (approved: boolean) => {
                 if (approved) {
@@ -714,7 +731,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                   ConsentQueue.getInstance().deny(matching.id);
                 }
               },
-              requestId: matching.id
+              requestId: matching.id,
+              docked,
             });
           } else {
             setSecurityModalPlan((prev) => (prev?.requestId ? null : prev));
@@ -915,7 +933,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             if (result.steps.some(s => s.tool === '__clear__')) {
               term.clear();
               writeTerm('\x1b[2J\x1b[H');
-              afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+              afterShellRedraw(redrawPromptIfIdle);
               return;
             }
 
@@ -923,10 +941,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             if (result.cdPath) {
               notifyNavigation(result.cdPath);
               const cdCmd = result.cdPath.includes(' ') && !result.cdPath.startsWith('"') && !result.cdPath.startsWith("'") ? `cd "${result.cdPath}"` : `cd ${result.cdPath}`;
-              afterShellRedraw(() => sessionManager.write(currentSessionId!, `${cdCmd}\r`));
+              afterShellRedraw(() => {
+                // Typing `cd ...` into the shell would be appended to, and run with, the user's draft
+                if (inputLineRef.current.hasDraft()) {
+                  writeTerm(`\r\n  ${S.muted}The shell stays in its current folder while you are typing. To follow, run: ${cdCmd}${S.reset}\r\n`);
+                  return;
+                }
+                sessionManager.write(currentSessionId!, `${cdCmd}\r`);
+              });
             } else {
               writeTerm('\r\n');
-              afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+              afterShellRedraw(redrawPromptIfIdle);
             }
           }).catch(err => {
             if (abortController.signal.aborted) {
@@ -940,7 +965,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             planExecutionStatusRef.current = 'failed';
             schedulePlanDismiss();
             writeTerm(`\r\n${formatAgentEvent({ type: 'error', message: err.message || 'Something went wrong' })}\r\n`);
-            afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+            afterShellRedraw(redrawPromptIfIdle);
           }).finally(() => {
             PromptQueue.getInstance().setRunningItem(null);
             if (activeRunAbortControllerRef.current === abortController) {
@@ -1050,7 +1075,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               activeRunAbortControllerRef.current = null;
             }
             // The result line was written below the last prompt: ask the shell for a fresh one
-            if (currentSessionId) void sessionManager.write(currentSessionId, '\r');
+            redrawPromptIfIdle();
             aiBusyRef.current = false;
             const next = PromptQueue.getInstance().takeNext();
             if (next) setTimeout(() => runQueuedItem(next), 150);
@@ -1105,6 +1130,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
         term.onData(async (data) => {
           if (!currentSessionId) return;
+          lastKeystrokeAtRef.current = Date.now();
           CeroSerlCoordinator.getInstance().markActivity();
 
           // Stop key decision (Task 2.2: Ctrl+C stops a running task or copies selection)
@@ -1127,6 +1153,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
           if (stopAction === 'abort-ai-task') {
             lastInterruptTimeRef.current = Date.now();
+            inputLineRef.current.reset(); // the \x03 below discards the line the user had typed
             activeRunAbortControllerRef.current?.abort();
             PromptQueue.getInstance().setRunningItem(null);
             if (currentSessionId) {
@@ -1140,12 +1167,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             schedulePlanDismiss();
             aiBusyRef.current = false;
             activeRunAbortControllerRef.current = null;
-            afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+            afterShellRedraw(redrawPromptIfIdle);
             return;
           }
 
           if (stopAction === 'force-kill-ai-task') {
             lastInterruptTimeRef.current = 0;
+            inputLineRef.current.reset();
             activeRunAbortControllerRef.current?.abort();
             PromptQueue.getInstance().setRunningItem(null);
             PromptQueue.getInstance().clear();
@@ -1164,7 +1192,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             schedulePlanDismiss();
             aiBusyRef.current = false;
             activeRunAbortControllerRef.current = null;
-            afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+            afterShellRedraw(redrawPromptIfIdle);
             return;
           }
 
@@ -1431,19 +1459,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
                 if (queueCmd.type === 'open-panel') {
                   window.dispatchEvent(new CustomEvent('cero:open-queue'));
-                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  afterShellRedraw(redrawPromptIfIdle);
                   return;
                 }
                 if (queueCmd.type === 'show') {
                   const list = PromptQueue.getInstance().formatQueueList();
                   writeTerm(`\r\n  ${S.soft}${list.replace(/\n/g, '\r\n  ')}${S.reset}\r\n\r\n`);
-                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  afterShellRedraw(redrawPromptIfIdle);
                   return;
                 }
                 if (queueCmd.type === 'clear') {
                   PromptQueue.getInstance().clear();
                   writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Queue cleared.${S.reset}\r\n\r\n`);
-                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  afterShellRedraw(redrawPromptIfIdle);
                   return;
                 }
                 if (queueCmd.type === 'remove') {
@@ -1453,19 +1481,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                   } else {
                     writeTerm(`\r\n  ${S.err}✗${S.reset} ${S.text}Item ${queueCmd.index} not found in queue.${S.reset}\r\n\r\n`);
                   }
-                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  afterShellRedraw(redrawPromptIfIdle);
                   return;
                 }
                 if (queueCmd.type === 'pause') {
                   PromptQueue.getInstance().setPaused(true);
                   writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Queue paused.${S.reset}\r\n\r\n`);
-                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  afterShellRedraw(redrawPromptIfIdle);
                   return;
                 }
                 if (queueCmd.type === 'resume') {
                   PromptQueue.getInstance().setPaused(false);
                   writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Queue resumed.${S.reset}\r\n\r\n`);
-                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  afterShellRedraw(redrawPromptIfIdle);
                   return;
                 }
               }
@@ -1588,9 +1616,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         aiBusyRef.current = false;
         activeRunAbortControllerRef.current = null;
         PromptQueue.getInstance().setRunningItem(null);
-        if (currentSessionId) {
-          void sessionManager.write(currentSessionId, '\r');
-        }
+        redrawPromptIfIdle();
       }
     };
     window.addEventListener('cero:abort-active-run', handleAbortActiveRun);
@@ -2070,34 +2096,55 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       )}
 
       {/* Security & Deletion Authorization Overlay Modal: rendered on <body>, above every drawer and pane */}
-      {securityModalPlan && createPortal(
+      {securityModalPlan && securityModalPlan.docked && createPortal(
+        <ApprovalDock
+          plan={securityModalPlan.plan}
+          explicitClick={needsExplicitClick(securityModalPlan.plan)}
+          onApprove={() => { securityModalPlan.resolve(true); setSecurityModalPlan(null); }}
+          onDeny={() => { securityModalPlan.resolve(false); setSecurityModalPlan(null); }}
+        />,
+        document.body
+      )}
+      {securityModalPlan && !securityModalPlan.docked && createPortal(
         <div 
           tabIndex={0}
           ref={(el) => {
             if (!el) return;
-            // Runs at commit, before paint: every new plan starts its own arming delay
+            // Once per request. This callback runs on every render, and focusing each time took the
+            // keyboard back from the terminal whenever progress changed.
             if (consentPlanRef.current !== securityModalPlan.plan) {
               consentPlanRef.current = securityModalPlan.plan;
               consentShownAtRef.current = Date.now();
+              el.focus();
             }
-            el.focus();
           }}
           onKeyDown={(e) => {
             const now = Date.now();
-            if (e.key === 'Escape') {
+            const action = decideModalKey({
+              key: e.key,
+              ctrlOrMeta: e.ctrlKey || e.metaKey,
+              needsExplicitClick: needsExplicitClick(securityModalPlan.plan),
+              // Armed only after the dialog was visible for a moment with no typing going on
+              armed: now - consentShownAtRef.current > 800 && now - consentStrayKeyAtRef.current > 800,
+              repeat: e.repeat,
+            });
+            if (action === 'deny') {
               securityModalPlan.resolve(false);
               setSecurityModalPlan(null);
-            } else if (e.key === 'Enter' && needsExplicitClick(securityModalPlan.plan)) {
-              // Flows opened from a file, and high-risk commands, start only with a click on Run
-              consentStrayKeyAtRef.current = now;
-            } else if (e.key === 'Enter') {
-              // Armed only after the dialog was visible for a moment with no typing going on
-              const armed = now - consentShownAtRef.current > 800 && now - consentStrayKeyAtRef.current > 800 && !e.repeat;
-              if (!armed) return;
+            } else if (action === 'approve') {
               securityModalPlan.resolve(true);
               setSecurityModalPlan(null);
-            } else if (e.key.length === 1) {
+            } else if (action === 'arm-only') {
               consentStrayKeyAtRef.current = now;
+            } else if (action === 'dock-and-forward') {
+              // The user started typing. That is not an answer: give the keyboard back to the
+              // terminal with this key, and keep the request as a card they can click.
+              consentStrayKeyAtRef.current = now;
+              e.preventDefault();
+              const term = xtermRef.current;
+              setSecurityModalPlan((prev) => (prev ? { ...prev, docked: true } : prev));
+              term?.focus();
+              term?.input(e.key === 'Backspace' ? '\x7f' : e.key);
             }
           }}
           style={{
