@@ -33,6 +33,7 @@ import { EmbeddedModelManagerModal } from './EmbeddedModelManagerModal';
 import { EmbeddedEngineManager, EmbeddedStatus } from '../../ai/models/EmbeddedEngineManager';
 import { ModelRecommendationEngine, TierRecommendationResult } from '../../ai/management/ModelRecommendationEngine';
 import { CloudApiProvider, CloudServiceId, CloudKeyConfig, CLOUD_CATALOG } from '../../ai/provider/CloudApiProvider';
+import { readGhostAcceptRight } from '../../presentation/ghostPrefs';
 import { ModelManager, ActiveModelInfo } from '../../ai/management/ModelManager';
 import { InstallerService, IntegrationStatus } from '../../domain/integration/InstallerService';
 import { isLinux } from '../../shared/platform';
@@ -79,11 +80,8 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
   const [activeModelInfo, setActiveModelInfo] = useState<ActiveModelInfo>(() => ModelManager.getInstance().getActiveModel());
   const [selectedOllamaModel, setSelectedOllamaModel] = useState<string>('');
 
-  // Task 1.4: Ghost text Right-arrow preference (on by default)
-  const [ghostAcceptRight, setGhostAcceptRight] = useState<boolean>(() => {
-    if (typeof localStorage === 'undefined') return true;
-    return localStorage.getItem('cero_ghost_accept_right') !== 'false';
-  });
+  // Ghost text Right-arrow preference (off by default: arrows only move the cursor)
+  const [ghostAcceptRight, setGhostAcceptRight] = useState<boolean>(() => readGhostAcceptRight());
 
   const handleToggleGhostAcceptRight = (val: boolean) => {
     setGhostAcceptRight(val);

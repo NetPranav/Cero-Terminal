@@ -45,6 +45,11 @@ const NAVIGATION_KEYS = new Set([
   ALT_LEFT, ALT_RIGHT,
 ]);
 
+/** One printable character or Backspace: an edit at the cursor, as opposed to paste, movement or control keys. */
+export function isSingleEditKey(data: string): boolean {
+  return data === '\x7f' || data === '\b' || (Array.from(data).length === 1 && /^[^\x00-\x1f\x7f]$/.test(data));
+}
+
 /**
  * Decide what to do when a key is pressed and the ghost text system is active.
  *
@@ -53,7 +58,8 @@ const NAVIGATION_KEYS = new Set([
  * - Right at the end with a ghost and acceptRight on: accept
  * - Right mid-line: clear the ghost and pass to the shell
  * - Left, Home, End, Up, Down, word-move: clear the ghost and pass
- * - Everything else: pass (the ghost recompute happens separately)
+ * - A single printable character or Backspace: pass (the ghost recompute happens separately)
+ * - Everything else (paste, control keys, escape sequences): clear the ghost and pass
  */
 export function decideGhostKey(data: string, ctx: GhostKeyContext): KeyAction {
   // Tab key
@@ -75,6 +81,12 @@ export function decideGhostKey(data: string, ctx: GhostKeyContext): KeyAction {
     return 'pass';
   }
 
-  // Everything else: pass (no ghost decision here; ghost recompute is done in the timeout)
+  // One printable character or Backspace edits the line the suggestion was built for;
+  // the recompute that follows replaces it, and accepting is checked against the live line.
+  if (isSingleEditKey(data)) return 'pass';
+
+  // Anything else (paste, control keys, escape sequences, Enter) changes the line in a way the
+  // suggestion knows nothing about: it must not survive to be accepted later.
+  if (ctx.hasGhost) return 'clear-ghost-and-pass';
   return 'pass';
 }

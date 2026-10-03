@@ -5,6 +5,10 @@ export class GhostTextRenderer {
   private overlayElement: HTMLDivElement | null = null;
   private currentSuggestion: string = '';
   private currentGhostPart: string = '';
+  /** The exact input this suggestion was computed for; the suggestion is only valid for that text. */
+  private forInput: string = '';
+  /** Bumped by every invalidation so an async recompute that started earlier can tell it is stale. */
+  private epoch = 0;
 
   constructor(terminal: Terminal) {
     this.terminal = terminal;
@@ -63,6 +67,7 @@ export class GhostTextRenderer {
     }
 
     this.currentSuggestion = suggestion;
+    this.forInput = cleanInput;
     const ghostPart = suggestion.substring(cleanInput.length);
     this.currentGhostPart = ghostPart;
 
@@ -100,6 +105,7 @@ export class GhostTextRenderer {
   public clear() {
     this.currentSuggestion = '';
     this.currentGhostPart = '';
+    this.forInput = '';
     if (this.overlayElement) {
       this.overlayElement.textContent = '';
       this.overlayElement.style.display = 'none';
@@ -112,5 +118,33 @@ export class GhostTextRenderer {
 
   public getRemaining(): string {
     return this.currentGhostPart;
+  }
+
+  /**
+   * The text to type when the user accepts the suggestion, or '' when it must not be used.
+   * `typedNow` is what is really on the input line right now (null when that cannot be known).
+   * The suggestion only continues the exact text it was computed for; after a paste, an edit
+   * or a cursor move the remainder would land in the wrong place and duplicate text.
+   */
+  public acceptableRemaining(typedNow: string | null): string {
+    if (typedNow === null || !this.currentGhostPart || !this.forInput) return '';
+    if (typedNow.trimStart() !== this.forInput) return '';
+    if (!this.currentSuggestion.toLowerCase().startsWith(this.forInput.toLowerCase())) return '';
+    return this.currentGhostPart;
+  }
+
+  /** Drop the suggestion and cancel any recompute that is still in flight. */
+  public invalidate() {
+    this.epoch++;
+    this.clear();
+  }
+
+  /** Start of a recompute; pair with isCurrent() after any await. */
+  public beginRecompute(): number {
+    return ++this.epoch;
+  }
+
+  public isCurrent(epoch: number): boolean {
+    return epoch === this.epoch;
   }
 }

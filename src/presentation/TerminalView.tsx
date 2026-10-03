@@ -45,7 +45,8 @@ import {
 import { SearchAddon } from '@xterm/addon-search';
 import { TerminalSearchBar } from './TerminalSearchBar';
 import { InputLineTracker, stripPrompt, parseCdTarget } from './InputLineTracker';
-import { decideGhostKey } from './ghostKeys';
+import { decideGhostKey, isSingleEditKey } from './ghostKeys';
+import { readGhostAcceptRight } from './ghostPrefs';
 import { decideStopKey } from './stopKeys';
 import { PromptQueue, parseQueueCommand, type QueuedItem } from './PromptQueue';
 import { TerminalWorkspace } from '../domain/terminal/TerminalWorkspace';
@@ -123,6 +124,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         isBracketedPaste: isBracketed,
         isPromptDraft: isPromptDraft
       });
+
+      // The paste shortcut writes to the PTY directly, so term.onData never sees it. Without this
+      // a suggestion computed before the paste stayed live and Right/Tab appended it after the
+      // pasted text (the pasted prompt appeared twice).
+      ghostTextRef.current?.invalidate();
+      if (term && !/[\r\n]/.test(payload) && term.buffer.active.type !== 'alternate') {
+        const b = term.buffer.active;
+        inputLineRef.current.noteKeystroke(payload, { row: b.baseY + b.cursorY, col: b.cursorX }, ptyTrackerRef.current.isProcessRunning());
+      }
 
       await SessionManager.getInstance().write(activeSessionId, payload);
     } catch (err) {
@@ -246,6 +256,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   const outputObserverRef = useRef<PtyOutputObserver>(new PtyOutputObserver());
   const consentOpenRef = useRef(false);
   const inputLineRef = useRef<InputLineTracker>(new InputLineTracker());
+  const ghostTextRef = useRef<GhostTextRenderer | null>(null);
   const aiBusyRef = useRef(false);
   const activeRunAbortControllerRef = useRef<AbortController | null>(null);
   const lastInterruptTimeRef = useRef<number>(0);
@@ -736,6 +747,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
         const ghostText = new GhostTextRenderer(term);
         ghostText.attach(terminalRef.current!);
+        ghostTextRef.current = ghostText;
 
         // Keep the sidebar/tab path in sync when a request changes directory
         const notifyNavigation = (target: string) => {
@@ -1162,24 +1174,32 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             inputLineRef.current.noteKeystroke(data, { row: b.baseY + b.cursorY, col: b.cursorX }, ptyTrackerRef.current.isProcessRunning());
           }
 
-          // Ghost-text key decisions (Task 1.4: only Tab at end and Right at end accept)
+          // Ghost-text key decisions: arrows only move the cursor; Tab (and Right, if the user
+          // opted in) accept, and only a suggestion that still matches the live line
           const cursorEndInfo = inputLineRef.current.getCursorEndInfo(term);
           const ghostAction = decideGhostKey(data, {
             cursorAtEnd: cursorEndInfo.atEnd,
             hasGhost: !!ghostText.getRemaining(),
-            acceptRight: localStorage.getItem('cero_ghost_accept_right') !== 'false',
+            acceptRight: readGhostAcceptRight(),
           });
 
           if (ghostAction === 'accept-ghost') {
-            const remaining = ghostText.getRemaining();
+            const b = term.buffer.active;
+            const typedNow = inputLineRef.current.read(b, b.baseY + b.cursorY);
+            const remaining = ghostText.acceptableRemaining(typedNow);
+            ghostText.invalidate();
             if (remaining) {
+              inputLineRef.current.noteKeystroke(remaining, { row: b.baseY + b.cursorY, col: b.cursorX }, ptyTrackerRef.current.isProcessRunning());
               await sessionManager.write(currentSessionId, remaining);
-              ghostText.clear();
               return;
             }
+            // Stale suggestion: do not type it. Tab goes to the shell, Right moves the cursor.
           } else if (ghostAction === 'clear-ghost-and-pass') {
-            ghostText.clear();
+            ghostText.invalidate();
             // Fall through to send the key to the shell
+          } else if (!isSingleEditKey(data)) {
+            // No suggestion showing yet, but one may be in flight: movement or paste cancels it
+            ghostText.invalidate();
           }
 
           // Tab with no ghost: check auto-heal remediation
@@ -1490,36 +1510,30 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           // Task 1.4: only recompute on printable input and Backspace, and only when cursor is at end.
           const isPrintableOrBackspace = /^[^\x00-\x1f\x7f]+$/.test(data) || data === '\x7f' || data === '\b';
           if (data !== '\r' && data !== '\x03' && isPrintableOrBackspace) {
+            const epoch = ghostText.beginRecompute();
             setTimeout(async () => {
+              if (!ghostText.isCurrent(epoch)) return;
               const buffer = term.buffer.active;
-              const lineIndex = buffer.baseY + buffer.cursorY;
-              const line = buffer.getLine(lineIndex);
-              if (line) {
-                const endInfo = inputLineRef.current.getCursorEndInfo(term);
-                // Check cursor-at-end before recomputing
-                if (!endInfo.atEnd) {
-                  ghostText.clear();
-                  return;
-                }
-                const fullText = line.translateToString(true);
-                const promptMatch = fullText.match(/.*[$%#]\s*/);
-                const commandText = promptMatch ? fullText.substring(promptMatch[0].length).trimStart() : fullText.trimStart();
-                
-                if (commandText.length > 0) {
-                  const suggestions = await autocompleteEngine.getSuggestions({ 
-                    currentInput: commandText, 
-                    cwd: currentPath || '~',
-                    cursorPosition: commandText.length,
-                    os: getPlatform() === 'linux' ? 'linux' : 'macos'
-                  });
-                  if (suggestions.length > 0) {
-                     ghostText.render(suggestions[0].value, commandText, endInfo.endCol, endInfo.atEnd);
-                  } else {
-                     ghostText.clear();
-                  }
-                } else {
-                  ghostText.clear();
-                }
+              const cursorRow = buffer.baseY + buffer.cursorY;
+              const endInfo = inputLineRef.current.getCursorEndInfo(term);
+              // Only suggest when the cursor is at the end of text we can locate exactly
+              const commandText = endInfo.atEnd ? inputLineRef.current.read(buffer, cursorRow) : null;
+              if (commandText === null || commandText.trim().length === 0) {
+                ghostText.clear();
+                return;
+              }
+              const suggestions = await autocompleteEngine.getSuggestions({
+                currentInput: commandText,
+                cwd: currentPath || '~',
+                cursorPosition: commandText.length,
+                os: getPlatform() === 'linux' ? 'linux' : 'macos'
+              });
+              // The user may have typed, pasted or moved while suggestions were computed
+              if (!ghostText.isCurrent(epoch)) return;
+              if (suggestions.length > 0) {
+                ghostText.render(suggestions[0].value, commandText, endInfo.endCol, endInfo.atEnd);
+              } else {
+                ghostText.clear();
               }
             }, 20);
           }
