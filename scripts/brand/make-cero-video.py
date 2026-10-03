@@ -2,15 +2,15 @@
 """
 make-cero-video.py: the Cero logo animation as a video, built from the real logo photo so every texture is kept.
 
-  A glowing smooth sphere  ->  the sphere turns into a textured moon (the glow never leaves)
-  ->  the moon splits down the middle  ->  its surface divides into pieces, one by one from the middle outward,
-  and each piece breaks down into a dot  ->  the dots settle into the halftone and the picture is exactly the logo.
+  The sphere starts in the logo's own shape and texture (lit, with the fine etched surface of the photo) and the glow
+  is there all the time. Then the surface turns into dots: they form first at the edge and the change moves
+  inward, until the picture is exactly the logo.
 
   python3 scripts/brand/make-cero-video.py [--preview] [--fps 30]
 Reads  assets/brand/Application_LOGO.jpeg   Writes  assets/brand/cero-logo-animation.mp4
 Needs numpy, scipy, opencv-python and ffmpeg. The same inputs give the same video (fixed random seed).
 """
-import argparse, os, subprocess, sys
+import argparse, glob, os, subprocess, sys
 import cv2
 import numpy as np
 from scipy.spatial import cKDTree
@@ -66,79 +66,26 @@ REST = rest8[:, :, ::-1].astype(np.float32) / 255.0
 DOTS = P * dot_alpha[:, :, None]                                     # premultiplied
 print(f'{len(dot_list)} dots')
 
-# ---------------------------------------------------------------- 2. a moon built from the photo's own texture
-def fbm(shape, octaves=6, base=3):
-    out = np.zeros(shape, np.float32); amp = 1.0; total = 0
-    for o in range(octaves):
-        g = rng.random((base * 2 ** o + 2, base * 2 ** o + 2)).astype(np.float32)
-        out += amp * cv2.resize(g, (shape[1], shape[0]), interpolation=cv2.INTER_CUBIC)
-        total += amp; amp *= 0.5
-    return out / total
-
+# ---------------------------------------------------------------- 2. the textured sphere the animation starts from
+# the photo's own surface texture, lit more strongly so it reads like the grey etched surface near the rim
 nx, ny = (xx - CX) / RAD, (yy - CY) / RAD
 r2 = np.clip(nx * nx + ny * ny, 0, 1)
 nz = np.sqrt(1 - r2)
 Ldir = np.array([0.62, -0.55, 0.56]); Ldir /= np.linalg.norm(Ldir)
 lam = np.clip(nx * Ldir[0] + ny * Ldir[1] + nz * Ldir[2], 0, 1)
 tex_src = cv2.cvtColor((REST * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
-tex = tex_src - cv2.GaussianBlur(tex_src, (0, 0), 4)
-tex = np.where(dist < RAD - 12, tex, 0)
-maria = fbm((H, W), 6, 3)
-grain = fbm((H, W), 7, 24)
-shade = 0.05 + 0.80 * lam ** 0.9
-moon_l = shade * (0.62 + 0.55 * maria) * (0.94 + 0.10 * grain) + 2.2 * tex
-# craters: a dark floor with a bright rim on the side facing the light
-cr = np.zeros((H, W), np.float32)
-for _ in range(90):
-    a = rng.random() * 2 * np.pi; d = np.sqrt(rng.random()) * (RAD - 30)
-    ccx, ccy = CX + d * np.cos(a), CY + d * np.sin(a)
-    rad = float(rng.choice([5, 7, 9, 12, 16, 22, 30], p=[.25, .22, .18, .15, .1, .07, .03]))
-    x0, x1, y0, y1 = int(ccx - rad * 2), int(ccx + rad * 2), int(ccy - rad * 2), int(ccy + rad * 2)
-    x0, y0 = max(x0, 0), max(y0, 0); x1, y1 = min(x1, W), min(y1, H)
-    if x1 <= x0 or y1 <= y0: continue
-    px, py = xx[y0:y1, x0:x1] - ccx, yy[y0:y1, x0:x1] - ccy
-    q = np.hypot(px, py) / rad
-    floor = -0.5 * np.exp(-(q / 0.85) ** 4)
-    lit_side = (px * Ldir[0] + py * Ldir[1]) / (rad * np.hypot(Ldir[0], Ldir[1]) + 1e-6)
-    rim = 0.45 * np.exp(-((q - 1.0) / 0.16) ** 2) * (0.35 + 0.65 * np.clip(-lit_side, 0, 1))
-    cr[y0:y1, x0:x1] += (floor + rim) * 0.5
-moon_l = np.clip(moon_l * (1 + cr) , 0, 1)
-edge_soft = smooth(1.0, 0.93, np.sqrt(r2))
-MOON = np.clip(moon_l * 0.58, 0, 1)[:, :, None] * np.array([1.0, 0.99, 0.97], np.float32)[None, None, :]
-SPHERE = (np.clip(0.03 + 0.20 * lam ** 1.2, 0, 1) * (0.85 + 0.15 * smooth(0, 0.5, nz)))[:, :, None] * np.ones(3, np.float32)
-IN_R = RAD - 8                                                        # the moon and sphere stop just inside the rim
+tex = tex_src - cv2.GaussianBlur(tex_src, (0, 0), 2.2)
+tex = np.where(dist < RAD - 10, tex, 0)
+tex_fine = tex_src - cv2.GaussianBlur(tex_src, (0, 0), 6)
+lit = (0.04 + 0.52 * lam ** 2.2)                                      # grey toward the light, dark away from it
+LIT_BODY = np.clip(tex_src * 0.6 + lit * (1.0 + 7.0 * tex + 4.0 * tex_fine), 0, 1)[:, :, None] * np.ones(3, np.float32)
+IN_R = RAD - 8
 disc = smooth(IN_R + 3, IN_R - 3, dist)[:, :, None]                   # 1 inside, 0 outside, soft edge
+GLOW = REST * (1 - disc)
+REST_IN = REST * disc
+depth = np.clip((RAD - dist) / RAD, 0, 1)                             # 0 at the rim, 1 in the middle
 
-# ---------------------------------------------------------------- 3. pieces: one cell per dot, plus cells for the rest of the surface
-cent_dots = np.array([c for _, _, c in dot_list], np.float32)
-seeds = [tuple(c) for c in cent_dots]
-SP = 30.0
-for gy in np.arange(CY - RAD, CY + RAD, SP * 0.866):
-    row = int(round((gy - CY) / (SP * 0.866)))
-    for gx in np.arange(CX - RAD, CX + RAD, SP):
-        x, y = gx + (SP / 2 if row % 2 else 0) + rng.uniform(-5, 5), gy + rng.uniform(-5, 5)
-        if np.hypot(x - CX, y - CY) < IN_R + 4 and (cKDTree(cent_dots).query((x, y))[0] > 19):
-            seeds.append((x, y))
-seeds = np.array(seeds, np.float32)
-tree = cKDTree(seeds)
-_, label = tree.query(np.c_[xx.ravel(), yy.ravel()])
-label = label.reshape(H, W).astype(np.int32)
-label[dist > IN_R + 3] = -1
-K = len(seeds)
-is_dot_cell = np.zeros(K, bool); is_dot_cell[:len(cent_dots)] = True
-sx = seeds[:, 0]; sy = seeds[:, 1]
-side = np.where(sx < CX, -1.0, 1.0)
-order_x = np.abs(sx - CX) / RAD                                       # 0 at the middle seam, 1 at the edges
-cell_info = []
-for k in range(K):
-    ys, xs = np.where(label == k)
-    if len(xs) == 0:
-        cell_info.append(None); continue
-    x0, x1, y0, y1 = xs.min() - 2, xs.max() + 3, ys.min() - 2, ys.max() + 3
-    x0, y0 = max(x0, 0), max(y0, 0); x1, y1 = min(x1, W), min(y1, H)
-    m = cv2.GaussianBlur((label[y0:y1, x0:x1] == k).astype(np.float32), (0, 0), 0.8)
-    cell_info.append((x0, y0, x1, y1, m))
-# dot sprites: each dot's own pixels (premultiplied) in a box around it
+# ---------------------------------------------------------------- 3. dots
 sprites = []
 for (x, y, w, h), m, (ccx, ccy) in dot_list:
     pad = 5
@@ -147,117 +94,62 @@ for (x, y, w, h), m, (ccx, ccy) in dot_list:
     full[y - y0:y - y0 + h, x - x0:x - x0 + w] = m.astype(np.uint8)
     own = cv2.GaussianBlur(cv2.dilate(full, np.ones((5, 5), np.uint8)).astype(np.float32), (0, 0), 1.3)
     own = np.clip(own * 1.2, 0, 1)
-    sprites.append((x0, y0, x1, y1, P[y0:y1, x0:x1] * own[:, :, None], own, ccx, ccy))
+    d = float(np.clip((RAD - np.hypot(ccx - CX, ccy - CY)) / RAD, 0, 1))
+    sprites.append((x0, y0, x1, y1, P[y0:y1, x0:x1] * own[:, :, None], own, ccx, ccy, d))
+dmax = max(sp[8] for sp in sprites)
 
 # ---------------------------------------------------------------- 4. timing
 FPS = args.fps
-T_END = 14.6
-T_GLOW = (0.0, 0.9)          # the glow arrives and stays
-T_SPHERE = (0.4, 1.6)        # a smooth sphere appears
-T_MOON = (1.6, 4.4)          # the sphere turns into the moon
-T_HOLD = (4.4, 5.4)          # the moon, lit
-T_SPLIT = (5.2, 6.4)         # it parts down the middle
-T_BREAK = (6.2, 12.4)        # pieces go one by one, from the middle outward
-T_FINAL = (12.9, 13.6)       # last blend to the exact logo
-GAP = 24.0
-jit = rng.uniform(-0.22, 0.22, K).astype(np.float32)
-start = T_BREAK[0] + (T_BREAK[1] - T_BREAK[0] - 1.5) * np.clip(order_x / order_x.max(), 0, 1) ** 0.9 + jit
-start = np.clip(start, T_BREAK[0], T_BREAK[1] - 1.3)
-DUR = np.where(is_dot_cell, 1.35, 0.9).astype(np.float32)
-noise_reveal = fbm((H, W), 5, 4)
-light_dist = np.clip(((xx - (CX + 0.6 * RAD)) ** 2 + (yy - (CY - 0.55 * RAD)) ** 2) ** 0.5 / (2 * RAD), 0, 1)
+T_END = 12.0
+T_GLOW = (0.0, 0.8)          # the glow arrives and stays
+T_WAVE = (1.6, 9.2)          # dots form from the edge inward
+T_FINAL = (9.8, 10.6)        # last blend to the exact logo
+DOT_TIME = 1.3
+rng2 = np.random.default_rng(11)
+jit = rng2.uniform(-0.15, 0.15, len(sprites))
+ts = np.array([T_WAVE[0] + (T_WAVE[1] - T_WAVE[0] - DOT_TIME) * (sp[8] / dmax) for sp in sprites]) + jit
+ts = np.clip(ts, T_WAVE[0], T_WAVE[1] - DOT_TIME)
 
 def ease(x): x = np.clip(x, 0, 1); return x * x * (3 - 2 * x)
 def lin(t, a, b): return float(np.clip((t - a) / (b - a), 0, 1))
 
-def blit(canvas, patch_rgb, patch_a, box, center, scale, shift, opacity):
-    """Draw a premultiplied patch scaled about `center`, moved by `shift`, onto the canvas."""
+def blit(canvas, patch_rgb, patch_a, box, center, scale, opacity):
+    """Draw a premultiplied patch scaled about `center` onto the canvas."""
     x0, y0, x1, y1 = box
     if opacity <= 0.002 or scale <= 0.02: return
     pad = 6
-    ox = int(np.floor(x0 + shift[0] - pad)); oy = int(np.floor(y0 + shift[1] - pad))
+    ox, oy = int(x0 - pad), int(y0 - pad)
     w, h = (x1 - x0) + 2 * pad, (y1 - y0) + 2 * pad
-    # patch pixel (u, v) sits at (x0 + u, y0 + v) in the picture; scale about `center`, then move
-    M = np.array([[scale, 0, scale * (x0 - center[0]) + center[0] + shift[0] - ox],
-                  [0, scale, scale * (y0 - center[1]) + center[1] + shift[1] - oy]], np.float32)
-    src = np.dstack([patch_rgb, patch_a]).astype(np.float32)
-    out = cv2.warpAffine(src, M, (w, h), flags=cv2.INTER_LINEAR, borderValue=0)
+    M = np.array([[scale, 0, scale * (x0 - center[0]) + center[0] - ox],
+                  [0, scale, scale * (y0 - center[1]) + center[1] - oy]], np.float32)
+    out = cv2.warpAffine(np.dstack([patch_rgb, patch_a]).astype(np.float32), M, (w, h), flags=cv2.INTER_LINEAR, borderValue=0)
     rgb, a = out[:, :, :3] * opacity, out[:, :, 3:4] * opacity
     cx0, cy0, cx1, cy1 = max(ox, 0), max(oy, 0), min(ox + w, W), min(oy + h, H)
     if cx1 <= cx0 or cy1 <= cy0: return
     rgb, a = rgb[cy0 - oy:cy1 - oy, cx0 - ox:cx1 - ox], a[cy0 - oy:cy1 - oy, cx0 - ox:cx1 - ox]
     canvas[cy0:cy1, cx0:cx1] = canvas[cy0:cy1, cx0:cx1] * (1 - a) + rgb
 
-# the glow: everything of the photo that is not the dots or the body, so it is exactly the photo's own glow
-body_hint = disc
-GLOW = REST * (1 - body_hint)
-REST_IN = REST * body_hint
-
 def frame(t):
-    glow_k = ease(lin(t, *T_GLOW)) * (1.0 + 0.04 * np.sin(t * 2.1))
+    glow_k = ease(lin(t, *T_GLOW)) * (1.0 + 0.03 * np.sin(t * 2.0))
     canvas = GLOW * glow_k
-    sph_k = ease(lin(t, *T_SPHERE))
-    moon_prog = lin(t, *T_MOON)
-    split_k = ease(lin(t, *T_SPLIT))
-    # the reveal of the moon texture spreads from the lit side
-    reveal = smooth(0, 0.22, moon_prog * 1.5 - (0.62 * light_dist + 0.38 * noise_reveal))
-    body = SPHERE * (1 - reveal[:, :, None]) + MOON * reveal[:, :, None]
-    breathe = 1.0 + 0.035 * np.sin(t * 1.7)
-    if t < T_SPLIT[0]:
-        canvas = canvas + body * disc * sph_k * breathe
-    else:
-        # background behind the parting halves: the dark body of the logo, with a light seam
-        back = REST_IN * ease(lin(t, T_SPLIT[0], T_SPLIT[0] + 0.6))
-        canvas = canvas + back
-        closing = 1.0 - ease(lin(t, T_BREAK[0] + 1.0, T_BREAK[1]))      # the halves come back together as they dissolve
-        dx = GAP * split_k * closing
-        state = np.clip((t - start) / DUR, 0, 1)                          # 0 untouched .. 1 gone
-        untouched = (state <= 0).astype(np.float32)
-        alive_lut = np.concatenate([untouched, [0.0]])                    # label -1 maps to the last entry
-        alive = alive_lut[label][:, :, None]
-        left_lut = np.concatenate([(side < 0).astype(np.float32), [0.0]])
-        left = left_lut[label][:, :, None]
-        for sgn, part in ((-1.0, alive * left), (1.0, alive * (1 - left))):
-            moved = cv2.warpAffine((body * part * disc).astype(np.float32), np.float32([[1, 0, sgn * dx], [0, 1, 0]]), (W, H), flags=cv2.INTER_LINEAR)
-            canvas = canvas + moved
-        # the seam: a thin bright light between the halves, strongest as they part
-        if dx > 0.5:
-            seam = np.exp(-((xx - CX) / (1.0 + dx * 0.45)) ** 2) * smooth(RAD * 0.99, RAD * 0.80, np.abs(yy - CY))
-            seam = seam * (dist < IN_R + 2) * min(1.0, dx / 8) * 0.7
-            canvas = canvas + seam[:, :, None] * np.array([1.0, 1.0, 1.0], np.float32)
-        # pieces in motion
-        active = np.where((state > 0) & (state < 1))[0]
-        for k in active:
-            info = cell_info[k]
-            if info is None: continue
-            x0, y0, x1, y1, m = info
-            s = float(ease(state[k]))
-            shift = (side[k] * dx, 0.0)
-            piece = (body[y0:y1, x0:x1] * m[:, :, None])
-            if is_dot_cell[k]:
-                dot_scale = 1.0 - 0.72 * s                                  # the piece shrinks...
-                fade_piece = 1.0 - ease(lin(state[k], 0.25, 0.8))           # ...turns white...
-                blit(canvas, piece * (1 + 0.7 * s), m, (x0, y0, x1, y1), (sx[k], sy[k]), dot_scale, shift, fade_piece)
-                # ...and becomes the dot, which grows into its own size and drifts to rest as the halves close
-                d = sprites[k]
-                grow = 0.35 + 0.65 * ease(lin(state[k], 0.2, 1.0))
-                blit(canvas, d[4], d[5], d[:4], (d[6], d[7]), grow, (shift[0] * (1 - ease(lin(state[k], 0.5, 1.0))), 0.0), ease(lin(state[k], 0.18, 0.7)))
-            else:
-                blit(canvas, piece * (1 + 0.5 * s), m, (x0, y0, x1, y1), (sx[k], sy[k]), 1.0 - 0.9 * s, shift, 1.0 - ease(lin(state[k], 0.0, 0.85)))
-        # dots that are finished sit in place
-        done = np.where(state >= 1)[0]
-        for k in done:
-            if k < len(sprites):
-                d = sprites[k]
-                blit(canvas, d[4], d[5], d[:4], (d[6], d[7]), 1.0, (0.0, 0.0), 1.0)
-    # the end: blend to the exact logo
+    # the surface settles from its lit, textured look to the dark body of the logo as the wave of dots passes inward
+    front = -0.12 + 1.5 * lin(t, T_WAVE[0], T_WAVE[1] - 1.8)
+    settled = smooth(0.0, 0.22, front - depth)[:, :, None]            # 1 where the wave has passed
+    breathe = 1.0 + 0.03 * np.sin(t * 1.6)
+    body = (LIT_BODY * breathe) * (1 - settled) + REST_IN * settled
+    canvas = canvas + body * disc * (ease(lin(t, 0.2, 1.0)))
+    for k, d in enumerate(sprites):
+        s = lin(t, ts[k], ts[k] + DOT_TIME)
+        if s <= 0: continue
+        e = ease(s)
+        blit(canvas, d[4], d[5], d[:4], (d[6], d[7]), 0.2 + 0.8 * e, ease(lin(s, 0.0, 0.55)))
     fin = ease(lin(t, *T_FINAL))
-    out = canvas * (1 - fin) + P * fin
-    return np.clip(out, 0, 1)
+    return np.clip(canvas * (1 - fin) + P * fin, 0, 1)
 
 if args.preview:
     os.makedirs('/tmp/cero-preview', exist_ok=True)
-    for t in [0.5, 1.2, 2.4, 3.6, 4.8, 5.8, 7.0, 8.4, 9.8, 11.2, 12.6, 14.0]:
+    for f in glob.glob('/tmp/cero-preview/t*.png'): os.remove(f)
+    for t in [0.4, 1.2, 2.4, 3.6, 4.8, 6.0, 7.2, 8.4, 9.4, 10.2, 11.0, 11.8]:
         cv2.imwrite(f'/tmp/cero-preview/t{t:05.2f}.png', (frame(t)[:, :, ::-1] * 255).astype(np.uint8))
     print('wrote /tmp/cero-preview'); sys.exit(0)
 
@@ -266,8 +158,7 @@ cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb2
 proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 frames = int(T_END * FPS)
 for i in range(frames):
-    f8 = (frame(i / FPS) * 255 + 0.5).astype(np.uint8)
-    proc.stdin.write(f8.tobytes())
+    proc.stdin.write((frame(i / FPS) * 255 + 0.5).astype(np.uint8).tobytes())
     if i % 30 == 0: print(f'{i}/{frames}', flush=True)
 proc.stdin.close(); proc.wait()
 print('wrote', args.out)
