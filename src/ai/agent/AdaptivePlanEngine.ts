@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ErrorDiagnosticsEngine, DiagnosticResult } from './ErrorDiagnosticsEngine';
 import { ProjectDiscoveryEngine, DiscoveredProject, FileSystemScanner } from '../../domain/discovery/ProjectDiscoveryEngine';
+import { throwIfAborted } from './Cancelled';
 
 export type PhaseStatus = 'pending' | 'running' | 'completed' | 'skipped' | 'failed' | 'awaiting_action';
 
@@ -76,10 +77,11 @@ export interface AdaptiveExecutionOptions {
   onStepOutput?: (output: string) => void;
   onPhysicalActionRequired?: (action: { prompt: string; cause: string; phaseId: string }) => Promise<boolean>;
   toolExecutor: {
-    execute: (toolId: string, params: any, cwd?: string, authHandler?: any) => Promise<any>;
+    execute: (toolId: string, params: any, cwd?: string, authHandler?: any, timeoutMs?: number, signal?: AbortSignal) => Promise<any>;
     hasDriver: (toolId: string) => boolean;
   };
   authorizationHandler?: any;
+  signal?: AbortSignal;
 }
 
 export interface PlannerModelProvider {
@@ -114,7 +116,7 @@ export class AdaptivePlanEngine {
         const prompt = this.buildPhasePlanningPrompt(goal, context);
         const res = await this.modelProvider.generate(prompt, this.modelId, {
           temperature: 0,
-          maxTokens: 350,
+          maxTokens: 1500,
           format: 'json'
         });
         const parsed = this.parsePlanResponse(res.content, goal);
@@ -124,7 +126,45 @@ export class AdaptivePlanEngine {
       }
     }
 
-    // 3. Fallback default single/two-phase plan
+    // 3. Fallback: Structured Multi-Step Extraction if goal contains numbered steps
+    const stepRegex = /(?:^|\n|\r\n|\s+)(?:(\d+)\.|\bstep\s+(\d+)[:.-]?)\s+([^\n\r]+)/gi;
+    const numberedStepMatches = Array.from(goal.matchAll(stepRegex));
+    if (numberedStepMatches.length >= 2) {
+      const phases: PlanPhase[] = [];
+      const preambleMatch = goal.match(/^([\s\S]+?)(?=(?:^|\n|\r\n|\s+)(?:1\.|\bstep\s+1[:.-]?))/i);
+      if (preambleMatch && preambleMatch[1].trim() && (preambleMatch[1].toLowerCase().includes('create') || preambleMatch[1].toLowerCase().includes('workspace') || preambleMatch[1].toLowerCase().includes('setup') || preambleMatch[1].toLowerCase().includes('temporary'))) {
+        const preambleText = preambleMatch[1].trim().replace(/[.:\s]+$/, '');
+        const resolvedPreambleCmd = this.resolveShellCommandForPhase(preambleText, goal, context.cwd, context.os);
+        phases.push({
+          id: '1',
+          title: preambleText,
+          tool: 'shell.execute',
+          params: { command: resolvedPreambleCmd || `mkdir -p /tmp/cero-workflow-test`, explanation: preambleText },
+          status: 'pending'
+        });
+      }
+
+      numberedStepMatches.forEach((m) => {
+        const stepNum = phases.length + 1;
+        const stepText = m[3].trim().replace(/[.;]+$/, '');
+        const resolvedCmd = this.resolveShellCommandForPhase(stepText, goal, context.cwd, context.os);
+        phases.push({
+          id: String(stepNum),
+          title: stepText,
+          tool: 'shell.execute',
+          params: resolvedCmd ? { command: resolvedCmd, explanation: stepText } : undefined,
+          status: 'pending'
+        });
+      });
+
+      return {
+        summary: `Execute multi-step workflow (${phases.length} phases): ${phases[0].title}`,
+        steps: phases.map(p => p.title),
+        phases
+      };
+    }
+
+    // 4. Fallback default single-phase plan
     return {
       summary: `Execute instruction: ${goal}`,
       steps: [goal],
@@ -154,6 +194,7 @@ export class AdaptivePlanEngine {
     options.onPlanUpdate?.(plan);
 
     for (let i = 0; i < plan.phases.length; i++) {
+      throwIfAborted(options.signal);
       const phase = plan.phases[i];
 
       // If phase was already skipped or completed, continue
@@ -259,6 +300,7 @@ export class AdaptivePlanEngine {
     options: AdaptiveExecutionOptions,
     executedSteps: PhaseExecutionStep[]
   ): Promise<{ success: boolean; cdPath?: string }> {
+    throwIfAborted(options.signal);
     let phaseCdPath: string | undefined;
 
     // Resolve tool and parameters if not already assigned
@@ -276,6 +318,19 @@ export class AdaptivePlanEngine {
       if (resolvedCmd) {
         phase.tool = 'shell.execute';
         phase.params = { command: resolvedCmd, explanation: phase.title };
+      } else if (this.modelProvider && this.modelId) {
+        try {
+          const gen = await this.modelProvider.generate(
+            `Given current working directory "${options.cwd}" on ${options.os}, generate the single bash command to accomplish this step: "${phase.title}". Return ONLY the raw shell command, no quotes, no markdown.`,
+            this.modelId,
+            { temperature: 0, maxTokens: 200 }
+          );
+          const rawCmd = gen.content.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^```(?:bash|sh)?\s*/i, '').replace(/\s*```$/i, '').trim();
+          if (rawCmd && !rawCmd.startsWith('{')) {
+            phase.tool = 'shell.execute';
+            phase.params = { command: rawCmd, explanation: phase.title };
+          }
+        } catch { /* ignore fallback */ }
       }
     }
 
@@ -292,13 +347,28 @@ export class AdaptivePlanEngine {
 
     // If tool is assigned, execute it
     if (phase.tool && options.toolExecutor.hasDriver(phase.tool)) {
+      if (phase.tool === 'shell.execute' && (!phase.params?.command || typeof phase.params.command !== 'string')) {
+        phase.status = 'failed';
+        phase.resultSummary = `Missing command for phase: ${phase.title}`;
+        return { success: false };
+      }
+
       try {
-        const result = await options.toolExecutor.execute(
-          phase.tool,
-          phase.params || {},
-          options.cwd,
-          options.authorizationHandler
-        );
+        const result = options.signal
+          ? await options.toolExecutor.execute(
+              phase.tool,
+              phase.params || {},
+              options.cwd,
+              options.authorizationHandler,
+              undefined,
+              options.signal
+            )
+          : await options.toolExecutor.execute(
+              phase.tool,
+              phase.params || {},
+              options.cwd,
+              options.authorizationHandler
+            );
 
         const stepRecord: PhaseExecutionStep = {
           phaseId: phase.id,
@@ -334,7 +404,7 @@ export class AdaptivePlanEngine {
 
             if (options.onPhysicalActionRequired) {
               const confirmed = await options.onPhysicalActionRequired({
-                prompt: diag.physicalPrompt || `⚠️ ${diag.cause}`,
+                prompt: diag.physicalPrompt || `[!] ${diag.cause}`,
                 cause: diag.cause,
                 phaseId: phase.id
               });
@@ -576,6 +646,13 @@ export class AdaptivePlanEngine {
   private createHeuristicPhases(goal: string, context: { os: string; cwd: string }): AgentPlan | null {
     const lower = goal.toLowerCase().trim();
 
+    // Multi-step numbered instructions should never be hijacked by single-intent heuristics
+    const hasNumberedSteps = /(?:^|\n|\r\n|\s+)(?:1\.|\bstep\s+1[:.-]?)\s+/i.test(goal) &&
+      /(?:^|\n|\r\n|\s+)(?:2\.|\bstep\s+2[:.-]?)\s+/i.test(goal);
+    if (hasNumberedSteps) {
+      return null;
+    }
+
     // 1. Bluetooth device connection workflow (Multi-Phase)
     if (
       (lower.includes('connect') || lower.includes('pair')) &&
@@ -721,8 +798,9 @@ export class AdaptivePlanEngine {
 
     // 7. Compound Project Scaffolding & Git Init Workflow (Multi-Phase)
     if (
-      (lower.includes('initialize') || lower.includes('scaffold') || lower.includes('create') || lower.includes('setup')) &&
-      (lower.includes('next') || lower.includes('react') || lower.includes('vite') || lower.includes('project') || lower.includes('app')) &&
+      !/(?:\b\d+\.|\bstep\s*\d+)/i.test(goal) &&
+      (lower.includes('initialize') || lower.includes('scaffold') || (lower.includes('create') && (lower.includes('next') || lower.includes('react') || lower.includes('vite'))) || lower.includes('setup')) &&
+      (lower.includes('next') || lower.includes('react') || lower.includes('vite') || ((lower.includes('project') || lower.includes('app')) && (lower.includes('scaffold') || lower.includes('initialize') || lower.includes('setup')))) &&
       (lower.includes('inside') || lower.includes('in folder') || lower.includes('in directory') || lower.includes('desktop') || lower.includes('git'))
     ) {
       const isNext = lower.includes('next');
@@ -873,11 +951,75 @@ export class AdaptivePlanEngine {
       return 'npm run build 2>/dev/null || make 2>/dev/null';
     }
 
-    // Directory creation
-    if (lower.includes('create directory') || lower.includes('create folder') || lower.includes('ensure directory') || lower.includes('mkdir')) {
-      const match = phaseTitle.match(/(?:directory|folder|mkdir|at|to)\s+['"]?([~/a-z0-9_.-]+)['"]?/i);
+    // Root workspace extraction from goal
+    const rootPathMatch = goal.match(/(?:at|in|to|workspace(?:\s+at)?|directory(?:\s+at)?)\s+['"]?([~/a-z0-9_.-]+)['"]?/i);
+    const workspaceRoot = rootPathMatch && rootPathMatch[1] && !['the', 'a', 'an', 'project'].includes(rootPathMatch[1].toLowerCase())
+      ? rootPathMatch[1].trim()
+      : null;
+
+    // Directory / workspace creation
+    if (lower.includes('create directory') || lower.includes('create folder') || lower.includes('ensure directory') || lower.includes('mkdir') || lower.includes('workspace') || lower.includes('create a temporary') || lower.includes('create a directory')) {
+      const match = phaseTitle.match(/(?:directory|folder|workspace|mkdir)\s+(?:called|named|at|to)?\s*['"]?([~/a-z0-9_.-]+)['"]?/i)
+        || phaseTitle.match(/(?:at|to|in)\s+['"]?([~/a-z0-9_.-]+)['"]?/i)
+        || goal.match(/(?:workspace|directory|folder)\s+at\s+['"]?([~/a-z0-9_.-]+)['"]?/i);
       if (match && match[1]) {
-        return `mkdir -p "${match[1]}"`;
+        let dirPath = match[1].trim();
+        if (dirPath.startsWith('project') && workspaceRoot && !dirPath.includes('/')) {
+          dirPath = `${workspaceRoot}/${dirPath}`;
+        }
+        return `mkdir -p "${dirPath}"`;
+      }
+    }
+
+    // File creation (touch / create files)
+    if (lower.includes('create') && (lower.includes('file') || lower.includes('.txt') || lower.includes('.md') || lower.includes('.json'))) {
+      const filesMatch = phaseTitle.match(/(?:files?:?\s*)([a-zA-Z0-9_.,\s-]+(?:\.[a-zA-Z0-9]+)?)/i);
+      if (filesMatch && filesMatch[1]) {
+        const fileNames = filesMatch[1].split(/[, ]+/).map(f => f.trim().replace(/^and\s+/i, '')).filter(f => f.includes('.'));
+        if (fileNames.length > 0) {
+          const subDirMatch = phaseTitle.match(/(?:inside|in)\s+([a-zA-Z0-9_.-]+)/i);
+          const subDir = subDirMatch ? subDirMatch[1].trim() : (workspaceRoot ? 'project' : '');
+          const prefix = workspaceRoot ? `${workspaceRoot}/${subDir ? subDir + '/' : ''}` : (subDir ? `${subDir}/` : '');
+          return `mkdir -p "${prefix ? prefix.replace(/\/$/, '') : '.'}" && touch ${fileNames.map(f => `"${prefix}${f}"`).join(' ')}`;
+        }
+      }
+    }
+
+    // Put / write / echo content into file
+    if ((lower.includes('put') || lower.includes('write') || lower.includes('echo') || lower.includes('add')) && (lower.includes('inside') || lower.includes('into') || lower.includes('in ') || lower.includes('to '))) {
+      const contentMatch = phaseTitle.match(/(?:put|write|echo|add)\s+["']([^"']+)["']\s+(?:inside|in|into|to)\s+['"]?([~/a-z0-9_.-]+)['"]?/i)
+        || phaseTitle.match(/(?:inside|in|into|to)\s+['"]?([~/a-z0-9_.-]+)['"]?\s+(?:put|write|echo|add)\s+["']([^"']+)["']/i);
+      if (contentMatch) {
+        let content = contentMatch[1];
+        let targetFile = contentMatch[2];
+        if (!targetFile.includes('.') && content.includes('.')) {
+          const tmp = content;
+          content = targetFile;
+          targetFile = tmp;
+        }
+        let fullFilePath = targetFile;
+        if (workspaceRoot && !fullFilePath.includes(workspaceRoot)) {
+          fullFilePath = `${workspaceRoot}/project/${targetFile}`;
+        }
+        return `echo "${content}" > "${fullFilePath}"`;
+      }
+    }
+
+    // List directory & display file contents
+    if (lower.includes('list') && (lower.includes('display') || lower.includes('content') || lower.includes('cat') || lower.includes('read') || lower.includes('show'))) {
+      const dirMatch = phaseTitle.match(/(?:list\s+(?:the\s+)?)([a-zA-Z0-9_./-]+)(?:\s+directory)?/i);
+      let targetDir = dirMatch ? dirMatch[1].trim() : 'project';
+      if (workspaceRoot && !targetDir.includes(workspaceRoot)) {
+        targetDir = `${workspaceRoot}/${targetDir}`;
+      }
+      return `ls -la "${targetDir}" && for f in "${targetDir}"/*; do [ -f "$f" ] && echo -e "\\n=== $f ===" && cat "$f"; done`;
+    }
+
+    // Direct cat / display
+    if (lower.startsWith('cat ') || lower.startsWith('read ') || lower.includes('display contents of')) {
+      const fileMatch = phaseTitle.match(/(?:cat|read|display\s+contents\s+of)\s+['"]?([~/a-z0-9_.-]+)['"]?/i);
+      if (fileMatch && fileMatch[1]) {
+        return `cat "${fileMatch[1]}"`;
       }
     }
 
@@ -896,15 +1038,24 @@ export class AdaptivePlanEngine {
   }
 
   private buildPhasePlanningPrompt(goal: string, context: { os: string; cwd: string }): string {
-    return `You are Sentinel's Core Workflow Planner on ${context.os}. Current directory: ${context.cwd}
+    return `You are Cero's Core Workflow Planner on ${context.os}. Current directory: ${context.cwd}
 
-Break the user request into 2 to 5 clear, sequential execution phases.
+Break the user request into clear, sequential execution phases to accomplish the goal completely.
+Each phase MUST include the exact bash shell command to execute.
+
 Return ONLY one valid JSON object formatted as:
 {
   "summary": "Brief description of overall goal",
   "phases": [
-    { "id": "1", "title": "Phase title", "tool": "optional.tool.id" },
-    { "id": "2", "title": "Phase title", "tool": "optional.tool.id" }
+    {
+      "id": "1",
+      "title": "Clear description of action",
+      "tool": "shell.execute",
+      "params": {
+        "command": "exact bash shell command to execute",
+        "explanation": "Brief reason for this command"
+      }
+    }
   ]
 }
 
@@ -917,13 +1068,20 @@ User request: ${goal}`;
       const parsed = JSON.parse(clean);
       if (!parsed || !Array.isArray(parsed.phases) || parsed.phases.length === 0) return null;
 
-      const phases: PlanPhase[] = parsed.phases.map((p: any, idx: number) => ({
-        id: String(p.id || idx + 1),
-        title: String(p.title || `Phase ${idx + 1}`),
-        tool: p.tool ? String(p.tool) : (p.command ? 'shell.execute' : undefined),
-        params: p.params || (p.command ? { command: String(p.command), explanation: String(p.title) } : undefined),
-        status: 'pending'
-      }));
+      const phases: PlanPhase[] = parsed.phases.map((p: any, idx: number) => {
+        const cmd = p.params?.command || p.command;
+        const tool = p.tool ? String(p.tool) : (cmd ? 'shell.execute' : undefined);
+        const explanation = p.params?.explanation || p.explanation || String(p.title || `Phase ${idx + 1}`);
+        const params = cmd ? { command: String(cmd), explanation } : p.params;
+
+        return {
+          id: String(p.id || idx + 1),
+          title: String(p.title || `Phase ${idx + 1}`),
+          tool,
+          params,
+          status: 'pending'
+        };
+      });
 
       return {
         summary: parsed.summary || goal,

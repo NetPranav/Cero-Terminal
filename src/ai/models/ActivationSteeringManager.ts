@@ -1,7 +1,7 @@
 /**
  * ActivationSteeringManager.ts — Neural Activation Steering & Representation Engineering
  * 
- * Part of Sentinel-SERL (Self-Evolving Reflexion Loop):
+ * Part of Cero-SERL (Self-Evolving Reflexion Loop):
  * Breakthrough 3: Brain Surgery on the Residual Stream.
  * 
  * Steers intermediate transformer layer hidden activations (L14-L22) during token generation:
@@ -90,22 +90,28 @@ export class ActivationSteeringManager {
   };
 
   /**
-   * Pre-identified token IDs for refusal suppression and action boosting.
-   * Based on Qwen2.5 and Llama token vocabularies.
+   * Token IDs for refusal suppression and action boosting.
+   *
+   * The Qwen IDs below were verified against the Qwen2.5 tokenizer.json vocabulary. The
+   * previous table was not: it mapped e.g. 24128 ("Music"), 7134 ("Book") and 8013 ("-(") as
+   * refusal tokens and boosted "the"/" form"/" File"/"view", which corrupted generated commands.
+   * The Llama/generic tables remain unverified placeholders.
+   *
+   * These biases are NOT applied to the agent's action generation: several refusal tokens
+   * (" an", " model", " language") are ordinary words a correct summary needs. Refusals are
+   * handled by the GBNF grammar plus AgentLoop's refusal interception instead.
    */
   public static readonly REFUSAL_TOKEN_IDS = {
     qwen: [
-      1428,   // "As"
-      458,    // " an"
-      9552,   // " AI"
-      24128,  // " apologize"
-      34421,  // " apologies"
-      8013,   // " cannot"
-      7134,   // " unable"
-      14924,  // " unfortunately"
-      6997,   // " sorry"
-      4233,   // " language"
-      1903,   // " model"
+      2121,   // "As"
+      15235,  // " AI"
+      36879,  // " apologize"
+      72173,  // " apologies"
+      4157,   // " cannot"
+      11889,  // " unable"
+      25822,  // " unfortunately"
+      18656,  // " Unfortunately"
+      14589,  // " sorry"
     ],
     llama: [
       1724,   // "As"
@@ -128,10 +134,10 @@ export class ActivationSteeringManager {
   public static readonly ACTION_BOOST_TOKEN_IDS = {
     qwen: [
       90,     // "{"
-      1352,   // "\"action\""
-      1782,   // "\"command\""
-      2887,   // "\"execute\""
-      1050,   // "\"args\""
+      4913,   // "{\""
+      1311,   // "action"
+      5631,   // "command"
+      10257,  // "execute"
     ],
     llama: [
       94,     // "{"
@@ -154,7 +160,7 @@ export class ActivationSteeringManager {
     };
 
     const homeDir = typeof process !== 'undefined' && process.env ? (process.env.HOME || process.env.USERPROFILE || '/tmp') : '/tmp';
-    this.storageFilePath = options?.storageFilePath || path.join(homeDir, '.sentinel', 'steering', 'steering_vectors.json');
+    this.storageFilePath = options?.storageFilePath || path.join(homeDir, '.cero', 'steering', 'steering_vectors.json');
 
     this.initializeDefaultVectors();
     this.loadFromDiskSync();
@@ -564,22 +570,22 @@ export class ActivationSteeringManager {
       {
         name: 'unix_mastery',
         desc: 'Direct UNIX kernel & POSIX execution authority direction (mdfind, lsof, launchctl)',
-        seed: 'sentinel_serl_unix_mastery_vector_v1',
+        seed: 'cero_serl_unix_mastery_vector_v1',
       },
       {
         name: 'refusal_suppression',
         desc: 'Conversational hesitation and apologetic chatbot evasion direction',
-        seed: 'sentinel_serl_refusal_suppression_vector_v1',
+        seed: 'cero_serl_refusal_suppression_vector_v1',
       },
       {
         name: 'conciseness',
         desc: 'Dense, clean single-line executable command output direction',
-        seed: 'sentinel_serl_conciseness_vector_v1',
+        seed: 'cero_serl_conciseness_vector_v1',
       },
       {
         name: 'safety_guard',
         desc: 'Direction steering away from unconfirmed system-destructive commands',
-        seed: 'sentinel_serl_safety_guard_vector_v1',
+        seed: 'cero_serl_safety_guard_vector_v1',
       },
     ];
 
@@ -647,7 +653,7 @@ export class ActivationSteeringManager {
    */
   public formatLlamaServerArgs(baseDir?: string): string[] {
     const homeDir = process.env.HOME || process.env.USERPROFILE || '/tmp';
-    const steeringDir = baseDir || path.join(homeDir, '.sentinel', 'steering');
+    const steeringDir = baseDir || path.join(homeDir, '.cero', 'steering');
     const args: string[] = [];
 
     const unixVecPath = path.join(steeringDir, 'unix_mastery.gguf');

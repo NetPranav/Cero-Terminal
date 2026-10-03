@@ -6,7 +6,7 @@
  * and malformed JSON output at hardware sampling time with zero token overhead.
  */
 
-export type GrammarType = 'SENTINEL_ACTION' | 'SENTINEL_PLANNER' | 'STRICT_JSON';
+export type GrammarType = 'CERO_ACTION' | 'CERO_PLANNER' | 'STRICT_JSON';
 
 export class GbnfGrammarManager {
   private static instance: GbnfGrammarManager;
@@ -16,34 +16,46 @@ export class GbnfGrammarManager {
   // ---------------------------------------------------------------------------
 
   /**
-   * SENTINEL_ACTION GBNF:
+   * CERO_ACTION GBNF:
    * Strictly enforces:
    *   {"action": "execute", "command": "<cmd>", "explanation": "<exp>"}
    * or
    *   {"action": "done", "summary": "<sum>"}
    */
-  public static readonly SENTINEL_ACTION_GBNF = `root ::= action_execute | action_done
+  public static readonly CERO_ACTION_GBNF = `root ::= action-execute | action-done
 
-action_execute ::= "{" ws "\\"action\\"" ws ":" ws "\\"execute\\"" ws "," ws "\\"command\\"" ws ":" ws string ws "," ws "\\"explanation\\"" ws ":" ws string ws "}"
-  | "{" ws "\\"action\\"" ws ":" ws "\\"execute\\"" ws "," ws "\\"explanation\\"" ws ":" ws string ws "," ws "\\"command\\"" ws ":" ws string ws "}"
+action-execute ::= ("{" ws "\\"action\\"" ws ":" ws "\\"execute\\"" ws "," ws "\\"command\\"" ws ":" ws string ws "," ws "\\"explanation\\"" ws ":" ws string ws "}") | ("{" ws "\\"action\\"" ws ":" ws "\\"execute\\"" ws "," ws "\\"explanation\\"" ws ":" ws string ws "," ws "\\"command\\"" ws ":" ws string ws "}")
 
-action_done ::= "{" ws "\\"action\\"" ws ":" ws "\\"done\\"" ws "," ws "\\"summary\\"" ws ":" ws string ws "}"
-  | "{" ws "\\"summary\\"" ws ":" ws string ws "," ws "\\"action\\"" ws ":" ws "\\"done\\"" ws "}"
+action-done ::= ("{" ws "\\"action\\"" ws ":" ws "\\"done\\"" ws "," ws "\\"summary\\"" ws ":" ws string ws "}") | ("{" ws "\\"summary\\"" ws ":" ws string ws "," ws "\\"action\\"" ws ":" ws "\\"done\\"" ws "}")
 
-string ::= "\\"" char* "\\""
-char ::= [^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+string ::= "\\"" ([^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]))* "\\""
 ws ::= [ \\t\\n\\r]*`;
 
   /**
-   * SENTINEL_PLANNER GBNF:
+   * JSON Schema equivalent of CERO_ACTION for backends that take a schema instead of GBNF
+   * (Ollama `format`, OpenAI-compatible `response_format`). Kept flat because every backend's
+   * schema-to-grammar converter supports enum/required, not all support anyOf/const.
+   */
+  public static readonly CERO_ACTION_JSON_SCHEMA: Record<string, any> = {
+    type: 'object',
+    properties: {
+      action: { type: 'string', enum: ['execute', 'done'] },
+      command: { type: 'string' },
+      explanation: { type: 'string' },
+      summary: { type: 'string' }
+    },
+    required: ['action']
+  };
+
+  /**
+   * CERO_PLANNER GBNF:
    * Strictly enforces:
    *   {"decision": "plan" | "clarify", "summary": "<string>", "steps": ["<step1>", ...], "question": "<opt>"}
    */
-  public static readonly SENTINEL_PLANNER_GBNF = `root ::= "{" ws "\\"decision\\"" ws ":" ws ("\\"plan\\"" | "\\"clarify\\"") ws "," ws "\\"summary\\"" ws ":" ws string ws "," ws "\\"steps\\"" ws ":" ws string_list (ws "," ws "\\"question\\"" ws ":" ws string)? ws "}"
+  public static readonly CERO_PLANNER_GBNF = `root ::= "{" ws "\\"decision\\"" ws ":" ws ("\\"plan\\"" | "\\"clarify\\"") ws "," ws "\\"summary\\"" ws ":" ws string ws "," ws "\\"steps\\"" ws ":" ws string-list (ws "," ws "\\"question\\"" ws ":" ws string)? ws "}"
 
-string_list ::= "[" ws (string (ws "," ws string)*)? ws "]"
-string ::= "\\"" char* "\\""
-char ::= [^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+string-list ::= "[" ws (string (ws "," ws string)*)? ws "]"
+string ::= "\\"" ([^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]))* "\\""
 ws ::= [ \\t\\n\\r]*`;
 
   /**
@@ -59,9 +71,7 @@ array ::= "[" ws (value (ws "," ws value)*)? ws "]"
 
 value ::= object | array | string | number | "true" | "false" | "null"
 
-string ::= "\\"" char* "\\""
-char ::= [^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
-
+string ::= "\\"" ([^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]))* "\\""
 number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)?
 ws ::= [ \\t\\n\\r]*`;
 
@@ -77,14 +87,14 @@ ws ::= [ \\t\\n\\r]*`;
    */
   public static getGrammar(type: GrammarType): string {
     switch (type) {
-      case 'SENTINEL_ACTION':
-        return GbnfGrammarManager.SENTINEL_ACTION_GBNF;
-      case 'SENTINEL_PLANNER':
-        return GbnfGrammarManager.SENTINEL_PLANNER_GBNF;
+      case 'CERO_ACTION':
+        return GbnfGrammarManager.CERO_ACTION_GBNF;
+      case 'CERO_PLANNER':
+        return GbnfGrammarManager.CERO_PLANNER_GBNF;
       case 'STRICT_JSON':
         return GbnfGrammarManager.STRICT_JSON_GBNF;
       default:
-        return GbnfGrammarManager.SENTINEL_ACTION_GBNF;
+        return GbnfGrammarManager.CERO_ACTION_GBNF;
     }
   }
 
@@ -112,7 +122,7 @@ ws ::= [ \\t\\n\\r]*`;
       } else if (propDef.type === 'boolean') {
         valueExpr = '("true" | "false")';
       } else if (propDef.type === 'array') {
-        valueExpr = 'string_list';
+        valueExpr = 'string-list';
       }
 
       const rule = `"\\"${key}\\"" ws ":" ws ${valueExpr}`;
@@ -123,9 +133,8 @@ ws ::= [ \\t\\n\\r]*`;
     const propSequence = propRules.join(' ws "," ws ');
     return `root ::= "{" ws ${propSequence} ws "}"
 
-string_list ::= "[" ws (string (ws "," ws string)*)? ws "]"
-string ::= "\\"" char* "\\""
-char ::= [^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+string-list ::= "[" ws (string (ws "," ws string)*)? ws "]"
+string ::= "\\"" ([^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]))* "\\""
 number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)?
 ws ::= [ \\t\\n\\r]*`;
   }
@@ -154,7 +163,7 @@ ws ::= [ \\t\\n\\r]*`;
     try {
       const parsed = JSON.parse(trimmed);
 
-      if (grammarType === 'SENTINEL_ACTION') {
+      if (grammarType === 'CERO_ACTION') {
         if (parsed.action === 'execute') {
           if (typeof parsed.command === 'string' && typeof parsed.explanation === 'string') {
             return { valid: true, parsed };
@@ -169,7 +178,7 @@ ws ::= [ \\t\\n\\r]*`;
         return { valid: false, error: `Invalid action type "${parsed.action}". Must be "execute" or "done".` };
       }
 
-      if (grammarType === 'SENTINEL_PLANNER') {
+      if (grammarType === 'CERO_PLANNER') {
         if (
           (parsed.decision === 'plan' || parsed.decision === 'clarify') &&
           typeof parsed.summary === 'string' &&

@@ -1,7 +1,7 @@
 /**
  * ShadowPtySimulator.ts — Speculative Shadow-PTY Simulation Engine ("Minority Report for the Shell")
  * 
- * Part of Sentinel-SERL (Self-Evolving Reflexion Loop):
+ * Part of Cero-SERL (Self-Evolving Reflexion Loop):
  * Spawns an ephemeral RAM sandbox that executes parallel candidate branches
  * in milliseconds before presenting any command to the user or live terminal.
  * 
@@ -20,6 +20,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { TldrKnowledgeEngine } from '../../domain/knowledge/TldrKnowledgeEngine';
 import { ShellAstParser } from '../../domain/security/ShellAstParser';
+import { CommandCapabilityClassifier } from '../../domain/simulation/CommandCapabilityClassifier';
 
 export type RiskLevel = 'read_only' | 'safe_mutation' | 'high_risk';
 
@@ -59,6 +60,8 @@ export interface ShadowSimulatorOptions {
   cwd?: string;
   os?: string;
   executor?: (cmd: string, args: string[], cwd?: string) => Promise<{ stdout: string; stderr: string; code: number }>;
+  /** Allow real dry-run transforms (cargo build -> cargo check, pip install --dry-run). Default true. */
+  allowDryRuns?: boolean;
 }
 
 export class ShadowPtySimulator {
@@ -78,7 +81,11 @@ export class ShadowPtySimulator {
     this.maxCandidates = options.maxCandidates ?? 3;
     this.branchTimeoutMs = options.branchTimeoutMs ?? 1500;
     this.customExecutor = options.executor;
+    this.allowDryRuns = options.allowDryRuns ?? true;
   }
+
+  /** When false, mutating commands are only syntax-checked (no cargo check, make -n, pip --dry-run) */
+  private allowDryRuns: boolean;
 
   /**
    * Main entry point: Speculatively simulates candidates for a given command/goal
@@ -102,11 +109,17 @@ export class ShadowPtySimulator {
     // 3. Prune failing or negative-scoring branches
     const prunedCount = evaluatedCandidates.filter(c => c.pruned).length;
 
-    // 4. Select winner: highest scoring non-pruned candidate
+    // 4. Select winner. Speculation exists to repair a primary command that is broken on
+    // this platform, not to second-guess a working one: a longer-output heuristic or TLDR
+    // variation must never replace a viable primary (e.g. `ps ... | head -n 2` -> `ps aux`).
     const viableCandidates = evaluatedCandidates.filter(c => !c.pruned);
     viableCandidates.sort((a, b) => b.empiricalScore - a.empiricalScore);
 
-    let winner: SimulationOutcome | null = viableCandidates.length > 0 ? viableCandidates[0] : null;
+    const viablePrimary = viableCandidates.find(c => c.candidate.source === 'primary');
+    const viablePlatformFix = viableCandidates.find(c => c.candidate.source === 'platform_optimized');
+    let winner: SimulationOutcome | null = viablePrimary
+      || viablePlatformFix
+      || (viableCandidates.length > 0 ? viableCandidates[0] : null);
 
     // Fallback: If all candidates were pruned, pick the candidate with highest score if syntax was valid
     if (!winner && evaluatedCandidates.length > 0) {
@@ -126,6 +139,16 @@ export class ShadowPtySimulator {
       prunedCount,
       totalDurationMs
     };
+  }
+
+  /**
+   * True when the command has a known platform-specific rewrite worth testing (e.g. GNU flags
+   * on macOS). Callers use this to skip speculation entirely otherwise, so read-only commands
+   * are not executed twice for nothing.
+   */
+  public hasPlatformAlternatives(goal: string, primaryCommand: string, context: { os: string; cwd: string }): boolean {
+    return this.generateHypotheses(goal, primaryCommand, context)
+      .some(h => h.source === 'platform_optimized');
   }
 
   /**
@@ -350,13 +373,19 @@ export class ShadowPtySimulator {
       return 'high_risk';
     }
 
+    // Phase 0.5, Item 5: Use capability classifier
+    const capability = CommandCapabilityClassifier.classify(trimmed);
+    if (capability.strategy === 'full_shadow') {
+      return 'read_only';
+    }
+
     // Mutating operations
     if (/\b(kill|pkill|killall|rm|rmdir|mv|touch|mkdir|chmod|chown|git\s+(commit|push|merge|rebase|reset)|npm\s+install|brew\s+install)\b/i.test(trimmed)) {
       return 'safe_mutation';
     }
 
-    // Default to read-only diagnostics
-    return 'read_only';
+    // Default to read-only diagnostics if classified read-only, otherwise safe_mutation
+    return capability.isReadOnly ? 'read_only' : 'safe_mutation';
   }
 
   /**
@@ -365,6 +394,13 @@ export class ShadowPtySimulator {
    */
   public toSafePredicate(command: string, risk: RiskLevel): { predicate: string; isTransformed: boolean } {
     const trimmed = command.trim();
+
+    // Check dry-run capable tools (Phase 0.5, Item 5). Background simulators skip these: a
+    // "dry run" such as cargo check or pip --dry-run still compiles or downloads.
+    const dryRun = this.allowDryRuns ? CommandCapabilityClassifier.getDryRunCommand(trimmed) : null;
+    if (dryRun && dryRun !== trimmed) {
+      return { predicate: dryRun, isTransformed: true };
+    }
 
     if (risk === 'read_only') {
       return { predicate: trimmed, isTransformed: false };
@@ -452,6 +488,35 @@ export class ShadowPtySimulator {
         pruneReason: `AST Syntax Validation Failed: ${syntax.error}`
       };
     }
+
+    // Phase 0.5, Item 5: Check command capability routing (skip shadow sandbox for catastrophic AST-only)
+    const capability = CommandCapabilityClassifier.classify(candidate.command);
+    if (capability.strategy === 'ast_only') {
+      let isCatastrophic = false;
+      try {
+        const ast = ShellAstParser.parse(candidate.command);
+        isCatastrophic = ShellAstParser.isDestructiveOperation(ast).isDestructive;
+      } catch {
+        isCatastrophic = true;
+      }
+
+      if (isCatastrophic) {
+        return {
+          candidate,
+          executedCommand: candidate.command,
+          isPredicateTransformed: false,
+          exitCode: 1,
+          stdout: `[AST-Only Assessment: ${capability.reason}]`,
+          stderr: 'High-risk destructive operation blocked via AST analysis',
+          durationMs: 0.1,
+          empiricalScore: -3.0,
+          pruned: true,
+          pruneReason: capability.reason
+        };
+      }
+    }
+
+
 
     // Transform into safe predicate if necessary
     const { predicate, isTransformed } = this.toSafePredicate(candidate.command, candidate.estimatedRisk);
@@ -548,13 +613,16 @@ export class ShadowPtySimulator {
 
     // 3. Tauri environment via execute_command IPC
     const timeoutPromise = new Promise<{ stdout: string; stderr: string; code: number }>((_, reject) => {
-      setTimeout(() => reject(new Error(`Shadow execution timeout (${this.branchTimeoutMs}ms exceeded)`)), this.branchTimeoutMs);
+      setTimeout(() => reject(new Error(`Shadow execution timeout (${this.branchTimeoutMs}ms exceeded)`)), this.branchTimeoutMs + 1000);
     });
 
+    // Rust enforces the timeout and kills the process group; the JS race below is only a
+    // backstop in case IPC itself stalls.
     const executionPromise = invoke<{ stdout: string; stderr: string; code: number }>('execute_command', {
       command: shell,
       args: ['-c', commandLine],
-      cwd
+      cwd,
+      timeoutMs: this.branchTimeoutMs
     });
 
     return Promise.race([executionPromise, timeoutPromise]);

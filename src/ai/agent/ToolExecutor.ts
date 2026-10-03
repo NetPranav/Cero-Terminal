@@ -12,11 +12,14 @@ import { ExecutionEngine, ExecutionPreviewPlan } from '../../domain/security/Exe
 import { PermissionManager } from '../../domain/security/PermissionManager';
 import { PolicyEngine } from '../../domain/security/PolicyEngine';
 import { SecurityEngine } from '../../domain/security/SecurityEngine';
+import { CommandSafetyGuardian } from '../../domain/security/CommandSafetyGuardian';
 
 export interface ToolExecutionResult {
   success: boolean;
   data?: any;
   error?: string;
+  /** Machine-readable error code from the execution engine (e.g. USER_CANCELLED) */
+  errorCode?: string;
   commandExecuted?: string;
 }
 
@@ -59,15 +62,60 @@ export class ToolExecutor {
     params: Record<string, any>,
     cwd?: string,
     onAskPermission?: (plan: ExecutionPreviewPlan) => Promise<boolean>,
-    timeoutMs?: number
+    timeoutMs?: number,
+    signal?: AbortSignal
   ): Promise<ToolExecutionResult> {
+    if (signal?.aborted) {
+      try {
+        const driver = this.sdk.getDriver(toolId);
+        if (driver) await driver.cancel();
+      } catch { /* ignore */ }
+      return {
+        success: false,
+        error: 'Execution cancelled',
+        errorCode: 'CANCELLED'
+      };
+    }
+
+    // Intercept catastrophic commands before capability dispatch
+    if (params?.command && typeof params.command === 'string') {
+      const safety = CommandSafetyGuardian.getInstance().evaluate(params.command);
+      if (safety.isBlocked) {
+        return {
+          success: false,
+          error: `${safety.capabilityRefusal}\n\nConsequence Analysis:\n${safety.consequenceExplanation}${safety.safeAlternative ? `\n\nSafe Alternative: ${safety.safeAlternative}` : ''}`
+        };
+      }
+    }
+
     const effectiveTimeout = timeoutMs ?? ToolExecutor.resolveAdaptiveTimeout(toolId);
     let timeoutHandle: any = null;
+    let abortListener: (() => void) | null = null;
     try {
       const timeoutPromise = new Promise<ToolExecutionResult>((_, reject) => {
         timeoutHandle = setTimeout(() => {
           reject(new Error(`Tool execution timed out after ${effectiveTimeout}ms`));
         }, effectiveTimeout);
+      });
+
+      const abortPromise = new Promise<ToolExecutionResult>((resolve) => {
+        if (!signal) return;
+        abortListener = () => {
+          try {
+            const driver = this.sdk.getDriver(toolId);
+            if (driver) void driver.cancel();
+          } catch { /* ignore */ }
+          resolve({
+            success: false,
+            error: 'Execution cancelled',
+            errorCode: 'CANCELLED'
+          });
+        };
+        if (signal.aborted) {
+          abortListener();
+        } else {
+          signal.addEventListener('abort', abortListener, { once: true });
+        }
       });
 
       const execPromise = (async (): Promise<ToolExecutionResult> => {
@@ -85,16 +133,19 @@ export class ToolExecutor {
         } else {
           return {
             success: false,
-            error: result.error?.message || String(result.error || 'Tool execution failed')
+            error: result.error?.message || String(result.error || 'Tool execution failed'),
+            errorCode: result.error?.code
           };
         }
       })();
 
-      const finalResult = await Promise.race([execPromise, timeoutPromise]);
+      const finalResult = await Promise.race([execPromise, timeoutPromise, abortPromise]);
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (signal && abortListener) signal.removeEventListener('abort', abortListener);
       return finalResult;
     } catch (err: any) {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (signal && abortListener) signal.removeEventListener('abort', abortListener);
       // Cancel active driver if running
       try {
         const driver = this.sdk.getDriver(toolId);

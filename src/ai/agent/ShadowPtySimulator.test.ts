@@ -231,7 +231,8 @@ describe('ShadowPtySimulator — Speculative Shadow-PTY Simulation Engine', () =
     });
   });
 
-  describe('Live Subshell Ephemeral Execution (Integration)', () => {
+  // Runs real POSIX commands (sw_vers, kill -0) in a subshell
+  describe.skipIf(process.platform === 'win32')('Live Subshell Ephemeral Execution (Integration)', () => {
     const simulator = new ShadowPtySimulator();
 
     it('should execute read-only probe in ephemeral subshell in <50ms', async () => {
@@ -265,5 +266,82 @@ describe('ShadowPtySimulator — Speculative Shadow-PTY Simulation Engine', () =
       // PID 999999 does not exist, so exitCode is 1
       expect(report.evaluatedCandidates[0].exitCode).toBe(1);
     });
+
+    it('should route high-risk AST-only command to AST assessment without sandbox execution (0.5.5)', async () => {
+      const mockExecutor = vi.fn();
+      const mockSim = new ShadowPtySimulator({ executor: mockExecutor });
+
+      const report = await mockSim.speculate(
+        'delete all files from root',
+        'rm -rf /',
+        { os: 'linux', cwd: '/' }
+      );
+
+      // Should NOT have called the executor (skips sandbox execution!)
+      expect(mockExecutor).not.toHaveBeenCalled();
+
+      // Primary candidate should be evaluated via AST and pruned
+      const primary = report.evaluatedCandidates[0];
+      expect(primary.pruned).toBe(true);
+      expect(primary.stdout).toContain('AST-Only Assessment');
+      expect(primary.empiricalScore).toBeLessThan(0);
+    });
+
+    it('should transform cargo build to cargo check via dry-run routing (0.5.5)', async () => {
+      const mockExecutor = vi.fn().mockResolvedValue({ stdout: 'Finished dev profile', stderr: '', code: 0 });
+      const mockSim = new ShadowPtySimulator({ executor: mockExecutor });
+
+      const report = await mockSim.speculate(
+        'compile rust binary',
+        'cargo build --release',
+        { os: 'linux', cwd: '/tmp' }
+      );
+
+      expect(report.evaluatedCandidates[0].isPredicateTransformed).toBe(true);
+      expect(report.evaluatedCandidates[0].executedCommand).toBe('cargo check --release');
+      expect(mockExecutor).toHaveBeenCalledWith(
+        expect.any(String),
+        ['-c', 'cargo check --release'],
+        '/tmp'
+      );
+    });
+  });
+
+  describe('Winner selection never replaces a working primary command', () => {
+    it('keeps a viable primary even when a heuristic variation prints more output', async () => {
+      // Heuristic/TLDR variations produce longer output; before the fix they outscored
+      // the model's precise command and silently replaced it.
+      const executor = vi.fn(async (_shell: string, args: string[]) => {
+        const cmd = args[1];
+        if (cmd.startsWith('pgrep')) return { stdout: 'x'.repeat(4000), stderr: '', code: 0 };
+        return { stdout: '1234 12.5 3.1 llama-server', stderr: '', code: 0 };
+      });
+      const sim = new ShadowPtySimulator({ executor });
+      const report = await sim.speculate(
+        'check llama usage',
+        'ps -eo pid,pcpu,pmem,comm --sort=-pcpu | head -n 2',
+        { os: 'linux', cwd: '/tmp' }
+      );
+      expect(report.evaluatedCandidates.length).toBeGreaterThan(1);
+      expect(report.winner?.candidate.source).toBe('primary');
+    });
+
+    it('uses a platform-specific rewrite when the primary fails on this platform', async () => {
+      const executor = vi.fn(async (_shell: string, args: string[]) => {
+        const cmd = args[1];
+        if (cmd.startsWith('fuser')) return { stdout: '', stderr: 'fuser: command not found', code: 127 };
+        return { stdout: 'node 4242 user 23u IPv4 TCP *:3000 (LISTEN)', stderr: '', code: 0 };
+      });
+      const sim = new ShadowPtySimulator({ executor });
+      const report = await sim.speculate('inspect port 3000', 'fuser 3000/tcp', { os: 'mac', cwd: '/tmp' });
+      expect(report.winner?.candidate.source).toBe('platform_optimized');
+    });
+
+    it('reports no platform alternatives for native Linux commands, so speculation is skipped', () => {
+      const sim = new ShadowPtySimulator();
+      expect(sim.hasPlatformAlternatives('top cpu', 'ps -eo pid,pcpu,comm --sort=-pcpu | head -n 2', { os: 'linux', cwd: '/tmp' })).toBe(false);
+      expect(sim.hasPlatformAlternatives('show ip', 'ip addr', { os: 'mac', cwd: '/tmp' })).toBe(true);
+    });
   });
 });
+

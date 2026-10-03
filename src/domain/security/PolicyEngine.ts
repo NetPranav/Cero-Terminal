@@ -1,3 +1,10 @@
+import {
+  PolicyCategory,
+  PolicyPosture,
+  CategoryPolicy,
+  DEFAULT_CATEGORY_POLICIES
+} from './SecurityEngine';
+
 export type PolicyResult = 'Allow' | 'Deny' | 'Ask' | 'Conditional';
 
 export interface PolicyRule {
@@ -8,14 +15,28 @@ export interface PolicyRule {
 
 export interface IPolicyEngine {
   evaluate(capabilityId: string, input: any): PolicyResult;
+  evaluateCategories(categories: PolicyCategory[]): PolicyResult;
   addRule(rule: PolicyRule): void;
+  registerCategory(category: PolicyCategory, defaultPosture: PolicyPosture, options?: Partial<CategoryPolicy>): void;
+  setCategoryPosture(category: PolicyCategory, posture: PolicyPosture): void;
+  getCategoryPosture(category: PolicyCategory): PolicyPosture;
+  getCategoryPolicy(category: PolicyCategory): CategoryPolicy | undefined;
+  getAllCategoryPolicies(): CategoryPolicy[];
 }
 
 export class PolicyEngine implements IPolicyEngine {
   private rules: PolicyRule[] = [];
+  private categoryPolicies: Map<PolicyCategory, CategoryPolicy> = new Map();
 
   constructor() {
+    this.registerDefaultCategories();
     this.registerDefaultRules();
+  }
+
+  private registerDefaultCategories() {
+    for (const [cat, policy] of Object.entries(DEFAULT_CATEGORY_POLICIES)) {
+      this.categoryPolicies.set(cat as PolicyCategory, { ...policy });
+    }
   }
 
   private registerDefaultRules() {
@@ -104,6 +125,55 @@ export class PolicyEngine implements IPolicyEngine {
       if (result === 'Conditional' && finalResult === 'Allow') finalResult = 'Conditional';
     }
 
+    return finalResult;
+  }
+
+  public registerCategory(category: PolicyCategory, defaultPosture: PolicyPosture, options?: Partial<CategoryPolicy>): void {
+    const existing = this.categoryPolicies.get(category) || DEFAULT_CATEGORY_POLICIES[category] || {
+      category,
+      defaultPosture,
+      consentRequired: defaultPosture === 'ask',
+      requiresPassword: false
+    };
+    this.categoryPolicies.set(category, {
+      ...existing,
+      category,
+      defaultPosture,
+      ...options
+    });
+  }
+
+  public setCategoryPosture(category: PolicyCategory, posture: PolicyPosture): void {
+    const policy = this.categoryPolicies.get(category);
+    if (policy) {
+      policy.defaultPosture = posture;
+      policy.consentRequired = posture === 'ask';
+    } else {
+      this.registerCategory(category, posture);
+    }
+  }
+
+  public getCategoryPolicy(category: PolicyCategory): CategoryPolicy | undefined {
+    return this.categoryPolicies.get(category);
+  }
+
+  public getCategoryPosture(category: PolicyCategory): PolicyPosture {
+    return this.categoryPolicies.get(category)?.defaultPosture || 'ask';
+  }
+
+  public getAllCategoryPolicies(): CategoryPolicy[] {
+    return Array.from(this.categoryPolicies.values());
+  }
+
+  public evaluateCategories(categories: PolicyCategory[]): PolicyResult {
+    if (!categories || categories.length === 0) return 'Allow';
+
+    let finalResult: PolicyResult = 'Allow';
+    for (const cat of categories) {
+      const posture = this.getCategoryPosture(cat);
+      if (posture === 'deny') return 'Deny';
+      if (posture === 'ask') finalResult = 'Ask';
+    }
     return finalResult;
   }
 }

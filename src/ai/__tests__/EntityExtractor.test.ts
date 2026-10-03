@@ -32,8 +32,8 @@ describe('Phase X — Entity Extractor Verification', () => {
   });
 
   it('should extract file paths and folders', () => {
-    const res = extractor.extract('List files in /Users/pranav/Documents and view config.json');
-    expect(res.paths).toContain('/Users/pranav/Documents');
+    const res = extractor.extract('List files in /Users/dev/Documents and view config.json');
+    expect(res.paths).toContain('/Users/dev/Documents');
     expect(res.files).toContain('config.json');
   });
 

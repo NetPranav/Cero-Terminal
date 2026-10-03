@@ -24,7 +24,7 @@ describe('ToolExecutor security integration', () => {
 
     expect(requestApproval).toHaveBeenCalledOnce();
     expect(result.success).toBe(false);
-    expect(result.error).toContain('User denied execution');
+    expect(result.error).toContain('Declined in the confirmation dialog');
   });
 
   it('requires explicit user approval and presents 1-line explanation for generative shell commands', async () => {

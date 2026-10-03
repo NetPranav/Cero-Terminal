@@ -71,21 +71,38 @@ export class OllamaProvider extends LocalModel {
   async generate(prompt: string, config?: Partial<ModelConfig>): Promise<AIResponse> {
     if (!this.isInitialized) await this.initialize();
     
-    const response = await fetch(`${this.baseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: this.modelName,
-        prompt,
-        format: 'json',
-        stream: false,
-        options: {
-          temperature: config?.temperature ?? 0.1,
-          top_p: config?.top_p ?? 0.9,
-          num_predict: 2048
-        }
-      })
-    });
+    const timeoutMs = 180000;
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: this.modelName,
+          prompt,
+          format: 'json',
+          stream: false,
+          think: false,
+          options: {
+            temperature: config?.temperature ?? 0.1,
+            top_p: config?.top_p ?? 0.9,
+            num_predict: 1024
+          }
+        })
+      });
+    } catch (err: any) {
+      clearTimeout(timeoutHandle);
+      if (err.name === 'AbortError' || controller.signal.aborted) {
+        throw new Error(`Ollama generation timed out after ${Math.round(timeoutMs / 1000)}s.`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
     
     if (!response.ok) {
       throw new Error(`Ollama generation failed: ${response.statusText}`);

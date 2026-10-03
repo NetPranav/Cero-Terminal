@@ -2,7 +2,7 @@
   "toolId": "browser.bookmarks",
   "examples": [
     {
-      "input": "show bookmarks for sentinel",
+      "input": "show bookmarks for cero",
       "expectedIntent": {
         "domain": "browser",
         "action": "bookmarks"

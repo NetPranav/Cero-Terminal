@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { formatAgentEvent, formatMarkdownTerminal, formatDataOutput } from './OutputFormatter';
+import { formatAgentEvent, formatMarkdownTerminal, formatDataOutput, AgentEventRenderer, CLEAR_LINE } from './OutputFormatter';
+
+const plain = (s: string) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
 
 describe('OutputFormatter — Terminal Markdown & CRLF Formatting', () => {
   it('formats multi-line markdown responses without any bare LF (staircase prevention)', () => {
@@ -29,9 +31,11 @@ sudo networksetup -setmanual en1 192.168.1.100 255.255.255.0 192.168.1.1
     }
 
     // Code blocks should be cleanly boxed
-    expect(formatted).toContain('┌── sh ─');
+    expect(plain(formatted)).toContain('╭─ sh ─');
     expect(formatted).toContain('│');
-    expect(formatted).toContain('└──');
+    expect(formatted).toContain('╰──');
+    // No SGR dim: it renders as an opaque box in the WebGL renderer
+    expect(formatted).not.toMatch(/\x1b\[(?:[0-9;]*;)?2m/);
   });
 
   it('formats headers, lists, and inline code properly', () => {
@@ -74,11 +78,10 @@ sudo networksetup -setmanual en1 192.168.1.100 255.255.255.0 192.168.1.1
       ]
     });
 
-    expect(out).toContain('Top Processes (sorted by CPU)');
-    expect(out).toContain('spotify');
-    expect(out).toContain('PID:20485');
-    expect(out).toContain('CPU: 19.7%');
-    expect(out).toContain('RAM: 2.7%');
+    const text = plain(out);
+    expect(text).toContain('Top processes by CPU');
+    expect(text).toMatch(/PID\s+CPU%\s+MEM%\s+NAME/);
+    expect(text).toMatch(/20485\s+19\.7\s+2\.7\s+spotify/);
     expect(/(?<!\r)\n/.test(out)).toBe(false);
   });
 
@@ -89,11 +92,11 @@ sudo networksetup -setmanual en1 192.168.1.100 255.255.255.0 192.168.1.1
       ]
     });
 
-    expect(out).toContain('Storage Mounts & Disk Usage');
-    expect(out).toContain('/dev/nvme0n1p6');
-    expect(out).toContain('64G free');
-    expect(out).toContain('of 261G');
-    expect(out).toContain('75% used');
+    const text = plain(out);
+    expect(text).toContain('/dev/nvme0n1p6');
+    expect(text).toContain('64G free of 261G');
+    expect(text).toContain('75% used');
+    expect(text).toContain('━');
     expect(/(?<!\r)\n/.test(out)).toBe(false);
   });
 
@@ -103,9 +106,10 @@ sudo networksetup -setmanual en1 192.168.1.100 255.255.255.0 192.168.1.1
       status: 'Not charging',
       powerSource: 'Battery (BAT1)'
     });
-    expect(batOut).toContain('Battery:');
-    expect(batOut).toContain('58%');
-    expect(batOut).toContain('Not charging');
+    expect(plain(batOut)).toContain('Battery');
+    expect(plain(batOut)).toContain('58%');
+    expect(plain(batOut)).toContain('not charging');
+    expect(plain(batOut)).toContain('on battery (bat1) power');
 
     const ramOut = formatDataOutput({
       totalGb: 15.1,
@@ -114,9 +118,10 @@ sudo networksetup -setmanual en1 192.168.1.100 255.255.255.0 192.168.1.1
       swapTotalGb: 7.7,
       swapUsedGb: 2.2
     });
-    expect(ramOut).toContain('System Memory (RAM):');
-    expect(ramOut).toContain('6.4 GB used');
-    expect(ramOut).toContain('15.1 GB total');
+    expect(plain(ramOut)).toContain('Memory');
+    expect(plain(ramOut)).toContain('6.4 GB used of 15.1 GB');
+    expect(plain(ramOut)).toContain('8.9 GB available');
+    expect(plain(ramOut)).toContain('Swap      2.2 GB used of 7.7 GB');
   });
 
   it('formats single process card when singular query is requested', () => {
@@ -129,11 +134,10 @@ sudo networksetup -setmanual en1 192.168.1.100 255.255.255.0 192.168.1.1
       ]
     });
 
-    expect(out).toContain('▶ Top Process (sorted by CPU):');
-    expect(out).toContain('llama-server');
-    expect(out).toContain('PID:52374');
-    expect(out).toContain('CPU: 196%');
-    expect(out).toContain('RAM: 19.9%');
+    const text = plain(out);
+    expect(text).toContain('Top process by CPU');
+    expect(text).toContain('llama-server');
+    expect(text).toContain('PID 52374 · CPU 196% · MEM 19.9%');
     expect(/(?<!\r)\n/.test(out)).toBe(false);
   });
 
@@ -146,8 +150,81 @@ sudo networksetup -setmanual en1 192.168.1.100 255.255.255.0 192.168.1.1
       ]
     }, { goal: 'which process is using the most cpu' });
 
-    expect(out).toContain('▶ Top Process (sorted by CPU):');
+    expect(plain(out)).toContain('Top process by CPU');
     expect(out).toContain('llama-server');
     expect(out).not.toContain('Isolated Web Co');
   });
+
+  it('formats a macOS battery reading with remaining time', () => {
+    const out = plain(formatDataOutput({ percentage: 64, status: 'discharging', isCharging: false, powerSource: 'Battery Power', timeRemaining: '20:00' }));
+    expect(out).toContain('Battery   64%');
+    expect(out).toContain('discharging · 20:00 remaining · on battery power');
+  });
 });
+
+describe('AgentEventRenderer', () => {
+  it('rewrites thinking updates in place and opens the block on a new line', () => {
+    const r = new AgentEventRenderer();
+    const first = r.render({ type: 'thinking', message: 'Thinking...' });
+    expect(first.startsWith('\r\n')).toBe(true);
+    expect(first.endsWith('\r\n')).toBe(false);
+    const second = r.render({ type: 'thinking', message: 'Intent routed: system.battery' });
+    expect(second.startsWith(CLEAR_LINE)).toBe(true);
+  });
+
+  it('replaces the running step with its result and skips a redundant Done', () => {
+    const r = new AgentEventRenderer();
+    r.render({ type: 'tool_start', message: 'Battery charge and charging state' });
+    const done = r.render({ type: 'tool_done', message: '✓ Battery charge and charging state' });
+    expect(done.startsWith(CLEAR_LINE)).toBe(true);
+    expect(plain(done)).toContain('✓ Battery charge and charging state');
+    expect(plain(done)).not.toContain('›');
+    expect(r.render({ type: 'done', message: 'Done.' })).toBe('');
+  });
+
+  it('keeps a step line when its command streams output', () => {
+    const r = new AgentEventRenderer();
+    r.render({ type: 'tool_start', message: 'Phase 1: build' });
+    const out = plain(r.render({ type: 'step_output', message: 'compiling...' }));
+    expect(out).toContain('› Phase 1: build');
+    expect(out).toContain('compiling...');
+  });
+
+  it('shows Done when nothing succeeded before it, and truncates long status lines', () => {
+    const r = new AgentEventRenderer(() => 40);
+    const status = plain(r.render({ type: 'thinking', message: 'x'.repeat(200) }));
+    expect(status.length).toBeLessThanOrEqual(40);
+    expect(plain(r.render({ type: 'done', message: 'Done.' }))).toContain('✓ Done.');
+    expect(r.finish()).toBe('');
+  });
+
+  it('never emits the SGR dim attribute', () => {
+    const r = new AgentEventRenderer();
+    const all = [
+      r.render({ type: 'thinking', message: 'a' }),
+      r.render({ type: 'tool_start', message: 'b' }),
+      r.render({ type: 'tool_done', message: '✗ failed' }),
+      r.render({ type: 'error', message: 'boom' }),
+      r.render({ type: 'question', message: 'which one?' }),
+    ].join('');
+    expect(all).not.toMatch(/\x1b\[(?:[0-9;]*;)?2m/);
+  });
+});
+
+describe('Long answers wrap under the text', () => {
+  it('wraps at the terminal width with a hanging indent', () => {
+    const text = plain(formatAgentEvent({ type: 'done', message: 'math.js exports a single function add that takes two numbers and returns their sum, and nothing else.' }, 40));
+    const lines = text.split('\r\n').filter(Boolean);
+    expect(lines.length).toBeGreaterThan(2);
+    expect(lines.every(l => l.length <= 40)).toBe(true);
+    expect(lines[1].startsWith('    ')).toBe(true);
+  });
+});
+
+describe('Battery wording', () => {
+  it('says "until full" while charging and keeps AC in capitals', () => {
+    const out = plain(formatDataOutput({ percentage: 79, status: 'charging', isCharging: true, powerSource: 'AC Power', timeRemaining: '1:52' }));
+    expect(out).toContain('charging · 1:52 until full · on AC power');
+  });
+});
+

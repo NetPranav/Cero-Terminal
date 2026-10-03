@@ -18,7 +18,7 @@ function makeTemplate(
   return {
     id,
     metadata: {
-      author: 'Sentinel',
+      author: 'Cero',
       createdAt: Date.now(),
       updatedAt: Date.now(),
       version: '1.0.0',

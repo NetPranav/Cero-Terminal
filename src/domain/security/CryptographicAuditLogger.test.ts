@@ -81,4 +81,29 @@ describe('Cryptographic Audit Logger (Pillar 3.2)', () => {
     expect(report.entryCount).toBe(1);
     expect(report.rootHash).toBeDefined();
   });
+
+  it('redacts secrets in logged parameters while preserving cryptographic chain validity', async () => {
+    await logger.log({
+      capabilityId: 'shell.execute',
+      parameters: {
+        command: 'curl -H "Authorization: Bearer my-secret-token" https://example.com',
+        env: 'AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE'
+      },
+      riskScore: 50,
+      permissionResult: 'Granted',
+      executionTimeMs: 3.0,
+      rollbackAvailable: false,
+      userConfirmation: false
+    });
+
+    const logs = await logger.exportLogs();
+    expect(logs.length).toBe(1);
+    expect(logs[0].parameters.command).toContain('[REDACTED:');
+    expect(logs[0].parameters.command).not.toContain('my-secret-token');
+    expect(logs[0].parameters.env).toContain('[REDACTED:AWS_KEY]');
+    expect(logs[0].parameters.env).not.toContain('AKIAIOSFODNN7EXAMPLE');
+
+    const verification = await logger.verifyChain();
+    expect(verification.valid).toBe(true);
+  });
 });

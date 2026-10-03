@@ -5,22 +5,22 @@ describe('GbnfGrammarManager (Phase 5.3 — GBNF Constrained Decoding)', () => {
   const manager = GbnfGrammarManager.getInstance();
 
   describe('Pre-compiled GBNF Grammars', () => {
-    it('provides valid SENTINEL_ACTION GBNF grammar definition', () => {
-      const gbnf = GbnfGrammarManager.getGrammar('SENTINEL_ACTION');
+    it('provides valid CERO_ACTION GBNF grammar definition', () => {
+      const gbnf = GbnfGrammarManager.getGrammar('CERO_ACTION');
 
-      expect(gbnf).toContain('root ::= action_execute | action_done');
+      expect(gbnf).toContain('root ::= action-execute | action-done');
       expect(gbnf).toContain('\\"action\\"');
       expect(gbnf).toContain('\\"execute\\"');
       expect(gbnf).toContain('\\"command\\"');
       expect(gbnf).toContain('\\"explanation\\"');
       expect(gbnf).toContain('\\"done\\"');
       expect(gbnf).toContain('\\"summary\\"');
-      expect(gbnf).toContain('char ::=');
+      expect(gbnf).toContain('string ::=');
       expect(gbnf).toContain('ws ::=');
     });
 
-    it('provides valid SENTINEL_PLANNER GBNF grammar definition', () => {
-      const gbnf = GbnfGrammarManager.getGrammar('SENTINEL_PLANNER');
+    it('provides valid CERO_PLANNER GBNF grammar definition', () => {
+      const gbnf = GbnfGrammarManager.getGrammar('CERO_PLANNER');
 
       expect(gbnf).toContain('root ::=');
       expect(gbnf).toContain('\\"decision\\"');
@@ -28,7 +28,7 @@ describe('GbnfGrammarManager (Phase 5.3 — GBNF Constrained Decoding)', () => {
       expect(gbnf).toContain('\\"clarify\\"');
       expect(gbnf).toContain('\\"summary\\"');
       expect(gbnf).toContain('\\"steps\\"');
-      expect(gbnf).toContain('string_list ::=');
+      expect(gbnf).toContain('string-list ::=');
     });
 
     it('provides valid STRICT_JSON GBNF grammar definition', () => {
@@ -48,7 +48,7 @@ describe('GbnfGrammarManager (Phase 5.3 — GBNF Constrained Decoding)', () => {
         explanation: 'Inspect port 3000 listening process'
       });
 
-      const res = manager.validateOutput(output, 'SENTINEL_ACTION');
+      const res = manager.validateOutput(output, 'CERO_ACTION');
       expect(res.valid).toBe(true);
       expect(res.parsed.action).toBe('execute');
       expect(res.parsed.command).toBe('lsof -i :3000');
@@ -60,7 +60,7 @@ describe('GbnfGrammarManager (Phase 5.3 — GBNF Constrained Decoding)', () => {
         summary: 'All test suites completed successfully.'
       });
 
-      const res = manager.validateOutput(output, 'SENTINEL_ACTION');
+      const res = manager.validateOutput(output, 'CERO_ACTION');
       expect(res.valid).toBe(true);
       expect(res.parsed.action).toBe('done');
       expect(res.parsed.summary).toContain('successfully');
@@ -69,7 +69,7 @@ describe('GbnfGrammarManager (Phase 5.3 — GBNF Constrained Decoding)', () => {
     it('rejects conversational chatbot apologies prohibited by GBNF grammar', () => {
       const output = "I'm sorry, but as an AI language model, I do not have direct access to your local machine.";
 
-      const res = manager.validateOutput(output, 'SENTINEL_ACTION');
+      const res = manager.validateOutput(output, 'CERO_ACTION');
       expect(res.valid).toBe(false);
       expect(res.error).toContain('prohibited by grammar');
     });
@@ -77,7 +77,7 @@ describe('GbnfGrammarManager (Phase 5.3 — GBNF Constrained Decoding)', () => {
     it('rejects markdown code fences prohibited by hardware-level GBNF grammar', () => {
       const output = '```json\n{"action": "execute", "command": "ls", "explanation": "list files"}\n```';
 
-      const res = manager.validateOutput(output, 'SENTINEL_ACTION');
+      const res = manager.validateOutput(output, 'CERO_ACTION');
       expect(res.valid).toBe(false);
       expect(res.error).toContain('prohibited by grammar');
     });
@@ -88,7 +88,7 @@ describe('GbnfGrammarManager (Phase 5.3 — GBNF Constrained Decoding)', () => {
         url: 'https://google.com'
       });
 
-      const res = manager.validateOutput(output, 'SENTINEL_ACTION');
+      const res = manager.validateOutput(output, 'CERO_ACTION');
       expect(res.valid).toBe(false);
       expect(res.error).toContain('Invalid action type');
     });
@@ -100,7 +100,7 @@ describe('GbnfGrammarManager (Phase 5.3 — GBNF Constrained Decoding)', () => {
         // missing explanation
       });
 
-      const res = manager.validateOutput(output, 'SENTINEL_ACTION');
+      const res = manager.validateOutput(output, 'CERO_ACTION');
       expect(res.valid).toBe(false);
       expect(res.error).toContain('missing valid command or explanation');
     });
@@ -116,7 +116,7 @@ describe('GbnfGrammarManager (Phase 5.3 — GBNF Constrained Decoding)', () => {
         ]
       });
 
-      const res = manager.validateOutput(output, 'SENTINEL_PLANNER');
+      const res = manager.validateOutput(output, 'CERO_PLANNER');
       expect(res.valid).toBe(true);
       expect(res.parsed.decision).toBe('plan');
       expect(res.parsed.steps.length).toBe(3);

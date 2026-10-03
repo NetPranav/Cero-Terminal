@@ -636,4 +636,136 @@ export class ShellAstParser {
       reasons,
     };
   }
+
+  /**
+   * Evaluates if a shell command line or AST uses obfuscated execution techniques.
+   * Detects:
+   *  - Decoding pipelines: base64 -d | sh, xxd -r | bash, etc.
+   *  - Network payload piping: curl | sh, wget | bash, etc.
+   *  - Command substitutions inside eval or execution targets: eval $(...), etc.
+   *  - Inline script decoding execution: python -c "exec(b64decode...)", perl -e "eval...", etc.
+   *  - Shell variable IFS bypasses: ${IFS}
+   *  - ANSI-C quoting or hex escapes in binary execution: $'\x...', \x2f\x62\x69\x6e
+   */
+  public static isObfuscatedExecution(astOrCommand: ProgramNode | string): { isObfuscated: boolean; reasons: string[] } {
+    const reasons: string[] = [];
+    let ast: ProgramNode;
+    let rawText: string = '';
+
+    if (typeof astOrCommand === 'string') {
+      rawText = astOrCommand;
+      // 1. Check raw text for whitespace/character evasion techniques
+      if (/\$\{IFS\}|\$IFS\b/.test(rawText)) {
+        reasons.push('Shell $IFS whitespace obfuscation bypass detected');
+      }
+      if (/\$'(?:\\x[0-9a-fA-F]{2}|\\[0-7]{3})+'/.test(rawText)) {
+        reasons.push('ANSI-C hex/octal string escape execution detected');
+      }
+      if (/(?:\\x[0-9a-fA-F]{2}){3,}/.test(rawText)) {
+        reasons.push('Hex encoded byte sequence detected');
+      }
+      if (/\/(?:dev\/tcp|dev\/udp)\//.test(rawText)) {
+        reasons.push('Direct socket pseudo-device network redirection detected');
+      }
+
+      try {
+        ast = this.parse(rawText);
+      } catch {
+        // If syntax is too warped to parse, but contains obfuscation tokens, return true
+        if (reasons.length > 0) {
+          return { isObfuscated: true, reasons };
+        }
+        return { isObfuscated: false, reasons: [] };
+      }
+    } else {
+      ast = astOrCommand;
+      rawText = ast.rawText || '';
+    }
+
+    const shells = new Set(['sh', 'bash', 'zsh', 'dash', 'ash', 'ksh', 'fish', 'source', '.']);
+    const decoders = new Set(['base64', 'uudecode', 'xxd', 'openssl']);
+    const downloaders = new Set(['curl', 'wget', 'fetch', 'nc', 'ncat', 'netcat']);
+
+    // 2. Check pipelines
+    for (const stmt of ast.statements) {
+      const pipeline = stmt.pipeline;
+      if (pipeline && pipeline.commands && pipeline.commands.length > 1) {
+        for (let i = 1; i < pipeline.commands.length; i++) {
+          const targetNode = pipeline.commands[i];
+          const prevNode = pipeline.commands[i - 1];
+
+          if (targetNode.type === 'simple_command') {
+            const targetBin = targetNode.name.toLowerCase();
+
+            // Piped into a shell
+            if (shells.has(targetBin)) {
+              if (prevNode.type === 'simple_command') {
+                const prevBin = prevNode.name.toLowerCase();
+                const prevArgs = prevNode.args;
+
+                // base64 -d / base64 --decode | sh
+                if (decoders.has(prevBin)) {
+                  reasons.push(`Decoded pipeline execution: '${prevBin} ${prevArgs.join(' ')}' piped into shell '${targetBin}'`);
+                }
+
+                // curl ... | sh
+                if (downloaders.has(prevBin)) {
+                  reasons.push(`Remote script piped directly into shell: '${prevBin}' piped into '${targetBin}'`);
+                }
+
+                // printf with hex/octal or echo -e with escapes | sh
+                if ((prevBin === 'printf' || prevBin === 'echo') && (prevArgs.some(a => /\\x|\\0/.test(a)) || prevArgs.includes('-e'))) {
+                  reasons.push(`Escaped output piped into shell: '${prevBin}' piped into '${targetBin}'`);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Check simple commands
+    const allCmds = this.getAllSimpleCommands(ast);
+    for (const cmd of allCmds) {
+      const bin = cmd.name.toLowerCase();
+      const args = cmd.args;
+      const joinedArgs = args.join(' ');
+
+      // eval with command substitutions or dynamic variables
+      if (bin === 'eval') {
+        if (cmd.substitutions.length > 0 || joinedArgs.includes('$(') || joinedArgs.includes('`') || joinedArgs.includes('$')) {
+          reasons.push(`Dynamic eval execution: eval ${joinedArgs}`);
+        }
+      }
+
+      // bash -c / sh -c with command substitutions or base64 decoding
+      if (shells.has(bin) && (args.includes('-c') || args.includes('-e'))) {
+        if (joinedArgs.includes('base64') || joinedArgs.includes('$(') || joinedArgs.includes('`')) {
+          reasons.push(`Shell sub-process with dynamic/encoded payload: ${bin} ${joinedArgs}`);
+        }
+      }
+
+      // Inline script interpreters with decode/exec
+      if (bin.startsWith('python') || bin === 'py') {
+        if (args.includes('-c') && (/exec\s*\(|b64decode|codecs\.decode/.test(joinedArgs))) {
+          reasons.push(`Python inline script execution with dynamic decoding/exec: ${joinedArgs}`);
+        }
+      }
+      if (bin === 'perl') {
+        if (args.includes('-e') && (/eval\s*\(|decode_base64/.test(joinedArgs))) {
+          reasons.push(`Perl inline script execution with eval/decode: ${joinedArgs}`);
+        }
+      }
+      if (bin === 'node') {
+        if (args.includes('-e') && (/eval\s*\(|Buffer\.from\(.*'base64'\)/.test(joinedArgs))) {
+          reasons.push(`Node inline script execution with eval/base64: ${joinedArgs}`);
+        }
+      }
+    }
+
+    return {
+      isObfuscated: reasons.length > 0,
+      reasons
+    };
+  }
 }

@@ -11,7 +11,7 @@ describe('Phase 4.6 — Neural Activation Steering (Representation Engineering)'
   let manager: ActivationSteeringManager;
   const testStoragePath = path.join(
     process.env.HOME || '/tmp',
-    '.sentinel',
+    '.cero',
     'steering',
     'test_steering_vectors.json'
   );
@@ -193,29 +193,32 @@ describe('Phase 4.6 — Neural Activation Steering (Representation Engineering)'
         tokenizerType: 'qwen',
       });
 
-      // Refusal tokens should have -100.0
-      expect(bias['1428']).toBe(-100.0); // "As"
-      expect(bias['458']).toBe(-100.0);  // " an"
-      expect(bias['9552']).toBe(-100.0); // " AI"
-      expect(bias['24128']).toBe(-100.0); // " apologize"
-      expect(bias['8013']).toBe(-100.0); // " cannot"
+      // Refusal tokens (IDs verified against the Qwen2.5 tokenizer vocabulary)
+      expect(bias['2121']).toBe(-100.0);  // "As"
+      expect(bias['15235']).toBe(-100.0); // " AI"
+      expect(bias['36879']).toBe(-100.0); // " apologize"
+      expect(bias['4157']).toBe(-100.0);  // " cannot"
+
+      // Ordinary words must never be banned: 458 is " an", 24128 is "Music"
+      expect(bias['458']).toBeUndefined();
+      expect(bias['24128']).toBeUndefined();
 
       // Action tokens should have +3.5
-      expect(bias['90']).toBe(3.5);   // "{"
-      expect(bias['1352']).toBe(3.5); // "\"action\""
-      expect(bias['1782']).toBe(3.5); // "\"command\""
+      expect(bias['90']).toBe(3.5);    // "{"
+      expect(bias['1311']).toBe(3.5);  // "action"
+      expect(bias['5631']).toBe(3.5);  // "command"
     });
 
     it('merges custom logit biases seamlessly', () => {
       const bias = manager.generateLogitBias({
         customBiases: {
           '9999': 4.0,
-          '1428': -50.0, // Override
+          '2121': -50.0, // Override
         },
       });
 
       expect(bias['9999']).toBe(4.0);
-      expect(bias['1428']).toBe(-50.0);
+      expect(bias['2121']).toBe(-50.0);
     });
 
     it('detects conversational refusal signatures and tracks telemetry', () => {
@@ -278,12 +281,12 @@ describe('Phase 4.6 — Neural Activation Steering (Representation Engineering)'
     });
 
     it('formats llama-server control-vector CLI arguments', () => {
-      const args = manager.formatLlamaServerArgs('/opt/sentinel/steering');
+      const args = manager.formatLlamaServerArgs('/opt/cero/steering');
 
       expect(args).toContain('--control-vector-scaled');
-      expect(args).toContain('/opt/sentinel/steering/unix_mastery.gguf');
+      expect(args).toContain('/opt/cero/steering/unix_mastery.gguf');
       expect(args).toContain('1.50');
-      expect(args).toContain('/opt/sentinel/steering/refusal_suppression.gguf');
+      expect(args).toContain('/opt/cero/steering/refusal_suppression.gguf');
       expect(args).toContain('-2.00');
     });
 

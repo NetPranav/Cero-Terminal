@@ -13,7 +13,7 @@ export class WorkflowSharing {
    */
   public exportWorkflow(workflow: UserWorkflow): WorkflowExportPayload {
     return {
-      format: 'sentinel-workflow-v1',
+      format: 'cero-workflow-v1',
       exportedAt: Date.now(),
       workflow: JSON.parse(JSON.stringify(workflow)),
       templateId: workflow.templateId,
@@ -31,8 +31,8 @@ export class WorkflowSharing {
   } {
     const errors: string[] = [];
 
-    if (payload.format !== 'sentinel-workflow-v1') {
-      errors.push(`Unsupported format: '${payload.format}'. Expected 'sentinel-workflow-v1'.`);
+    if (payload.format !== 'cero-workflow-v1') {
+      errors.push(`Unsupported format: '${payload.format}'. Expected 'cero-workflow-v1'.`);
       return { valid: false, errors };
     }
 

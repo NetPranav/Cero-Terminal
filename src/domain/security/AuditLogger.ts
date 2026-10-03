@@ -1,8 +1,10 @@
-import { invoke } from '@tauri-apps/api/core';
+import { appendCeroFile } from '../../infrastructure/storage/CeroFiles';
+import { SecretRedactor } from './SecretRedactor';
 
 export interface AuditLogEntry {
   id: string;
   timestamp: string;
+  source?: 'user' | 'benchmark' | 'system';
   capabilityId: string;
   parameters: any;
   riskScore: number;
@@ -50,7 +52,8 @@ export async function computeSha256(data: string): Promise<string> {
 }
 
 export async function computeEntryHash(entry: Omit<AuditLogEntry, 'hash'>): Promise<string> {
-  const payload = `${entry.previousHash || GENESIS_HASH}:${entry.id}:${entry.timestamp}:${entry.capabilityId}:${JSON.stringify(entry.parameters)}:${entry.riskScore}:${entry.permissionResult}:${entry.userConfirmation}`;
+  const source = entry.source || 'user';
+  const payload = `${entry.previousHash || GENESIS_HASH}:${entry.id}:${entry.timestamp}:${source}:${entry.capabilityId}:${JSON.stringify(entry.parameters)}:${entry.riskScore}:${entry.permissionResult}:${entry.userConfirmation}`;
   return computeSha256(payload);
 }
 
@@ -75,10 +78,16 @@ export class AuditLogger implements IAuditLogger {
     const previousEntry = this.logs[this.logs.length - 1];
     const previousHash = previousEntry ? (previousEntry.hash || GENESIS_HASH) : GENESIS_HASH;
 
+    const isBenchmark = typeof process !== 'undefined' && process.env.CERO_BENCHMARK === 'true';
+    const source: 'user' | 'benchmark' | 'system' = entry.source || (isBenchmark ? 'benchmark' : 'user');
+    const sanitizedParameters = SecretRedactor.redactObject(entry.parameters);
+
     const entryWithoutHash = {
       id: crypto.randomUUID ? crypto.randomUUID() : `log_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
       timestamp: new Date().toISOString(),
+      source,
       ...entry,
+      parameters: sanitizedParameters,
       previousHash
     };
 
@@ -98,16 +107,18 @@ export class AuditLogger implements IAuditLogger {
     }
 
     try {
-      // Append to immutable JSONL audit log via Tauri backend
-      const jsonLine = JSON.stringify(fullEntry).replace(/'/g, "'\\''");
-      const cmd = `mkdir -p "$HOME/.sentinel" && echo '${jsonLine}' >> "$HOME/.sentinel/audit.jsonl"`;
-      await invoke('execute_command', { command: 'sh', args: ['-c', cmd] });
+      // Append to the JSONL audit log (benchmark runs kept apart from real history). Through the
+      // native store, not `sh -c "echo ..."`: that does not exist on Windows, and echo turned the
+      // \n escapes inside JSON into real line breaks
+      const auditFileName = isBenchmark ? 'audit.benchmark.jsonl' : 'audit.jsonl';
+      if (!appendCeroFile(auditFileName, `${JSON.stringify(fullEntry)}\n`)) throw new Error('audit store unavailable');
     } catch (err) {
       // Fallback to localStorage in web preview / browser dev mode
       if (typeof localStorage !== 'undefined') {
         try {
-          const existing = localStorage.getItem('sentinel_audit_logs') || '';
-          localStorage.setItem('sentinel_audit_logs', existing + JSON.stringify(fullEntry) + '\n');
+          const key = isBenchmark ? 'cero_audit_benchmark_logs' : 'cero_audit_logs';
+          const existing = localStorage.getItem(key) || '';
+          localStorage.setItem(key, existing + JSON.stringify(fullEntry) + '\n');
         } catch { /* ignore */ }
       }
     }
@@ -149,6 +160,7 @@ export class AuditLogger implements IAuditLogger {
       const recomputed = await computeEntryHash({
         id: entry.id,
         timestamp: entry.timestamp,
+        source: entry.source,
         capabilityId: entry.capabilityId,
         parameters: entry.parameters,
         riskScore: entry.riskScore,

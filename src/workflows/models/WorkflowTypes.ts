@@ -298,9 +298,59 @@ export interface WorkflowVersion {
 }
 
 export interface WorkflowExportPayload {
-  readonly format: 'sentinel-workflow-v1';
+  readonly format: 'cero-workflow-v1';
   readonly exportedAt: number;
   readonly workflow: UserWorkflow;
   readonly templateId?: string;
   readonly checksum: string;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 1: Saved Workflow JSON File Schema (Version 1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const CURRENT_WORKFLOW_SCHEMA_VERSION = 1;
+
+export interface EnvironmentPrerequisites {
+  readonly requiredBinaries?: string[];
+  readonly requiredEnvVars?: string[];
+  readonly requiredPorts?: number[];
+  readonly requiredPaths?: string[];
+}
+
+export interface WorkflowStepDefinition {
+  readonly id: string;
+  readonly name: string;
+  readonly command: string;
+  readonly cwd?: string;
+  readonly timeoutMs?: number;
+  readonly expectedExitCode?: number;
+  readonly validationCriteria?: string;
+  readonly dependsOn?: string[];
+  readonly isDestructive?: boolean;
+  // Phase 0.75 Task 0.75.2: Precondition-aware execution fields
+  readonly precondition_check?: string;
+  readonly if_precondition_true?: 'skip' | 'continue' | 'abort';
+  readonly if_precondition_false?: 'install' | 'continue' | 'abort' | 'skip';
+  // Cross-Platform workflow support: optional platform-specific command variants
+  readonly platformCommands?: {
+    readonly linux?: string;
+    readonly macos?: string;
+    readonly windows?: string;
+    readonly distroOverrides?: Record<string, string>;
+  };
+}
+
+export interface SavedWorkflowDefinition {
+  readonly schemaVersion: number;
+  readonly name: string;
+  readonly description?: string;
+  readonly steps: WorkflowStepDefinition[];
+  readonly parameters?: WorkflowVariable[];
+  readonly environmentPrerequisites?: EnvironmentPrerequisites;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+  readonly author?: string;
+  readonly tags?: string[];
+}
+
