@@ -1,30 +1,41 @@
-## Cero 2.1.0 for Linux
+## Cero 2.2.0 for Linux
 
-**Downloads**
-| File | For |
-|---|---|
-| `cero-terminal-bin-2.1.0-1-x86_64.pkg.tar.zst` | Arch Linux, Manjaro, EndeavourOS: `sudo pacman -U cero-terminal-bin-2.1.0-1-x86_64.pkg.tar.zst` (built on Arch; also installs the `cero` and `cero-shell` launchers and a Dolphin "Open in Cero" menu) |
-| `Cero.Terminal_2.1.0_amd64.deb` | Ubuntu 22.04 or later, Debian 12, Mint, Pop!_OS: `sudo apt install ./Cero.Terminal_2.1.0_amd64.deb` |
-| `Cero.Terminal-2.1.0-1.x86_64.rpm` | Fedora 38 or later, openSUSE: `sudo dnf install ./Cero.Terminal-2.1.0-1.x86_64.rpm` |
-| `Cero.Terminal_2.1.0_amd64.AppImage` | Any other x86_64 distribution: `chmod +x` it and run it |
+**Downloads** (built by CI from the `release/linux` branch)
+- Arch, Manjaro, EndeavourOS: the `.pkg.tar.zst`
+- Ubuntu 22.04 or later, Debian 12, Mint, Pop!_OS: the `.deb`
+- Fedora 38 or later, openSUSE: the `.rpm`
+- Any other x86_64 distribution: the `.AppImage` (it offers to register the `.flow` file type on first run)
 
-Double-clicking a `.flow` file opens it with Cero (the packages register the file type). All packages need WebKitGTK 4.1 (installed automatically by pacman, apt and dnf). The built-in model downloads its engine (the Vulkan build when `libvulkan.so.1` is present, else the CPU build) and the 2 GB model from Settings, AI, Built-in model. Ollama and cloud keys work too.
+**These packages were not run on a Linux desktop for this release.** The `.flow` file type, icon and AppImage registration are implemented and unit-tested, not yet checked on real systems. See [LINUX_TEST_REPORT.md](https://github.com/NetPranav/Sentinal-Terminal/blob/main/docs/LINUX_TEST_REPORT.md). Please report problems.
 
-These packages are built by CI from the `release/linux` branch. They were not run on a Linux desktop for this release; please report problems.
+**What changed** (answers to twelve findings from the first Linux test)
 
-**Open a .flow file and it runs.** A `.flow` file (from a tutorial, a teammate or you) lists what to install, run and open. Cero picks the commands for this OS.
-- A flow that only opens apps and links (Chrome, YouTube, VS Code) runs without showing the terminal.
-- A flow that installs or runs things opens the terminal, lists every command, waits for you to click Run, then types each step so you can see output and answer prompts.
+| # | You saw | Now |
+|---|---|---|
+| 1 | "...and save this as a workflow" did nothing | Run the task, then save what really ran as a `.flow`. Every request ends with `Saved workflow "x" (N steps) to <path>` or `Not saved: <reason>`. |
+| 2 | Arrow keys moved the grey suggestion and appended it | Left, Right, Up, Down, Home and End only move the cursor. Tab, or Right at the end of the line, accepts. A setting turns Right-to-accept off. |
+| 3 | Queued prompts could not be seen | A queue panel and `/queue` commands: view, remove, reorder, clear. |
+| 4 | A prompt worked with an API model, not the built-in one | One shared place sets sampling for every provider; one tolerant parser reads every model's answer; after two failed checks the built-in model offers to retry that one request on your API model (it asks first). |
+| 5 | Esc did not close Settings | It does, and focus returns to the terminal. |
+| 6 | "Open folder gitBrains in VS Code (inside /padhai_in_linux/Projects/)" made files and opened a second window | The real folder is found (the place you name, this folder, usual project folders, then home), opened in one editor window, and nothing is created unless you say "create it". |
+| 7 | Wrong folder or app names were not handled | Spelling and case are forgiven, typos ask "Did you mean ...?", two matches ask which, a missing folder or app is reported. Answers are remembered (`forget gitbrains` clears one). "opn firefox" is read as "open firefox". |
+| 8 | The chosen provider and model were forgotten | Remembered across restarts; if the provider is not reachable yet it is retried and the reason is shown, never silently replaced by the built-in model. |
+| 9 | The status bar said "AI: Off" for a working API or local model | Shows `AI: local`, `AI: API` or `AI: Ollama`; "Off" is only for a stopped built-in engine. |
+| 10 | Ctrl+C did not stop a task | Ctrl+C stops the running request and its command; a second press forces it. |
+| 11 | The built-in model was right sometimes, random the next time | Decisions are deterministic (temperature 0, one choice, fixed seed, no prompt cache); the prompt is fitted to the context; every action is checked before it runs. Measured numbers: `docs/MODEL_RELIABILITY.md`. |
+| 12 | `.flow` files were saved as `.json`; no icon; not tied to the app | Only `.flow` is written (old `.json` flows are migrated, originals kept as `.json.bak`); a document icon; registered on macOS, Windows, Linux (deb, rpm, Arch, Flatpak) and by the AppImage on first run; opening one while Cero is running joins that window. |
 
-See [FLOW_FILES.md](https://github.com/NetPranav/Sentinal-Terminal/blob/main/docs/FLOW_FILES.md) and the [example flows](https://github.com/NetPranav/Sentinal-Terminal/tree/main/examples/flows).
+Also: API keys are stored in the macOS Keychain or Windows Credential Manager (a private `0600` file on Linux)
+instead of browser storage, after the new copy is read back; "list my workflows"; "what do you remember about X".
 
-**New in 2.1.0** (all of it applies on Linux):
-- **Make a workflow by asking**: "make me a workflow that ..." writes a `.flow` file from the steps you list, asks where to keep it (Desktop, this folder, Cero workflows, or a path) and never replaces an existing file. Steps it does not understand are named and left out, never guessed.
-- **Close a port by number**: "close port 8765" finds what is listening on exactly that port, shows its name and PID, asks, stops it normally and checks that the port is free.
-- **Wi-Fi is exact**: turning Wi-Fi on or off and joining a network use the exact command, shown before it runs. The built-in model is no longer involved (it once invented a password).
-- **Fixed**: a workflow with relative folders stopped at step 3; opening Cero on a folder named `$(...)` could run text from the name; several drivers quoted names unsafely.
-- **Security**: Cero no longer asks for your login password (high-risk commands need a click on Run). `~/.cero` is readable by you only. See [SECURITY.md](https://github.com/NetPranav/Sentinal-Terminal/blob/main/SECURITY.md).
+Not verified yet: the Linux packages, the AppImage registration, the Windows installer registration and the macOS
+Finder icon were built from configuration and unit-tested but not run on those systems.
 
-See also the macOS release notes for the rest; everything there applies on Linux. The window has no separate title bar: minimize, maximize and close sit at the right of the tab bar. ROS 2 pipelines ("run the ros2 talker and listener demo") open each node in its own terminal when ROS 2 is installed.
+
+**Teaching Cero.** Cero never learns by watching you. `/learn` teaches the request just above it (only if it worked), `/learn <request> -> <command>` teaches a pair, `/forget` removes one, and `/learning on|off` controls whether it keeps a record of its own failed requests (off by default). See [LEARNING.md](https://github.com/NetPranav/Sentinal-Terminal/blob/main/docs/LEARNING.md).
+
+**Smaller model option.** A 0.5B model (about 470 MB) joins the 1.5B, 3B and 4B choices for slow connections and old machines. Compressing a model file does not shrink it much (measured: 3.4%), so a smaller model is the way to a smaller download. Interrupted downloads resume.
+
+**Renamed.** Sentinel Terminal is now Cero. On first launch `~/.sentinel` moves to `~/.cero`, saved settings and stored API keys carry over, and nothing has to be downloaded again. The `sentinel` command is now `cero`.
 
 Checksums: `SHA256SUMS.txt`.
