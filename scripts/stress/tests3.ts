@@ -84,6 +84,9 @@ export const tests: Test[] = [
   { id: 'f-list', prompt: 'list my workflows', check: expectSay(/ship.it|hello.flow|demo/i) },
   { id: 'f-run-missing', prompt: 'run the workflow nope-not-here', check: expectSay('No saved workflow') },
 
+  { id: 'a-status-typo', prompt: 'Hey there tell me is the amphetmine application running or not', check: expectSay(/amphetamine/i) },
+  { id: 'a-status-exact', prompt: 'is safari running?', check: expectSay(/safari/i) },
+
   // ---- reports 4 and 11: ordinary requests, the same answer every time ----
   { id: 'm-lines', prompt: 'how many lines are in logs/app.log', check: expectSay(/\b6\b/) },
   { id: 'm-biggest', prompt: 'show the 3 biggest files in this folder', check: expectSay('big1.bin') },

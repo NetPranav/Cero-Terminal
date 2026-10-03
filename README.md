@@ -145,6 +145,13 @@ Format, actions and the package table: [docs/FLOW_FILES.md](docs/FLOW_FILES.md).
 - The editor gets the folder in one window (no second window). Apps are found in your installed apps (desktop entries on Linux,
   `/Applications` on macOS, the Start menu on Windows); an app that is not installed is reported, never guessed.
 - Your answers are remembered (`what do you remember about gitbrains`, `forget gitbrains`).
+- **Is it running?** `>is the amphetmine application running or not` lists what is really running and matches the name loosely
+  (case, spelling, a typo): "Amphetamine is running. (You wrote "amphetmine"; that is the closest running app.)" If it is not
+  running, Cero says whether it is installed.
+- **Fallbacks look things up; they do not guess.** When a command fails because a name was not found (a `pgrep` that matched
+  nothing, a folder that does not exist, an app name that is not installed, a program that is not on the PATH), Cero checks the real
+  state of your computer and answers from that: the running apps, your folders, your installed apps, the programs on your PATH. It
+  asks before running anything it had to correct, and never closes an app on a guess.
 - A slipped first word is read as intended: `opne fldor docs in cod` becomes `open folder docs in code`.
 
 ## Stop it, queue it

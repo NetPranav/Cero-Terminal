@@ -22,6 +22,8 @@ import { parseSystemAction, commandFor, suggestionsFor, TOPIC_NAMES, type System
 import { parseQuitRequest, listRunningCommand, parseRunning, matchRunning, quitCommand, type QuitRequest, type RunningItem } from '../../domain/system/AppControl';
 import { parseFlowCreateRequest, draftFlow, serializeFlow, describeDraft, draftNeedsTerminal, type FlowCreateRequest, type FlowDraft } from '../../workflows/flow/FlowAuthoring';
 import { parseModelReply } from './ModelReply';
+import { parseAppStatus, findRunningApp, describeStatus } from '../../domain/system/AppStatus';
+import { rankNames } from '../../domain/system/NameMatch';
 import { fixTypos } from './TypoFix';
 import { editDistance } from '../../domain/system/NameMatch';
 import { DiagnosticLogger } from '../../infrastructure/logging/DiagnosticLogger';
@@ -1731,6 +1733,13 @@ export class AgentLoop {
       if (handled) return handled;
     }
 
+    // "is the amphetmine application running": list what is really running and match the name loosely
+    const appStatus = parseAppStatus(cleaned || goal);
+    if (appStatus) {
+      const handled = await this.runAppStatus(appStatus.name, context);
+      if (handled) return handled;
+    }
+
     // "quit claude", "terminate or stop the claude application": check what is running first
     const quit = parseQuitRequest(cleaned || goal);
     if (quit) {
@@ -3262,6 +3271,118 @@ export class AgentLoop {
     }
   }
 
+  /** Is this app running? Lists what really runs, matches the name loosely, and says which real app it matched. */
+  private async runAppStatus(name: string, context: AgentRunContext): Promise<AgentResult | null> {
+    const os = osOf(context.os);
+    const appOs = os;
+    this.emit({ type: 'tool_start', message: `Looking at what is running for "${name}"` });
+    const params = { command: listRunningCommand(appOs), explanation: 'List running apps' };
+    const listed = await this.toolExecutor.execute('shell.execute', params, context.cwd, async () => true);
+    const steps = [{ tool: 'shell.execute', params, result: listed }];
+    if (!listed?.success) return null;                                   // cannot list: let the normal path try
+    const match = findRunningApp(name, parseRunning(String(listed.data?.stdout ?? ''), appOs));
+    let installed: string | undefined;
+    if (match.kind === 'not-running') {
+      try {
+        const apps = await loadCatalog(os, async command => {
+          const r = await this.toolExecutor.execute('shell.execute', { command, explanation: 'List installed apps' }, context.cwd, async () => true);
+          return typeof r?.data?.stdout === 'string' ? r.data.stdout : '';
+        });
+        const res = resolveApp(name, apps);
+        if (res.type === 'found') installed = res.app.name;
+        else if (res.type === 'choose') installed = res.candidates[0]?.app.name;
+      } catch { /* the installed list is a bonus */ }
+    }
+    const summary = describeStatus(name, match, installed);
+    this.emit({ type: 'done', message: summary });
+    return { success: true, summary, steps };
+  }
+
+  /**
+   * A command failed because a name was not found. Look the name up in real state and answer from that:
+   *  - pgrep/pidof/pkill/killall <name>: what is running, matched loosely (never kills anything)
+   *  - open -a <name>: the installed apps
+   *  - ls/cat/cd ... <missing path>: the real folder or file (read-only commands are re-run on the real path)
+   *  - <name>: command not found: programs with a similar name on the PATH, asked before running
+   * Returns null when it has nothing better than the model's own next try.
+   */
+  private async smartFallback(command: string, result: ToolExecutionResult, context: AgentRunContext, steps: AgentResult['steps'], goal = ''): Promise<AgentResult | null> {
+    const text = `${result?.error ?? ''}\n${result?.data?.stderr ?? ''}\n${result?.data?.stdout ?? ''}`;
+    const os = osOf(context.os);
+    const first = command.trim().split(/\s+/)[0] ?? '';
+
+    // 1. a process name that matched nothing
+    const proc = command.match(/^(?:pgrep|pidof|pkill|killall)\b(?:\s+-[A-Za-z0-9]+)*\s+['"]?([^\s'"|;&]+)/);
+    if (proc) {
+      const base = await this.runAppStatus(proc[1], context);
+      if (base) {
+        const killer = /^(?:pkill|killall)\b/.test(command);
+        const summary = killer && /is running/.test(base.summary)
+          ? `${base.summary} Nothing was closed. Say "quit ${proc[1]}" and I will check and ask first.`
+          : base.summary;
+        this.emit({ type: 'done', message: summary });
+        return { ...base, summary, steps: [...steps, ...base.steps] };
+      }
+    }
+
+    // 2. an app that is not there under that name
+    const openApp = command.match(/^open\s+-a\s+(?:'([^']+)'|"([^"]+)"|(\S+))/);
+    if (openApp && /unable to find application|can't find application|no application knows|does not exist/i.test(text)) {
+      const wanted = openApp[1] || openApp[2] || openApp[3];
+      const launched = await this.runAppLaunch({ app: wanted.toLowerCase(), background: true }, context);
+      return { ...launched, steps: [...steps, ...launched.steps] };
+    }
+
+    // 3. a file or folder that is not there: read-only commands are re-run on the real path
+    const READ_ONLY = /^(?:ls|cat|head|tail|wc|stat|file|less|more|du|cd|tree|open)$/;
+    if (READ_ONLY.test(first) && /no such file or directory|cannot access|does not exist|not found/i.test(text)) {
+      const args = command.trim().split(/\s+/).slice(1).filter(a => !a.startsWith('-'));
+      const raw = (args[args.length - 1] ?? '').replace(/^['"]|['"]$/g, '');
+      if (raw && !/[;&|`$<>*?]/.test(raw)) {
+        const folderCmd = /^(?:ls|cd|du|tree)$/.test(first);
+        const name = raw.split(/[\\/]/).filter(Boolean).pop() ?? raw;
+        const parent = raw.includes('/') ? raw.replace(/[\\/][^\\/]*$/, '') : undefined;
+        let probe: PathProbe | null = null;
+        try { probe = this.pathProbe ?? await resolveAppProbe(); } catch { probe = null; }
+        if (probe) {
+          const res = await resolvePath({ name, kind: folderCmd ? 'folder' : 'file', locationHint: parent && parent !== '.' ? parent : undefined }, { cwd: context.cwd }, probe).catch(() => null);
+          let real: string | null | undefined;
+          if (res?.type === 'found') real = res.path;
+          else if (res?.type === 'choose') {
+            const shown = (p: string) => (probe!.home && p.startsWith(probe!.home) ? `~${probe!.home ? p.slice(probe!.home.length) : p}` : p);
+            real = await this.chooseCandidate({ kind: folderCmd ? 'folder' : 'file', name, create: false }, res, shown);
+          }
+          if (real) {
+            const flags = command.trim().split(/\s+/).slice(1).filter(a => a.startsWith('-'));
+            const fixed = [first, ...flags, posixQuote(real)].join(' ');
+            const again = await this.runShellStep(fixed, `${first} ${real} (found "${name}" there)`, context, out => out || '(done)');
+            return { ...again, summary: `"${raw}" does not exist; I found ${real}.\n${again.summary}`, steps: [...steps, ...again.steps], cdPath: first === 'cd' && again.success ? real : undefined };
+          }
+        }
+      }
+    }
+
+    // 4. a program that is not on the PATH
+    if (/command not found|not recognized as an internal or external command|is not recognized as the name of a cmdlet/i.test(text) && os !== 'windows' && !(goal && this.tryHeuristicFallback(goal, context))) {
+      const wanted = first;
+      const list = await this.toolExecutor.execute('shell.execute', { command: 'IFS=:; for d in $PATH; do ls -1 "$d" 2>/dev/null; done | sort -u', explanation: 'List programs on the PATH' }, context.cwd, async () => true);
+      const names = String(list?.data?.stdout ?? '').split('\n').map(n => n.trim()).filter(Boolean);
+      const ranked = rankNames(wanted, names, n => n, { min: 44, limit: 4 });
+      if (ranked.length) {
+        const answer = await askChoice({
+          title: `"${wanted}" is not installed. Did you mean "${ranked[0].item}"?`,
+          options: [...ranked.slice(0, 3).map(r => ({ label: r.item })), { label: 'No, none of these' }],
+        });
+        if (answer && 'index' in answer && answer.index < Math.min(3, ranked.length)) {
+          const fixed = `${ranked[answer.index].item}${command.trim().slice(wanted.length)}`;
+          const again = await this.runShellStep(fixed, fixed, context, out => out || '(done)');
+          return { ...again, steps: [...steps, ...again.steps] };
+        }
+      }
+    }
+    return null;
+  }
+
   /** One read-only shell step with the usual authorization, shown as its output */
   private async runShellStep(command: string, explanation: string, context: AgentRunContext, format: (stdout: string) => string): Promise<AgentResult> {
     this.emit({ type: 'tool_start', message: explanation });
@@ -4738,6 +4859,11 @@ export class AgentLoop {
           // grep, pgrep and lsof exit 1 with no output when nothing matched: that is the answer
           if (toolId === 'shell.execute' && typeof params?.command === 'string' && result.data
             && isNoMatchExit(params.command, result.data.code, result.data.stdout, result.data.stderr)) {
+            // "pgrep -x amphetmine" found nothing: that only means the exact name is wrong. Look at what is really running.
+            if (/^(?:pgrep|pidof|pkill|killall)\b/.test(params.command.trim())) {
+              const smart = await this.smartFallback(params.command, { ...result, success: false } as ToolExecutionResult, context, steps, goal).catch(() => null);
+              if (smart) return { ...smart, cdPath: smart.cdPath ?? cdPath };
+            }
             result.success = true;
             result.error = undefined;
             result.data = { ...result.data, code: 0, stdout: '(nothing matched)' };
@@ -4805,6 +4931,11 @@ export class AgentLoop {
               this.emit({ type: 'tool_done', message: `✗ ${summary}` });
               return { success: false, summary, steps, cdPath, declined: true };
             }
+
+            // A name that was not found is looked up in the real state of this computer (running apps, installed apps,
+            // folders, programs on the PATH) before anything else is tried; a blind retry is not a fallback.
+            const smart = await this.smartFallback(failedCmd, result, context, steps, goal).catch(() => null);
+            if (smart) return { ...smart, cdPath: smart.cdPath ?? cdPath };
 
             // A question never turns into a change: once a read-only attempt has failed, a
             // follow-up that would modify the system (git init, installs, rm) is not run.
