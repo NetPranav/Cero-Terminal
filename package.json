@@ -1,7 +1,7 @@
 {
   "name": "cero-terminal",
   "private": true,
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "A terminal that takes requests in plain language and runs .flow files on macOS, Windows and Linux",
   "license": "MIT",
   "author": "Pranav Dubey (NetPranav)",

@@ -1,6 +1,6 @@
 [package]
 name = "cero-terminal"
-version = "2.2.0"
+version = "2.2.1"
 description = "Cero: a terminal that takes requests in plain language and runs .flow files on any OS"
 authors = ["Pranav Dubey (NetPranav)"]
 license = "MIT"
