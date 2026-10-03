@@ -33,3 +33,28 @@ export function shouldCloseSettings(input: EscapeKeyInput): boolean {
   if (input.escOwnerOpen) return false;
   return true;
 }
+
+/**
+ * Attaches the capture-phase Escape listener for the Settings screen and returns its remover.
+ * Capture phase matters: it runs before xterm's own key handling, which would otherwise swallow
+ * the key while the terminal textarea still holds focus underneath the full-frame Settings.
+ */
+export function installSettingsEscape(
+  target: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>,
+  deps: { hasEscOwnerOpen: () => boolean; close: () => void },
+): () => void {
+  const onKey = (e: Event) => {
+    const ke = e as KeyboardEvent;
+    if (!shouldCloseSettings({
+      key: ke.key,
+      defaultPrevented: ke.defaultPrevented,
+      settingsOpen: true,
+      escOwnerOpen: deps.hasEscOwnerOpen(),
+    })) return;
+    ke.preventDefault();
+    ke.stopPropagation();
+    deps.close();
+  };
+  target.addEventListener('keydown', onKey, true);
+  return () => target.removeEventListener('keydown', onKey, true);
+}

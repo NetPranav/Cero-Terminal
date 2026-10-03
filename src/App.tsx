@@ -47,7 +47,7 @@ import { isWorkflowFilePath } from "./workflows/storage/FlowImport";
 import { planFlowFile, flowOsOf } from "./workflows/flow/FlowPlan";
 import { runDesktopSteps } from "./workflows/flow/FlowRunner";
 import { getPlatform } from "./shared/platform";
-import { shouldCloseSettings } from "./presentation/escapeKey";
+import { installSettingsEscape } from "./presentation/escapeKey";
 import { CloudApiProvider } from "./ai/provider/CloudApiProvider";
 import { ModelManager } from "./ai/management/ModelManager";
 import "./App.css";
@@ -796,15 +796,10 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
   // Task 1.1: Dedicated Esc handler for the Settings screen (capture phase, runs before xterm)
   useEffect(() => {
     if (!showAiSettings) return;
-    const onKey = (e: KeyboardEvent) => {
-      const escOwnerOpen = !!document.querySelector('[data-esc-owner="true"]');
-      if (!shouldCloseSettings({ key: e.key, defaultPrevented: e.defaultPrevented, settingsOpen: true, escOwnerOpen })) return;
-      e.preventDefault();
-      e.stopPropagation();
-      closeSettings();
-    };
-    window.addEventListener('keydown', onKey, true); // capture phase: runs before xterm
-    return () => window.removeEventListener('keydown', onKey, true);
+    return installSettingsEscape(window, {
+      hasEscOwnerOpen: () => !!document.querySelector('[data-esc-owner="true"]'),
+      close: closeSettings,
+    });
   }, [showAiSettings, closeSettings]);
 
   useEffect(() => {
