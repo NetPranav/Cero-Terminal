@@ -276,16 +276,13 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
         flex: 1
       }}>
         {/* Screen Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
-          <img src="/cero-logo-animated.svg" alt="Cero" width={88} height={88} style={{ borderRadius: '50%', flexShrink: 0 }} />
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 4px 0', letterSpacing: '-0.4px', color: '#ffffff' }}>
-              Welcome to Cero
-            </h1>
-            <p style={{ fontSize: '13.5px', color: 'rgba(255, 255, 255, 0.65)', margin: 0, lineHeight: 1.45 }}>
-              Configure your terminal experience profile, layout density, and native desktop environment integrations.
-            </p>
-          </div>
+        <div>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 4px 0', letterSpacing: '-0.4px', color: '#ffffff' }}>
+            Welcome to Cero
+          </h1>
+          <p style={{ fontSize: '13.5px', color: 'rgba(255, 255, 255, 0.65)', margin: 0, lineHeight: 1.45 }}>
+            Configure your terminal experience profile, layout density, and native desktop environment integrations.
+          </p>
         </div>
 
         {/* Section 1: Choose Your Terminal Experience */}
