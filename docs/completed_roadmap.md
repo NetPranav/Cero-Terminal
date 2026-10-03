@@ -519,7 +519,7 @@ Model reliability, measured: see `docs/MODEL_RELIABILITY.md` (flip rate 0.0%, `p
 | `scripts/stress/tests3.ts` (50, the Linux findings) | 50 of 50 after fixes | First full run 48 of 50: "what is in data.csv" ran `wc -l`, "list the files in my notes folder" invented `~/Notes`. Both are now answered by code (read the named file; find the folder by name, then list it). |
 | `tests.ts` (original 50) | 47 of 50 after fixes | Real bugs found and fixed: "clone <url>" was rewritten to "close <url>" by the new first-word typo fix (now a list of real words that are left alone); an error path containing a space ("Project Folder") was cut at the space so the failing file was never read. Still failing: `git-log-fmt` (the test expects the demo repo's author name, but commits made by earlier tests in the same run use the real git identity), `why-log-errors` (the model does not read the log). |
 | `tests2.ts` (holdout 20) | 18 of 20 | `h-stop-top` fails the same way on the 2.1.0-era code (a pane is stopped by the quit-app route, which the harness denies); `h-unique-paths` is a model miss. |
-| Unit tests, build, cargo | 2370 tests pass, build and `cargo check` clean | |
+| Unit tests, build, cargo | 2367 tests pass, build and `cargo check` clean | |
 
 Running two harness runs against the one model server at the same time gave different answers from a single run; the numbers above are from runs one at a time.
 
