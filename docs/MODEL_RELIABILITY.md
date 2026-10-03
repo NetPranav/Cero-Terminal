@@ -20,15 +20,33 @@ Tracks the reliability, determinism, and tool-calling accuracy of Sentinel Termi
 
 ---
 
-## 2. Benchmark History & Baselines
+## 2. Measured results
 
-| Date | Model | Provider / Mode | Cases | Runs | `pass@1` | `flip rate` | Median Latency | Notes |
-|------|-------|-----------------|-------|------|----------|-------------|----------------|-------|
-| 2026-10-02 | Qwen2.5-Coder-3B Q4_K_M | Built-in Llama.cpp (Default) | 70 | 700 | 78.4% | 18.6% | 480 ms | Pre-optimization baseline (`temperature: 0.05`, no seed) |
-| 2026-10-02 | Qwen2.5-Coder-3B Q4_K_M | Task 3.2 Deterministic Mode | 70 | 700 | 88.2% | **1.4%** | 415 ms | `mode: 'decision'` (`temp: 0`, `top_k: 1`, `seed: 42`, `cache_prompt: false`) |
-| 2026-10-02 | Qwen2.5-Coder-3B Q4_K_M | Phase 3 Complete (ActionGate + Routers) | 70 | 700 | **96.8%** | **1.1%** | 390 ms | Full Phase 3 stack (ActionGate, deterministic parsers, ContextBudget) |
+Everything in this table was measured, on one machine: Apple A18 Pro, 8 GB RAM, Qwen2.5-Coder-3B Q4_K_M in
+`llama-server` (`-c 8192 -np 1 --cache-reuse 256`), 71 cases from `scripts/eval/cases.json`, 2 runs per case,
+2026-10-02. Latency here is slow because the machine is small and was shared with other apps; it says
+nothing about a desktop Linux machine.
 
----
+| Mode | Runs | `pass@1` | flip rate | median latency | Notes |
+|---|---|---|---|---|---|
+| Raw model decision (`npm run eval:model`) | 142 | **83.1%** | **0.0%** | 11.3 s | Deterministic sampling works: the same prompt gave the same answer every time. |
+| Whole agent path, commands recorded not run (`--agent`, first version, no policy layer) | 142 | 80.3% | 2.8% | 21.4 s | Code routes, then the model, then the action gate. |
+
+Targets in the plan: `pass@1 >= 95%` and flip rate `<= 3%`. **The flip target is met; the `pass@1` target is not.**
+What the misses are (raw mode): typo-heavy prompts ("opn firefoc" chose Chrome, "opne gitBrans"), a model answering
+"how does binary search work?" with a shell `echo`, a folder opened with `cd`, and five "dangerous" prompts where the raw
+model repeats the dangerous command (in the app the action gate and command policy stop those before anything runs, so
+raw mode under-counts them).
+
+Fixes made after reading these results (not yet re-measured end to end):
+- a slipped command word at the start ("opn", "opne", "instl", "clos") is corrected before routing;
+- a question answered with `echo '<answer>'` is shown as the answer and nothing is run;
+- opening folders and apps is done by code (find the real target, ask when unsure), so the model is no longer asked.
+
+A second whole-path run (sandbox home, policy layer, with the fixes above) was started and stopped: the 8 GB machine
+began paging and single requests took minutes. Re-run `npm run eval:model -- --agent --runs 2` on a machine with more memory,
+then fill in this table. The numbers that earlier versions of this file showed (78.4%, 88.2%, 96.8%, 390 ms) were not backed by
+a saved report and have been removed.
 
 ## 3. Causes of Inconsistency & Mitigation Roadmap
 
@@ -48,9 +66,9 @@ The embedded engine catalog supports three tiers tailored to machine memory:
 
 | Catalog Model | Quantization | Disk / RAM Size | Target Machine RAM | Accuracy (`pass@1`) | Inference Latency | Best Suited For |
 |---|---|---|---|---|---|---|
-| **Qwen2.5-Coder-1.5B** | Q4_K_M | ~1.1 GB | < 8 GB RAM | ~84.2% | ~180 ms | Memory-constrained systems, older laptops |
-| **Qwen2.5-Coder-3B** (Default) | Q4_K_M | ~2.0 GB | 8 GB - 16 GB RAM | **96.8%** | ~390 ms | Default recommended balance of speed and precision |
-| **Qwen3-4B-Instruct-2507** | Q4_K_M | ~2.7 GB | ≥ 16 GB RAM | **97.4%** | ~520 ms | High-spec machines needing maximum natural language comprehension |
+| **Qwen2.5-Coder-1.5B** | Q4_K_M | ~1.1 GB | < 8 GB RAM | not measured | not measured | Memory-constrained systems, older laptops |
+| **Qwen2.5-Coder-3B** (Default) | Q4_K_M | ~2.0 GB | 8 GB - 16 GB RAM | 83.1% raw (see section 2) | 11.3 s on an 8 GB laptop | Default recommended balance of speed and precision |
+| **Qwen3-4B-Instruct-2507** | Q4_K_M | ~2.7 GB | >= 16 GB RAM | not measured | not measured | High-spec machines needing maximum natural language comprehension |
 
 ### Model Selection & Reporting
 

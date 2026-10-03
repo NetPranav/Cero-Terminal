@@ -19,8 +19,8 @@ Legend: **pass** = ran and worked, **fail** = ran and broke (write why), **not r
 | 7 | Wrong folder or app names | same, plus `AppCatalog.test.ts` with saved `.desktop` samples; headless `a-*` requests | pass |
 | 8 | Provider and model remembered | `ModelManager.test.ts` | pass (logic) |
 | 9 | Status bar | `AiStatus.test.ts` | pass (logic) |
-| 10 | Ctrl+C | `Cancelled.test.ts`, `AgentLoop.cancel.test.ts`; headless `c-*` requests with an abort | see `docs/completed_roadmap.md` |
-| 11 | Built-in model reliability | `npm run eval:model` against the local 3B model; numbers in `docs/MODEL_RELIABILITY.md` | see that file |
+| 10 | Ctrl+C | `Cancelled.test.ts`, `AgentLoop.cancel.test.ts`; headless `c-*` requests with an abort (the model-backed ones were not run: the machine ran out of memory) | pass (logic) |
+| 11 | Built-in model reliability | `npm run eval:model` against the local 3B model on a Mac: flip rate 0.0% (target met), `pass@1` 83.1% (target 95% NOT met); details in `docs/MODEL_RELIABILITY.md` | partly met |
 | 12 | `.flow` extension, icon, association | `FlowExport`, `DiskWorkflowStorage`, `FlowImport` tests; Rust tests for `launch.rs` and `file_association.rs` | pass (code) |
 
 ## Real Linux: to do

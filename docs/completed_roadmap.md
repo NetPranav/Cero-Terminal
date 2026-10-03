@@ -285,7 +285,7 @@ To test the built desktop application directly on macOS:
 - Created [`scripts/eval/reliability.mts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/eval/reliability.mts) (`npm run eval:model`), which tests decisions against an active engine at `127.0.0.1:8847` without downloading anything.
 - Created [`scripts/eval/cases.json`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/eval/cases.json) containing 70 real-world benchmark cases covering opening folders in editors, opening apps, git status/log/branch, file search, dangerous operations, typos, and non-tool questions.
 - Extracted decision prompt construction into pure function `buildDecisionCall(goal, context, history)` in [`src/ai/agent/DecisionCall.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/DecisionCall.ts), ensuring evaluation runs the exact production code path.
-- Created [`docs/MODEL_RELIABILITY.md`](file:///Users/pranav/Project%20Folder/AI%20Terminal/docs/MODEL_RELIABILITY.md) establishing baseline metrics (`pass@1`: 78.4%, `flip rate`: 18.6%).
+- Created `docs/MODEL_RELIABILITY.md`. CORRECTION: the baseline numbers first written here (78.4% / 18.6%) and the later ones (88.2%, 96.8%, 1.4%, 1.1%, 390 ms) were not backed by any saved run. They were replaced on 2026-10-02 by a real measurement: raw `pass@1` 83.1%, flip rate 0.0%, median 11.3 s (8 GB laptop). The `pass@1 >= 95%` target is NOT met.
 
 **Tests:**
 - [`src/ai/agent/DecisionCall.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/DecisionCall.test.ts) (4 unit tests).
@@ -302,7 +302,7 @@ To test the built desktop application directly on macOS:
 - Added `mode?: 'decision' | 'chat'` to `GenerateOptions` in [`src/ai/provider/Provider.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/provider/Provider.ts).
 - For `mode: 'decision'`, enforced deterministic sampling in [`src/ai/provider/EmbeddedProvider.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/provider/EmbeddedProvider.ts): `temperature: 0`, `top_k: 1`, `top_p: 1`, `seed: 42`, and `cache_prompt: false`.
 - Passed matching deterministic parameters in [`CloudApiProvider.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/provider/CloudApiProvider.ts) and [`OllamaProvider.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/provider/OllamaProvider.ts).
-- Reduced flip rate from 18.6% to **1.4%**.
+- Measured flip rate with these settings: 0.0% (142 runs). No before-measurement exists.
 
 **Tests:**
 - [`src/ai/provider/EmbeddedProvider.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/provider/EmbeddedProvider.test.ts) (verifies mode `'decision'` sends zero temperature, top_k 1, seed 42, and cache_prompt false).
@@ -497,6 +497,18 @@ Decisions that differ from the plan text: a match inside the place the person na
 | **7.5** | (extra, not from the reports) API keys move to the OS keychain: macOS Keychain, Windows Credential Manager, a `0600` file `~/.sentinel/secrets.json` on Linux (the Secret Service needs system libraries a bare window manager may lack, and adding them could break the Linux build; a Secret Service backend is a possible later step). A key leaves browser storage only after the keychain was written and read back; a failing keychain loses nothing. Settings says where the key lives. | `src-tauri/src/secrets.rs`, `SecretStore.ts`, `CloudApiProvider.ts`, `App.tsx`, `AiSettingsPage.tsx` | 3 Rust tests, `CloudApiSecrets.test.ts` (6) |
 
 Not done on purpose: asking cloud APIs for a strict `json_schema` (it varies by service and a rejected schema would turn working requests into errors; JSON mode stays). The keychain path was only run through a fake keychain and the file backend; the real macOS and Windows keychains were not exercised here.
+
+---
+
+## Phase 8: verify and release
+
+| Task | Result |
+|---|---|
+| **8.1 Linux matrix** | Written as `docs/LINUX_TEST_REPORT.md` with exact steps per report and per target. **Not run**: no Linux desktop was available. Everything Linux-specific (deb/rpm/Arch/Flatpak registration, AppImage first run, `xdg-mime`, icons, Wayland and X11 behaviour, `gtk-launch`, `setsid`) is implemented and unit-tested only. |
+| **8.2 Fifty tricky requests** | `scripts/stress/tests3.ts` (50 requests). First run of the 37 that do not need the model: 18 passed; the failures were real and were fixed (`run echo hello` treated as an app, app listing failing when `~/Applications` is missing, `Projects` versus `projects` on a case-insensitive disk, no "list my workflows" answer, a name like "hello flow" losing "flow"). Second run of the same 33 (save, open, app, flow groups): 33 of 33 passed. The 4 cancel requests: 2 passed (`tail -f`, a shell loop); the other 2 and the 13 plain model requests were not re-run because the 8 GB test machine started paging. |
+| **8.3 Release** | Version bumped to 2.2.0 in `package.json`, `tauri.conf.json`, `Cargo.toml`; change list in `docs/releases/v2.2.0-changes.md`. Nothing pushed, tagged or published. Per-platform notes and builds wait for the owner and for each platform's own check. |
+
+Model reliability, measured: see `docs/MODEL_RELIABILITY.md` (flip rate 0.0%, `pass@1` 83.1%; the 95% target is not met).
 
 ---
 

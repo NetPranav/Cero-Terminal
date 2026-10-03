@@ -1,6 +1,6 @@
 [package]
 name = "sentinel-terminal"
-version = "2.1.0"
+version = "2.2.0"
 description = "Sentinel Terminal: a terminal that takes requests in plain language and runs .flow files on any OS"
 authors = ["Pranav Dubey (NetPranav)"]
 license = "MIT"

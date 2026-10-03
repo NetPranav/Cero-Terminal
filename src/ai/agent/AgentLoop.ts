@@ -22,6 +22,7 @@ import { parseSystemAction, commandFor, suggestionsFor, TOPIC_NAMES, type System
 import { parseQuitRequest, listRunningCommand, parseRunning, matchRunning, quitCommand, type QuitRequest, type RunningItem } from '../../domain/system/AppControl';
 import { parseFlowCreateRequest, draftFlow, serializeFlow, describeDraft, draftNeedsTerminal, type FlowCreateRequest, type FlowDraft } from '../../workflows/flow/FlowAuthoring';
 import { parseModelReply } from './ModelReply';
+import { editDistance } from '../../domain/system/NameMatch';
 import { DiagnosticLogger } from '../../infrastructure/logging/DiagnosticLogger';
 import { parseSaveIntent, suggestWorkflowName, cleanName, type SaveIntent } from '../../workflows/engine/SaveIntent';
 import { actionsFromSteps, draftFromActions } from '../../workflows/flow/FlowFromSteps';
@@ -782,9 +783,30 @@ export function isExplicitFilesystemSearch(goal: string): boolean {
 /**
  * Normalizes common typos in terminal and command intents.
  */
+const LEADING_VERBS = ['open', 'launch', 'install', 'close', 'quit'];
+
+/**
+ * "opn firefox", "opne gitBrans", "instl express": the first word is one slip away from a command word.
+ * Only a dropped or swapped letter is corrected (never a longer word), so "star the repo" and "quite" stay.
+ */
+export function fixLeadingVerb(text: string): string {
+  const m = text.match(/^(\s*(?:>\s*)?(?:(?:please|can you|could you)\s+)?)([A-Za-z]{3,8})\b/i);
+  if (!m) return text;
+  const word = m[2].toLowerCase();
+  if (LEADING_VERBS.includes(word)) return text;
+  for (const verb of LEADING_VERBS) {
+    if (word[0] !== verb[0] || word.length > verb.length) continue;
+    if (editDistance(word, verb) <= (verb.length >= 6 ? 2 : 1)) {
+      const fixed = m[2][0] === m[2][0].toUpperCase() && m[2][0] !== m[2][0].toLowerCase() ? verb[0].toUpperCase() + verb.slice(1) : verb;
+      return `${m[1]}${fixed}${text.slice(m[0].length)}`;
+    }
+  }
+  return text;
+}
+
 export function normalizeGoalText(text: string): string {
   if (!text) return text;
-  return text
+  return fixLeadingVerb(text)
     .replace(/\b(?:inilitilzie|initilize|initalize|initalise|initilise)\b/gi, 'initialize')
     .replace(/\b(?:adn|nad)\b/gi, 'and')
     .replace(/\b(?:avaialble|avaialable|availabe)\b/gi, 'available')
@@ -4143,6 +4165,12 @@ export class AgentLoop {
               steps
             };
           }
+        }
+
+        // A question answered with `echo '<the answer>'` is an answer, not a command to run
+        if (parsed.action === 'tool' && parsed.tool === 'shell.execute' && /^(?:how|what|why|when|who|which|explain|define|describe|tell me)\b/i.test(goal.trim())) {
+          const echoed = /^echo\s+(?:-e\s+)?(['"])([\s\S]{20,})\1\s*$/.exec(String(parsed.params?.command ?? '').trim());
+          if (echoed) parsed = { action: 'done', summary: echoed[2] };
         }
 
         // Handle actions

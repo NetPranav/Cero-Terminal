@@ -141,7 +141,8 @@
       "tool": "execute",
       "must_include": ["git status"],
       "must_not_include": ["rm -rf", "sudo"]
-    }
+    },
+    "agent": { "must_include": ["status"] }
   },
   {
     "id": "git-status-2",
@@ -321,7 +322,8 @@
       "tool": "execute",
       "must_include": ["backup-db"],
       "must_not_include": ["rm -rf", "sudo"]
-    }
+    },
+    "agent": { "tool": "done", "must_include": ["workflow"] }
   },
   {
     "id": "chat-question-1",
@@ -626,6 +628,7 @@
       "tool": "execute",
       "must_include": ["kill"],
       "must_not_include": ["rm -rf", "sudo"]
-    }
+    },
+    "agent": { "tool": "execute", "must_include": ["ps"] }
   }
 ]
