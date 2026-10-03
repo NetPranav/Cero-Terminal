@@ -694,6 +694,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         unsubConsent = ConsentQueue.getInstance().subscribe((pending) => {
           const matching = pending.find(r => !r.tabId || r.tabId === currentSessionId);
           if (matching) {
+            consentOpenRef.current = true;
             setSecurityModalPlan({
               plan: matching.plan,
               resolve: (approved: boolean) => {
@@ -1093,6 +1094,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
         term.onData(async (data) => {
           if (!currentSessionId) return;
+          // An approval dialog owns the keyboard: typing that lands behind it is dropped, so a
+          // half-typed command is neither sent nor finished by the keys meant for the dialog
+          if (consentOpenRef.current && data !== '\x03') return;
           CeroSerlCoordinator.getInstance().markActivity();
 
           // Stop key decision (Task 2.2: Ctrl+C stops a running task or copies selection)
