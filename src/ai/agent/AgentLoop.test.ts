@@ -1811,7 +1811,7 @@ describe('isActionableGoal and knowledge questions', () => {
   });
   it('still treats requests about this computer as actions', async () => {
     const { isActionableGoal } = await import('./AgentLoop');
-    for (const q of ['what is using port 3000', 'what files are in this folder', 'how much disk space is left', 'find all log files', 'show git status', 'search for read me file in repository']) {
+    for (const q of ['what is using port 3000', 'what files are in this folder', 'how much disk space is left', 'find all log files', 'show git status', 'search for read me file in repository', 'what does scripts/deploy.sh do?']) {
       expect(isActionableGoal(q)).toBe(true);
     }
   });

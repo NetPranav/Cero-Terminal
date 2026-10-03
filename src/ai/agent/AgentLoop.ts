@@ -1007,7 +1007,9 @@ export function isActionableGoal(goal: string): boolean {
   // A knowledge question ("how does binary search work?", "explain closures") is answered, not run, unless it names
   // something on this computer (a file, port, process, app...)
   const isKnowledgeQuestion = /^(?:what|why|who|when|how\s+(?:does|do|is|are|can|would|should)|explain|define|describe|tell me (?:about|what|how))\b/i.test(stripped);
-  if (isKnowledgeQuestion && !/\b(?:folder|folders|directory|directories|dir|file|files|path|paths|network|wifi|wi-fi|bluetooth|port|ports|process|processes|cpu|ram|memory|storage|disk|battery|git|repo|repository|terminal|service|ip|address|volume|screen|here|this machine|my (?:computer|mac|pc|laptop|system))\b/i.test(stripped)) {
+  if (isKnowledgeQuestion && !/\b(?:folder|folders|directory|directories|dir|file|files|path|paths|network|wifi|wi-fi|bluetooth|port|ports|process|processes|cpu|ram|memory|storage|disk|battery|git|repo|repository|terminal|service|ip|address|volume|screen|here|this machine|my (?:computer|mac|pc|laptop|system))\b/i.test(stripped)
+    // a file name or path in the question ("what does scripts/deploy.sh do?") means the file has to be read
+    && !/(?:^|\s)[\w~./-]*[\w-]\.[a-z0-9]{1,5}(?=[\s?.!]|$)|\w\/\w/i.test(stripped.replace(/\b(?:e\.g|i\.e)\./g, ''))) {
     return false;
   }
   const actionablePatterns = [

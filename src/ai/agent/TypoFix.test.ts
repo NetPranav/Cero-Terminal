@@ -20,7 +20,7 @@ describe('fixTypos', () => {
   for (const [input, want] of rows) it(`${input} -> ${want}`, () => expect(fixTypos(input)).toBe(want));
 
   it('leaves correct requests, commands, names and paths alone', () => {
-    for (const t of ['open firefox', 'git push origin main', 'ls -la', 'touch foo.txt', 'tar xzf a.tgz', 'find lodsh in src', 'open Main.rs', 'run npm test', 'kill 1234',
+    for (const t of ['open a split and run top', 'open a tab and run htop', 'open firefox', 'git push origin main', 'ls -la', 'touch foo.txt', 'tar xzf a.tgz', 'find lodsh in src', 'open Main.rs', 'run npm test', 'kill 1234',
       'fine, thanks', 'quite a lot of files', 'what is the capital of France?', 'mkdir -p a/b', 'install lodsh', 'open ~/Projects/gitBrains in code']) {
       expect(fixTypos(t)).toBe(t);
     }

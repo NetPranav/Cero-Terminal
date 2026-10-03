@@ -34,8 +34,8 @@ function nearest(word: string): string | null {
   for (const v of WORDS) {
     if (Math.abs(v.length - word.length) > limit) continue;
     if (word.length < 3 && v.length > 4) continue;
-    // same first letter, or one letter dropped from the front ("nd" for "and")
-    if (v[0] !== word[0] && !(v.length - word.length === 1 && isSubsequence(word, v))) continue;
+    // same first letter, or a two-letter word missing its first letter ("nd" for "and")
+    if (v[0] !== word[0] && !(word.length === 2 && v.length === 3 && isSubsequence(word, v))) continue;
     if (word.length > v.length) continue;                          // a typo drops, swaps or changes letters; it does not add them
     const d = editDistance(word, v);
     if (d > limit || (d === 2 && word.length === v.length)) continue;
