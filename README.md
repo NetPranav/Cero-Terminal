@@ -7,7 +7,7 @@
 **A terminal that also takes requests in plain language, runs `.flow` setup files on any OS, and uses a model that runs on your own computer.**
 
 [![CI](https://github.com/NetPranav/Sentinal-Terminal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NetPranav/Sentinal-Terminal/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-2.1.0-1F222E)](https://github.com/NetPranav/Sentinal-Terminal/releases)
+[![Release](https://img.shields.io/badge/release-2.2.0-1F222E)](https://github.com/NetPranav/Sentinal-Terminal/releases)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-1F222E)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1F222E)](LICENSE)
 
@@ -146,6 +146,12 @@ private keys or credential files always asks. Keys and tokens are masked before 
 </tr>
 </table>
 
+## Teaching Cero
+
+Cero never learns by watching you. Type `/learn` after a request that worked and it remembers that request and its
+command; `/forget` removes one; `/learning on` lets it keep a record of its own failures (off by default). See
+[docs/LEARNING.md](docs/LEARNING.md).
+
 ## System settings by request
 
 `>turn wifi off`, `>set brightness to 60`, `>mute`, `>turn on dark mode`, `>show paired bluetooth devices`,
@@ -177,19 +183,23 @@ are under Advanced.
 
 ## Download
 
-Version 2.1.0. Each platform has its own release, built from its own branch.
+Version 2.2.0. Sentinel Terminal is now **Cero**. Each platform has its own release, built from its own branch; get the
+newest one for your system from the [Releases page](https://github.com/NetPranav/Sentinal-Terminal/releases).
 
-| Platform | Files | Release |
-|---|---|---|
-| macOS, Apple Silicon | [`Cero.Terminal_2.1.0_aarch64.dmg`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-macos/Sentinel.Terminal_2.1.0_aarch64.dmg) | [v2.1.0-macos](https://github.com/NetPranav/Sentinal-Terminal/releases/tag/v2.1.0-macos) |
-| macOS, Intel | [`Cero.Terminal_2.1.0_x64.dmg`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-macos/Sentinel.Terminal_2.1.0_x64.dmg) | |
-| Arch, Manjaro, EndeavourOS | [`cero-terminal-bin-2.1.0-1-x86_64.pkg.tar.zst`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-linux/sentinel-terminal-bin-2.1.0-1-x86_64.pkg.tar.zst) | [v2.1.0-linux](https://github.com/NetPranav/Sentinal-Terminal/releases/tag/v2.1.0-linux) |
-| Ubuntu 22.04+, Debian 12, Mint, Pop!_OS | [`Cero.Terminal_2.1.0_amd64.deb`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-linux/Sentinel.Terminal_2.1.0_amd64.deb) | |
-| Fedora 38+, openSUSE | [`Cero.Terminal-2.1.0-1.x86_64.rpm`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-linux/Sentinel.Terminal-2.1.0-1.x86_64.rpm) | |
-| Other x86_64 Linux | [`Cero.Terminal_2.1.0_amd64.AppImage`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-linux/Sentinel.Terminal_2.1.0_amd64.AppImage) | |
-| Windows 10 (1803+) and 11 | [`Cero.Terminal_2.1.0_x64_en-US.msi`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-windows/Sentinel.Terminal_2.1.0_x64_en-US.msi) or [`Cero.Terminal_2.1.0_x64-setup.exe`](https://github.com/NetPranav/Sentinal-Terminal/releases/download/v2.1.0-windows/Sentinel.Terminal_2.1.0_x64-setup.exe) | [v2.1.0-windows](https://github.com/NetPranav/Sentinal-Terminal/releases/tag/v2.1.0-windows) |
+| Platform | File |
+|---|---|
+| macOS, Apple Silicon | `Cero_2.2.0_aarch64.dmg` |
+| Arch, Manjaro, EndeavourOS | `cero-terminal-bin-2.2.0-1-x86_64.pkg.tar.zst` |
+| Ubuntu 22.04+, Debian 12, Mint, Pop!_OS | `Cero_2.2.0_amd64.deb` |
+| Fedora 38+, openSUSE | `Cero-2.2.0-1.x86_64.rpm` |
+| Other x86_64 Linux | `Cero_2.2.0_amd64.AppImage` |
+| Windows 10 (1803+) and 11 | `Cero_2.2.0_x64_en-US.msi` or `Cero_2.2.0_x64-setup.exe` |
 
-Each release has a `SHA256SUMS.txt`.
+If a 2.2.0 file for your system is not listed on the Releases page yet, that platform's build has not been published;
+the 2.1.0 releases (named Sentinel Terminal) are still there. Each release has a `SHA256SUMS.txt`.
+
+**Coming from Sentinel Terminal?** Install Cero and open it: your `~/.sentinel` folder moves to `~/.cero`, your
+settings and saved keys carry over, and the model does not have to be downloaded again. The `sentinel` command is now `cero`.
 
 The optional `cero` command opens the app in a folder or runs a `.flow` file from any shell: see [assets/cli](assets/cli).
 
