@@ -83,3 +83,18 @@ describe('a program that is not installed', () => {
     expect(fn.mock.calls.some(c => c[1]?.command === 'htop')).toBe(true);
   });
 });
+
+describe('"any improvement for my computer"', () => {
+  it('looks at the machine first and answers from what it finds, without the model', async () => {
+    const out = '##arch\narm64\n##ram\n8589934592\n##swap\ntotal = 4096.00M  used = 3072.00M  free = 1024.00M\n##disk\n/dev/x 239362496 196000000 19000000 92% /\n##sizes\n9000000\t/Users/me/Library/Caches\n##nodemodules\n900000\t/Users/me/app/node_modules\n##procs\n5.0 4.0 /Applications/Claude.app/Contents/MacOS/Claude\n##uptime\nup 2 days';
+    const generate = vi.fn();
+    const { loop, fn } = loopWith(async () => ({ success: true, data: { stdout: out } }), generate);
+    const r = await loop.run('any improvement you would like to recommend me for my computer for better performance', mac);
+    expect(r.summary).toContain('8 GB of memory, 3.0 GB of it spilled to disk');
+    expect(r.summary).toContain('node_modules');
+    expect(r.summary).toContain('Nothing was changed');
+    expect(generate).not.toHaveBeenCalled();
+    // one read-only look, nothing else
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+});

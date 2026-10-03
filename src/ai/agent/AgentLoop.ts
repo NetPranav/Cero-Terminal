@@ -22,6 +22,7 @@ import { parseSystemAction, commandFor, suggestionsFor, TOPIC_NAMES, type System
 import { parseQuitRequest, listRunningCommand, parseRunning, matchRunning, quitCommand, type QuitRequest, type RunningItem } from '../../domain/system/AppControl';
 import { parseFlowCreateRequest, draftFlow, serializeFlow, describeDraft, draftNeedsTerminal, type FlowCreateRequest, type FlowDraft } from '../../workflows/flow/FlowAuthoring';
 import { parseModelReply } from './ModelReply';
+import { parseAdviceRequest, snapshotScript, parseSnapshot, adviseFrom, formatAdvice } from '../../domain/system/SystemAdvisor';
 import { parseAppStatus, findRunningApp, describeStatus } from '../../domain/system/AppStatus';
 import { rankNames } from '../../domain/system/NameMatch';
 import { fixTypos } from './TypoFix';
@@ -1733,6 +1734,13 @@ export class AgentLoop {
       if (handled) return handled;
     }
 
+    // "any improvement you would recommend for my computer": look at this computer, then advise from what is found
+    const advice = parseAdviceRequest(cleaned || goal);
+    if (advice && osOf(context.os) !== 'windows') {
+      const handled = await this.runSystemAdvice(advice.focus, context);
+      if (handled) return handled;
+    }
+
     // "is the amphetmine application running": list what is really running and match the name loosely
     const appStatus = parseAppStatus(cleaned || goal);
     if (appStatus) {
@@ -3269,6 +3277,21 @@ export class AgentLoop {
       if (context.signal?.aborted) throw err;
       return null;
     }
+  }
+
+  /** Read-only look at this computer's memory, disk, caches, project folders and processes, then advice built from it */
+  private async runSystemAdvice(focus: 'performance' | 'storage' | 'general', context: AgentRunContext): Promise<AgentResult | null> {
+    const os = osOf(context.os);
+    this.emit({ type: 'tool_start', message: 'Looking at this computer: memory, storage, caches, project folders, running apps' });
+    const params = { command: snapshotScript(), explanation: 'Read memory, disk, caches, node_modules sizes and running processes (read-only)' };
+    const result = context.signal
+      ? await this.toolExecutor.execute('shell.execute', params, context.cwd, async () => true, undefined, context.signal)
+      : await this.toolExecutor.execute('shell.execute', params, context.cwd, async () => true);
+    const out = typeof result?.data?.stdout === 'string' ? result.data.stdout : '';
+    if (!out.includes('##ram')) return null;                             // could not read: let the normal path answer
+    const summary = formatAdvice(adviseFrom(parseSnapshot(out, os === 'macos' ? 'macos' : 'linux'), focus));
+    this.emit({ type: 'done', message: summary });
+    return { success: true, summary, steps: [{ tool: 'shell.execute', params, result }] };
   }
 
   /** Is this app running? Lists what really runs, matches the name loosely, and says which real app it matched. */
