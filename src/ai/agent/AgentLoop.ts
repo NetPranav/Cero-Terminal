@@ -3846,7 +3846,7 @@ export class AgentLoop {
     switch (saved.status) {
       case 'saved':
         result.steps.push({ tool: '__flow__', params: { path: saved.path }, result: { success: true } as ToolExecutionResult });
-        return report(`Saved workflow "${finalName}" (${actions.length} step${actions.length > 1 ? 's' : ''}) to ${saved.path}\nRun it any time: say "run the workflow ${finalName}" or double-click the file.`);
+        return report(`Saved workflow "${finalName}" (${actions.length} step${actions.length > 1 ? 's' : ''}) to ${saved.path}${saved.stored ? `\nAlso added to your Cero workflows: ${saved.stored}` : ''}\nRun it any time: say "run the workflow ${finalName}" or double-click the file.`);
       case 'cancelled':
         return report('Not saved: you chose not to.');
       case 'error':
@@ -3928,7 +3928,7 @@ export class AgentLoop {
     place?: 'desktop' | 'here',
     storeWhenNoScreen = false,
   ): Promise<
-    | { status: 'saved'; path: string; shown: string }
+    | { status: 'saved'; path: string; shown: string; stored?: string }
     | { status: 'no-folders' | 'no-screen' | 'cancelled'; message: string }
     | { status: 'error'; message: string; macBlock: boolean }
   > {
@@ -3967,9 +3967,23 @@ export class AgentLoop {
       const target = 'custom' in choice
         ? await resolveCustomTarget(choice.custom, draft.name, folders, context.cwd, this.flowIO)
         : await freeFlowPath([folders.desktop, context.cwd, folders.workflows][choice.index] ?? folders.workflows, draft.name, this.flowIO);
-      await this.flowIO.write(target, serializeFlow(draft));
+      const text = serializeFlow(draft);
+      await this.flowIO.write(target, text);
       const shown = target.startsWith(folders.home) ? `~${target.slice(folders.home.length)}` : target;
-      return { status: 'saved', path: target, shown };
+      // "run the workflow <name>" and the Workflow Manager read the Cero workflows folder only. A copy
+      // that went to the Desktop or the current folder is also registered there, or it would be
+      // written but never found again by name.
+      let stored: string | undefined;
+      const trimDir = (d: string) => d.replace(/[\\/]+$/, '');
+      const targetDir = trimDir(target.replace(/[\\/][^\\/]*$/, ''));
+      if (targetDir !== trimDir(folders.workflows)) {
+        try {
+          stored = await DiskWorkflowStorage.getInstance().saveFlowText(draft.name, text);
+        } catch {
+          // the requested copy exists; only the by-name registration failed
+        }
+      }
+      return { status: 'saved', path: target, shown, stored };
     } catch (e: any) {
       const why = String(e?.message || e);
       const macBlock = /operation not permitted|permission denied|os error 1\b/i.test(why) && /^mac|darwin/i.test(context.os);

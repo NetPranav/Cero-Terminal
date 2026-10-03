@@ -108,3 +108,50 @@ describe('helpers', () => {
     expect(cleanName('!!!')).toBeUndefined();
   });
 });
+
+describe('parseSaveIntent: more ways people say it', () => {
+  const rows: Array<[string, { task: string; name?: string }]> = [
+    ['open vscode, save as workflow dev', { task: 'open vscode', name: 'dev' }],
+    ['Open vscode. Save as workflow dev.', { task: 'Open vscode', name: 'dev' }],
+    ['open vscode and save as workflow dev then open slack', { task: 'open vscode then open slack', name: 'dev' }],
+    ['open vscode and save workflow named dev', { task: 'open vscode', name: 'dev' }],
+    ['open vscode and save this workflow as dev', { task: 'open vscode', name: 'dev' }],
+    ['open vscode and save this workflow', { task: 'open vscode' }],
+    ['open vscode then save this workflow', { task: 'open vscode' }],
+    ['open vscode and save this task as a workflow named dev', { task: 'open vscode', name: 'dev' }],
+    ['open vscode, and save the whole thing as a workflow', { task: 'open vscode' }],
+    ['open vscode and make it a workflow called dev', { task: 'open vscode', name: 'dev' }],
+    ['open vscode and turn this task into a workflow called dev', { task: 'open vscode', name: 'dev' }],
+    ['open vscode and save it as workflow named "my dev flow"', { task: 'open vscode', name: 'my dev flow' }],
+  ];
+  for (const [input, expected] of rows) {
+    it(`understands: ${input}`, () => {
+      const out = parseSaveIntent(input);
+      expect(out.save).toBe(true);
+      expect(out.task).toBe(expected.task);
+      expect(out.name).toBe(expected.name);
+    });
+  }
+
+  it('a bare name never swallows the next instruction', () => {
+    const out = parseSaveIntent('save this as a workflow open youtube and play music');
+    // "open youtube" is the task, not a workflow called "open youtube"
+    expect(out.name).toBeUndefined();
+    expect(out.task).toContain('open youtube');
+  });
+
+  it('does not trigger on questions or talk about workflows', () => {
+    for (const p of [
+      'how do I save a workflow?',
+      'how do i save this workflow',
+      'what does save as workflow do',
+      'open the workflow editor',
+      'list my workflows',
+      'run workflow dev',
+      'delete the workflow named dev',
+      'can you explain how to save workflow files',
+    ]) {
+      expect(parseSaveIntent(p).save, p).toBe(false);
+    }
+  });
+});

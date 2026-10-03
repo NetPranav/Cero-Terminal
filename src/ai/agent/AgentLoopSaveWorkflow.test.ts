@@ -110,4 +110,36 @@ describe('Saving a workflow from inside a prompt', () => {
     expect(r.success).toBe(false);
     expect(r.summary).toContain('Not saved: there are no earlier steps');
   });
+
+  describe('a saved workflow can be found and used afterwards', () => {
+    it('saved to the default place (Desktop): "run the workflow <name>" finds it and replays its steps', async () => {
+      setChoiceHandlerForTests(async () => ({ index: 0 }));
+      const saved = await loop.run('open spotify and save this as a workflow called my music', ctx);
+      expect(saved.summary).toContain('Saved workflow "my music"');
+      // physically on disk in the Cero workflows folder, not only wherever the copy went
+      expect(fs.readdirSync(tmpDir).filter(f => f.endsWith('.flow'))).toEqual(['my_music.flow']);
+
+      execute.mockClear();
+      const ran = await loop.run('run the workflow my music', ctx);
+      expect(ran.summary).not.toMatch(/No saved workflow/);
+      expect(ran.success).toBe(true);
+      expect(execute).toHaveBeenCalled();
+    });
+
+    it('is listed by "list my workflows"', async () => {
+      setChoiceHandlerForTests(async () => ({ index: 0 }));
+      await loop.run('open spotify and save this as a workflow called my music', ctx);
+      const listed = await loop.run('list my workflows', ctx);
+      expect(listed.summary).toMatch(/Saved workflows \(1\)[\s\S]*my.music/);
+    });
+
+    it('the phrase at the start of the prompt (the make-a-workflow route) is saved and found too', async () => {
+      setChoiceHandlerForTests(async () => ({ index: 0 }));
+      const r = await loop.run('save this as a workflow called quick and open spotify', ctx);
+      expect(r.summary).toMatch(/^Saved /);
+      expect(fs.existsSync(path.join(tmpDir, 'quick.flow'))).toBe(true);
+      const ran = await loop.run('run the workflow quick', ctx);
+      expect(ran.success).toBe(true);
+    });
+  });
 });

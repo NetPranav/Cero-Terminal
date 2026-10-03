@@ -20,18 +20,28 @@ export interface SaveIntent {
 const MAX_NAME_WORDS = 6;
 const MAX_NAME_CHARS = 60;
 
-const OBJ = String.raw`(?:all\s+(?:of\s+)?this|all\s+these\s+steps|these\s+steps|this|it|that|everything|the\s+above|the\s+steps|the\s+last\s+(?:\d+\s+)?(?:steps?|commands?)|the\s+(?:verified\s+)?(?:result|execution|pipeline))`;
+const OBJ = String.raw`(?:all\s+(?:of\s+)?this|all\s+these\s+steps|these\s+steps|(?:this|that|the)\s+(?:task|thing|session|sequence|procedure)|the\s+whole\s+(?:thing|task|sequence)|this|it|that|everything|the\s+above|the\s+steps|the\s+last\s+(?:\d+\s+)?(?:steps?|commands?)|the\s+(?:verified\s+)?(?:result|execution|pipeline))`;
 const TARGET = String.raw`(?:as|into)\s+(?:an?\s+)?(?:reusable\s+)?(?:\.?flow|workflow|macro)(?:\s+file)?`;
-// "save|store|keep|record|remember [object] as a workflow" or "turn|make|convert <object> into a workflow"
-const CLAUSE_CORE = String.raw`(?:(?:save|store|keep|record|remember)\s+(?:${OBJ}\s+)?|(?:turn|make|convert)\s+${OBJ}\s+)${TARGET}`;
+// "save|store|keep|record|remember [object] as a workflow" or "turn|make|convert <object> [into|as] a workflow"
+const MAKE_TARGET = String.raw`(?:(?:as|into)\s+)?(?:an?\s+)?(?:reusable\s+)?(?:\.?flow|workflow|macro)(?:\s+file)?`;
+const CLAUSE_CORE = String.raw`(?:(?:save|store|keep|record|remember)\s+(?:${OBJ}\s+)?${TARGET}|(?:turn|make|convert)\s+${OBJ}\s+${MAKE_TARGET})`;
+// "save [this|the] workflow [as|named|called X]": the word workflow is the thing being saved
+const CLAUSE_WORKFLOW = String.raw`(?:save|store|keep|record|remember)\s+(?:(?:this|that|the)\s+)?(?:workflow|flow)`;
 const NAME = String.raw`(?:"([^"]{1,60})"|'([^']{1,60})'|([A-Za-z0-9_\- ]+?)(?=\s*(?:[,.;:!?]|\s(?:and|then|after)\b|\s(?:on|to|in|into)\s+(?:the\s+|my\s+)?(?:desktop|this\s+folder|current\s+folder|here)\b|$)))`;
-const NAME_TAIL = String.raw`(?:\s+(?:called|named|titled)\s+${NAME}|\s*=\s*${NAME})?`;
+// A name given with no "named": "save as workflow dev". Short, not starting with a command word or a
+// connector, so "save this as a workflow open youtube" is not read as a workflow called "open youtube".
+const NOT_NAME_START = String.raw`(?!(?:and|then|also|after|on|in|into|to|at|here|please|for|so|with|using|from|open|run|start|launch|install|play|show|close|create|make|go|cd|list|check|find|search|download|stop|kill|quit|visit|browse|turn|set|enable|disable|connect|git|npm|sudo|ping)\b)`;
+const BARE_NAME = String.raw`\s+${NOT_NAME_START}(?:"([^"]{1,60})"|'([^']{1,60})'|([A-Za-z0-9_\-]+(?:\s(?!(?:and|then|after|also)\b)[A-Za-z0-9_\-]+){0,2})(?=\s*(?:[,.;:!?]|\s(?:and|then|after)\b|\s(?:on|to|in|into)\s+(?:the\s+|my\s+)?(?:desktop|this\s+folder|current\s+folder|here)\b|$)))`;
+// Same group layout in every tail: 3 groups per name form, then the place group
+const NAME_TAIL = String.raw`(?:\s+(?:called|named|titled)\s+${NAME}|\s*=\s*${NAME}|${BARE_NAME})?`;
+const NAME_TAIL_AS = String.raw`(?:\s+(?:called|named|titled|as)\s+${NAME}|\s*=\s*${NAME}|${BARE_NAME})?`;
 const PLACE = String.raw`(?:\s+(?:on|to|in|into)\s+(?:the\s+|my\s+)?(desktop|this\s+folder|current\s+folder|here))?`;
 const CONNECT = String.raw`(?:(?:[,;]|\.)?\s*(?:and\s+then|and|then|also|after\s+that)?\s*)?`;
 const LEAD = String.raw`(?:after\s+(?:successfully\s+)?(?:completing|finishing)\s+(?:all\s+of\s+these\s+steps|everything|this|all\s+steps)[,.]?\s+)?`;
 const PLEASE = String.raw`(?:please\s+)?`;
 
 const SAVE_RE = new RegExp(String.raw`${LEAD}${CONNECT}\b${PLEASE}(${CLAUSE_CORE})${NAME_TAIL}${PLACE}\s*[.:!;]?`, 'i');
+const SAVE_WORKFLOW_RE = new RegExp(String.raw`${LEAD}${CONNECT}\b${PLEASE}(${CLAUSE_WORKFLOW})${NAME_TAIL_AS}${PLACE}\s*[.:!;]?`, 'i');
 const DELIMITED_RE = /^([\s\S]+?)\s*::\s*save\s+(?:as\s+)?workflow\s+(?:"([^"]+)"|'([^']+)'|([^\s].*?))\s*$/i;
 const QUESTION_START = /^(?:how|what|why|when|where|who|which|can\s+you\s+explain|could\s+you\s+explain|explain|does|do\s+i|is\s+there|tell\s+me)\b/i;
 const ALWAYS_QUESTION = /^(?:can\s+you\s+explain|could\s+you\s+explain|explain|does|do\s+i|is\s+there|tell\s+me)\b/i;
@@ -73,12 +83,12 @@ export function parseSaveIntent(prompt: string): SaveIntent {
     return { task: delimited[1].trim(), save: true, name, position: 'end' };
   }
 
-  const match = SAVE_RE.exec(text);
+  const match = SAVE_RE.exec(text) ?? SAVE_WORKFLOW_RE.exec(text);
   if (!match) return none;
   const before = text.slice(0, match.index);
   const after = text.slice(match.index + match[0].length);
-  const name = cleanName(match.slice(2, 8).find(Boolean));
-  const placeWord = (match[8] || '').toLowerCase();
+  const name = cleanName(match.slice(2, 11).find(Boolean));
+  const placeWord = (match[11] || '').toLowerCase();
   const place = placeWord ? (placeWord === 'desktop' ? 'desktop' : 'here') : undefined;
   const task = tidy(`${before} ${after}`);
   // "how to save this as a workflow": a question about saving, not a task
