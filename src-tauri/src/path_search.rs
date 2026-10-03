@@ -139,7 +139,10 @@ mod tests {
     use std::fs;
 
     fn tree() -> PathBuf {
-        let root = std::env::temp_dir().join(format!("cero-find-{}-{}", std::process::id(), Instant::now().elapsed().as_nanos()));
+        // each test gets its own folder: tests run in parallel and one must not delete another's tree
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let root = std::env::temp_dir().join(format!("cero-find-{}-{}", std::process::id(), n));
         let _ = fs::remove_dir_all(&root);
         for d in ["Projects/gitbrains", "Projects/other", "Projects/node_modules/gitbrains", ".hidden/gitbrains", "deep/a/b/c/gitbrains"] {
             fs::create_dir_all(root.join(d)).unwrap();
