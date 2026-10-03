@@ -18,7 +18,7 @@ describe('AgentLoop Conversational & Offline Resilience', () => {
   it('answers "hey" and conversational greetings immediately without needing an LLM', async () => {
     const res = await agentLoop.run('hey', { os: 'darwin', cwd: '/tmp' });
     expect(res.success).toBe(true);
-    expect(res.summary).toContain('Sentinel AI');
+    expect(res.summary).toContain('Cero AI');
     expect(res.summary).toContain('copilot');
     expect(res.steps.length).toBe(0);
   });

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * scripts/run_cli_prompts.ts — Sentinel CLI Prompt Test Runner & Telemetry Recorder
+ * scripts/run_cli_prompts.ts — Cero CLI Prompt Test Runner & Telemetry Recorder
  *
- * Executes prompts through the Sentinel CLI (scripts/agent-cli.ts),
+ * Executes prompts through the Cero CLI (scripts/agent-cli.ts),
  * records every input, expected output, actual output, underlying OS commands,
  * exit codes, raw stdout/stderr, execution duration, and verification oracles.
  *
@@ -109,7 +109,7 @@ async function main() {
   }
 
   console.log(`\n================================================================================`);
-  console.log(`  Sentinel CLI Prompt Test & Telemetry Recorder`);
+  console.log(`  Cero CLI Prompt Test & Telemetry Recorder`);
   console.log(`  Prompts Queued: ${promptsToRun.length} | Target Platform: ${process.platform}`);
   console.log(`================================================================================\n`);
 
@@ -242,7 +242,7 @@ async function main() {
 
   // Write Markdown summary
   const mdPath = path.resolve(process.cwd(), 'reports', 'cli_test_records.md');
-  let md = `# Sentinel CLI Prompt Execution & Telemetry Report\n\n`;
+  let md = `# Cero CLI Prompt Execution & Telemetry Report\n\n`;
   md += `> **Generated:** ${summaryReport.timestamp}  \n`;
   md += `> **Platform:** ${summaryReport.platform}  \n`;
   md += `> **Total Evaluated:** ${summaryReport.totalPrompts}  \n`;

@@ -12,10 +12,13 @@
  * Features:
  * - Secure local persistence of API keys in localStorage
  * - One-click connection testing with latency measurement
- * - Streaming & non-streaming execution conforming to Sentinel's JSON contract
+ * - Streaming & non-streaming execution conforming to Cero's JSON contract
  */
 
+import { wireSampling, resolveSampling } from './DecisionRequest';
+import { getSecretBackend, storeSecretVerified } from './SecretStore';
 import { ModelProvider, ModelMetadata, GenerateOptions, ProviderResponse } from './Provider';
+import { CancelledError, throwIfAborted } from '../agent/Cancelled';
 
 export type CloudServiceId = 'openai' | 'anthropic' | 'groq' | 'deepseek' | 'openrouter' | 'custom';
 
@@ -190,7 +193,7 @@ export class CloudApiProvider implements ModelProvider {
   public readonly providerName = 'Cloud API Provider';
 
   private static instance: CloudApiProvider;
-  private static readonly STORAGE_KEY = 'sentinel_cloud_api_keys';
+  private static readonly STORAGE_KEY = 'cero_cloud_api_keys';
   private inMemoryConfigs: Record<string, CloudKeyConfig> = {};
 
   public static getInstance(): CloudApiProvider {
@@ -244,13 +247,84 @@ export class CloudApiProvider implements ModelProvider {
     const current = this.getSavedConfigs();
     current[config.serviceId] = config;
     this.inMemoryConfigs = current;
+    // until the keychain confirms the new key, keep it where it was safe before
+    this.keychainHeld.delete(config.serviceId);
+    this.persistConfigs();
+    // Move the key out of browser storage once the keychain really holds it
+    void this.moveKeyToKeychain(config.serviceId);
+  }
+
+  /** The configs as stored in the browser: keys that live in the keychain are left out */
+  private persistConfigs(): void {
     try {
       if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(CloudApiProvider.STORAGE_KEY, JSON.stringify(current));
+        const toStore: Record<string, CloudKeyConfig> = {};
+        for (const [id, cfg] of Object.entries(this.inMemoryConfigs)) {
+          toStore[id] = this.keychainHeld.has(id) ? { ...cfg, apiKey: '' } : cfg;
+        }
+        localStorage.setItem(CloudApiProvider.STORAGE_KEY, JSON.stringify(toStore));
       }
     } catch {
       // Non-fatal
     }
+  }
+
+  /** Services whose key is confirmed to be in the keychain (and so is not written to localStorage) */
+  private keychainHeld = new Set<string>();
+
+  private async moveKeyToKeychain(serviceId: string): Promise<boolean> {
+    const cfg = this.inMemoryConfigs[serviceId];
+    if (!cfg) return false;
+    if (!cfg.apiKey) {
+      // a key that was cleared must leave the keychain too
+      try { await getSecretBackend().delete(CloudApiProvider.SECRET_SERVICE, serviceId); } catch { /* nothing to remove */ }
+      this.keychainHeld.delete(serviceId);
+      this.persistConfigs();
+      return true;
+    }
+    if (!(await storeSecretVerified(CloudApiProvider.SECRET_SERVICE, serviceId, cfg.apiKey))) return false;
+    this.keychainHeld.add(serviceId);
+    this.persistConfigs();
+    return true;
+  }
+
+  private static readonly SECRET_SERVICE = 'cero.cloud_api';
+  /** Where keys were kept under the old app name; read once and moved */
+  private static readonly LEGACY_SECRET_SERVICE = 'sentinel.cloud_api';
+
+  /**
+   * Call once at startup, before the active provider is chosen. Fills keys in from the keychain and
+   * moves any key still sitting in browser storage there (write, read back, then remove the old copy).
+   * Where no keychain works, keys stay in browser storage exactly as before; nothing is lost.
+   */
+  public async hydrateSecrets(): Promise<{ migrated: number; failed: number }> {
+    const configs = this.getSavedConfigs() as Record<string, CloudKeyConfig>;
+    let migrated = 0;
+    let failed = 0;
+    for (const [id, cfg] of Object.entries(configs)) {
+      if (cfg.apiKey) {
+        if (await this.moveKeyToKeychain(id)) migrated++; else failed++;
+      } else {
+        try {
+          let stored = await getSecretBackend().get(CloudApiProvider.SECRET_SERVICE, id);
+          if (!stored) {
+            // a key saved before the rename: copy it to the new name, and only then remove the old entry
+            const legacy = await getSecretBackend().get(CloudApiProvider.LEGACY_SECRET_SERVICE, id);
+            if (legacy && (await storeSecretVerified(CloudApiProvider.SECRET_SERVICE, id, legacy))) {
+              stored = legacy;
+              try { await getSecretBackend().delete(CloudApiProvider.LEGACY_SECRET_SERVICE, id); } catch { /* leave it */ }
+            }
+          }
+          if (stored) {
+            this.inMemoryConfigs[id] = { ...cfg, apiKey: stored };
+            this.keychainHeld.add(id);
+          }
+        } catch {
+          // keychain unavailable: nothing to fill in
+        }
+      }
+    }
+    return { migrated, failed };
   }
 
   /**
@@ -445,6 +519,7 @@ export class CloudApiProvider implements ModelProvider {
   }
 
   public async generate(prompt: string, modelId?: string, options?: GenerateOptions): Promise<ProviderResponse> {
+    throwIfAborted(options?.signal);
     const active = this.getActiveConfig();
     if (!active || !active.apiKey) {
       throw new Error('No active Cloud API key configured. Please configure an API key in AI Settings.');
@@ -456,30 +531,111 @@ export class CloudApiProvider implements ModelProvider {
 
     // Messages formatting
     const messages = options?.messages || [
-      { role: 'system', content: 'You are Sentinel, an autonomous Linux terminal copilot. Always respond with valid JSON.' },
+      { role: 'system', content: 'You are Cero, an autonomous Linux terminal copilot. Always respond with valid JSON.' },
       { role: 'user', content: prompt }
     ];
 
-    if (active.serviceId === 'anthropic') {
-      const systemMsg = messages.find(m => m.role === 'system')?.content;
-      const nonSystemMessages = messages.filter(m => m.role !== 'system');
+    try {
+      if (active.serviceId === 'anthropic') {
+        const systemMsg = messages.find(m => m.role === 'system')?.content;
+        const nonSystemMessages = messages.filter(m => m.role !== 'system');
 
-      const body: any = {
+        const body: any = {
+          model,
+          max_tokens: resolveSampling(options).maxTokens,
+          temperature: resolveSampling(options).temperature,
+          messages: nonSystemMessages
+        };
+        if (systemMsg) body.system = systemMsg;
+
+        const res = await httpFetch(url, {
+          method: 'POST',
+          signal: options?.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': active.apiKey.trim(),
+            'anthropic-version': '2023-06-01'
+          },
+          body: JSON.stringify(body)
+        });
+
+        const latencyMs = Math.round(performance.now() - start);
+        if (!res.ok) {
+          const errMessage = await extractErrorMessage(res);
+          throw new Error(errMessage);
+        }
+
+        const json = await res.json();
+        const content = json.content?.[0]?.text || '';
+        return {
+          content,
+          raw: json,
+          usage: {
+            promptTokens: json.usage?.input_tokens || 0,
+            completionTokens: json.usage?.output_tokens || 0,
+            totalTokens: (json.usage?.input_tokens || 0) + (json.usage?.output_tokens || 0)
+          },
+          latencyMs,
+          finishReason: json.stop_reason === 'max_tokens' ? 'length' : json.stop_reason
+        };
+      }
+
+      // Standard OpenAI-compatible execution
+      const isReasoningModel = model.startsWith('o1') || model.startsWith('o3') || model.includes('reasoner');
+      const wire = wireSampling('cloud', options);
+
+      const requestBody: any = {
         model,
-        max_tokens: options?.maxTokens || 1024,
-        messages: nonSystemMessages
+        messages,
+        ...(isReasoningModel ? { max_completion_tokens: wire.max_tokens } : wire)
       };
-      if (systemMsg) body.system = systemMsg;
+      if (options?.format === 'json') {
+        requestBody.response_format = { type: 'json_object' };
+      }
 
-      const res = await httpFetch(url, {
+      let res = await httpFetch(url, {
         method: 'POST',
+        signal: options?.signal,
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': active.apiKey.trim(),
-          'anthropic-version': '2023-06-01'
+          'Authorization': `Bearer ${active.apiKey.trim()}`
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(requestBody)
       });
+
+      // If endpoint rejects response_format (e.g. 400 Bad Request on some models), retry once without it
+      if (!res.ok && res.status === 400 && requestBody.response_format) {
+        throwIfAborted(options?.signal);
+        delete requestBody.response_format;
+        res = await httpFetch(url, {
+          method: 'POST',
+          signal: options?.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${active.apiKey.trim()}`
+          },
+          body: JSON.stringify(requestBody)
+        });
+      }
+
+      // If endpoint rejects temperature or max_tokens for reasoning models, retry with sanitized payload
+      if (!res.ok && res.status === 400 && (requestBody.temperature !== undefined || requestBody.max_tokens !== undefined)) {
+        throwIfAborted(options?.signal);
+        delete requestBody.temperature;
+        if (requestBody.max_tokens) {
+          requestBody.max_completion_tokens = requestBody.max_tokens;
+          delete requestBody.max_tokens;
+        }
+        res = await httpFetch(url, {
+          method: 'POST',
+          signal: options?.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${active.apiKey.trim()}`
+          },
+          body: JSON.stringify(requestBody)
+        });
+      }
 
       const latencyMs = Math.round(performance.now() - start);
       if (!res.ok) {
@@ -488,91 +644,23 @@ export class CloudApiProvider implements ModelProvider {
       }
 
       const json = await res.json();
-      const content = json.content?.[0]?.text || '';
+      const content = json.choices?.[0]?.message?.content || '';
       return {
         content,
         raw: json,
         usage: {
-          promptTokens: json.usage?.input_tokens || 0,
-          completionTokens: json.usage?.output_tokens || 0,
-          totalTokens: (json.usage?.input_tokens || 0) + (json.usage?.output_tokens || 0)
+          promptTokens: json.usage?.prompt_tokens || 0,
+          completionTokens: json.usage?.completion_tokens || 0,
+          totalTokens: json.usage?.total_tokens || 0
         },
-        latencyMs
+        latencyMs,
+        finishReason: json.choices?.[0]?.finish_reason
       };
-    }
-
-    // Standard OpenAI-compatible execution
-    const isReasoningModel = model.startsWith('o1') || model.startsWith('o3') || model.includes('reasoner');
-    const requestBody: any = {
-      model,
-      messages,
-      ...(isReasoningModel
-        ? { max_completion_tokens: options?.maxTokens || 1024 }
-        : {
-            temperature: options?.temperature ?? 0.2,
-            max_tokens: options?.maxTokens || 1024
-          })
-    };
-    if (options?.format === 'json') {
-      requestBody.response_format = { type: 'json_object' };
-    }
-
-    let res = await httpFetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${active.apiKey.trim()}`
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    // If endpoint rejects response_format (e.g. 400 Bad Request on some models), retry once without it
-    if (!res.ok && res.status === 400 && requestBody.response_format) {
-      delete requestBody.response_format;
-      res = await httpFetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${active.apiKey.trim()}`
-        },
-        body: JSON.stringify(requestBody)
-      });
-    }
-
-    // If endpoint rejects temperature or max_tokens for reasoning models, retry with sanitized payload
-    if (!res.ok && res.status === 400 && (requestBody.temperature !== undefined || requestBody.max_tokens !== undefined)) {
-      delete requestBody.temperature;
-      if (requestBody.max_tokens) {
-        requestBody.max_completion_tokens = requestBody.max_tokens;
-        delete requestBody.max_tokens;
+    } catch (err: any) {
+      if (options?.signal?.aborted || err?.name === 'AbortError' || err instanceof CancelledError) {
+        throw new CancelledError();
       }
-      res = await httpFetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${active.apiKey.trim()}`
-        },
-        body: JSON.stringify(requestBody)
-      });
+      throw err;
     }
-
-    const latencyMs = Math.round(performance.now() - start);
-    if (!res.ok) {
-      const errMessage = await extractErrorMessage(res);
-      throw new Error(errMessage);
-    }
-
-    const json = await res.json();
-    const content = json.choices?.[0]?.message?.content || '';
-    return {
-      content,
-      raw: json,
-      usage: {
-        promptTokens: json.usage?.prompt_tokens || 0,
-        completionTokens: json.usage?.completion_tokens || 0,
-        totalTokens: json.usage?.total_tokens || 0
-      },
-      latencyMs
-    };
   }
 }

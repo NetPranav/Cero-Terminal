@@ -1,4 +1,4 @@
-import { appendSentinelFile } from '../../infrastructure/storage/SentinelFiles';
+import { appendCeroFile } from '../../infrastructure/storage/CeroFiles';
 import { SecretRedactor } from './SecretRedactor';
 
 export interface AuditLogEntry {
@@ -78,7 +78,7 @@ export class AuditLogger implements IAuditLogger {
     const previousEntry = this.logs[this.logs.length - 1];
     const previousHash = previousEntry ? (previousEntry.hash || GENESIS_HASH) : GENESIS_HASH;
 
-    const isBenchmark = typeof process !== 'undefined' && process.env.SENTINEL_BENCHMARK === 'true';
+    const isBenchmark = typeof process !== 'undefined' && process.env.CERO_BENCHMARK === 'true';
     const source: 'user' | 'benchmark' | 'system' = entry.source || (isBenchmark ? 'benchmark' : 'user');
     const sanitizedParameters = SecretRedactor.redactObject(entry.parameters);
 
@@ -111,12 +111,12 @@ export class AuditLogger implements IAuditLogger {
       // native store, not `sh -c "echo ..."`: that does not exist on Windows, and echo turned the
       // \n escapes inside JSON into real line breaks
       const auditFileName = isBenchmark ? 'audit.benchmark.jsonl' : 'audit.jsonl';
-      if (!appendSentinelFile(auditFileName, `${JSON.stringify(fullEntry)}\n`)) throw new Error('audit store unavailable');
+      if (!appendCeroFile(auditFileName, `${JSON.stringify(fullEntry)}\n`)) throw new Error('audit store unavailable');
     } catch (err) {
       // Fallback to localStorage in web preview / browser dev mode
       if (typeof localStorage !== 'undefined') {
         try {
-          const key = isBenchmark ? 'sentinel_audit_benchmark_logs' : 'sentinel_audit_logs';
+          const key = isBenchmark ? 'cero_audit_benchmark_logs' : 'cero_audit_logs';
           const existing = localStorage.getItem(key) || '';
           localStorage.setItem(key, existing + JSON.stringify(fullEntry) + '\n');
         } catch { /* ignore */ }

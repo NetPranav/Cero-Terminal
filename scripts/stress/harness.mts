@@ -113,6 +113,8 @@ agent.setAuthorizationHandler(async (plan: any) => {
   return allowed;
 });
 
+// Questions the agent asks (which folder? where to save?) are answered here and recorded
+const { claimChoiceRequests, releaseChoiceRequests } = await import(`${ROOT}/src/presentation/ChoiceRequests.ts`);
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const only = process.env.ONLY ? new Set(process.env.ONLY.split(',')) : null;
 fs.writeFileSync(OUT, '');
@@ -120,7 +122,19 @@ console.log(`provider: ${provider?.name} model: ${models.getActiveModel?.()?.mod
 
 for (const test of tests) {
   if (only && !only.has(test.id)) continue;
-  current = { ...test, plans: [] };
+  current = { ...test, plans: [], asked: [] as string[] };
+  if (test.screen === false) releaseChoiceRequests('harness');
+  else {
+    claimChoiceRequests('harness', async (req: any) => {
+      current.asked.push(req.title);
+      const pick = typeof current.pick === 'function' ? current.pick(req) : current.pick;
+      if (pick === null) return null;
+      if (pick && typeof pick === 'object') return pick;
+      return { index: pick ?? 0 };
+    });
+  }
+  const controller = test.abortAfter ? new AbortController() : null;
+  if (controller) setTimeout(() => controller.abort(), test.abortAfter);
   const before = NodeTauriBridge.getHistory(false).length;
   modelCalls = 0; modelMs = 0;
   const cwd = test.cwd ? path.join(WORK, test.cwd) : WORK;
@@ -129,7 +143,7 @@ for (const test of tests) {
   let result: any;
   try {
     result = await Promise.race([
-      agent.run(test.prompt, { os: 'macos', cwd, paneId: 'me' }),
+      agent.run(test.prompt, { os: 'macos', cwd, paneId: 'me', ...(controller ? { signal: controller.signal } : {}) }),
       sleep(240_000).then(() => ({ success: false, summary: 'HARNESS TIMEOUT (240 s)', steps: [] })),
     ]);
   } catch (e: any) {
@@ -143,14 +157,14 @@ for (const test of tests) {
   }));
   let check: string | null = null;
   try {
-    check = test.check ? await test.check({ result, cmds, plans: current.plans, work: WORK, ws, spawns, sh: (c: string) => { try { return execSync(c, { cwd: WORK, encoding: 'utf8', shell: '/bin/sh' }); } catch (e: any) { return `ERR ${e.status}: ${e.stdout || ''}${e.stderr || ''}`; } } }) : null;
+    check = test.check ? await test.check({ result, cmds, plans: current.plans, asked: current.asked, ms, work: WORK, ws, spawns, sh: (c: string) => { try { return execSync(c, { cwd: WORK, encoding: 'utf8', shell: '/bin/sh' }); } catch (e: any) { return `ERR ${e.status}: ${e.stdout || ''}${e.stderr || ''}`; } } }) : null;
   } catch (e: any) {
     check = `check threw: ${e?.message}`;
   }
   const row = {
     id: test.id, prompt: test.prompt, pass: check === null, check, ms, modelCalls, modelMs: Math.round(modelMs),
     success: result.success, declined: result.declined, summary: String(result.summary || '').slice(0, 1200),
-    cmds, plans: current.plans, cdPath: result.cdPath,
+    cmds, plans: current.plans, asked: current.asked, cdPath: result.cdPath,
   };
   fs.appendFileSync(OUT, JSON.stringify(row) + '\n');
   if (process.env.DEBUG_PANES) for (const p of ws.list()) console.log(`   pane ${p.paneId} busy=${p.busy} cmd=${p.runningCommand ?? '-'} tail=${JSON.stringify(p.outputTail.slice(-3))}`);

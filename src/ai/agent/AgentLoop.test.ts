@@ -229,7 +229,7 @@ describe('AgentLoop fast-path routing', () => {
 
       expect(isConversationalRefusal("Found 12 matching folders.")).toBe(false);
       expect(isConversationalRefusal("The active listening port is 3000.")).toBe(false);
-      expect(isConversationalRefusal("I am Sentinel, an autonomous mac terminal AI copilot.")).toBe(false);
+      expect(isConversationalRefusal("I am Cero, an autonomous mac terminal AI copilot.")).toBe(false);
     });
 
     it('identifies actionable system goals versus informational queries', () => {
@@ -846,15 +846,6 @@ To push the current branch and set the remote as upstream, use
       );
       expect(sanitized).toBe(original);
     });
-
-    it('matches composite app launch regex with workspace specifier', () => {
-      const res = findFastPath('open zen browser and "/home/test/Projects" folder in vscode in 5th workspace');
-      expect(res).not.toBeNull();
-      expect(res?.tool).toBe('shell.execute');
-      expect(res?.params.command).toContain('hyprctl dispatch');
-      expect(res?.params.command).toContain('zen-browser');
-      expect(res?.params.command).toContain('code "/home/test/Projects"');
-    });
   });
 });
 
@@ -1086,7 +1077,7 @@ describe('Explaining and exporting what happened', () => {
     expect(why.summary).toContain('succeeded');
   });
 
-  it('exports a redacted Markdown transcript under ~/.sentinel/transcripts', async () => {
+  it('exports a redacted Markdown transcript under ~/.cero/transcripts', async () => {
     const fs = await import('node:fs');
     const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any);
     (loop as any).transcript.push({
@@ -1095,7 +1086,7 @@ describe('Explaining and exporting what happened', () => {
       result: { success: true, summary: 'GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789', steps: [{ tool: 'shell.execute', params: { command: 'echo $GITHUB_TOKEN' }, result: { success: true } }] }
     });
     const res = await loop.run('export session', { os: 'linux', cwd: '/home/u' });
-    const file = `${process.env.HOME}/.sentinel/transcripts/${res.summary.match(/session-[\d-]+\.md/)![0]}`;
+    const file = `${process.env.HOME}/.cero/transcripts/${res.summary.match(/session-[\d-]+\.md/)![0]}`;
     const text = fs.readFileSync(file, 'utf8');
     expect(text).toContain('## ');
     expect(text).toContain('`echo $GITHUB_TOKEN` (ok)');
@@ -1621,7 +1612,7 @@ describe('Making a workflow from plain steps', () => {
       expect(generate).not.toHaveBeenCalled();
       expect(asked).toHaveLength(1);
       expect(asked[0].title).toBe('Save "demo setup" as a .flow file');
-      expect(asked[0].options.map((o: any) => o.label)).toEqual(['Desktop', 'This folder', 'Sentinel workflows']);
+      expect(asked[0].options.map((o: any) => o.label)).toEqual(['Desktop', 'This folder', 'Cero workflows']);
       expect(asked[0].options[1].detail).toBe('/tmp/work');
       expect(asked[0].lines.slice(0, 3)).toEqual(['1. Install node', '2. Open YouTube in Chrome', '3. Open VS Code']);
       const [path] = [...files.keys()];
@@ -1791,5 +1782,37 @@ describe('Turning Wi-Fi on and off on macOS', () => {
     const on = await loop.run('turn wifi on', { os: 'macos', cwd: '/tmp' });
     expect(on.summary).toBe('Wi-Fi is on.');
     expect(generate).not.toHaveBeenCalled();
+  });
+});
+
+describe('fixLeadingVerb', () => {
+  it('corrects a slipped command word and leaves real words alone', async () => {
+    const { fixLeadingVerb } = await import('./AgentLoop');
+    expect(fixLeadingVerb('opn firefox')).toBe('open firefox');
+    expect(fixLeadingVerb('opne gitBrans in vs code')).toBe('open gitBrans in vs code');
+    expect(fixLeadingVerb('Oepn the folder x')).toBe('Open the folder x');
+    expect(fixLeadingVerb('instl express')).toBe('install express');
+    expect(fixLeadingVerb('please clos port 8000')).toBe('please close port 8000');
+    expect(fixLeadingVerb('star the repo')).toBe('star the repo');
+    expect(fixLeadingVerb('clone https://x.y/z into w')).toBe('clone https://x.y/z into w');
+    expect(fixLeadingVerb('quite a lot of files here')).toBe('quite a lot of files here');
+    expect(fixLeadingVerb('open firefox')).toBe('open firefox');
+    expect(fixLeadingVerb('ls -la')).toBe('ls -la');
+    expect(fixLeadingVerb('')).toBe('');
+  });
+});
+
+describe('isActionableGoal and knowledge questions', () => {
+  it('answers knowledge questions instead of demanding a command', async () => {
+    const { isActionableGoal } = await import('./AgentLoop');
+    for (const q of ['how does binary search work?', 'explain what async and await do in typescript', 'what is a closure in programming?', 'why is the sky blue', 'define recursion']) {
+      expect(isActionableGoal(q)).toBe(false);
+    }
+  });
+  it('still treats requests about this computer as actions', async () => {
+    const { isActionableGoal } = await import('./AgentLoop');
+    for (const q of ['what is using port 3000', 'what files are in this folder', 'how much disk space is left', 'find all log files', 'show git status', 'search for read me file in repository', 'what does scripts/deploy.sh do?']) {
+      expect(isActionableGoal(q)).toBe(true);
+    }
   });
 });

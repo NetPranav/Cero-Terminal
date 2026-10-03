@@ -90,4 +90,45 @@ describe('EmbeddedProvider (Inference & Request Isolation)', () => {
     expect(manager.isCpuFallback()).toBe(true);
     expect(manager.getCpuFallbackNotice()).toContain('CPU fallback mode');
   });
+
+  it('sends temperature 0, top_k 1, top_p 1, numeric seed, and cache_prompt false for mode: "decision"', async () => {
+    let capturedBody: any = null;
+    global.fetch = vi.fn().mockImplementation(async (_url, init) => {
+      capturedBody = JSON.parse(init?.body as string);
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: '{"action":"execute","command":"ls"}' } }]
+        })
+      };
+    });
+
+    await provider.generate('find files', undefined, { mode: 'decision' });
+    expect(capturedBody.temperature).toBe(0);
+    expect(capturedBody.top_k).toBe(1);
+    expect(capturedBody.top_p).toBe(1);
+    expect(typeof capturedBody.seed).toBe('number');
+    expect(capturedBody.seed).toBe(42);
+    expect(capturedBody.cache_prompt).toBe(false);
+  });
+
+  it('sends conversational temperature and no fixed seed for mode: "chat"', async () => {
+    let capturedBody: any = null;
+    global.fetch = vi.fn().mockImplementation(async (_url, init) => {
+      capturedBody = JSON.parse(init?.body as string);
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'hello user' } }]
+        })
+      };
+    });
+
+    await provider.generate('hello', undefined, { mode: 'chat' });
+    expect(capturedBody.temperature).toBe(0.4);
+    expect(capturedBody.top_k).toBe(20);
+    expect(capturedBody.seed).toBeUndefined();
+    expect(capturedBody.cache_prompt).toBe(true);
+  });
 });
+

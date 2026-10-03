@@ -46,8 +46,7 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.summary).toContain('Saved 1 step(s) to ~/.sentinel/workflows/my-ci-pipeline.json');
-    expect(result.summary).toContain('schemaVersion: 1');
+    expect(result.summary).toContain('my-ci-pipeline.flow');
 
     // Verify it was actually written to disk
     const storage = DiskWorkflowStorage.getInstance();
@@ -119,7 +118,7 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.summary).toContain('Saved 2 step(s)');
+    expect(result.summary).toContain('(2 steps)');
 
     const storage = DiskWorkflowStorage.getInstance();
     const loaded = await storage.loadWorkflow('scoped-pipeline');
@@ -143,8 +142,7 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.summary).toContain('Workflow "get-date" saved');
-    expect(result.summary).toContain('schemaVersion: 1');
+    expect(result.summary).toContain('Saved workflow \"get-date\"');
 
     const storage = DiskWorkflowStorage.getInstance();
     const loaded = await storage.loadWorkflow('get-date');
@@ -172,7 +170,7 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.summary).toContain('Saved 3 step(s)');
+    expect(result.summary).toContain('(3 steps)');
 
     const storage = DiskWorkflowStorage.getInstance();
     const loaded = await storage.loadWorkflow('my-scoped-pipeline');
@@ -213,7 +211,7 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.summary).toContain('Workflow "cargo-build-flow" saved');
+    expect(result.summary).toContain('Saved workflow \"cargo-build-flow\"');
 
     const storage = DiskWorkflowStorage.getInstance();
     const loaded = await storage.loadWorkflow('cargo-build-flow');

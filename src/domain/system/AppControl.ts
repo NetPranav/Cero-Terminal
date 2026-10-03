@@ -11,6 +11,8 @@
  * Nothing matches: say so and name the closest running apps. Several match: ask which one.
  */
 
+import { editDistance } from './NameMatch';
+
 export type AppOs = 'macos' | 'linux' | 'windows';
 
 export interface QuitRequest {
@@ -33,7 +35,7 @@ export interface RunningItem {
 }
 
 // Things "stop"/"close" refer to that are not apps: other routes handle them
-const NOT_AN_APP = /^(?:(?:the\s+)?(?:dev\s+|web\s+|local\s+|http\s+)?server|(?:this|the|that|current|other|last|first)?\s*(?:tab|pane|split|terminal|window|shell|session)(?:\s+\d+)?|tab\s+\d+|terminal\s+\d+|it|this|that|everything|all|settings|sentinel(?:\s+terminal)?|port\s+\d+|pid\s+\d+|\d+|the\s+build|build|watch(?:er|ing)?|recording|the\s+recording|it\s+all|(?:the\s+)?(?:command|process)(?:\s+(?:on|using)\s+port\s+\d+)?|.*\bport\s+\d+.*|.*\b(?:in|on)\s+tab\s+\d+.*)$/i;
+const NOT_AN_APP = /^(?:(?:the\s+)?(?:dev\s+|web\s+|local\s+|http\s+)?server|(?:this|the|that|current|other|last|first)?\s*(?:tab|pane|split|terminal|window|shell|session)(?:\s+\d+)?|tab\s+\d+|terminal\s+\d+|it|this|that|everything|all|settings|cero(?:\s+terminal)?|port\s+\d+|pid\s+\d+|\d+|the\s+build|build|watch(?:er|ing)?|recording|the\s+recording|it\s+all|(?:the\s+)?(?:command|process)(?:\s+(?:on|using)\s+port\s+\d+)?|.*\bport\s+\d+.*|.*\b(?:in|on)\s+tab\s+\d+.*)$/i;
 
 const VERB = '(?:force\\s+quit|force\\s+close|force\\s+kill|quit|close|stop|kill|terminate|exit|shut\\s*down|end)';
 
@@ -148,16 +150,7 @@ export function matchRunning(query: string, running: RunningItem[], appOnly: boo
   return { kind: 'none', closest };
 }
 
-function distance(a: string, b: string): number {
-  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
-  for (let j = 1; j <= b.length; j++) d[0][j] = j;
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-    }
-  }
-  return d[a.length][b.length];
-}
+const distance = editDistance;
 
 // ---- quitting -------------------------------------------------------------------------------
 

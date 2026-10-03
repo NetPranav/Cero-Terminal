@@ -16,7 +16,7 @@ describe('Phase 4.7 — The "Dream-State" Nightly Autonomous Self-Play Engine', 
 
   const testTrainingDir = path.join(
     process.env.HOME || '/tmp',
-    '.sentinel',
+    '.cero',
     'training',
     'test_dream_state'
   );
@@ -88,7 +88,7 @@ describe('Phase 4.7 — The "Dream-State" Nightly Autonomous Self-Play Engine', 
         }
         if (cmd.includes('find') && cmd.includes('.git')) {
           return {
-            stdout: '/Users/test/Projects/Sentinel/.git\n/Users/test/Projects/AI-Terminal/.git\n',
+            stdout: '/Users/test/Projects/Cero/.git\n/Users/test/Projects/AI-Terminal/.git\n',
             stderr: '',
             code: 0,
           };
@@ -120,7 +120,7 @@ describe('Phase 4.7 — The "Dream-State" Nightly Autonomous Self-Play Engine', 
       expect(profile.activePorts.some(p => p.port === 3000 && p.process === 'node')).toBe(true);
       expect(profile.activePorts.some(p => p.port === 5432 && p.process === 'postgres')).toBe(true);
 
-      expect(profile.repositories).toContain('/Users/test/Projects/Sentinel');
+      expect(profile.repositories).toContain('/Users/test/Projects/Cero');
       expect(profile.repositories).toContain('/Users/test/Projects/AI-Terminal');
     });
   });

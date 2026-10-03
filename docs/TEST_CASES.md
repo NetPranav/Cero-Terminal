@@ -1,14 +1,14 @@
-# Sentinel Terminal — Complete AI Tool Calling Test Suite
+# Cero — Complete AI Tool Calling Test Suite
 
-> **Ready-to-Test Command Reference**: Every command in this guide is verified to run in Sentinel Terminal. These test cases directly invoke Sentinel's **101 registered capability drivers** via either the sub-millisecond **Fast-Path Engine** or the local **ReAct Agent Loop**.
+> **Ready-to-Test Command Reference**: Every command in this guide is verified to run in Cero. These test cases directly invoke Cero's **101 registered capability drivers** via either the sub-millisecond **Fast-Path Engine** or the local **ReAct Agent Loop**.
 
 ---
 
 ## 🚀 Quick Start: High-Priority Test Checklist
 
-Try pasting these foundational commands directly into your Sentinel Terminal prompt:
+Try pasting these foundational commands directly into your Cero prompt:
 
-| # | What You Want to Test | Command to Type in Sentinel Terminal | Tool Invoked | Execution Mode |
+| # | What You Want to Test | Command to Type in Cero | Tool Invoked | Execution Mode |
 | :-: | :--- | :--- | :--- | :---: |
 | 1 | **Turn Bluetooth On** | `turn on bluetooth` | `network.bluetooth.on` | ⚡ Fast-Path |
 | 2 | **Check Available Bluetooth Devices** | `check if any bluetooth device is available` | `network.bluetooth.list` | 🤖 Agent Loop |
@@ -30,7 +30,7 @@ Try pasting these foundational commands directly into your Sentinel Terminal pro
 
 ## 🎧 1. Bluetooth & Audio Peripherals
 
-Sentinel Terminal provides direct macOS Bluetooth driver integration (`blueutil` / CoreBluetooth).
+Cero provides direct macOS Bluetooth driver integration (`blueutil` / CoreBluetooth).
 
 ### Test Cases
 
@@ -560,7 +560,7 @@ Sentinel Terminal provides direct macOS Bluetooth driver integration (`blueutil`
 
 ## 🐚 12. Compound Shell Pipelines
 
-When no specialized single tool matches, Sentinel Terminal automatically routes compound commands through `shell.execute`:
+When no specialized single tool matches, Cero automatically routes compound commands through `shell.execute`:
 
 #### 🔹 TC-SH-01: Pwd & Git Branch Chain
 - **User Input**: `show the current directory and its git branch`
@@ -581,10 +581,10 @@ When no specialized single tool matches, Sentinel Terminal automatically routes 
 
 ## 🧪 Verifying Test Cases
 
-To verify that Sentinel's tool calling works as expected:
+To verify that Cero's tool calling works as expected:
 
 1. **Interactive Manual Testing**:
-   Open Sentinel Terminal and enter any of the test commands above. Watch the bottom status line or pane reflect the active tool execution and the updated terminal state.
+   Open Cero and enter any of the test commands above. Watch the bottom status line or pane reflect the active tool execution and the updated terminal state.
 
 2. **Automated Unit Testing via Vitest**:
    Run the verification test suite directly from your terminal:

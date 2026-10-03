@@ -5,12 +5,12 @@ train_colab_standalone.py — Standalone Google Colab / Cloud GPU Fine-Tuning Sc
 Fine-tunes Qwen/Qwen2.5-Coder-3B-Instruct (or 7B) on Google Colab (T4 / A100 GPU):
 1. Loads SFT dataset and runs QLoRA 4-bit SFT training via TRL SFTTrainer
 2. Loads DPO dataset and aligns preference pairs via TRL DPOTrainer (suppressing refusal heads)
-3. Merges LoRA weights or exports GGUF adapter directly compatible with Sentinel llama-server
+3. Merges LoRA weights or exports GGUF adapter directly compatible with Cero llama-server
 
 Usage in Google Colab:
   !python train_colab_standalone.py \
-      --sft-dataset sentinel_sft_dataset.jsonl \
-      --dpo-dataset sentinel_dpo_dataset.jsonl \
+      --sft-dataset cero_sft_dataset.jsonl \
+      --dpo-dataset cero_dpo_dataset.jsonl \
       --epochs 3 \
       --export-gguf
 """
@@ -22,11 +22,11 @@ import argparse
 from pathlib import Path
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Sentinel Colab Fine-Tuning Script")
-    parser.add_argument("--sft-dataset", type=str, default="sentinel_sft_dataset.jsonl", help="Path to SFT dataset (.jsonl)")
-    parser.add_argument("--dpo-dataset", type=str, default="sentinel_dpo_dataset.jsonl", help="Path to DPO dataset (.jsonl)")
+    parser = argparse.ArgumentParser(description="Cero Colab Fine-Tuning Script")
+    parser.add_argument("--sft-dataset", type=str, default="cero_sft_dataset.jsonl", help="Path to SFT dataset (.jsonl)")
+    parser.add_argument("--dpo-dataset", type=str, default="cero_dpo_dataset.jsonl", help="Path to DPO dataset (.jsonl)")
     parser.add_argument("--model-id", type=str, default="Qwen/Qwen2.5-Coder-3B-Instruct", help="Hugging Face base model ID")
-    parser.add_argument("--output-dir", type=str, default="sentinel_lora_output", help="Output directory for trained adapter")
+    parser.add_argument("--output-dir", type=str, default="cero_lora_output", help="Output directory for trained adapter")
     parser.add_argument("--epochs", type=int, default=3, help="Number of SFT training epochs")
     parser.add_argument("--dpo-epochs", type=int, default=1, help="Number of DPO training epochs")
     parser.add_argument("--batch-size", type=int, default=2, help="Per device batch size")
@@ -38,7 +38,7 @@ def parse_args():
     parser.add_argument("--dry-run", action="store_true", help="Validate data loading without full training")
     return parser.parse_args()
 
-SYSTEM_PROMPT = 'You are Sentinel, an autonomous on-device terminal copilot on macOS and Linux. You directly execute verified shell commands. Output strictly valid JSON matching: {"action": "execute", "command": "<cmd>", "explanation": "<brief reason>"}.'
+SYSTEM_PROMPT = 'You are Cero, an autonomous on-device terminal copilot on macOS and Linux. You directly execute verified shell commands. Output strictly valid JSON matching: {"action": "execute", "command": "<cmd>", "explanation": "<brief reason>"}.'
 
 def load_jsonl(filepath):
     path = Path(filepath)
@@ -178,7 +178,7 @@ def main():
     args = parse_args()
 
     print("=" * 65)
-    print("⚡ Sentinel Terminal — Google Colab Fine-Tuning Pipeline")
+    print("⚡ Cero — Google Colab Fine-Tuning Pipeline")
     print(f"Base Model:    {args.model_id}")
     print(f"SFT Dataset:   {args.sft_dataset}")
     print(f"DPO Dataset:   {args.dpo_dataset}")
@@ -345,7 +345,7 @@ def main():
         print("\n⚡ Exporting to GGUF format...")
         try:
             # Check if llama.cpp convert script is available
-            cmd = f"python3 -m llama_cpp.convert_lora_to_gguf {out_path} --base {args.model_id} --outfile {out_path}/sentinel_lora.gguf"
+            cmd = f"python3 -m llama_cpp.convert_lora_to_gguf {out_path} --base {args.model_id} --outfile {out_path}/cero_lora.gguf"
             print(f"Run GGUF conversion: {cmd}")
         except Exception as e:
             print(f"Note on GGUF export: {e}")
@@ -353,8 +353,8 @@ def main():
     print("\n" + "=" * 65)
     print("🎉 Fine-Tuning Complete! Download your adapter from Google Colab:")
     print("   from google.colab import files")
-    print(f"   !zip -r sentinel_lora.zip {args.output_dir}")
-    print("   files.download('sentinel_lora.zip')")
+    print(f"   !zip -r cero_lora.zip {args.output_dir}")
+    print("   files.download('cero_lora.zip')")
     print("=" * 65)
 
 if __name__ == "__main__":

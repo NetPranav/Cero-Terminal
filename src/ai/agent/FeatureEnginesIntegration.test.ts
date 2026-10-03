@@ -18,7 +18,7 @@ describe('Core Feature Engines Integration Suite', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-features-test-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-features-test-'));
     DiskWorkflowStorage.getInstance().setCustomBaseDir(tmpDir);
   });
 

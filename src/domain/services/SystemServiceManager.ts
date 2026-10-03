@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Unified Cross-Platform System Service Manager
+ * Cero — Unified Cross-Platform System Service Manager
  *
  * Controls background daemons and services across Linux (systemd / systemctl),
  * macOS (launchctl / brew services), and Windows (PowerShell Service cmdlets).

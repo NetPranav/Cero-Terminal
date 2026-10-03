@@ -47,7 +47,7 @@ export class PromptNavigationEngine {
   public static detectPromptPrefixLength(lineText: string): number {
     if (!lineText) return 0;
 
-    // 1. Sentinel AI prompt starting with '>' (e.g. "> Create workspace...")
+    // 1. Cero AI prompt starting with '>' (e.g. "> Create workspace...")
     const trimmed = lineText.trimStart();
     const leadingSpaces = lineText.length - trimmed.length;
     if (trimmed.startsWith('>')) {

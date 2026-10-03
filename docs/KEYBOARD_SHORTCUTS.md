@@ -1,6 +1,6 @@
-# Sentinel Terminal — Master Keyboard Shortcuts Guide
+# Cero — Master Keyboard Shortcuts Guide
 
-Sentinel is engineered for rapid keyboard-first navigation and efficient control of multi-pane terminal workspaces. All capabilities, navigation panels, and modal overlays are accessible via keybindings.
+Cero is engineered for rapid keyboard-first navigation and efficient control of multi-pane terminal workspaces. All capabilities, navigation panels, and modal overlays are accessible via keybindings.
 
 ---
 
@@ -9,7 +9,7 @@ Sentinel is engineered for rapid keyboard-first navigation and efficient control
 | Action | Linux / Windows Shortcut | macOS Shortcut | Description |
 | :--- | :--- | :--- | :--- |
 | **Open Command Palette** | `Ctrl + Shift + P` | `Cmd + Shift + P` | Launches the interactive prompt and capability search palette. |
-| **Sentinel Settings Center** | `Ctrl + ,` | `Cmd + ,` | Opens full-screen Settings Center (AI Models, Desktop Integrations, Terminal Experience, General & Setup). |
+| **Cero Settings Center** | `Ctrl + ,` | `Cmd + ,` | Opens full-screen Settings Center (AI Models, Desktop Integrations, Terminal Experience, General & Setup). |
 | **Fuzzy History Search** | `Ctrl + R` | `Ctrl + R` | Interactive fuzzy search across past command history with instant paste-to-terminal. |
 | **Terminal Find / Search** | `Ctrl + F` | `Cmd + F` | Opens floating terminal search bar overlay with match counters. |
 | **Toggle Zen / Visual Mode** | `Ctrl + Shift + Z` | `Cmd + Shift + Z` | Switches between distraction-free Zen mode and full Visual Mode with quick buttons. |

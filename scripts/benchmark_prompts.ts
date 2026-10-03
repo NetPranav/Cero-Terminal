@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * scripts/benchmark_prompts.ts — Sentinel Terminal Automated Benchmark Suite
+ * scripts/benchmark_prompts.ts — Cero Automated Benchmark Suite
  * 
- * Phase 0 of SENTINEL_ROADMAP_v5.0:
- * Executes domain-classified prompts against Sentinel's agent engine, validates
+ * Phase 0 of CERO_ROADMAP_v5.0:
+ * Executes domain-classified prompts against Cero's agent engine, validates
  * results against automated verification oracles, and generates quality reports.
  * 
  * Usage:
@@ -21,7 +21,7 @@ import { AgentLoop, AgentResult } from '../src/ai/agent/AgentLoop';
 import { ModelManager } from '../src/ai/management/ModelManager';
 
 // Set benchmark environment flag before importing components
-process.env.SENTINEL_BENCHMARK = 'true';
+process.env.CERO_BENCHMARK = 'true';
 
 // ANSI Colors
 const colors = {
@@ -582,7 +582,7 @@ export class BenchmarkRunner {
     const detectedOs = process.platform === 'darwin' ? 'mac' : (process.platform === 'win32' ? 'windows' : 'linux');
 
     console.log(`\n${colors.bold}${colors.cyan}══════════════════════════════════════════════════════════════════════════════${colors.reset}`);
-    console.log(`  ${colors.bold}Sentinel AI Terminal — Automated Benchmark Suite (Phase 0)${colors.reset}`);
+    console.log(`  ${colors.bold}Cero AI Terminal — Automated Benchmark Suite (Phase 0)${colors.reset}`);
     console.log(`  Target Platform: ${colors.green}${detectedOs}${colors.reset} | Prompts Queued: ${colors.bold}${this.prompts.length}${colors.reset}`);
     console.log(`${colors.bold}${colors.cyan}══════════════════════════════════════════════════════════════════════════════${colors.reset}\n`);
 
@@ -861,7 +861,7 @@ export class BenchmarkRunner {
 
   private generateMarkdownReport(report: BenchmarkReport): string {
     const lines: string[] = [];
-    lines.push(`# Sentinel AI Terminal — Benchmark Execution Report\n`);
+    lines.push(`# Cero AI Terminal — Benchmark Execution Report\n`);
     lines.push(`> **Generated:** ${report.timestamp}  `);
     lines.push(`> **Platform:** ${report.system.platform} (${report.system.release} ${report.system.arch})  `);
     lines.push(`> **Total Evaluated:** ${report.totalPrompts} (Real Native: **${report.totalRealNative}**, Simulated/Stubs: **${report.totalSimulated}**)  `);
@@ -970,7 +970,7 @@ async function main() {
       promptRange = undefined;
     } else if (a === '--help' || a === '-h') {
       console.log(`
-Sentinel AI Terminal — Automated Benchmark Runner
+Cero AI Terminal — Automated Benchmark Runner
 
 Usage:
   npx tsx scripts/benchmark_prompts.ts [options]

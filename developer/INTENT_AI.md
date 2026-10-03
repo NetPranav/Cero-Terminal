@@ -6,7 +6,7 @@ The **Local Intent AI Engine** (`src/ai/`) translates natural language instructi
 
 ## 🤖 Supported Intelligence Profiles
 
-Sentinel is engineered around high-efficiency localized models:
+Cero is engineered around high-efficiency localized models:
 - **Recommended Model**: **Qwen 2.5:1.5b via Ollama** (`qwen2.5:1.5b`). This specialized profile achieves superior parameter extraction accuracy on developer command statements while consuming minimal system RAM and executing with sub-second inference speeds.
 - **Hardware Acceleration Adaptation**: On macOS platforms, `ModelManager.ts` dynamically leverages unified memory architectures (Apple Silicon M1/M2/M3/M4) via Apple Metal compute accelerators and CoreML optimization interfaces.
 
@@ -17,7 +17,7 @@ Sentinel is engineered around high-efficiency localized models:
 Users naturally add conversational modifiers when communicating with AI assistants. `EntityExtractor.ts` applies layered syntactic normalization to uncover pure tool parameters, while `AgentLoop.ts` handles the volatile nature of 3B parameter model outputs.
 
 ### 1. Resilient JSON Parsing (Curly-Brace Counting Algorithm)
-Standard regex extraction frequently fails on smaller models (like the 3B parameter model) that output conversational text intermingled with multi-step JSON tool calls. Sentinel replaces regex with a robust curly-brace counting algorithm that reads the LLM output character-by-character, perfectly isolating nested JSON configurations even if the model was abruptly interrupted or hallucinated surrounding text.
+Standard regex extraction frequently fails on smaller models (like the 3B parameter model) that output conversational text intermingled with multi-step JSON tool calls. Cero replaces regex with a robust curly-brace counting algorithm that reads the LLM output character-by-character, perfectly isolating nested JSON configurations even if the model was abruptly interrupted or hallucinated surrounding text.
 
 ### 2. Strict Anti-Hallucination Rules
 To prevent the model from guessing non-existent OS paths (e.g., hallucinating `/path/to/project`), `SystemPrompt.ts` enforces stringent logic:
@@ -44,6 +44,6 @@ The engine matches distinct target parameters across varying domain expressions:
 
 ## 📈 Telemetry Events & LoRA Fine-Tuning Pipelines
 
-To continuously refine localized reasoning models without compromising privacy, Sentinel incorporates an offline telemetry and adaptation pipeline (`src/ai/telemetry/`):
+To continuously refine localized reasoning models without compromising privacy, Cero incorporates an offline telemetry and adaptation pipeline (`src/ai/telemetry/`):
 - **Event Recording**: When low confidence matches occur or users apply command corrections following an AI action, `TelemetryRecorder` locally captures the utterance paired with the validated final tool execution.
 - **JSONL Dataset Generation**: Exported historical execution pairings are preserved in standardized JSONL training files under `.system_generated/logs/`, providing developers with high-quality, reproducible datasets ready for custom LoRA model adaptation and lightweight fine-tuning!

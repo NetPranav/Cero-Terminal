@@ -1,7 +1,7 @@
 /**
  * ShadowPtySimulator.ts — Speculative Shadow-PTY Simulation Engine ("Minority Report for the Shell")
  * 
- * Part of Sentinel-SERL (Self-Evolving Reflexion Loop):
+ * Part of Cero-SERL (Self-Evolving Reflexion Loop):
  * Spawns an ephemeral RAM sandbox that executes parallel candidate branches
  * in milliseconds before presenting any command to the user or live terminal.
  * 

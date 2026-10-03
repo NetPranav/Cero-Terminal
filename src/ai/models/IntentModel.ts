@@ -28,7 +28,7 @@ export class LocalIntentClassifier implements IntentModel {
   public static readonly DEFAULT_TIMEOUT_MS = 3000; // Phase 0.75 Task 0.75.8: Hard ~3s latency budget
 
   /** localStorage key holding an Ollama-compatible endpoint for the optional intent model */
-  public static readonly ENDPOINT_STORAGE_KEY = 'sentinel_intent_model_endpoint';
+  public static readonly ENDPOINT_STORAGE_KEY = 'cero_intent_model_endpoint';
 
   private configuredEndpoint?: string;
   private defaultTimeoutMs: number;
@@ -122,7 +122,7 @@ export class LocalIntentClassifier implements IntentModel {
    * Only includes prompt and minimal session state; excludes full tool specs.
    */
   private buildIntentPrompt(prompt: string, context?: IntentContext): string {
-    return `You are Sentinel's Intent Classifier. Classify the user instruction into domain, action, and whether it requires multi-step decomposition.
+    return `You are Cero's Intent Classifier. Classify the user instruction into domain, action, and whether it requires multi-step decomposition.
 Output JSON only:
 {
   "domain": "application|system|network|developer|filesystem|git|docker|shell|workflow|general",

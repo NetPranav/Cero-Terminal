@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Sentinel Terminal — Cross-Platform Shared Core Synchronizer
+# Cero — Cross-Platform Shared Core Synchronizer
 #
 # Use this script on Windows (Git Bash / WSL), Linux, or macOS to pull ONLY the
 # OS-agnostic shared core (Tools, AI Planning Engine, React UI, Workflows,
@@ -19,7 +19,7 @@ SOURCE_BRANCH="${1:-origin/main}"
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 echo "================================================================="
-echo "🔄 Sentinel Terminal — Shared Core Synchronizer"
+echo "🔄 Cero — Shared Core Synchronizer"
 echo "================================================================="
 echo "📌 Current Branch : $CURRENT_BRANCH"
 echo "🌐 Source Branch  : $SOURCE_BRANCH"

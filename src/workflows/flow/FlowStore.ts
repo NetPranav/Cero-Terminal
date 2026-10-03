@@ -15,7 +15,7 @@ export interface FlowIO {
 export interface FlowFolders {
   home: string;
   desktop: string;
-  /** ~/.sentinel/workflows: the Workflow Manager lists the flows saved here */
+  /** ~/.cero/workflows: the Workflow Manager lists the flows saved here */
   workflows: string;
 }
 
@@ -49,7 +49,7 @@ export async function flowFolders(): Promise<FlowFolders> {
   }
   if (!home) throw new Error('Could not find your home folder');
   const sep = sepOf(home);
-  return { home, desktop: desktop || `${home}${sep}Desktop`, workflows: `${home}${sep}.sentinel${sep}workflows` };
+  return { home, desktop: desktop || `${home}${sep}Desktop`, workflows: `${home}${sep}.cero${sep}workflows` };
 }
 
 /** "~" and "~/x" as an absolute path; anything else unchanged */

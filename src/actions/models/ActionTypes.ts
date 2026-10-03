@@ -4,7 +4,7 @@
  * Every Action is a self-describing, platform-independent capability.
  * The registry is purely declarative — zero execution logic.
  *
- * This module defines WHAT Sentinel can do — never HOW.
+ * This module defines WHAT Cero can do — never HOW.
  */
 
 import { z } from 'zod';

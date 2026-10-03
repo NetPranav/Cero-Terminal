@@ -100,7 +100,7 @@ describe('All Domain Capabilities — Comprehensive 13-Domain Verification', () 
   });
 
   it('12. TerminalCapability: should bridge commands into PTY zsh/bash sessions with clean exit code auditing', async () => {
-    const res = await executor.execute(createTestNode('term-1', 'terminal.run', { command: 'echo "Sentinel OS"' }), context);
+    const res = await executor.execute(createTestNode('term-1', 'terminal.run', { command: 'echo "Cero OS"' }), context);
     expect(res.success).toBe(true);
     expect(res.verification?.verifiedOutputs.activeShell).toBe('/bin/zsh');
   });

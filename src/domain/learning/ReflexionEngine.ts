@@ -1,7 +1,7 @@
 /**
  * ReflexionEngine.ts — Autonomous Background Reflexion & Counterfactual Synthesis Engine
  * 
- * Part of Sentinel-SERL (Self-Evolving Reflexion Loop):
+ * Part of Cero-SERL (Self-Evolving Reflexion Loop):
  * When the terminal is idle, this autonomous background agent examines logged
  * knowledge deficits, identifies the target entity and intent, generates counterfactual
  * candidate command pipelines, evaluates them in the Shadow-PTY sandbox,
@@ -395,7 +395,7 @@ export class ReflexionEngine {
     // 8. If LLM provider is available, query model for reflection candidates
     if (this.modelProvider && candidates.length < 3) {
       try {
-        const prompt = `You are Sentinel's autonomous Reflexion Agent on ${deficit.context.os}.
+        const prompt = `You are Cero's autonomous Reflexion Agent on ${deficit.context.os}.
 A user command failed with:
 Goal: "${deficit.goal}"
 Model Output / Excuse: "${deficit.modelOutput || 'None'}"

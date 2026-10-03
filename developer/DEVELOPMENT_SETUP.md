@@ -1,6 +1,6 @@
-# Sentinel Development Setup & Prerequisites
+# Cero Development Setup & Prerequisites
 
-This manual instructs engineering contributors on configuring a reproducible local development environment for building, running, and modifying the Sentinel native codebase.
+This manual instructs engineering contributors on configuring a reproducible local development environment for building, running, and modifying the Cero native codebase.
 
 ---
 

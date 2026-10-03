@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as os from 'os';
 
 describe('KnowledgeDeficitLogger — Runtime Knowledge Deficit Logger', () => {
-  const testDir = path.join(os.tmpdir(), `sentinel_test_deficit_${Date.now()}`);
+  const testDir = path.join(os.tmpdir(), `cero_test_deficit_${Date.now()}`);
   const testFile = path.join(testDir, 'knowledge_deficits.jsonl');
 
   beforeEach(() => {

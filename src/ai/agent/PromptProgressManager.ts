@@ -182,7 +182,7 @@ export class PromptProgressManager {
   private broadcast(): void {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
-        new CustomEvent('sentinel:prompt-progress', {
+        new CustomEvent('cero:prompt-progress', {
           detail: { ...this.state }
         })
       );

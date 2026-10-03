@@ -13,7 +13,7 @@ describe('pathPolyfill (the app\'s path module on every OS)', () => {
     expect(p.resolve('/tmp/a', 'b/')).toBe('/tmp/a/b');
     expect(p.resolve('C:\\Users\\me', 'proj')).toBe('C:/Users/me/proj');
     expect(p.resolve('C:\\Users\\me', 'D:\\data')).toBe('D:/data');
-    expect(p.resolve('/workspace', 'sentinel')).toBe('/workspace/sentinel');
+    expect(p.resolve('/workspace', 'cero')).toBe('/workspace/cero');
   });
 
   it('understands Windows paths', () => {

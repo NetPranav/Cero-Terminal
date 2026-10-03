@@ -4,7 +4,9 @@
  * Communicates cleanly with local Ollama runtime over HTTP REST endpoints.
  */
 
+import { wireSampling } from './DecisionRequest';
 import { ModelProvider, ModelMetadata, GenerateOptions, ProviderResponse } from './Provider';
+import { CancelledError, throwIfAborted } from '../agent/Cancelled';
 
 export class OllamaProvider implements ModelProvider {
   readonly providerId = 'ollama';
@@ -94,21 +96,25 @@ export class OllamaProvider implements ModelProvider {
   }
 
   public async generate(prompt: string, modelId: string = 'qwen2.5:1.5b', options?: GenerateOptions): Promise<ProviderResponse> {
+    throwIfAborted(options?.signal);
     const startTime = performance.now();
     const timeoutMs = options?.timeoutMs ?? 180000;
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+    const onAbort = () => controller.abort();
+    if (options?.signal) {
+      options.signal.addEventListener('abort', onAbort, { once: true });
+    }
 
     const isChat = Array.isArray(options?.messages) && options.messages.length > 0;
     const endpoint = isChat ? `${this.baseUrl}/api/chat` : `${this.baseUrl}/api/generate`;
     // A JSON schema constrains decoding like a grammar does; plain 'json' only guarantees valid JSON.
     const format = options?.grammarJsonSchema
       ?? (options?.format === 'json' ? 'json' : options?.format);
-    const sampling = {
-      temperature: options?.temperature ?? 0.1,
-      top_p: options?.topP ?? 0.9,
-      num_predict: options?.maxTokens ?? 1024,
-      stop: options?.stopSequences
+    const sampling: Record<string, any> = {
+      ...wireSampling('ollama', options),
+      stop: options?.stopSequences,
     };
     // think:false keeps reasoning models (qwen3, deepseek-r1) from spending seconds to minutes
     // on hidden chain-of-thought per command; keep_alive avoids a model reload after 5 idle
@@ -143,12 +149,21 @@ export class OllamaProvider implements ModelProvider {
       });
     } catch (err: any) {
       clearTimeout(timeoutHandle);
+      if (options?.signal) {
+        options.signal.removeEventListener('abort', onAbort);
+      }
+      if (options?.signal?.aborted) {
+        throw new CancelledError();
+      }
       if (err.name === 'AbortError' || controller.signal.aborted) {
         throw new Error(`[OllamaProvider] Model inference timed out after ${Math.round(timeoutMs / 1000)}s.`);
       }
       throw err;
     } finally {
       clearTimeout(timeoutHandle);
+      if (options?.signal) {
+        options.signal.removeEventListener('abort', onAbort);
+      }
     }
 
     const latencyMs = performance.now() - startTime;
@@ -182,7 +197,8 @@ export class OllamaProvider implements ModelProvider {
         completionTokens,
         totalTokens: promptTokens + completionTokens
       },
-      latencyMs
+      latencyMs,
+      finishReason: data.done_reason === 'length' ? 'length' : data.done_reason
     };
   }
 }

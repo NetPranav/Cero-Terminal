@@ -175,7 +175,7 @@ function macDesktopAnswer(text: string): InstantAnswer | null {
   const dir = '"$HOME/Pictures/Screenshots"';
   return {
     id: 'screenshot',
-    command: `mkdir -p ${dir} && f="$HOME/Pictures/Screenshots/sentinel-$(date +%Y%m%d-%H%M%S).png" && screencapture ${region ? '-i' : '-x'} "$f" && echo "Saved $f"`,
+    command: `mkdir -p ${dir} && f="$HOME/Pictures/Screenshots/cero-$(date +%Y%m%d-%H%M%S).png" && screencapture ${region ? '-i' : '-x'} "$f" && echo "Saved $f"`,
     explanation: region ? 'Screenshot of a selected region' : 'Screenshot of the screen'
   };
 }

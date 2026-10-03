@@ -6,7 +6,7 @@
  * and enables runtime user customization via the /app or /alias slash command.
  */
 
-import { readSentinelFile, writeSentinelFile } from '../../infrastructure/storage/SentinelFiles';
+import { readCeroFile, writeCeroFile } from '../../infrastructure/storage/CeroFiles';
 
 export class AppAliasRegistry {
   private static instance?: AppAliasRegistry;
@@ -44,8 +44,8 @@ export class AppAliasRegistry {
     'calculator': 'Calculator',
     'safari': 'Safari',
     'terminal': 'Terminal',
-    'sentinel': 'Sentinel Terminal',
-    'sentinel terminal': 'Sentinel Terminal',
+    'cero': 'Cero',
+    'cero terminal': 'Cero',
     'antigravity': 'Antigravity IDE',
     'antigravity ide': 'Antigravity IDE',
     'cursor': 'Cursor',
@@ -122,7 +122,7 @@ export class AppAliasRegistry {
   private initStorage(): void {
     if (typeof localStorage !== 'undefined') {
       try {
-        const saved = localStorage.getItem('sentinel_app_aliases');
+        const saved = localStorage.getItem('cero_app_aliases');
         if (saved) {
           const custom = JSON.parse(saved);
           for (const [key, val] of Object.entries(custom)) {
@@ -134,12 +134,12 @@ export class AppAliasRegistry {
       }
     }
 
-    // ~/.sentinel/app_aliases.json through the native store (the desktop app has no `process`,
+    // ~/.cero/app_aliases.json through the native store (the desktop app has no `process`,
     // so the old `process.env` check meant this never ran there)
     const underTest = typeof process !== 'undefined' && process.env?.NODE_ENV === 'test';
     if (!underTest) {
       try {
-        const saved = readSentinelFile('app_aliases.json');
+        const saved = readCeroFile('app_aliases.json');
         if (saved?.trim()) {
           for (const [key, val] of Object.entries(JSON.parse(saved))) {
             this.aliases.set(key.toLowerCase().trim(), String(val));
@@ -244,14 +244,14 @@ print(json.dumps(apps))
 
     if (typeof localStorage !== 'undefined') {
       try {
-        localStorage.setItem('sentinel_app_aliases', JSON.stringify(data));
+        localStorage.setItem('cero_app_aliases', JSON.stringify(data));
       } catch (e) {
         console.warn('[AppAliasRegistry] Failed saving to localStorage:', e);
       }
     }
 
     if (!(typeof process !== 'undefined' && process.env?.NODE_ENV === 'test')) {
-      writeSentinelFile('app_aliases.json', JSON.stringify(data, null, 2));
+      writeCeroFile('app_aliases.json', JSON.stringify(data, null, 2));
     }
   }
 

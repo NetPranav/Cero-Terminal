@@ -32,7 +32,7 @@ describe('FlowRunner', () => {
     }, '/home/u/Downloads/demo.flow');
     expect(result).toMatchObject({ success: true, completed: 3, summary: 'Flow "demo" from demo.flow finished: 3 steps.' });
     expect(typed[0]).toBe(`${markerDefinition('posix')}\r`);
-    expect(typed[2]).toBe('cd "$HOME/demo" && npm install; __sentinel_step $?\r');
+    expect(typed[2]).toBe('cd "$HOME/demo" && npm install; __cero_step $?\r');
     expect(typed).toHaveLength(3);
     expect(execute).toHaveBeenCalledWith('/bin/sh', ['-c', "xdg-open 'http://localhost:3000'"]);
   });
@@ -53,10 +53,10 @@ describe('FlowRunner', () => {
 
   it('writes the marker for each shell and reads it back', () => {
     const plan = planFlow(TUTORIAL, 'demo', 'windows')!;
-    expect(typedStep(plan.steps[1], 'windows', 'powershell')).toBe("Set-Location -LiteralPath (Join-Path $HOME 'demo'); npm install; __sentinel_step $(if ($?) { 0 } elseif ($LASTEXITCODE) { $LASTEXITCODE } else { 1 })");
-    expect(typedStep(plan.steps[1], 'linux', 'fish')).toMatch(/; __sentinel_step \$status$/);
-    expect(parseStepMarker('sentinel-step;0')).toBe(0);
-    expect(parseStepMarker('sentinel-step;127')).toBe(127);
+    expect(typedStep(plan.steps[1], 'windows', 'powershell')).toBe("Set-Location -LiteralPath (Join-Path $HOME 'demo'); npm install; __cero_step $(if ($?) { 0 } elseif ($LASTEXITCODE) { $LASTEXITCODE } else { 1 })");
+    expect(typedStep(plan.steps[1], 'linux', 'fish')).toMatch(/; __cero_step \$status$/);
+    expect(parseStepMarker('cero-step;0')).toBe(0);
+    expect(parseStepMarker('cero-step;127')).toBe(127);
     expect(parseStepMarker('other;1')).toBeNull();
   });
 });

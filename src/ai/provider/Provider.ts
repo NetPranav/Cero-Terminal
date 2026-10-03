@@ -2,7 +2,7 @@
  * Provider.ts — Pluggable Model Provider Layer
  * 
  * Defines the foundational interface for local and pluggable model inference providers.
- * Sentinel's planner and intent systems never depend directly on Ollama or Llama.cpp.
+ * Cero's planner and intent systems never depend directly on Ollama or Llama.cpp.
  */
 
 export interface GenerateOptions {
@@ -18,6 +18,12 @@ export interface GenerateOptions {
   sessionId?: string; // Phase 0.5 item 11: Request isolation per-tab / PTY session
   requestId?: string; // Phase 0.5 item 11: Unique request tracking ID
   timeoutMs?: number;
+  /** Set by the caller; aborting it stops inference immediately */
+  signal?: AbortSignal;
+  /** Decision vs conversational mode (Task 3.2 determinism) */
+  mode?: 'decision' | 'chat';
+  seed?: number;
+  topK?: number;
 }
 
 export interface ProviderResponse {
@@ -29,6 +35,7 @@ export interface ProviderResponse {
     totalTokens: number;
   };
   latencyMs: number;
+  finishReason?: string;
 }
 
 export interface ModelMetadata {

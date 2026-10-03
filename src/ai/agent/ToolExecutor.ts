@@ -62,8 +62,21 @@ export class ToolExecutor {
     params: Record<string, any>,
     cwd?: string,
     onAskPermission?: (plan: ExecutionPreviewPlan) => Promise<boolean>,
-    timeoutMs?: number
+    timeoutMs?: number,
+    signal?: AbortSignal
   ): Promise<ToolExecutionResult> {
+    if (signal?.aborted) {
+      try {
+        const driver = this.sdk.getDriver(toolId);
+        if (driver) await driver.cancel();
+      } catch { /* ignore */ }
+      return {
+        success: false,
+        error: 'Execution cancelled',
+        errorCode: 'CANCELLED'
+      };
+    }
+
     // Intercept catastrophic commands before capability dispatch
     if (params?.command && typeof params.command === 'string') {
       const safety = CommandSafetyGuardian.getInstance().evaluate(params.command);
@@ -77,11 +90,32 @@ export class ToolExecutor {
 
     const effectiveTimeout = timeoutMs ?? ToolExecutor.resolveAdaptiveTimeout(toolId);
     let timeoutHandle: any = null;
+    let abortListener: (() => void) | null = null;
     try {
       const timeoutPromise = new Promise<ToolExecutionResult>((_, reject) => {
         timeoutHandle = setTimeout(() => {
           reject(new Error(`Tool execution timed out after ${effectiveTimeout}ms`));
         }, effectiveTimeout);
+      });
+
+      const abortPromise = new Promise<ToolExecutionResult>((resolve) => {
+        if (!signal) return;
+        abortListener = () => {
+          try {
+            const driver = this.sdk.getDriver(toolId);
+            if (driver) void driver.cancel();
+          } catch { /* ignore */ }
+          resolve({
+            success: false,
+            error: 'Execution cancelled',
+            errorCode: 'CANCELLED'
+          });
+        };
+        if (signal.aborted) {
+          abortListener();
+        } else {
+          signal.addEventListener('abort', abortListener, { once: true });
+        }
       });
 
       const execPromise = (async (): Promise<ToolExecutionResult> => {
@@ -105,11 +139,13 @@ export class ToolExecutor {
         }
       })();
 
-      const finalResult = await Promise.race([execPromise, timeoutPromise]);
+      const finalResult = await Promise.race([execPromise, timeoutPromise, abortPromise]);
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (signal && abortListener) signal.removeEventListener('abort', abortListener);
       return finalResult;
     } catch (err: any) {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (signal && abortListener) signal.removeEventListener('abort', abortListener);
       // Cancel active driver if running
       try {
         const driver = this.sdk.getDriver(toolId);

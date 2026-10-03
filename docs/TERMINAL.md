@@ -1,6 +1,6 @@
-# Sentinel Terminal — High-Performance Shell & PTY Architecture
+# Cero — High-Performance Shell & PTY Architecture
 
-At its core, Sentinel provides a robust, native terminal emulator engineered for speed, interactive compatibility, and seamless multitasking. Whether running intensive server builds or editing code via interactive text editors, Sentinel delivers sub-millisecond responsiveness.
+At its core, Cero provides a robust, native terminal emulator engineered for speed, interactive compatibility, and seamless multitasking. Whether running intensive server builds or editing code via interactive text editors, Cero delivers sub-millisecond responsiveness.
 
 ---
 
@@ -20,7 +20,7 @@ Eliminate desktop clutter by dividing your command workflow into multi-direction
   - Vertical split: `Ctrl + Shift + D` (or `Cmd + D`).
   - Horizontal split: `Ctrl + Shift + H` (or `Cmd + Shift + D`).
   - Dividers feature an invisible 8px grab hitbox for easy mouse targeting and an active window-wide drag overlay that prevents canvas event capture during resizing.
-- **Session Memory Persistence**: Sentinel utilizes dedicated output ring-buffers for every open session tab and split pane. When switching tabs, resizing windows, or dividing views, your full terminal scrollback history and active shell processes remain preserved without blinking or vanishing.
+- **Session Memory Persistence**: Cero utilizes dedicated output ring-buffers for every open session tab and split pane. When switching tabs, resizing windows, or dividing views, your full terminal scrollback history and active shell processes remain preserved without blinking or vanishing.
 - **Tab Customization**: Double-click any tab pill to assign persistent custom labels. Use `Ctrl+1` through `Ctrl+9` for instant tab switching.
 
 ---

@@ -32,7 +32,7 @@ src-tauri/resources/models/
 *.gguf
 *.zip
 *.tar.gz
-sentinel_lora_colab/
+cero_lora_colab/
 
 # Build artifacts & scratch
 *.dmg

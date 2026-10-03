@@ -118,7 +118,7 @@ export class SessionManager {
     };
   }
 
-  /** Draw Sentinel's own text in the session's current view. False when no view is attached. */
+  /** Draw Cero's own text in the session's current view. False when no view is attached. */
   public display(sessionId: string, text: string): boolean {
     const write = this.displays.get(sessionId);
     if (!write) return false;

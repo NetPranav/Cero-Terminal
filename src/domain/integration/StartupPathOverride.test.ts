@@ -19,10 +19,10 @@ describe('Startup Path Override & File Manager Integration', () => {
     const handler = UrlSchemeHandler.getInstance();
     
     // Nautilus / Thunar argument pattern
-    const actions1 = handler.parseMany(['/home/user/code/sentinel-project']);
+    const actions1 = handler.parseMany(['/home/user/code/cero-project']);
     expect(actions1.length).toBe(1);
     expect(actions1[0].type).toBe('open');
-    expect(actions1[0].path).toBe('/home/user/code/sentinel-project');
+    expect(actions1[0].path).toBe('/home/user/code/cero-project');
 
     // FreeDesktop file:// URI pattern
     const actions2 = handler.parseMany(['file:///home/user/workspace/microservice']);
@@ -61,7 +61,7 @@ describe('Startup Path Override & File Manager Integration', () => {
       timestamp: Date.now()
     };
 
-    mockStore['sentinel_session_state'] = JSON.stringify(previousSession);
+    mockStore['cero_session_state'] = JSON.stringify(previousSession);
 
     // Simulate startup with folder argument from file manager
     const newRequestedFolder = '/home/user/new-project-from-nautilus';
@@ -99,7 +99,7 @@ describe('Startup Path Override & File Manager Integration', () => {
       timestamp: Date.now()
     };
 
-    mockStore['sentinel_session_state'] = JSON.stringify(previousSession);
+    mockStore['cero_session_state'] = JSON.stringify(previousSession);
 
     // Normal launch without arguments
     const state = SessionPersistenceEngine.getInstance().resolveInitialState(undefined);
@@ -146,7 +146,7 @@ describe('Startup Path Override & File Manager Integration', () => {
       timestamp: Date.now()
     };
 
-    mockStore['sentinel_session_state'] = JSON.stringify(previousSession);
+    mockStore['cero_session_state'] = JSON.stringify(previousSession);
 
     const state = SessionPersistenceEngine.getInstance().resolveInitialState('/home/user/new-target-dir');
 

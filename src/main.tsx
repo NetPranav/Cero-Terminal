@@ -3,19 +3,22 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { DiagnosticLogger } from "./infrastructure/logging/DiagnosticLogger";
 import { UrlSchemeHandler } from "./domain/integration/UrlSchemeHandler";
-import { hydrateSentinelStore } from "./utils/fsPolyfill";
+import { hydrateCeroStore } from "./utils/fsPolyfill";
+import { migrateLegacyStorage } from "./utils/legacyStorage";
 
 async function bootstrap() {
+  // settings saved under the old name (Sentinel Terminal) carry over before anything reads them
+  try { migrateLegacyStorage(localStorage); } catch { /* storage blocked */ }
   DiagnosticLogger.init().catch(() => {});
 
-  // Load ~/.sentinel learning state before any store is constructed, so synchronous reads in the
+  // Load ~/.cero learning state before any store is constructed, so synchronous reads in the
   // stores see it. Bounded so a slow disk can never hold up the first paint.
   await Promise.race([
-    hydrateSentinelStore(),
+    hydrateCeroStore(),
     new Promise(resolve => setTimeout(resolve, 1500)),
   ]);
 
-  // Opened to run .flow files (double-click, "Open with", `sentinel setup.flow`)?
+  // Opened to run .flow files (double-click, "Open with", `cero setup.flow`)?
   const flowFiles = await takeLaunchFlowFiles();
   if (flowFiles.length > 0 && (await runDesktopOnlyFlowsHidden(flowFiles))) return;
 

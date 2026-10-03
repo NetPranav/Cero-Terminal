@@ -1,19 +1,19 @@
-# Sentinel Terminal — Security & Safeguards Guide
+# Cero — Security & Safeguards Guide
 
-Allowing an autonomous AI agent to interact with your operating system requires absolute trust, verifiable boundaries, and zero-leakage guarantees. Sentinel implements a comprehensive **Zero-Trust Security Engine** engineered to protect your local environment from accidental destruction, privilege escalation, and prompt injection attacks.
+Allowing an autonomous AI agent to interact with your operating system requires absolute trust, verifiable boundaries, and zero-leakage guarantees. Cero implements a comprehensive **Zero-Trust Security Engine** engineered to protect your local environment from accidental destruction, privilege escalation, and prompt injection attacks.
 
 ---
 
 ## 1. Categorical Policy Engine & Command Safety Guardian (`CommandSafetyGuardian.ts`)
 
-Sentinel evaluates all proposed operations—both interactive terminal keystrokes and autonomous AI tool executions—against a categorical safety policy and a deep AST security engine:
+Cero evaluates all proposed operations—both interactive terminal keystrokes and autonomous AI tool executions—against a categorical safety policy and a deep AST security engine:
 
 | Policy Tier | Behavior | Example Operations |
 | :--- | :--- | :--- |
 | **`SAFE`** | Executes immediately without interruption | Reading system diagnostics, listing files, checking network connections, inspecting ports |
 | **`CONFIRMATION_REQUIRED`** | Pauses execution and requires explicit interactive user confirmation | Modifying configuration files, creating directories, terminating user applications, running build scripts |
 | **`ADMIN_REQUIRED`** | Strictly requires user confirmation and root/sudo password authentication | Installing systemd daemons, modifying `/etc/`, altering network interfaces, kernel driver actions |
-| **`PERMANENTLY_REFUSED`** | Hard-blocked at the keyboard and agent loop; Sentinel asserts lack of capability | Root deletion, block device zeroing, partition wipes, permission lockouts, fork bombs, UEFI wipes, glibc sabotage |
+| **`PERMANENTLY_REFUSED`** | Hard-blocked at the keyboard and agent loop; Cero asserts lack of capability | Root deletion, block device zeroing, partition wipes, permission lockouts, fork bombs, UEFI wipes, glibc sabotage |
 
 ### The 8 Catastrophic Threat Vectors
 
@@ -37,21 +37,21 @@ Sentinel evaluates all proposed operations—both interactive terminal keystroke
 ### Capability Refusal & Impact Analysis Architecture
 
 When a blocked command is detected:
-1. **Explicit Capability Limitation**: The terminal responds that Sentinel does not have the capability to execute the command:
+1. **Explicit Capability Limitation**: The terminal responds that Cero does not have the capability to execute the command:
    ```text
-   ✕ Capability Statement: Sentinel does not have the capability to execute '[command]'.
+   ✕ Capability Statement: Cero does not have the capability to execute '[command]'.
    ```
-2. **Consequence & Impact Analysis**: Sentinel explains the exact technical destruction that would occur if the command were executed (e.g. recursive inode deletion, loss of the C standard library, kernel panic, or irrecoverable UEFI NVRAM bricking).
-3. **Safe Alternative**: Sentinel suggests safe, non-destructive commands (e.g. `pacman -Sc`, `apt clean`, `ncdu /`).
+2. **Consequence & Impact Analysis**: Cero explains the exact technical destruction that would occur if the command were executed (e.g. recursive inode deletion, loss of the C standard library, kernel panic, or irrecoverable UEFI NVRAM bricking).
+3. **Safe Alternative**: Cero suggests safe, non-destructive commands (e.g. `pacman -Sc`, `apt clean`, `ncdu /`).
 4. **Dual-Layer Interception**:
    - **Terminal View Interception (`TerminalView.tsx`)**: Intercepts the Enter keypress before the command is written to the PTY. The pending buffer is cleared, and an ANSI refusal banner is output directly to the terminal without invoking the shell.
    - **AI Agent Tool Interception (`ToolExecutor.ts`)**: Evaluates all commands proposed by the LLM or planner before execution. Destructive commands are blocked, returning the refusal and technical consequence back to the agent loop.
 5. **Strict No-Emoji Banner Styling**:
    ```text
    ┌──────────────────────────────────────────────────────────────────────────┐
-   │ [!] SENTINEL SECURITY GUARDIAN — ACTION PERMANENTLY REFUSED              │
+   │ [!] CERO SECURITY GUARDIAN — ACTION PERMANENTLY REFUSED              │
    └──────────────────────────────────────────────────────────────────────────┘
-   ✕ Capability Statement: Sentinel does not have the capability to execute 'rm -rf /'.
+   ✕ Capability Statement: Cero does not have the capability to execute 'rm -rf /'.
      • Attempted Command : rm -rf /
      • Threat Category   : ROOT_DESTRUCTION (Target: Root Filesystem (/))
 
@@ -62,7 +62,7 @@ When a blocked command is detected:
    [+] Safe Alternative:
      To safely clean disk space, remove cached packages with your package manager (e.g. pacman -Sc or apt clean), or inspect disk usage with: ncdu /
 
-   [#] Policy: Sentinel strictly refuses all commands that cause irreversible destruction of the host OS.
+   [#] Policy: Cero strictly refuses all commands that cause irreversible destruction of the host OS.
    ```
 
 ---
@@ -101,6 +101,6 @@ When a blocked command is detected:
 
 ## 6. Immutable Audit Trails & Benchmark Isolation
 
-- **Production Audit Logging**: Every capability invocation, parameter payload, policy tier evaluation, and completion timestamp is recorded to `~/.sentinel/audit.jsonl`.
-- **Benchmark Isolation**: Test harnesses and automated benchmarks write exclusively to isolated logs (`~/.sentinel/audit.benchmark.jsonl`), ensuring production development records remain unpolluted.
+- **Production Audit Logging**: Every capability invocation, parameter payload, policy tier evaluation, and completion timestamp is recorded to `~/.cero/audit.jsonl`.
+- **Benchmark Isolation**: Test harnesses and automated benchmarks write exclusively to isolated logs (`~/.cero/audit.benchmark.jsonl`), ensuring production development records remain unpolluted.
 - **Binary & Model Integrity**: Downloads for embedded binaries (`llama-server`) and GGUF models are verified against SHA-256 cryptographic checksums before loading into memory.

@@ -10,7 +10,7 @@ describe('DiskWorkflowStorage (Schema-Versioned Persistence)', () => {
   let storage: DiskWorkflowStorage;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-wf-test-'));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-wf-test-'));
     storage = new DiskWorkflowStorage(tempDir);
   });
 
@@ -189,6 +189,109 @@ describe('DiskWorkflowStorage (Schema-Versioned Persistence)', () => {
     const countAfter = (await storage.listWorkflows()).length;
     expect(countAfter).toBe(0);
   });
+
+  it('saveWorkflow creates name.flow, never name.json', async () => {
+    const filePath = await storage.saveWorkflow({
+      schemaVersion: 1,
+      name: 'unique-flow',
+      steps: [{ id: 's1', name: 'Step 1', command: 'echo unique' }],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    });
+
+    expect(filePath.endsWith('unique-flow.flow')).toBe(true);
+    expect(fs.existsSync(filePath)).toBe(true);
+    expect(fs.existsSync(path.join(tempDir, 'unique-flow.json'))).toBe(false);
+
+    // Verify it is a valid .flow JSON document
+    const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    expect(content.schemaVersion).toBe('1.0');
+    expect(content.actions).toBeDefined();
+    expect(content.actions[0].command).toBe('echo unique');
+  });
+
+  it('listWorkflows shows a legacy .json once, and .flow wins when both exist', async () => {
+    // Write legacy .json
+    const legacyPath = path.join(tempDir, 'shared_flow.json');
+    fs.writeFileSync(legacyPath, JSON.stringify({
+      schemaVersion: 1,
+      name: 'shared_flow',
+      steps: [{ id: 's1', name: 'Legacy Step', command: 'echo legacy' }]
+    }), 'utf8');
+
+    // Also write a .flow for the same workflow name
+    const flowPath = path.join(tempDir, 'shared_flow.flow');
+    fs.writeFileSync(flowPath, JSON.stringify({
+      schemaVersion: '1.0',
+      metadata: { name: 'shared_flow' },
+      actions: [{ type: 'command', name: 'Flow Step', command: 'echo flow' }]
+    }), 'utf8');
+
+    const list = await storage.listWorkflows();
+    const matching = list.filter(w => w.name === 'shared_flow');
+    expect(matching).toHaveLength(1);
+    expect(matching[0].steps[0].command).toBe('echo flow');
+  });
+
+  it('migration creates the .flow and leaves .json.bak without deleting', async () => {
+    const legacyPath = path.join(tempDir, 'old_script.json');
+    fs.writeFileSync(legacyPath, JSON.stringify({
+      schemaVersion: 1,
+      name: 'old_script',
+      steps: [{ id: 's1', name: 'Step', command: 'echo old' }]
+    }), 'utf8');
+
+    const converted = await storage.migrateLegacyJsonWorkflows();
+    expect(converted).toBe(1);
+
+    expect(fs.existsSync(path.join(tempDir, 'old_script.flow'))).toBe(true);
+    expect(fs.existsSync(path.join(tempDir, 'old_script.json.bak'))).toBe(true);
+    expect(fs.existsSync(legacyPath)).toBe(false);
+    expect(fs.existsSync(path.join(tempDir, '.migrated-flow'))).toBe(true);
+
+    // Subsequent migration run does nothing
+    const secondRun = await storage.migrateLegacyJsonWorkflows();
+    expect(secondRun).toBe(0);
+  });
+
+  it('no source file builds a path ending in .json under workflows/', () => {
+    const srcDir = path.resolve(__dirname, '../../..');
+    const walk = (dir: string): string[] => {
+      let results: string[] = [];
+      const list = fs.readdirSync(dir);
+      for (const file of list) {
+        const full = path.join(dir, file);
+        const stat = fs.statSync(full);
+        if (stat.isDirectory()) {
+          if (file !== 'node_modules' && file !== '__tests__' && file !== '.git') {
+            results = results.concat(walk(full));
+          }
+        } else if (/\.(ts|tsx)$/.test(file) && !file.endsWith('.test.ts') && !file.endsWith('.test.tsx')) {
+          results.push(full);
+        }
+      }
+      return results;
+    };
+
+    const sourceFiles = walk(srcDir);
+    const violations: { file: string; line: number; text: string }[] = [];
+
+    // Check for patterns building .json paths under workflows
+    const forbiddenPattern = /(?:workflows[\\/].*\.json|workflows`?\$?\{.*\}\.json)/i;
+
+    for (const file of sourceFiles) {
+      const lines = fs.readFileSync(file, 'utf8').split('\n');
+      lines.forEach((line, idx) => {
+        // Exclude comments
+        const clean = line.replace(/\/\/.*$/, '').replace(/\/\*.*?\*\//g, '');
+        if (forbiddenPattern.test(clean)) {
+          violations.push({ file: path.relative(srcDir, file), line: idx + 1, text: line.trim() });
+        }
+      });
+    }
+
+    expect(violations).toEqual([]);
+  });
 });
 
 
@@ -198,7 +301,7 @@ describe('DiskWorkflowStorage.toShellPath', () => {
     expect(storage.toShellPath('/tmp/wf/a.flow')).toBe("'/tmp/wf/a.flow'");
     expect(storage.toShellPath('/tmp/wf/$(touch x)`id`.flow')).toBe("'/tmp/wf/$(touch x)`id`.flow'");
     expect(storage.toShellPath("/tmp/it's.flow")).toBe("'/tmp/it'\\''s.flow'");
-    expect(storage.toShellPath('~/.sentinel/w$(x).flow')).toBe(`"$HOME"/'.sentinel/w$(x).flow'`);
+    expect(storage.toShellPath('~/.cero/w$(x).flow')).toBe(`"$HOME"/'.cero/w$(x).flow'`);
     expect(storage.toShellPath('~')).toBe('"$HOME"');
   });
 });

@@ -149,7 +149,7 @@ jobs:
         with:
           tag_name: v${{ needs.meta.outputs.version }}-${{ needs.meta.outputs.platform }}
           target_commitish: ${{ github.sha }}
-          name: Sentinel Terminal ${{ needs.meta.outputs.version }} for ${{ needs.meta.outputs.platform == 'macos' && 'macOS' || needs.meta.outputs.platform == 'linux' && 'Linux' || 'Windows' }}
+          name: Cero ${{ needs.meta.outputs.version }} for ${{ needs.meta.outputs.platform == 'macos' && 'macOS' || needs.meta.outputs.platform == 'linux' && 'Linux' || 'Windows' }}
           body_path: docs/releases/${{ needs.meta.outputs.platform }}.md
           files: release/*
           fail_on_unmatched_files: false

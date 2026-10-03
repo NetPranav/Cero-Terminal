@@ -5,9 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BUNDLE_DIR="${REPO_ROOT}/src-tauri/target/release/bundle/pacman"
 BUILD_DIR="${SCRIPT_DIR}/build"
-RELEASE_BIN="${REPO_ROOT}/src-tauri/target/release/sentinel-terminal"
+RELEASE_BIN="${REPO_ROOT}/src-tauri/target/release/cero-terminal"
 
-echo "=== Building Arch Linux Pacman Package for Sentinel Terminal ==="
+echo "=== Building Arch Linux Pacman Package for Cero ==="
 
 # Step 1: Ensure frontend production assets are built
 echo "[1/4] Building web application production assets..."
@@ -40,14 +40,14 @@ mkdir -p "${BUNDLE_DIR}"
 
 # Stage sources
 cp "${RELEASE_BIN}" "${BUILD_DIR}/"
-cp "${SCRIPT_DIR}/sentinel" "${BUILD_DIR}/"
-cp "${SCRIPT_DIR}/sentinel-shell" "${BUILD_DIR}/"
-cp "${SCRIPT_DIR}/sentinel_open.desktop" "${BUILD_DIR}/"
-cp "${SCRIPT_DIR}/sentinel-terminal.desktop" "${BUILD_DIR}/"
+cp "${SCRIPT_DIR}/cero" "${BUILD_DIR}/"
+cp "${SCRIPT_DIR}/cero-shell" "${BUILD_DIR}/"
+cp "${SCRIPT_DIR}/cero_open.desktop" "${BUILD_DIR}/"
+cp "${SCRIPT_DIR}/cero-terminal.desktop" "${BUILD_DIR}/"
 cp "${REPO_ROOT}/src-tauri/icons/icon.png" "${BUILD_DIR}/icon.png"
 cp "${REPO_ROOT}/src-tauri/icons/128x128.png" "${BUILD_DIR}/128x128.png"
 cp "${REPO_ROOT}/src-tauri/icons/32x32.png" "${BUILD_DIR}/32x32.png"
-cp "${REPO_ROOT}/packaging/linux/sentinel-terminal-mime.xml" "${BUILD_DIR}/"
+cp "${REPO_ROOT}/packaging/linux/cero-terminal-mime.xml" "${BUILD_DIR}/"
 cp "${SCRIPT_DIR}/PKGBUILD" "${BUILD_DIR}/"
 
 # Build package using makepkg

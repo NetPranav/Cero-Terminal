@@ -21,7 +21,7 @@ describe('WorkflowVariables — 11 Strongly Typed Variable Domains & Runtime Res
     ];
 
     const inputs = {
-      name: 'Sentinel',
+      name: 'Cero',
       count: 42,
       verbose: true,
       files: ['a.ts', 'b.ts'],
@@ -31,13 +31,13 @@ describe('WorkflowVariables — 11 Strongly Typed Variable Domains & Runtime Res
       ide: 'Cursor',
       port: 3000,
       device: 'Magic Keyboard',
-      repo: '/Users/dev/repos/sentinel',
+      repo: '/Users/dev/repos/cero',
     };
 
     const { resolved, errors } = resolver.resolve(declarations, inputs);
     expect(errors.length).toBe(0);
     expect(Object.keys(resolved).length).toBe(11);
-    expect(resolved.name).toBe('Sentinel');
+    expect(resolved.name).toBe('Cero');
     expect(resolved.port).toBe(3000);
   });
 

@@ -6,7 +6,7 @@ The **Capability SDK** bridges structured AI workflows with concrete operating s
 
 ## 🏛️ Driver Design Architecture
 
-Rather than executing ad-hoc terminal string injections, Sentinel extends an enterprise-grade driver abstraction:
+Rather than executing ad-hoc terminal string injections, Cero extends an enterprise-grade driver abstraction:
 ```
 BaseCapabilityDriver (src/sdk/capabilities/drivers/BaseCapabilityDriver.ts)
   ├── FilesystemSDKCapability.ts  # Directory navigation (cd), recursive listing, trash API
@@ -66,7 +66,7 @@ export class CustomApplicationDriver extends BaseCapabilityDriver {
 
 ---
 
-## ⚙️ Specialized Driver Behaviors in Sentinel
+## ⚙️ Specialized Driver Behaviors in Cero
 
 ### 1. Full Process Elimination (`pkill -9 -i -f`)
 When an end-user executes process termination instructions (such as `"kill antigravity"` or `"stop chrome"`), simple Process ID table lookups often overlook orphan background workers, hidden daemon processes, or multi-threaded browser renderer tasks. Our drivers (`SystemSDKCapability` and `ApplicationCapability`) execute full command-line string matching (`pkill -9 -i -f "<name>"`) to guarantee complete application elimination across all active OS user threads.

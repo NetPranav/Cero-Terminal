@@ -1,14 +1,14 @@
 /**
- * Sentinel Terminal — Tier 3: Episodic Memory Engine
+ * Cero — Tier 3: Episodic Memory Engine
  *
  * Implements Continuous On-Device Learning via:
  * 1. 0ms Dynamic In-Context Retrieval: Stores verified terminal executions & human demonstrations,
  *    indexes them, and injects the top matching workflows directly into the LLM system prompt.
  * 2. Continuous LoRA Fine-Tuning Pipeline: Automatically formats and appends verified
- *    interactions to ~/.sentinel/training/sentinel_shell_dataset.jsonl in ShareGPT format.
+ *    interactions to ~/.cero/training/cero_shell_dataset.jsonl in ShareGPT format.
  */
 
-import { readSentinelFile, writeSentinelFile, appendSentinelFile } from '../../infrastructure/storage/SentinelFiles';
+import { readCeroFile, writeCeroFile, appendCeroFile } from '../../infrastructure/storage/CeroFiles';
 import { invoke } from '@tauri-apps/api/core';
 import { safeBase64Encode } from '../../utils/encodingUtils';
 import { SecretRedactor } from '../security/SecretRedactor';
@@ -245,7 +245,7 @@ export class EpisodicMemoryEngine {
         content: SecretRedactor.redact(m.content)
       }));
       const sample = JSON.stringify({ messages: sanitizedMessages });
-      appendSentinelFile('training/sentinel_shell_dataset.jsonl', sample + '\n');
+      appendCeroFile('training/cero_shell_dataset.jsonl', sample + '\n');
     } catch {
       // Ignore file persistence errors in headless environments
     }
@@ -258,7 +258,7 @@ export class EpisodicMemoryEngine {
     const messages = [
       {
         role: 'system',
-        content: `You are Sentinel's autonomous shell execution copilot on ${osName}. Output JSON only: {"action": "execute", "command": "<cmd>", "explanation": "<reason>"}`
+        content: `You are Cero's autonomous shell execution copilot on ${osName}. Output JSON only: {"action": "execute", "command": "<cmd>", "explanation": "<reason>"}`
       },
       {
         role: 'user',
@@ -358,7 +358,7 @@ export class EpisodicMemoryEngine {
     }
 
     try {
-      const output = { stdout: readSentinelFile('memory/episodic_memory.json') ?? '' };
+      const output = { stdout: readCeroFile('memory/episodic_memory.json') ?? '' };
 
       if (output.stdout && output.stdout.trim()) {
         const parsed: EpisodicMemory[] = JSON.parse(output.stdout.trim());
@@ -381,7 +381,7 @@ export class EpisodicMemoryEngine {
     try {
       const all = Array.from(this.memories.values());
       const jsonStr = JSON.stringify(all, null, 2);
-      writeSentinelFile('memory/episodic_memory.json', jsonStr);
+      writeCeroFile('memory/episodic_memory.json', jsonStr);
     } catch {
       // Ignore
     }

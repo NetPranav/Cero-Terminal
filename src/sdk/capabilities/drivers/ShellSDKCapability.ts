@@ -30,7 +30,7 @@ export class ShellSDKCapability extends BaseCapabilityDriver<ShellDriverInput, a
   readonly name = 'Arbitrary Shell Execution Driver';
   readonly supportedPlatforms: Platform[] = ['macos', 'windows', 'linux'];
 
-  private runningPid?: number;
+  private runningRunId?: string;
 
   public async run(command: string, cwd?: string): Promise<CapabilityExecutionResult<{ stdout: string; stderr: string; code: number }>> {
     return this.execute({ command, cwd });
@@ -49,8 +49,13 @@ export class ShellSDKCapability extends BaseCapabilityDriver<ShellDriverInput, a
       return { success: false, error: { code: 'MISSING_SHELL_CMD', message: 'Command string required for shell.execute' } };
     }
 
+    const commandLine = this.toCommandLine(input);
+    const runId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `run_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    this.runningRunId = runId;
+
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
-      const commandLine = this.toCommandLine(input);
       return {
         success: true,
         data: { stdout: `mock output for ${commandLine}`, stderr: '', code: 0 },
@@ -59,7 +64,6 @@ export class ShellSDKCapability extends BaseCapabilityDriver<ShellDriverInput, a
     }
 
     try {
-      const commandLine = this.toCommandLine(input);
       const shellBinary = isLinux() ? '/bin/bash' : (isWindows() ? 'powershell.exe' : '/bin/zsh');
       // ros2/colcon/rosdep only exist after sourcing ROS; non-interactive bash never reads ~/.bashrc
       const runnable = isLinux() ? withRosEnvironment(commandLine, this.rosDistro()) : commandLine;
@@ -69,15 +73,22 @@ export class ShellSDKCapability extends BaseCapabilityDriver<ShellDriverInput, a
         ? ['-NoProfile', '-NonInteractive', '-Command', `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${runnable}`]
         : ['-c', runnable];
 
-      const output = await invoke<{ stdout: string; stderr: string; code: number; pid?: number; timed_out?: boolean }>('execute_command', {
+      const output = await invoke<{ stdout: string; stderr: string; code: number; timed_out?: boolean; cancelled?: boolean }>('execute_command', {
         command: shellBinary,
         args: shellArgs,
         cwd: input.cwd || _context?.cwd,
-        timeoutMs: input.timeoutMs ?? DEFAULT_SHELL_TIMEOUT_MS
+        timeoutMs: input.timeoutMs ?? DEFAULT_SHELL_TIMEOUT_MS,
+        runId
       });
 
-      if (output.pid) {
-        this.runningPid = output.pid;
+      if (output.cancelled) {
+        return {
+          success: false,
+          cancelled: true,
+          data: { stdout: output.stdout, stderr: output.stderr, code: output.code },
+          error: { code: 'CANCELLED', message: 'Command was cancelled' },
+          commandExecuted: commandLine
+        };
       }
 
       const isSuccess = output.code === 0;
@@ -96,6 +107,10 @@ export class ShellSDKCapability extends BaseCapabilityDriver<ShellDriverInput, a
         ? e
         : (e?.message || (e ? JSON.stringify(e) : 'Error occurred while executing command in shell'));
       return { success: false, error: { code: 'SHELL_INVOKER_ERROR', message: errMsg } };
+    } finally {
+      if (this.runningRunId === runId) {
+        this.runningRunId = undefined;
+      }
     }
   }
 
@@ -105,9 +120,9 @@ export class ShellSDKCapability extends BaseCapabilityDriver<ShellDriverInput, a
 
   public async cancel(): Promise<boolean> {
     const cancelled = await super.cancel();
-    if (this.runningPid) {
+    if (this.runningRunId) {
       try {
-        await invoke('kill_process', { pid: this.runningPid });
+        await invoke('cancel_command', { runId: this.runningRunId });
       } catch {
         // ignore errors during process termination
       }

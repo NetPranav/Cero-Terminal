@@ -4,7 +4,7 @@
  *
  * Phase 4 Multi-Distribution Verification Script
  * Audits host Linux distribution, package managers, init systems, and display compositors
- * to ensure Sentinel Terminal capabilities operate cleanly.
+ * to ensure Cero capabilities operate cleanly.
  */
 
 import { execSync } from 'node:child_process';
@@ -128,7 +128,7 @@ export function auditDistroCompatibility(): CompatibilityReport {
 }
 
 if (process.argv[1]?.includes('verify_distro_compatibility')) {
-  console.log('🔍 Sentinel Terminal — Host Linux Distribution Audit\n');
+  console.log('🔍 Cero — Host Linux Distribution Audit\n');
   const rep = auditDistroCompatibility();
 
   console.log(`OS:              ${rep.distro.prettyName} (${rep.distro.arch})`);
@@ -140,7 +140,7 @@ if (process.argv[1]?.includes('verify_distro_compatibility')) {
   console.log(`\nCompatibility Readiness: ${rep.universalScore}%`);
 
   if (rep.universalScore >= 75) {
-    console.log('✅ System is fully compatible with Sentinel Terminal release builds.');
+    console.log('✅ System is fully compatible with Cero release builds.');
   } else {
     console.log('⚠️ Minimal environment detected; core terminal and AI will run with standard fallback drivers.');
   }

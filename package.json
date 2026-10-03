@@ -1,7 +1,7 @@
 {
-  "name": "sentinel-terminal",
+  "name": "cero-terminal",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "A terminal that takes requests in plain language and runs .flow files on macOS, Windows and Linux",
   "license": "MIT",
   "author": "Pranav Dubey (NetPranav)",
@@ -29,10 +29,11 @@
     "benchmark": "tsx scripts/benchmark_prompts.ts",
     "benchmark:domain": "tsx scripts/benchmark_prompts.ts --domain",
     "smoke:engine": "tsx scripts/engine_smoke.ts",
+    "eval:model": "tsx scripts/eval/reliability.mts",
     "stress": "bash scripts/stress/run.sh"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2",
+    "@tauri-apps/api": "^2.12.1",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-http": "^2.5.9",

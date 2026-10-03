@@ -8,7 +8,7 @@ export interface HistoryEntry {
 }
 
 /** Where the webview keeps the command history between launches */
-const STORAGE_KEY = 'sentinel.commandHistory';
+const STORAGE_KEY = 'cero.commandHistory';
 const MAX_ENTRIES = 500;
 
 // Completions offered for common commands. They are never shown as history: the Ctrl+R search

@@ -1,3 +1,4 @@
+import { decideLearn, candidateFromRun, isBareLearn, type LearnCandidate } from '../domain/learning/LearnCommand';
 import { AuditLogger } from '../domain/security/AuditLogger';
 import { SystemSettingsProvider } from '../domain/autocomplete/SystemSettingsProvider';
 import { runFlowInTerminal, parseStepMarker, flowApprovalPlan, type ShellFamily } from '../workflows/flow/FlowRunner';
@@ -14,7 +15,7 @@ import { AgentLoop, AgentPlan, AgentResult } from '../ai/agent/AgentLoop';
 import { PromptProgressManager } from '../ai/agent/PromptProgressManager';
 import { DemonstrationLearningEngine, isPlausibleDemonstration } from '../domain/learning/DemonstrationLearningEngine';
 import { EpisodicMemoryEngine } from '../domain/learning/EpisodicMemoryEngine';
-import { SentinelSerlCoordinator } from '../domain/learning/SentinelSerlCoordinator';
+import { CeroSerlCoordinator } from '../domain/learning/CeroSerlCoordinator';
 import { PtyOutputObserver, type RemediationPrompt } from '../domain/observer/PtyOutputObserver';
 import { ErrorWatchService } from '../domain/watch/ErrorWatchService';
 import { formatAgentEvent, formatDataOutput, formatWatchEvent, formatRemediationNotice, AgentEventRenderer, S } from './OutputFormatter';
@@ -44,14 +45,19 @@ import {
 import { SearchAddon } from '@xterm/addon-search';
 import { TerminalSearchBar } from './TerminalSearchBar';
 import { InputLineTracker, stripPrompt, parseCdTarget } from './InputLineTracker';
+import { decideGhostKey } from './ghostKeys';
+import { decideStopKey } from './stopKeys';
+import { PromptQueue, parseQueueCommand, type QueuedItem } from './PromptQueue';
 import { TerminalWorkspace } from '../domain/terminal/TerminalWorkspace';
 import { claimTerminalRequests, releaseTerminalRequests, TerminalRequest } from './TerminalRequests';
 import { claimChoiceRequests, releaseChoiceRequests, type ChoiceRequest, type ChoiceResult } from './ChoiceRequests';
 import { ChoiceDialog } from '../ui/components/ChoiceDialog';
 import { createPortal } from 'react-dom';
 
-type AgentRunner = (context: { os: string; cwd: string; paneId?: string }) => Promise<AgentResult>;
+type AgentRunner = (context: { os: string; cwd: string; paneId?: string; signal?: AbortSignal }) => Promise<AgentResult>;
 import { readClipboardText, writeClipboardText, formatTerminalPastePayload } from '../utils/clipboard';
+import { copyWrongAnswerToClipboard } from '../ai/agent/WrongAnswerReporter';
+import { ModelManager } from '../ai/management/ModelManager';
 
 /** Goal text for an auto-heal request: the failing command and diagnosis, not just a title. */
 function autoHealGoal(rem: RemediationPrompt): string {
@@ -149,6 +155,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchRequest, setSearchRequest] = useState<{ text: string; id: number } | undefined>(undefined);
+  const runQueuedItemRef = useRef<((item: QueuedItem) => void) | null>(null);
   // Read by window listeners registered once, which would otherwise see the first value
   const isFocusedRef = useRef(isFocused);
   useEffect(() => { isFocusedRef.current = isFocused; }, [isFocused]);
@@ -177,8 +184,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   const [isPlanOpen, setIsPlanOpen] = useState(true);
   const [planExecutionStatus, setPlanExecutionStatus] = useState<'running' | 'completed' | 'failed'>('running');
   const planExecutionStatusRef = useRef<'running' | 'completed' | 'failed'>('running');
-  const [hudPlanEnabled, setHudPlanEnabled] = useState<boolean>(() => localStorage.getItem('sentinel_hud_plan_enabled') !== 'false');
-  const [hudPlanDuration, setHudPlanDuration] = useState<string>(() => localStorage.getItem('sentinel_hud_plan_duration') || '8');
+  const lastGoalRef = useRef<string>('');
+  const [reportCopied, setReportCopied] = useState(false);
+  const [hudPlanEnabled, setHudPlanEnabled] = useState<boolean>(() => localStorage.getItem('cero_hud_plan_enabled') !== 'false');
+  const [hudPlanDuration, setHudPlanDuration] = useState<string>(() => localStorage.getItem('cero_hud_plan_duration') || '8');
   const planDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isHoveringPlanRef = useRef<boolean>(false);
 
@@ -191,8 +200,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
   const schedulePlanDismiss = useCallback(() => {
     clearPlanDismissTimer();
-    const enabled = localStorage.getItem('sentinel_hud_plan_enabled') !== 'false';
-    const duration = localStorage.getItem('sentinel_hud_plan_duration') || '8';
+    const enabled = localStorage.getItem('cero_hud_plan_enabled') !== 'false';
+    const duration = localStorage.getItem('cero_hud_plan_duration') || '8';
     if (!enabled || duration === 'disabled') {
       setLatestPlan(null);
       return;
@@ -213,8 +222,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
   useEffect(() => {
     const handleSettingsChange = () => {
-      const enabled = localStorage.getItem('sentinel_hud_plan_enabled') !== 'false';
-      const duration = localStorage.getItem('sentinel_hud_plan_duration') || '8';
+      const enabled = localStorage.getItem('cero_hud_plan_enabled') !== 'false';
+      const duration = localStorage.getItem('cero_hud_plan_duration') || '8';
       setHudPlanEnabled(enabled);
       setHudPlanDuration(duration);
       if (!enabled || duration === 'disabled') {
@@ -223,9 +232,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       }
     };
 
-    window.addEventListener('sentinel:hud-settings-changed', handleSettingsChange);
+    window.addEventListener('cero:hud-settings-changed', handleSettingsChange);
     return () => {
-      window.removeEventListener('sentinel:hud-settings-changed', handleSettingsChange);
+      window.removeEventListener('cero:hud-settings-changed', handleSettingsChange);
       clearPlanDismissTimer();
     };
   }, [clearPlanDismissTimer]);
@@ -238,7 +247,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   const consentOpenRef = useRef(false);
   const inputLineRef = useRef<InputLineTracker>(new InputLineTracker());
   const aiBusyRef = useRef(false);
-  const aiQueueRef = useRef<Array<{ goal: string; runner?: AgentRunner }>>([]);
+  const activeRunAbortControllerRef = useRef<AbortController | null>(null);
+  const lastInterruptTimeRef = useRef<number>(0);
   // Runs a request handed over by the app (Workflow Manager, opened workflow file)
   const submitRef = useRef<((request: TerminalRequest) => void) | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
@@ -261,6 +271,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   }, [choiceRequest]);
 
   const lastUnresolvedGoalRef = useRef<{ goal: string; timestamp: number } | null>(null);
+  /** What `/learn` would teach. Set by what happened, used only when the person types /learn */
+  const learnCandidateRef = useRef<LearnCandidate | null>(null);
 
   const handleExecuteRemediation = async (rem: RemediationPrompt) => {
     setActiveRemediation(null);
@@ -286,7 +298,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
   };
 
   // High-risk commands (stopping processes, deleting, super-user) need an explicit click on Run.
-  // Sentinel never asks for the login password: it was collected in this window and checked by putting
+  // Cero never asks for the login password: it was collected in this window and checked by putting
   // it on a command line, where other local processes could read it, and it granted nothing (the command
   // runs as the user either way). Super-user commands ask in the terminal itself, where sudo belongs.
   const needsExplicitClick = (plan: any) => Boolean(plan?.requiresPassword || plan?.requiresClick);
@@ -474,7 +486,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         if (event.type === 'keydown') {
           event.preventDefault();
           event.stopPropagation();
-          window.dispatchEvent(new CustomEvent('sentinel:toggle-history'));
+          window.dispatchEvent(new CustomEvent('cero:toggle-history'));
         }
         return false;
       }
@@ -504,7 +516,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     const handleToggleSearch = () => {
       setIsSearchOpen(prev => !prev);
     };
-    window.addEventListener('sentinel:toggle-search', handleToggleSearch);
+    window.addEventListener('cero:toggle-search', handleToggleSearch);
     // "search the terminal for ERROR": only the pane the request came from opens its search
     const handleFindRequest = (event: Event) => {
       const detail = (event as CustomEvent<{ paneId?: string; query?: string }>).detail || {};
@@ -513,11 +525,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       setIsSearchOpen(true);
       if (detail.query) setSearchRequest({ text: detail.query, id: Date.now() });
     };
-    window.addEventListener('sentinel:find-in-terminal', handleFindRequest);
+    window.addEventListener('cero:find-in-terminal', handleFindRequest);
 
     term.open(terminalRef.current);
 
-    // End-of-step reports from .flow runs (OSC 777 "sentinel-step;<code>"): invisible, never drawn
+    // End-of-step reports from .flow runs (OSC 777 "cero-step;<code>"): invisible, never drawn
     term.parser.registerOscHandler(777, (payload) => {
       const code = parseStepMarker(payload);
       if (code === null) return false;
@@ -647,7 +659,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           // Discarding a `>` request line makes the shell print a fresh prompt; hide that redraw so
           // agent output follows the request directly (the final prompt is printed at the end)
           if (Date.now() < shellRedrawMuteUntil) { shellRedrawSeen = true; return; }
-          // SessionManager already recorded this shell output; only Sentinel's own text is
+          // SessionManager already recorded this shell output; only Cero's own text is
           // recorded by writeTerm (recording both doubled every restored screen)
           term.write(text.replace(/\r?\n/g, '\r\n'));
           outputObserverRef.current.ingest(text, currentPathRef.current);
@@ -719,8 +731,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
         autocompleteEngine.registerProvider(workspaceContextProvider);
         autocompleteEngine.registerProvider(new SystemSettingsProvider());
         
-        // Start Tier 4 Sentinel-SERL Autonomous Orchestrator
-        SentinelSerlCoordinator.getInstance().startCoordinator();
+        // Start Tier 4 Cero-SERL Autonomous Orchestrator
+        CeroSerlCoordinator.getInstance().startCoordinator();
 
         const ghostText = new GhostTextRenderer(term);
         ghostText.attach(terminalRef.current!);
@@ -768,10 +780,24 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           }
         };
 
+        let runQueuedItem: (item: QueuedItem) => void;
+
         // Runs one AI request and streams its events into the terminal
         const runAiGoal = async (aiGoal: string, runner?: AgentRunner) => {
+          lastGoalRef.current = aiGoal;
           // Busy before the first await, so a second Enter is queued rather than run alongside
           aiBusyRef.current = true;
+          const abortController = new AbortController();
+          activeRunAbortControllerRef.current = abortController;
+          PromptQueue.getInstance().setRunningItem({
+            id: `running_${Date.now()}`,
+            goal: aiGoal,
+            label: aiGoal,
+            kind: runner ? 'workflow' : 'goal',
+            runner,
+            timestamp: Date.now(),
+            addedAt: Date.now(),
+          });
           const cwd = (await syncCwd()) || currentPathRef.current || currentPath || '~';
           // Initiate live progress tracking in the bottom bar
           PromptProgressManager.getInstance().startPrompt(aiGoal);
@@ -780,12 +806,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
           // Set up event listener for live output
           agentLoop.onEvent((event) => {
+            if (abortController.signal.aborted) return;
             if (event.type === 'thinking') {
               PromptProgressManager.getInstance().updateStage(event.message || 'Thinking...', 30);
             } else if (event.type === 'plan') {
               PromptProgressManager.getInstance().updateStage('Planning...', 50);
-              const enabled = localStorage.getItem('sentinel_hud_plan_enabled') !== 'false';
-              const duration = localStorage.getItem('sentinel_hud_plan_duration') || '8';
+              const enabled = localStorage.getItem('cero_hud_plan_enabled') !== 'false';
+              const duration = localStorage.getItem('cero_hud_plan_duration') || '8';
               if (!enabled || duration === 'disabled') {
                 return;
               }
@@ -850,11 +877,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           });
 
           // Run the agent loop
-          (runner ? runner({ os: getPlatform(), cwd, paneId }) : agentLoop.run(aiGoal, { os: getPlatform(), cwd, paneId })).then(result => {
+          (runner ? runner({ os: getPlatform(), cwd, paneId, signal: abortController.signal }) : agentLoop.run(aiGoal, { os: getPlatform(), cwd, paneId, signal: abortController.signal })).then(result => {
+            if (abortController.signal.aborted || result.cancelled) {
+              return;
+            }
             const leftover = renderer.finish();
             if (leftover) writeTerm(leftover);
             PromptProgressManager.getInstance().completePrompt(result.success, result.summary);
             // A declined request is answered: the user chose not to do it
+            // a request that worked with one command can be taught with /learn; one that failed never can
+            learnCandidateRef.current = candidateFromRun(aiGoal, result) ?? (result.success ? null : learnCandidateRef.current);
             if (!result.success && !result.declined) {
               lastUnresolvedGoalRef.current = { goal: aiGoal, timestamp: Date.now() };
               setPlanExecutionStatus('failed');
@@ -885,6 +917,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
             }
           }).catch(err => {
+            if (abortController.signal.aborted) {
+              return;
+            }
             const leftover = renderer.finish();
             if (leftover) writeTerm(leftover);
             PromptProgressManager.getInstance().completePrompt(false, err?.message || 'Error');
@@ -895,16 +930,32 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             writeTerm(`\r\n${formatAgentEvent({ type: 'error', message: err.message || 'Something went wrong' })}\r\n`);
             afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
           }).finally(() => {
+            PromptQueue.getInstance().setRunningItem(null);
+            if (activeRunAbortControllerRef.current === abortController) {
+              activeRunAbortControllerRef.current = null;
+            }
             aiBusyRef.current = false;
             activeRenderer = null;
-            const next = aiQueueRef.current.shift();
-            if (next) setTimeout(() => runAiGoal(next.goal, next.runner), 150);
+            const next = PromptQueue.getInstance().takeNext();
+            if (next) setTimeout(() => runQueuedItem(next), 150);
           });
         };
 
         // .flow files that install or run things: typed into this terminal step by step
         const runFlow = async (originalPlan: FlowPlan, source?: string) => {
           aiBusyRef.current = true;
+          const abortController = new AbortController();
+          activeRunAbortControllerRef.current = abortController;
+          PromptQueue.getInstance().setRunningItem({
+            id: `running_${Date.now()}`,
+            goal: `Flow: ${originalPlan.name}`,
+            label: `Flow: ${originalPlan.name}`,
+            kind: 'flow',
+            flowPlan: originalPlan,
+            source,
+            timestamp: Date.now(),
+            addedAt: Date.now(),
+          });
           const os = flowOsOf(getPlatform());
           let plan = originalPlan;
           try {
@@ -918,13 +969,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             }
             // A pane opened for this flow may still be starting its shell
             for (let waited = 0; waited < 15000 && !ptyTrackerRef.current.isIdleAtPrompt(); waited += 250) {
+              if (abortController.signal.aborted) break;
               await new Promise(r => setTimeout(r, 250));
             }
             await runFlowInTerminal(plan, {
               os,
               shell,
               type: async (text) => {
-                if (!text.startsWith('__sentinel_step') && !text.startsWith('function __sentinel_step')) ptyTrackerRef.current.notifyCommandStarted(text);
+                if (!text.startsWith('__cero_step') && !text.startsWith('function __cero_step')) ptyTrackerRef.current.notifyCommandStarted(text);
                 await sessionManager.write(currentSessionId!, text);
               },
               nextStepResult: () => new Promise<number | null>((resolve) => {
@@ -941,6 +993,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 flowStepWaiter = finish;
                 // No marker and the prompt has been back for 8 s: the step was interrupted (Ctrl+C)
                 const watch = setInterval(() => {
+                  if (abortController.signal.aborted) {
+                    finish(null);
+                  }
                   if (Date.now() - started < 2000) return;
                   if (ptyTrackerRef.current.isIdleAtPrompt()) {
                     idleSince = idleSince || Date.now();
@@ -971,23 +1026,45 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 const color = tone === 'error' ? S.err : tone === 'ok' ? S.ok : S.muted;
                 writeTerm(`\r\n  ${color}${tone === 'error' ? '✗' : tone === 'ok' ? '✓' : '›'}${S.reset} ${S.text}${text}${S.reset}\r\n`);
               },
+              signal: abortController.signal
             }, source);
           } catch (err: any) {
-            writeTerm(`\r\n  ${S.err}✗${S.reset} Flow "${plan.name}" failed: ${err?.message || err}\r\n`);
+            if (!abortController.signal.aborted) {
+              writeTerm(`\r\n  ${S.err}✗${S.reset} Flow "${plan.name}" failed: ${err?.message || err}\r\n`);
+            }
           } finally {
+            PromptQueue.getInstance().setRunningItem(null);
+            if (activeRunAbortControllerRef.current === abortController) {
+              activeRunAbortControllerRef.current = null;
+            }
             // The result line was written below the last prompt: ask the shell for a fresh one
             if (currentSessionId) void sessionManager.write(currentSessionId, '\r');
             aiBusyRef.current = false;
-            const next = aiQueueRef.current.shift();
-            if (next) setTimeout(() => runAiGoal(next.goal, next.runner), 150);
+            const next = PromptQueue.getInstance().takeNext();
+            if (next) setTimeout(() => runQueuedItem(next), 150);
           }
         };
+
+        runQueuedItem = (item: QueuedItem) => {
+          if (item.kind === 'flow' && item.flowPlan) {
+            void runFlow(item.flowPlan, item.source);
+          } else {
+            runAiGoal(item.goal, item.runner);
+          }
+        };
+        runQueuedItemRef.current = runQueuedItem;
 
         submitRef.current = (request: TerminalRequest) => {
           if (request.kind === 'flow') {
             writeTerm(`\r\n  ${S.muted}›${S.reset} ${S.text}Flow "${request.plan.name}"${request.source ? ` from ${request.source.split(/[\\/]/).pop()}` : ''}${S.reset}`);
             if (aiBusyRef.current) {
-              writeTerm(`\r\n  ${S.muted}Another request is running; open the flow again when it is done.${S.reset}\r\n`);
+              PromptQueue.getInstance().enqueue({
+                label: `Flow: ${request.plan.name}`,
+                kind: 'flow',
+                flowPlan: request.plan,
+                source: request.source,
+              });
+              writeTerm(`\r\n  ${S.muted}Queued flow: ${request.plan.name}${S.reset}\r\n`);
               return;
             }
             void runFlow(request.plan, request.source);
@@ -1001,17 +1078,83 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             ? (ctx) => agentLoop.runWorkflow(request.definition, {}, ctx)
             : undefined;
           if (aiBusyRef.current) {
-            aiQueueRef.current.push({ goal: label, runner });
-            writeTerm(`\r\n  ${S.muted}Queued${S.reset}\r\n`);
+            PromptQueue.getInstance().enqueue({
+              label,
+              kind: request.kind === 'workflow' ? 'workflow' : 'goal',
+              runner,
+            });
+            writeTerm(`\r\n  ${S.muted}Queued: ${label}${S.reset}\r\n`);
             return;
           }
           runAiGoal(request.kind === 'goal' ? request.goal : label, runner);
         };
+
         setSessionReady(true);
 
         term.onData(async (data) => {
           if (!currentSessionId) return;
-          SentinelSerlCoordinator.getInstance().markActivity();
+          CeroSerlCoordinator.getInstance().markActivity();
+
+          // Stop key decision (Task 2.2: Ctrl+C stops a running task or copies selection)
+          const stopAction = decideStopKey({
+            data,
+            hasSelection: term.hasSelection(),
+            isAiBusy: aiBusyRef.current,
+            lastInterruptTime: lastInterruptTimeRef.current,
+          });
+
+          if (stopAction === 'copy-selection') {
+            const selection = term.getSelection();
+            if (selection) {
+              try {
+                await navigator.clipboard.writeText(selection);
+              } catch { /* ignore clipboard write failure */ }
+            }
+            return;
+          }
+
+          if (stopAction === 'abort-ai-task') {
+            lastInterruptTimeRef.current = Date.now();
+            activeRunAbortControllerRef.current?.abort();
+            PromptQueue.getInstance().setRunningItem(null);
+            if (currentSessionId) {
+              await sessionManager.write(currentSessionId, '\x03');
+            }
+            const leftover = activeRenderer?.finish() ?? '';
+            writeTerm(`${leftover}\r\n  ${S.muted}Stopped.${S.reset}\r\n`);
+            PromptProgressManager.getInstance().completePrompt(false, 'Stopped.');
+            setPlanExecutionStatus('failed');
+            planExecutionStatusRef.current = 'failed';
+            schedulePlanDismiss();
+            aiBusyRef.current = false;
+            activeRunAbortControllerRef.current = null;
+            afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+            return;
+          }
+
+          if (stopAction === 'force-kill-ai-task') {
+            lastInterruptTimeRef.current = 0;
+            activeRunAbortControllerRef.current?.abort();
+            PromptQueue.getInstance().setRunningItem(null);
+            PromptQueue.getInstance().clear();
+            if (currentSessionId) {
+              await sessionManager.write(currentSessionId, '\x03');
+              await sessionManager.write(currentSessionId, '\x03');
+            }
+            try {
+              await invoke('cancel_command', { runId: '*' }).catch(() => {});
+            } catch { /* ignore */ }
+            const leftover = activeRenderer?.finish() ?? '';
+            writeTerm(`${leftover}\r\n  ${S.err}Force killed.${S.reset}\r\n`);
+            PromptProgressManager.getInstance().completePrompt(false, 'Killed.');
+            setPlanExecutionStatus('failed');
+            planExecutionStatusRef.current = 'failed';
+            schedulePlanDismiss();
+            aiBusyRef.current = false;
+            activeRunAbortControllerRef.current = null;
+            afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+            return;
+          }
 
           // Remember where this input line starts so Enter can read exactly what was typed
           if (!(data.includes('\r') || data === '\n') && term.buffer.active.type !== 'alternate') {
@@ -1019,20 +1162,32 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             inputLineRef.current.noteKeystroke(data, { row: b.baseY + b.cursorY, col: b.cursorX }, ptyTrackerRef.current.isProcessRunning());
           }
 
-          // Handle Tab completion or Right Arrow completion
-          if (data === '\t' || data === '\x1b[C') {
-             const remaining = ghostText.getRemaining();
-             if (remaining) {
-               await sessionManager.write(currentSessionId, remaining);
-               ghostText.clear();
-               return; // Intercept key
-             }
+          // Ghost-text key decisions (Task 1.4: only Tab at end and Right at end accept)
+          const cursorEndInfo = inputLineRef.current.getCursorEndInfo(term);
+          const ghostAction = decideGhostKey(data, {
+            cursorAtEnd: cursorEndInfo.atEnd,
+            hasGhost: !!ghostText.getRemaining(),
+            acceptRight: localStorage.getItem('cero_ghost_accept_right') !== 'false',
+          });
 
-             // If Tab is pressed and an auto-heal remediation is active
+          if (ghostAction === 'accept-ghost') {
+            const remaining = ghostText.getRemaining();
+            if (remaining) {
+              await sessionManager.write(currentSessionId, remaining);
+              ghostText.clear();
+              return;
+            }
+          } else if (ghostAction === 'clear-ghost-and-pass') {
+            ghostText.clear();
+            // Fall through to send the key to the shell
+          }
+
+          // Tab with no ghost: check auto-heal remediation
+          if (data === '\t') {
              const activeRem = outputObserverRef.current.getActiveRemediation();
              if (activeRem) {
                await ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d));
-               writeTerm(`\r\n  ${S.muted}›${S.reset} ${S.soft}Applying fix: ${activeRem.actionTitle}${S.reset}\r\n`);
+               writeTerm(`\r\n  ${S.muted}>${S.reset} ${S.soft}Applying fix: ${activeRem.actionTitle}${S.reset}\r\n`);
                outputObserverRef.current.clearRemediation();
                if (activeRem.tool === 'shell.execute' && activeRem.params?.command) {
                  await sessionManager.write(currentSessionId!, `${activeRem.params.command}\r`);
@@ -1112,7 +1267,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                   AppAliasRegistry.getInstance().setAlias(match[1], match[2]);
                   writeTerm(`\r\n\x1b[1;32m[App Registry] Successfully registered application mapping:\x1b[0m\r\n`);
                   writeTerm(`  • Alias: \x1b[1;36m"${match[1]}"\x1b[0m ──► Application: \x1b[1;33m"${match[2]}"\x1b[0m\r\n`);
-                  writeTerm(`\x1b[37m[App Registry] Saved to persistent storage (~/.sentinel/app_aliases.json).\x1b[0m\r\n\r\n`);
+                  writeTerm(`\x1b[37m[App Registry] Saved to persistent storage (~/.cero/app_aliases.json).\x1b[0m\r\n\r\n`);
                 } else {
                   writeTerm(`\r\n\x1b[1;35m[App Registry] Currently Registered Application Mappings:\x1b[0m\r\n`);
                   const aliases = AppAliasRegistry.getInstance().getAll();
@@ -1125,6 +1280,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 return;
               }
 
+              // /learning on | off: whether Cero may collect its own failures for later study (off by default)
+              if (/^\/learning(?:\s+(?:on|off))?\s*$/i.test(cleanCmd)) {
+                await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
+                const arg = cleanCmd.replace(/^\/learning\s*/i, '').toLowerCase();
+                try {
+                  if (arg === 'on') localStorage.setItem('cero_auto_learning', 'true');
+                  else if (arg === 'off') localStorage.removeItem('cero_auto_learning');
+                } catch { /* storage blocked */ }
+                const on = CeroSerlCoordinator.isAutoCaptureEnabled();
+                writeTerm(`\r\n  ${S.soft}Automatic learning is ${on ? 'ON: Cero keeps a local record of its failed requests' : 'OFF: Cero learns only when you type /learn'}.${S.reset}\r\n\r\n`);
+                return;
+              }
+
               // Intercept demonstration learning slash commands: /learn, /learned, /forget
               if (cleanCmd.startsWith('/learn') || cleanCmd.startsWith('/learned') || cleanCmd.startsWith('/forget')) {
                 await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
@@ -1132,7 +1300,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                   const patterns = DemonstrationLearningEngine.getInstance().getAllPatterns();
                   if (patterns.length === 0) {
                     writeTerm(`\r\n\x1b[33m[Learning Engine] No custom patterns learned yet.\x1b[0m\r\n`);
-                    writeTerm(`\x1b[37mTeach Sentinel via:\x1b[0m \x1b[1;32m/learn <goal> -> <command>\x1b[0m\r\n\r\n`);
+                    writeTerm(`\x1b[37mTeach Cero after a request that worked:\x1b[0m \x1b[1;32m/learn\x1b[0m   \x1b[37mor\x1b[0m   \x1b[1;32m/learn <goal> -> <command>\x1b[0m\r\n\r\n`);
                   } else {
                     writeTerm(`\r\n\x1b[1;35m[Learning Engine] Currently Learned Workflows (${patterns.length}):\x1b[0m\r\n`);
                     patterns.forEach((p, idx) => {
@@ -1152,6 +1320,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                   } else {
                     writeTerm(`\r\n\x1b[37mUsage:\x1b[0m \x1b[1;31m/forget <pattern_id or goal>\x1b[0m\r\n\r\n`);
                   }
+                } else if (isBareLearn(cleanCmd)) {
+                  const decision = decideLearn(learnCandidateRef.current);
+                  if (decision.kind === 'refuse') {
+                    writeTerm(`\r\n\x1b[33m[Learning] ${decision.reason}\x1b[0m\r\n\r\n`);
+                  } else {
+                    const pattern = DemonstrationLearningEngine.getInstance().learnExplicit(decision.goal, decision.command);
+                    EpisodicMemoryEngine.getInstance().recordMemory(decision.goal, decision.command, { cwd: currentPath, source: 'explicit_teach' });
+                    learnCandidateRef.current = null;
+                    writeTerm(`\r\n\x1b[1;32m[Learning] Learned, because you asked:\x1b[0m\r\n`);
+                    writeTerm(`  \u2022 When you ask: \x1b[1;36m"${pattern.originalGoal}"\x1b[0m\r\n`);
+                    writeTerm(`  \u2022 Cero runs:    \x1b[1;33m${pattern.commandTemplate}\x1b[0m\r\n`);
+                    writeTerm(`\x1b[37mUndo with /forget ${pattern.id}\x1b[0m\r\n\r\n`);
+                  }
                 } else {
                   // /learn <trigger> -> <command>
                   const match = cleanCmd.match(/^\/learn\s+(.+?)\s*(?:->|=>|──►|to)\s*(.+)$/i);
@@ -1164,7 +1345,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                     writeTerm(`\r\n\x1b[1;32m[Learning Engine] Successfully learned new workflow:\x1b[0m\r\n`);
                     writeTerm(`  • Trigger: \x1b[1;36m"${pattern.originalGoal}"\x1b[0m\r\n`);
                     writeTerm(`  • Command: \x1b[1;33m${pattern.commandTemplate}\x1b[0m\r\n`);
-                    writeTerm(`\x1b[37m[Learning Engine] Saved to persistent storage (~/.sentinel/learned_patterns.json & episodic memory).\x1b[0m\r\n\r\n`);
+                    writeTerm(`\x1b[37m[Learning Engine] Saved to persistent storage (~/.cero/learned_patterns.json & episodic memory).\x1b[0m\r\n\r\n`);
                   } else {
                     writeTerm(`\r\n\x1b[37mUsage:\x1b[0m \x1b[1;32m/learn <natural language goal> -> <command>\x1b[0m\r\n`);
                     writeTerm(`Example: \x1b[36m/learn compress backups -> tar -czvf backups.tar.gz ./backups\x1b[0m\r\n\r\n`);
@@ -1204,32 +1385,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 !cleanCmd.startsWith('/') &&
                 isPlausibleDemonstration(lastUnresolvedGoalRef.current.goal, cleanCmd)
               ) {
-                const learned = DemonstrationLearningEngine.getInstance().learnFromDemonstration(
-                  lastUnresolvedGoalRef.current.goal,
-                  cleanCmd,
-                  currentPathRef.current
-                );
-                EpisodicMemoryEngine.getInstance().recordMemory(
-                  lastUnresolvedGoalRef.current.goal,
-                  cleanCmd,
-                  {
-                    cwd: currentPathRef.current,
-                    source: 'demonstration'
-                  }
-                );
-                // Tier 4: Feed human demonstration into Sentinel-SERL closed-loop
-                SentinelSerlCoordinator.getInstance().onHumanDemonstration(
-                  lastUnresolvedGoalRef.current.goal,
-                  cleanCmd,
-                  `Human demonstration in ${currentPathRef.current || '~'}`
-                ).catch(e => console.warn('[TerminalView] SERL demonstration recording error:', e));
-                if (learned) {
-                  writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Learned from your command${S.reset}\r\n`);
-                  writeTerm(`    ${S.muted}when you ask${S.reset}  ${S.soft}${lastUnresolvedGoalRef.current.goal}${S.reset}\r\n`);
-                  writeTerm(`    ${S.muted}Sentinel runs${S.reset} ${S.code}${cleanCmd}${S.reset}\r\n`);
-                  writeTerm(`    ${S.muted}Undo with /forget ${learned.id}${S.reset}\r\n\r\n`);
-                  lastUnresolvedGoalRef.current = null;
-                }
+                // Nothing is learned from watching. The command is only remembered as something /learn could teach.
+                learnCandidateRef.current = { goal: lastUnresolvedGoalRef.current.goal, command: cleanCmd, at: Date.now(), source: 'typed' };
+                writeTerm(`\r\n  ${S.muted}To teach Cero "${lastUnresolvedGoalRef.current.goal}" = ${cleanCmd}, type /learn. Otherwise nothing is learned.${S.reset}\r\n`);
+                lastUnresolvedGoalRef.current = null;
               }
 
               // `>` starts an AI request. Once it asks a clarification question,
@@ -1244,6 +1403,51 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 writeTerm(`\r\n  ${S.muted}Cancelled.${S.reset}\r\n\r\n`);
                 sessionManager.write(currentSessionId!, '\r');
                 return;
+              }
+
+              // Queue management slash and natural language commands (Task 2.3)
+              const queueCmd = parseQueueCommand(cleanCmd);
+              if (queueCmd) {
+                await (typedWhileRunning ? sessionManager.write(currentSessionId!, '\x15') : ptyTrackerRef.current.safeClearLine(d => sessionManager.write(currentSessionId!, d)));
+                if (queueCmd.type === 'open-panel') {
+                  window.dispatchEvent(new CustomEvent('cero:open-queue'));
+                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  return;
+                }
+                if (queueCmd.type === 'show') {
+                  const list = PromptQueue.getInstance().formatQueueList();
+                  writeTerm(`\r\n  ${S.soft}${list.replace(/\n/g, '\r\n  ')}${S.reset}\r\n\r\n`);
+                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  return;
+                }
+                if (queueCmd.type === 'clear') {
+                  PromptQueue.getInstance().clear();
+                  writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Queue cleared.${S.reset}\r\n\r\n`);
+                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  return;
+                }
+                if (queueCmd.type === 'remove') {
+                  const ok = PromptQueue.getInstance().remove(queueCmd.index);
+                  if (ok) {
+                    writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Removed item ${queueCmd.index} from queue.${S.reset}\r\n\r\n`);
+                  } else {
+                    writeTerm(`\r\n  ${S.err}✗${S.reset} ${S.text}Item ${queueCmd.index} not found in queue.${S.reset}\r\n\r\n`);
+                  }
+                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  return;
+                }
+                if (queueCmd.type === 'pause') {
+                  PromptQueue.getInstance().setPaused(true);
+                  writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Queue paused.${S.reset}\r\n\r\n`);
+                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  return;
+                }
+                if (queueCmd.type === 'resume') {
+                  PromptQueue.getInstance().setPaused(false);
+                  writeTerm(`\r\n  ${S.ok}✓${S.reset} ${S.text}Queue resumed.${S.reset}\r\n\r\n`);
+                  afterShellRedraw(() => sessionManager.write(currentSessionId!, '\r'));
+                  return;
+                }
               }
 
               if (cleanCmd.startsWith('>') || answeringAgentQuestion) {
@@ -1261,7 +1465,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
                 // One request at a time: the agent keeps a single transcript and event listener
                 if (aiBusyRef.current) {
-                  aiQueueRef.current.push({ goal: aiGoal });
+                  PromptQueue.getInstance().enqueue(aiGoal);
                   const settled = activeRenderer?.finish() ?? '';
                   const newline = !settled && term.buffer.active.cursorX > 0 ? '\r\n' : '';
                   writeTerm(`${settled}${newline}  ${S.muted}Queued: ${aiGoal}${S.reset}\r\n`);
@@ -1282,13 +1486,21 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
           sessionManager.write(currentSessionId, data);
 
-          // Update ghost text asynchronously after terminal buffer updates
-          if (data !== '\r' && data !== '\x03') {
+          // Update ghost text asynchronously after terminal buffer updates.
+          // Task 1.4: only recompute on printable input and Backspace, and only when cursor is at end.
+          const isPrintableOrBackspace = /^[^\x00-\x1f\x7f]+$/.test(data) || data === '\x7f' || data === '\b';
+          if (data !== '\r' && data !== '\x03' && isPrintableOrBackspace) {
             setTimeout(async () => {
               const buffer = term.buffer.active;
               const lineIndex = buffer.baseY + buffer.cursorY;
               const line = buffer.getLine(lineIndex);
               if (line) {
+                const endInfo = inputLineRef.current.getCursorEndInfo(term);
+                // Check cursor-at-end before recomputing
+                if (!endInfo.atEnd) {
+                  ghostText.clear();
+                  return;
+                }
                 const fullText = line.translateToString(true);
                 const promptMatch = fullText.match(/.*[$%#]\s*/);
                 const commandText = promptMatch ? fullText.substring(promptMatch[0].length).trimStart() : fullText.trimStart();
@@ -1301,7 +1513,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                     os: getPlatform() === 'linux' ? 'linux' : 'macos'
                   });
                   if (suggestions.length > 0) {
-                     ghostText.render(suggestions[0].value, commandText);
+                     ghostText.render(suggestions[0].value, commandText, endInfo.endCol, endInfo.atEnd);
                   } else {
                      ghostText.clear();
                   }
@@ -1313,10 +1525,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
           }
         });
       } catch (error: any) {
-        console.warn("[Sentinel] Native backend unavailable, running in preview mode:", error);
+        console.warn("[Cero] Native backend unavailable, running in preview mode:", error);
         term.write('\x1b[1;32m❯\x1b[0m \x1b[1mcargo check --workspace\x1b[0m\r\n');
-        term.write('   \x1b[34mCompiling\x1b[0m sentinel v2.0.0 (/home/dev/workspace/sentinel)\r\n');
-        term.write('    \x1b[32mChecking\x1b[0m sentinel-core v2.0.0\r\n');
+        term.write('   \x1b[34mCompiling\x1b[0m cero v2.0.0 (/home/dev/workspace/cero)\r\n');
+        term.write('    \x1b[32mChecking\x1b[0m cero-core v2.0.0\r\n');
         term.write('    \x1b[32mFinished\x1b[0m dev [optimized + debuginfo] target(s) in 0.38s\r\n\r\n');
         term.write('\x1b[1;32m❯\x1b[0m \x1b[1mgit status\x1b[0m\r\n');
         term.write('On branch main\r\n');
@@ -1351,7 +1563,36 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       resizeObserver.observe(terminalRef.current);
     }
 
+    const handleAbortActiveRun = () => {
+      if (activeRunAbortControllerRef.current) {
+        activeRunAbortControllerRef.current.abort();
+        writeTerm(`\r\n  ${S.muted}Stopped.${S.reset}\r\n`);
+        PromptProgressManager.getInstance().completePrompt(false, 'Stopped.');
+        setPlanExecutionStatus('failed');
+        planExecutionStatusRef.current = 'failed';
+        schedulePlanDismiss();
+        aiBusyRef.current = false;
+        activeRunAbortControllerRef.current = null;
+        PromptQueue.getInstance().setRunningItem(null);
+        if (currentSessionId) {
+          void sessionManager.write(currentSessionId, '\r');
+        }
+      }
+    };
+    window.addEventListener('cero:abort-active-run', handleAbortActiveRun);
+
+    const handleQueueResumed = () => {
+      if (!aiBusyRef.current) {
+        const next = PromptQueue.getInstance().takeNext();
+        if (next) setTimeout(() => runQueuedItemRef.current?.(next), 150);
+      }
+    };
+    window.addEventListener('cero:queue-resumed', handleQueueResumed);
+
     return () => {
+      runQueuedItemRef.current = null;
+      window.removeEventListener('cero:abort-active-run', handleAbortActiveRun);
+      window.removeEventListener('cero:queue-resumed', handleQueueResumed);
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
       if (currentSessionId && outputCallback) {
@@ -1365,8 +1606,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
       detachDisplay?.();
       if (paneId) TerminalWorkspace.getInstance().unregister(paneId);
       ConsentQueue.getInstance().clearQueue(currentSessionId);
-      window.removeEventListener('sentinel:toggle-search', handleToggleSearch);
-      window.removeEventListener('sentinel:find-in-terminal', handleFindRequest);
+      window.removeEventListener('cero:toggle-search', handleToggleSearch);
+      window.removeEventListener('cero:find-in-terminal', handleFindRequest);
       searchAddon.dispose();
       term.dispose();
     };
@@ -1678,7 +1919,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
               )}
 
               {/* Status and auto-dismiss hint */}
-              {planExecutionStatus !== 'running' && hudPlanDuration !== 'persistent' && (
+              {planExecutionStatus !== 'running' && (
                 <div style={{
                   marginTop: '10px',
                   paddingTop: '6px',
@@ -1689,8 +1930,39 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                   fontSize: '10px',
                   color: 'rgba(255, 255, 255, 0.4)'
                 }}>
-                  <span>Auto-dismiss in {hudPlanDuration}s</span>
-                  <span>Hover to pause</span>
+                  {hudPlanDuration !== 'persistent' ? <span>Auto-dismiss in {hudPlanDuration}s</span> : <span />}
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const activeModel = ModelManager.getInstance().getActiveModel();
+                      const copied = await copyWrongAnswerToClipboard(
+                        lastGoalRef.current || latestPlan?.summary || 'AI task',
+                        activeModel?.displayName || activeModel?.modelId || 'built-in',
+                        latestPlan?.steps || []
+                      );
+                      if (copied) {
+                        setReportCopied(true);
+                        setTimeout(() => setReportCopied(false), 2500);
+                      }
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: reportCopied ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+                      fontSize: '10px',
+                      cursor: 'pointer',
+                      padding: '2px 4px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'all 0.15s ease'
+                    }}
+                    title="Copy prompt and chosen action to clipboard in cases.json format"
+                  >
+                    {reportCopied ? <Check size={10} style={{ color: '#ffffff' }} /> : <AlertCircle size={10} />}
+                    <span>{reportCopied ? 'Report copied to clipboard' : 'Report a wrong answer'}</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -1870,10 +2142,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
 
             <p style={{ fontSize: '13px', lineHeight: '1.55', color: 'rgba(255, 255, 255, 0.75)', margin: '0 0 18px 0' }}>
               {securityModalPlan.plan.requiresPassword
-                ? 'This can stop or change things on your computer. Sentinel will run exactly what is shown below, only after you click Run. It never asks for your password.'
+                ? 'This can stop or change things on your computer. Cero will run exactly what is shown below, only after you click Run. It never asks for your password.'
                 : securityModalPlan.plan.requiresClick
-                  ? 'These commands come from a file. Sentinel will run exactly what is shown below, only after you click Run.'
-                  : 'Sentinel will run exactly what is shown below. Nothing runs until you approve.'}
+                  ? 'These commands come from a file. Cero will run exactly what is shown below, only after you click Run.'
+                  : 'Cero will run exactly what is shown below. Nothing runs until you approve.'}
             </p>
 
             <div style={{

@@ -30,11 +30,11 @@ export class ConsentQueue {
   private listeners: Set<ConsentQueueListener> = new Set();
   /**
    * Approves every request without asking. Only the prompt benchmark turns this on, with the
-   * Sentinel-specific SENTINEL_BENCHMARK switch. Generic variables such as CI or HEADLESS must
+   * Cero-specific CERO_BENCHMARK switch. Generic variables such as CI or HEADLESS must
    * never do it: many shells and every CI runner export CI=true.
    */
   private autoApprove: boolean =
-    typeof process !== 'undefined' && !!process.env && process.env.SENTINEL_BENCHMARK === 'true';
+    typeof process !== 'undefined' && !!process.env && process.env.CERO_BENCHMARK === 'true';
 
   public static getInstance(): ConsentQueue {
     if (!ConsentQueue.instance) {

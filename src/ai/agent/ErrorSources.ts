@@ -17,6 +17,13 @@ export function pathsInError(output: string, cwd: string): string[] {
     const rel = cwd && clean.startsWith(`${cwd.replace(/\/+$/, '')}/`) ? clean.slice(cwd.replace(/\/+$/, '').length + 1) : clean;
     if (!found.includes(rel)) found.push(rel);
   };
+  // Absolute paths with spaces ("/Users/me/Project Folder/app/test.js:3"): taken whole, then blanked out so the
+  // plain pattern below does not also pick up the piece after the space
+  const spaced = new RegExp(`((?:/|[A-Za-z]:[\\\\/])[^\\n:()'"]*?\\.(?:${SOURCE_EXT}))(?=[:(]\\d)`, 'g');
+  output = output.replace(spaced, (whole, p1: string) => {
+    if (/\s/.test(p1)) { add(p1.trim()); return ' '.repeat(whole.length); }
+    return whole;
+  });
   // Python: File "/x/app.py", line 3
   for (const m of output.matchAll(/File "([^"]+\.py)", line \d+/g)) add(m[1]);
   // Stack frames and compiler errors: /x/test.js:3:8, src/app.ts(12,5), ./main.go:10

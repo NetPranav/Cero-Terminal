@@ -8,7 +8,7 @@ describe('SystemPrompt — Shell-Native Autonomous Copilot Prompt', () => {
 
   it('builds shell-native system prompt for macOS with zero-refusal rules and JSON contract', () => {
     const prompt = buildSystemPrompt(mockTools, { os: 'mac', cwd: '/Users/test/projects' });
-    expect(prompt).toContain('You are Sentinel, an autonomous mac terminal AI copilot.');
+    expect(prompt).toContain('You are Cero, an autonomous mac terminal AI copilot.');
     expect(prompt).toContain('Working Directory: /Users/test/projects');
     expect(prompt).toContain('Shell: /bin/zsh');
     expect(prompt).toContain('CRITICAL RULES:');

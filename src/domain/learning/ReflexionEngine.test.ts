@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as os from 'os';
 
 describe('ReflexionEngine — Autonomous Background Reflexion & Counterfactual Synthesis', () => {
-  const testDir = path.join(os.tmpdir(), `sentinel_test_reflexion_${Date.now()}`);
+  const testDir = path.join(os.tmpdir(), `cero_test_reflexion_${Date.now()}`);
   const testFile = path.join(testDir, 'knowledge_deficits.jsonl');
 
   beforeEach(() => {

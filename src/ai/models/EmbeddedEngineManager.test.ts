@@ -39,7 +39,7 @@ describe('EmbeddedEngineManager (In-App Local AI Integration)', () => {
   });
 
   it('supports attaching LoRA adapters and tracking activeLora status', async () => {
-    const loraPath = '/Users/test/.sentinel/models/sentinel_mlx_lora.gguf';
+    const loraPath = '/Users/test/.cero/models/cero_mlx_lora.gguf';
     const started = await manager.startEngine(undefined, loraPath);
     expect(started).toBe(true);
     expect(manager.getActiveLora()).toBe(loraPath);
@@ -53,11 +53,11 @@ describe('EmbeddedEngineManager (In-App Local AI Integration)', () => {
   });
 
   it('hot-reloads a new LoRA adapter into the running engine', async () => {
-    const initialLora = '/Users/test/.sentinel/models/v1_adapter.gguf';
+    const initialLora = '/Users/test/.cero/models/v1_adapter.gguf';
     await manager.startEngine(undefined, initialLora);
     expect(manager.getActiveLora()).toBe(initialLora);
 
-    const newLora = '/Users/test/.sentinel/models/sentinel_mlx_lora.gguf';
+    const newLora = '/Users/test/.cero/models/cero_mlx_lora.gguf';
     const reloaded = await manager.hotReloadLora(newLora);
     expect(reloaded).toBe(true);
     expect(manager.getActiveLora()).toBe(newLora);
@@ -166,9 +166,9 @@ describe('EmbeddedEngineManager (In-App Local AI Integration)', () => {
   // =========================================================================
   describe('SHA-256 Checksum Verification (Item 0.5.16)', () => {
     it('verifies valid file checksum correctly', async () => {
-      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-test-'));
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-test-'));
       const testFile = path.join(tempDir, 'sample.bin');
-      const content = Buffer.from('Sentinel AI test payload for integrity verification');
+      const content = Buffer.from('Cero AI test payload for integrity verification');
       fs.writeFileSync(testFile, content);
 
       const expectedHash = crypto.createHash('sha256').update(content).digest('hex');
@@ -181,7 +181,7 @@ describe('EmbeddedEngineManager (In-App Local AI Integration)', () => {
     });
 
     it('detects and rejects checksum mismatch on corrupted file', async () => {
-      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-test-'));
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-test-'));
       const testFile = path.join(tempDir, 'corrupt.bin');
       fs.writeFileSync(testFile, Buffer.from('Corrupted payload data'));
 

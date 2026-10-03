@@ -23,3 +23,14 @@ describe('parseDiagnoseRequest', () => {
     expect(parseDiagnoseRequest('why is my wifi not working', isCommand)).toBeNull();
   });
 });
+
+describe('paths with spaces', () => {
+  it('keeps a whole path that has a space in it, relative to the working folder', () => {
+    const out = "/Users/me/Project Folder/app/node-app/test.js:5\n    throw err;\n";
+    expect(pathsInError(out, '/Users/me/Project Folder/app')).toEqual(['node-app/test.js']);
+  });
+  it('does not also report the piece after the space', () => {
+    const found = pathsInError('at /Users/me/My Project/src/a.ts:12:3', '/elsewhere');
+    expect(found).toEqual(['/Users/me/My Project/src/a.ts']);
+  });
+});

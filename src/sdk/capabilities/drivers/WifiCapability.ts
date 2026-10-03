@@ -57,7 +57,7 @@ export class WifiCapability extends BaseCapabilityDriver<WifiInput, any> {
     try {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
         if (op === 'scan') {
-          return { success: true, data: { networks: ['Home-WiFi-5G', 'Office_Guest', 'Sentinel-Hub'] }, commandExecuted: 'airport -s' };
+          return { success: true, data: { networks: ['Home-WiFi-5G', 'Office_Guest', 'Cero-Hub'] }, commandExecuted: 'airport -s' };
         } else if (op === 'on' || op === 'off') {
           return { success: true, data: { power: op, wifi: op }, commandExecuted: `networksetup -setairportpower ${iface} ${op}`, rollbackPayload: { power: op === 'on' ? 'off' : 'on', iface } };
         } else {
@@ -87,7 +87,7 @@ export class WifiCapability extends BaseCapabilityDriver<WifiInput, any> {
           }
         } else {
           // Linux nmcli / rfkill (with absolute safety in benchmark/test mode to prevent host internet drops)
-          if (typeof process !== 'undefined' && process.env.SENTINEL_BENCHMARK === 'true') {
+          if (typeof process !== 'undefined' && process.env.CERO_BENCHMARK === 'true') {
             const output = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', {
               command: 'sh',
               args: ['-c', `echo "Wi-Fi radio set to ${op === 'on' ? 'enabled' : 'disabled'}"`]
@@ -133,7 +133,7 @@ export class WifiCapability extends BaseCapabilityDriver<WifiInput, any> {
               networks.push(
                 { ssid: 'Home-WiFi-5G', signal: '90', security: 'WPA2' },
                 { ssid: 'Office_Guest', signal: '75', security: 'WPA2' },
-                { ssid: 'Sentinel-Hub', signal: '60', security: 'WPA3' }
+                { ssid: 'Cero-Hub', signal: '60', security: 'WPA3' }
               );
             }
             const stdout = `Available Wi-Fi Networks (${networks.length}):\r\n` + networks.map(n => `  • ${n.ssid}  ${n.signal}%  ▂▄▆█  [${n.security}]`).join('\r\n');
@@ -394,7 +394,7 @@ export class WifiCapability extends BaseCapabilityDriver<WifiInput, any> {
 
   public async verify(input: WifiInput, result: CapabilityExecutionResult<any>): Promise<boolean> {
     if (!result.success || result.cancelled) return false;
-    if (typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.SENTINEL_BENCHMARK === 'true')) return true;
+    if (typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.CERO_BENCHMARK === 'true')) return true;
 
     const platform = this.detectPlatform();
     if (platform !== 'macos') {
@@ -433,7 +433,7 @@ export class WifiCapability extends BaseCapabilityDriver<WifiInput, any> {
 
   public async rollback(input: WifiInput, result: CapabilityExecutionResult<any>): Promise<boolean> {
     if (!result.success) return false;
-    if (typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.SENTINEL_BENCHMARK === 'true')) return true;
+    if (typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.CERO_BENCHMARK === 'true')) return true;
 
     const platform = this.detectPlatform();
     if (platform !== 'macos') {

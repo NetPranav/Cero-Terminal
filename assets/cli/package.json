@@ -1,9 +1,9 @@
 {
-  "name": "@netpranav/sentinel-cli",
+  "name": "@netpranav/cero-cli",
   "version": "2.1.0",
-  "description": "Open Sentinel Terminal in a folder, or run a .flow file, from any shell (macOS, Linux, Windows)",
+  "description": "Open Cero in a folder, or run a .flow file, from any shell (macOS, Linux, Windows)",
   "bin": {
-    "sentinel": "sentinel.js"
+    "cero": "cero.js"
   },
   "repository": {
     "type": "git",
@@ -14,7 +14,7 @@
     "registry": "https://npm.pkg.github.com"
   },
   "keywords": [
-    "sentinel",
+    "cero",
     "terminal",
     "cli",
     "flow",
@@ -27,13 +27,13 @@
   },
   "homepage": "https://github.com/NetPranav/Sentinal-Terminal/tree/main/assets/cli#readme",
   "files": [
-    "sentinel.js",
+    "cero.js",
     "README.md"
   ],
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "test": "node sentinel.js --version"
+    "test": "node cero.js --version"
   }
 }

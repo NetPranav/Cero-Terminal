@@ -2,7 +2,7 @@
  * AutoRemediationPolicy.ts — decides whether a detected error may be fixed without asking.
  *
  * Watched files and terminal output are untrusted input: a crafted log line such as
- * "Cannot find module 'evil-pkg'" must never make Sentinel install a package (typosquatting plus
+ * "Cannot find module 'evil-pkg'" must never make Cero install a package (typosquatting plus
  * postinstall scripts = arbitrary code execution). So unattended fixes are limited to a small
  * table of vetted, standalone commands that are local, idempotent and need no privileges.
  * Every other remediation is proposed and goes through the normal consent flow.
@@ -55,7 +55,7 @@ export const VETTED_AUTO_FIXES: Record<string, VettedFix> = {
 };
 
 export class AutoRemediationPolicy {
-  public static readonly STORAGE_KEY = 'sentinel_auto_remediation_mode';
+  public static readonly STORAGE_KEY = 'cero_auto_remediation_mode';
   /** The same fix is not repeated for the same directory within this window */
   public static readonly REPEAT_WINDOW_MS = 10 * 60_000;
   /** Upper bound on unattended fixes per hour across everything */

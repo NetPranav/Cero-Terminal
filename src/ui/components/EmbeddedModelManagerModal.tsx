@@ -301,7 +301,7 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
             </div>
             <div>
               <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: '#ffffff' }}>
-                Sentinel Embedded AI
+                Cero Embedded AI
               </h2>
               <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.38)', display: 'block' }}>
                 Native local intelligence • Zero Ollama dependency
@@ -562,7 +562,7 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
             </div>
 
             <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255, 255, 255, 0.55)', lineHeight: 1.5 }}>
-              {model.description}. Runs locally through Sentinel's own llama.cpp engine; nothing leaves this machine.
+              {model.description}. Runs locally through Cero's own llama.cpp engine; nothing leaves this machine.
             </p>
 
             <div style={{ display: 'flex', gap: '12px', fontSize: '10px', color: 'rgba(255, 255, 255, 0.35)', fontFamily: 'ui-monospace, monospace' }}>
@@ -586,7 +586,7 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
                 fontFamily: 'ui-monospace, monospace',
                 whiteSpace: 'pre-wrap'
               }}>
-                {`Engine log (~/.sentinel/logs/llama-server.log):\n${engineLog}`}
+                {`Engine log (~/.cero/logs/llama-server.log):\n${engineLog}`}
               </pre>
             )}
 
@@ -779,7 +779,7 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
           }}>
             <Info size={13} style={{ color: 'rgba(255, 255, 255, 0.4)', flexShrink: 0, marginTop: '2px' }} />
             <div>
-              <strong>Why Embedded?</strong> Sentinel runs its own native inference engine without background daemons or port collisions. You can switch providers anytime in AI Settings.
+              <strong>Why Embedded?</strong> Cero runs its own native inference engine without background daemons or port collisions. You can switch providers anytime in AI Settings.
             </div>
           </div>
         </div>
@@ -795,7 +795,7 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-          <span style={{ fontFamily: 'ui-monospace, monospace' }}>~/.sentinel/models/</span>
+          <span style={{ fontFamily: 'ui-monospace, monospace' }}>~/.cero/models/</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '1px 4px', borderRadius: '3px', fontSize: '10px' }}>ESC</kbd>
             <span>Close</span>

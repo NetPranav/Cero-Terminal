@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 convert_peft_to_gguf.py — Converts Hugging Face PEFT LoRA safetensors to GGUF format
-Compatible with llama.cpp and Sentinel's embedded llama-server / llama-cli.
+Compatible with llama.cpp and Cero's embedded llama-server / llama-cli.
 """
 
 import sys
@@ -87,6 +87,6 @@ def convert_hf_lora_to_gguf(lora_dir: str, output_gguf_path: str):
     print(f"✓ Successfully generated GGUF LoRA adapter: {output_gguf_path}")
 
 if __name__ == "__main__":
-    src_dir = sys.argv[1] if len(sys.argv) > 1 else "sentinel_lora_colab"
-    out_file = sys.argv[2] if len(sys.argv) > 2 else "sentinel_lora_colab.gguf"
+    src_dir = sys.argv[1] if len(sys.argv) > 1 else "cero_lora_colab"
+    out_file = sys.argv[2] if len(sys.argv) > 2 else "cero_lora_colab.gguf"
     convert_hf_lora_to_gguf(src_dir, out_file)

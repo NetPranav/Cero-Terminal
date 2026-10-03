@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Workspace Registry
+ * Cero — Workspace Registry
  *
  * Scans, indexes, and caches developer workspaces (ROS 1/2, Node, Python, Rust, Docker)
  * across local filesystem roots to provide sub-millisecond workspace navigation.

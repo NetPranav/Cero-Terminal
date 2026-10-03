@@ -90,7 +90,7 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
         case 'maximize':
           return { success: true, data: { maximized: true }, commandExecuted };
         case 'list_running': {
-          const mockApps = ['Sentinel Terminal', 'Antigravity IDE', 'Google Chrome', 'Safari', 'Preview', 'Music'];
+          const mockApps = ['Cero', 'Antigravity IDE', 'Google Chrome', 'Safari', 'Preview', 'Music'];
           if (rawTarget) {
             const filterLower = rawTarget.toLowerCase();
             const matchedApp = mockApps.find(a => a.toLowerCase() === filterLower || a.toLowerCase().includes(filterLower));
@@ -240,7 +240,7 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
             resolvedTarget = folderMapping[cleanTarget];
             isPathOrFolder = true;
           } else if (cleanTarget === 'application' || cleanTarget === 'app' || cleanTarget === 'the app' || cleanTarget === 'the application' || cleanTarget === 'built app' || cleanTarget === 'built application') {
-            resolvedTarget = 'Sentinel Terminal';
+            resolvedTarget = 'Cero';
           } else if (target.startsWith('/') || target.startsWith('~/') || target.startsWith('./') || target === '~') {
             isPathOrFolder = true;
           }
@@ -363,7 +363,7 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
             .map(s => s.trim())
             .filter(Boolean)
             .map(name => {
-              if (name === 'tauri-app') return 'Sentinel Terminal';
+              if (name === 'tauri-app') return 'Cero';
               if (name === 'Electron') return 'Antigravity IDE';
               if (name === 'chrome' || name === 'Google Chrome') return 'Google Chrome';
               return name;

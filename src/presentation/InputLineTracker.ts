@@ -5,7 +5,7 @@
  * That broke in two ways that both sent an AI request to the shell, where a leading `>` is a
  * redirection (`>what is $PATH` truncates a file named "what"):
  *  - a request containing `$`, `%` or `#` was cut in the middle, so it no longer started with `>`;
- *  - text typed while Sentinel was printing agent output had no prompt on its line.
+ *  - text typed while Cero was printing agent output had no prompt on its line.
  *
  * Instead we keep two independent records of the line:
  *  - a shadow of the keystrokes (exact when the user only typed, pasted plain text and used
@@ -120,6 +120,33 @@ export class InputLineTracker {
       text += y === row ? line.translateToString(!continues, col) : line.translateToString(!continues);
     }
     return text.replace(/\s+$/, '');
+  }
+
+  /**
+   * Task 1.4: Check whether the cursor is at the end of what was typed on the current line.
+   * Compares the cursor column and row to the last non-space character of the line.
+   * Handles wrapped rows.
+   */
+  public isCursorAtEnd(term: { buffer: { active: { baseY: number; cursorY: number; cursorX: number; getLine: (y: number) => InputBufferLine | undefined } } }): boolean {
+    return this.getCursorEndInfo(term).atEnd;
+  }
+
+  public getCursorEndInfo(term: { buffer: { active: { baseY: number; cursorY: number; cursorX: number; getLine: (y: number) => InputBufferLine | undefined } } }): { atEnd: boolean; endCol: number; endRow: number } {
+    const buffer = term.buffer.active;
+    const cursorRow = buffer.baseY + buffer.cursorY;
+    const cursorX = buffer.cursorX;
+
+    let lastRow = cursorRow;
+    while (buffer.getLine(lastRow + 1)?.isWrapped) {
+      lastRow++;
+    }
+
+    const lastLine = buffer.getLine(lastRow);
+    const lineText = lastLine ? lastLine.translateToString(true) : '';
+    const endCol = lineText.length;
+
+    const atEnd = cursorRow === lastRow && cursorX >= endCol;
+    return { atEnd, endCol, endRow: lastRow };
   }
 }
 

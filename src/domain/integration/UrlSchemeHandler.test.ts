@@ -4,20 +4,20 @@ import { UrlSchemeHandler } from './UrlSchemeHandler';
 describe('UrlSchemeHandler', () => {
   const handler = UrlSchemeHandler.getInstance();
 
-  it('parses sentinel://open with encoded file system paths', () => {
-    const action = handler.parse('sentinel://open?path=%2FUsers%2Fdev%2FProjects');
+  it('parses cero://open with encoded file system paths', () => {
+    const action = handler.parse('cero://open?path=%2FUsers%2Fdev%2FProjects');
     expect(action.type).toBe('open');
     expect(action.path).toBe('/Users/dev/Projects');
   });
 
-  it('parses sentinel://workspace URI correctly', () => {
-    const action = handler.parse('sentinel://workspace?path=/home/user/code');
+  it('parses cero://workspace URI correctly', () => {
+    const action = handler.parse('cero://workspace?path=/home/user/code');
     expect(action.type).toBe('workspace');
     expect(action.path).toBe('/home/user/code');
   });
 
-  it('parses sentinel://run with commands and optional working directory', () => {
-    const action = handler.parse('sentinel://run?cmd=git%20status&path=%2Fworkspace');
+  it('parses cero://run with commands and optional working directory', () => {
+    const action = handler.parse('cero://run?cmd=git%20status&path=%2Fworkspace');
     expect(action.type).toBe('run');
     expect(action.command).toBe('git status');
     expect(action.path).toBe('/workspace');
@@ -29,9 +29,9 @@ describe('UrlSchemeHandler', () => {
     expect(action.path).toBe('/Users/dev/Downloads');
   });
 
-  it('parses sentinel://new-tab and sentinel://split commands', () => {
-    expect(handler.parse('sentinel://new-tab?path=/root').type).toBe('new-tab');
-    expect(handler.parse('sentinel://split').type).toBe('split');
+  it('parses cero://new-tab and cero://split commands', () => {
+    expect(handler.parse('cero://new-tab?path=/root').type).toBe('new-tab');
+    expect(handler.parse('cero://split').type).toBe('split');
   });
 
   it('parses file:// URIs provided by Linux FreeDesktop file managers', () => {
@@ -44,7 +44,7 @@ describe('UrlSchemeHandler', () => {
     expect(encodedAction.path).toBe('/home/user/My Documents/test');
   });
 
-  it('accepts Windows folders passed by the sentinel CLI', () => {
+  it('accepts Windows folders passed by the cero CLI', () => {
     expect(handler.parse('C:\\Users\\me\\api')).toMatchObject({ type: 'open', path: 'C:\\Users\\me\\api' });
     expect(handler.parse('D:/work')).toMatchObject({ type: 'open', path: 'D:/work' });
     expect(handler.parse('\\\\server\\share')).toMatchObject({ type: 'open', path: '\\\\server\\share' });
@@ -52,7 +52,7 @@ describe('UrlSchemeHandler', () => {
   });
 
   it('filters out invalid or noop inputs when parsing many', () => {
-    const actions = handler.parseMany(['--debug', 'sentinel://open?path=/dir', 'file:///var/log', 'unsupported:protocol']);
+    const actions = handler.parseMany(['--debug', 'cero://open?path=/dir', 'file:///var/log', 'unsupported:protocol']);
     expect(actions.length).toBe(2);
     expect(actions[0].path).toBe('/dir');
     expect(actions[1].path).toBe('/var/log');

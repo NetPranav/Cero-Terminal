@@ -2,7 +2,7 @@
  * EmbeddedProvider.ts — Embedded llama.cpp Model Provider
  * 
  * Communicates with a bundled llama-server sidecar binary that ships inside
- * the Sentinel Terminal .app bundle. This eliminates the need for users to 
+ * the Cero .app bundle. This eliminates the need for users to 
  * install Ollama or any external dependency.
  * 
  * Lifecycle:
@@ -13,8 +13,10 @@
  * Fallback: If embedded model is unavailable, ModelManager falls back to OllamaProvider.
  */
 
+import { wireSampling, resolveSampling } from './DecisionRequest';
 import { ModelProvider, ModelMetadata, GenerateOptions, ProviderResponse } from './Provider';
 import { EmbeddedEngineManager } from '../models/EmbeddedEngineManager';
+import { CancelledError, throwIfAborted } from '../agent/Cancelled';
 
 const EMBEDDED_PORT = 8847;
 const EMBEDDED_BASE_URL = `http://localhost:${EMBEDDED_PORT}`;
@@ -23,7 +25,7 @@ const MAX_HEALTH_RETRIES = 15; // 15 * 2s = 30s max wait for model load
 
 export class EmbeddedProvider implements ModelProvider {
   readonly providerId = 'embedded';
-  readonly providerName = 'Sentinel Embedded AI (llama.cpp)';
+  readonly providerName = 'Cero Embedded AI (llama.cpp)';
 
   private baseUrl: string;
   private _isHealthy = false;
@@ -68,10 +70,10 @@ export class EmbeddedProvider implements ModelProvider {
    */
   public async waitForReady(onProgress?: (status: string) => void): Promise<boolean> {
     for (let attempt = 0; attempt < MAX_HEALTH_RETRIES; attempt++) {
-      onProgress?.(`Initializing Sentinel AI... (${attempt + 1}/${MAX_HEALTH_RETRIES})`);
+      onProgress?.(`Initializing Cero AI... (${attempt + 1}/${MAX_HEALTH_RETRIES})`);
       
       if (await this.isAvailable()) {
-        onProgress?.('Sentinel AI ready.');
+        onProgress?.('Cero AI ready.');
         return true;
       }
       
@@ -96,8 +98,8 @@ export class EmbeddedProvider implements ModelProvider {
       if (!res.ok) {
         // Server is running but may not support /v1/models — return default
         return [{
-          id: 'sentinel-embedded',
-          name: 'Sentinel Embedded Model',
+          id: 'cero-embedded',
+          name: 'Cero Embedded Model',
           sizeBytes: 0,
           quantization: 'Q4_K_M'
         }];
@@ -105,15 +107,15 @@ export class EmbeddedProvider implements ModelProvider {
       
       const data = await res.json() as any;
       return (data.data || []).map((m: any) => ({
-        id: m.id || 'sentinel-embedded',
-        name: m.id || 'Sentinel Embedded Model',
+        id: m.id || 'cero-embedded',
+        name: m.id || 'Cero Embedded Model',
         sizeBytes: 0,
         quantization: 'Q4_K_M'
       }));
     } catch {
       return [{
-        id: 'sentinel-embedded',
-        name: 'Sentinel Embedded Model',
+        id: 'cero-embedded',
+        name: 'Cero Embedded Model',
         sizeBytes: 0,
         quantization: 'Q4_K_M'
       }];
@@ -127,7 +129,7 @@ export class EmbeddedProvider implements ModelProvider {
 
   public async pullModel(_modelId: string, onProgress?: (percent: number, status: string) => void): Promise<boolean> {
     // Embedded models are pre-bundled — no pulling needed
-    onProgress?.(100, 'Model is bundled with Sentinel.');
+    onProgress?.(100, 'Model is bundled with Cero.');
     return true;
   }
 
@@ -153,6 +155,7 @@ export class EmbeddedProvider implements ModelProvider {
     options?: GenerateOptions,
     allowOomRecovery = true
   ): Promise<ProviderResponse> {
+    throwIfAborted(options?.signal);
     const startTime = performance.now();
 
     let messages: { role: string; content: string }[];
@@ -204,23 +207,24 @@ export class EmbeddedProvider implements ModelProvider {
       'X-Request-ID': requestId
     };
 
+    // Task 3.2: Deterministic sampling for decisions (temp 0, top_k 1, top_p 1, seed 42, cache_prompt false)
+    const wire = wireSampling('embedded', options);
+    const sampled = resolveSampling(options);
+
     // Primary: OpenAI-compatible chat completions (best for instruct models)
     try {
       const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
         method: 'POST',
         headers,
+        signal: options?.signal,
         body: JSON.stringify({
           messages,
-          max_tokens: options?.maxTokens ?? 256,
-          temperature: options?.temperature ?? 0.05,
-          top_p: options?.topP ?? 0.9,
+          ...wire,
           stream: false,
           // Optimizations for speed
           // 1.0 = off. A repeat penalty corrupts JSON and shell syntax, which legitimately repeat
           // quotes, dashes and braces.
           repeat_penalty: 1.0,
-          top_k: 20,
-          cache_prompt: true,
           ...(options?.logitBias ? { logit_bias: options.logitBias } : {}),
           ...(options?.grammar ? { grammar: options.grammar } : {})
         })
@@ -243,9 +247,14 @@ export class EmbeddedProvider implements ModelProvider {
           completionTokens: data.usage?.completion_tokens || 0,
           totalTokens: data.usage?.total_tokens || 0
         },
-        latencyMs
+        latencyMs,
+        finishReason: data.choices?.[0]?.finish_reason
       };
     } catch (chatError) {
+      if (options?.signal?.aborted || (chatError as any)?.name === 'AbortError' || chatError instanceof CancelledError) {
+        throw new CancelledError();
+      }
+
       // If error was caused by grammar parsing failure, retry immediately without grammar constraint
       if (options?.grammar && String(chatError).toLowerCase().includes('grammar')) {
         console.warn('[EmbeddedProvider] Grammar rejected by llama-server, falling back to unconstrained inference:', chatError);
@@ -266,13 +275,16 @@ export class EmbeddedProvider implements ModelProvider {
         const response = await fetch(`${this.baseUrl}/completion`, {
           method: 'POST',
           headers,
+          signal: options?.signal,
           body: JSON.stringify({
             prompt,
-            n_predict: options?.maxTokens ?? 256,
-            temperature: options?.temperature ?? 0.05,
-            top_p: options?.topP ?? 0.9,
+            n_predict: sampled.maxTokens,
+            temperature: sampled.temperature,
+            top_p: sampled.topP,
+            top_k: sampled.topK,
             stop: ['</s>', '<|im_end|>', '\n\n\n'],
-            cache_prompt: true,
+            cache_prompt: options?.mode === 'chat',
+            ...(sampled.seed !== undefined ? { seed: sampled.seed } : {}),
             ...(options?.grammar ? { grammar: options.grammar } : {})
           })
         });
@@ -294,9 +306,14 @@ export class EmbeddedProvider implements ModelProvider {
             completionTokens: data.tokens_predicted || 0,
             totalTokens: (data.tokens_evaluated || 0) + (data.tokens_predicted || 0)
           },
-          latencyMs
+          latencyMs,
+          finishReason: data.stopped_limit ? 'length' : (data.truncated ? 'length' : undefined)
         };
       } catch (completionError) {
+        if (options?.signal?.aborted || (completionError as any)?.name === 'AbortError' || completionError instanceof CancelledError) {
+          throw new CancelledError();
+        }
+
         if (allowOomRecovery && EmbeddedEngineManager.getInstance().isVramExhaustionError(completionError)) {
           const recovered = await EmbeddedEngineManager.getInstance().handleOomCrash(String(completionError));
           if (recovered) {

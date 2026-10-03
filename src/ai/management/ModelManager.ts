@@ -37,12 +37,14 @@ export interface ActiveModelInfo {
   digest?: string;
   isReady: boolean;
   lastVerified: number;
+  /** When set, explains why the provider is not reachable (e.g. "Ollama is not running"). */
+  unavailableReason?: string;
 }
 
 export class ModelManager {
   private static instance?: ModelManager;
-  public static readonly PREF_PROVIDER_KEY = 'sentinel_active_ai_provider';
-  public static readonly PREF_MODEL_KEY = 'sentinel_active_ai_model';
+  public static readonly PREF_PROVIDER_KEY = 'cero_active_ai_provider';
+  public static readonly PREF_MODEL_KEY = 'cero_active_ai_model';
 
   public static getInstance(): ModelManager {
     if (!ModelManager.instance) {
@@ -188,14 +190,18 @@ export class ModelManager {
 
     if (savedProviderId) {
       const match = this.providers.find(p => p.providerId === savedProviderId);
-      if (match && (await match.isAvailable())) {
+      if (match) {
+        // Apply the saved choice immediately, without waiting for isAvailable()
         this.activeProvider = match;
         let displayName = savedModelId || match.providerName;
         if (savedProviderId === 'cloud_api') {
           const cfg = CloudApiProvider.getInstance().getActiveConfig();
           if (cfg) displayName = `${cfg.displayName || cfg.serviceId} (${cfg.modelId || 'default'})`;
         } else if (savedProviderId === 'embedded') {
-          displayName = 'Sentinel Embedded Model (Qwen2.5-3B)';
+          displayName = 'Cero Embedded Model (Qwen2.5-3B)';
+        } else if (savedProviderId === 'ollama' && savedModelId) {
+          const spec = this.matchCatalogSpec(savedModelId);
+          displayName = spec ? `${spec.name}` : savedModelId;
         }
         this.setActiveModel({
           providerId: match.providerId,
@@ -203,9 +209,43 @@ export class ModelManager {
           displayName,
           score: 100,
           sizeBytes: 0,
-          isReady: true,
+          isReady: false, // not verified yet
           lastVerified: Date.now()
         });
+
+        // Verify availability in the background with retries (do not block startup)
+        const verifyInBackground = async () => {
+          const MAX_RETRIES = 5;
+          const RETRY_DELAY = 2000;
+          for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            try {
+              if (await match.isAvailable()) {
+                if (this.activeModelInfo && this.activeModelInfo.providerId === savedProviderId) {
+                  this.activeModelInfo.isReady = true;
+                  this.activeModelInfo.unavailableReason = undefined;
+                }
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
+                }
+                return;
+              }
+            } catch { /* ignore */ }
+            await new Promise(r => setTimeout(r, RETRY_DELAY));
+          }
+          // Provider never became available: keep the saved choice, mark unavailable
+          if (this.activeModelInfo && this.activeModelInfo.providerId === savedProviderId) {
+            this.activeModelInfo.isReady = false;
+            this.activeModelInfo.unavailableReason =
+              savedProviderId === 'ollama' ? 'Ollama is not running'
+              : savedProviderId === 'cloud_api' ? 'API provider not reachable'
+              : 'Provider not available';
+          }
+          // Do NOT clear the saved keys and do NOT silently switch to embedded
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
+          }
+        };
+        void verifyInBackground();
         return this.activeModelInfo!;
       }
     }
@@ -224,7 +264,7 @@ export class ModelManager {
       this.activeProvider = availableProviders[0];
     }
 
-    // Sentinel's own engine is the default whenever it is running. Catalog scores used to let any
+    // Cero's own engine is the default whenever it is running. Catalog scores used to let any
     // larger Ollama model (qwen3:4b, 7B coders) take over automatically, which silently traded
     // latency for a model the user never chose. An explicit choice (above) still wins.
     const embedded = availableProviders.find(p => p.providerId === 'embedded');
@@ -232,8 +272,8 @@ export class ModelManager {
       this.activeProvider = embedded;
       this.setActiveModel({
         providerId: embedded.providerId,
-        modelId: 'sentinel-embedded',
-        displayName: 'Sentinel Embedded Model',
+        modelId: 'cero-embedded',
+        displayName: 'Cero Embedded Model',
         score: 100,
         sizeBytes: 0,
         isReady: true,
@@ -277,7 +317,7 @@ export class ModelManager {
 
     // No local candidate found -> default to embedded model since it's bundled
     const targetSpec = { 
-      name: 'Sentinel Embedded Model (Qwen2.5-3B)', 
+      name: 'Cero Embedded Model (Qwen2.5-3B)', 
       overallScore: 100, 
       maxRamBytes: 2147483648 // 2GB
     };
@@ -289,7 +329,7 @@ export class ModelManager {
     // After pulling/loading, register active info
     this.setActiveModel({
       providerId: this.activeProvider.providerId,
-      modelId: 'sentinel-embedded',
+      modelId: 'cero-embedded',
       displayName: targetSpec.name,
       score: targetSpec.overallScore,
       sizeBytes: targetSpec.maxRamBytes,
@@ -313,16 +353,11 @@ export class ModelManager {
     if (!prov) return false;
 
     this.activeProvider = prov;
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(ModelManager.PREF_PROVIDER_KEY, providerId);
-      if (modelId) {
-        localStorage.setItem(ModelManager.PREF_MODEL_KEY, modelId);
-      }
-    }
+    this.persistChoice(providerId, modelId);
 
     let displayName = modelId || prov.providerName;
     if (providerId === 'embedded') {
-      displayName = 'Sentinel Embedded Model (Qwen2.5-3B)';
+      displayName = 'Cero Embedded Model (Qwen2.5-3B)';
     } else if (providerId === 'cloud_api') {
       const activeCfg = CloudApiProvider.getInstance().getActiveConfig();
       if (activeCfg) {
@@ -344,7 +379,7 @@ export class ModelManager {
     });
 
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('sentinel:ai-status-changed'));
+      window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
     }
     return true;
   }
@@ -359,7 +394,7 @@ export class ModelManager {
     }
     // Generic lightweight scoring if model is under 1.5GB
     if (lower.includes('7b') || lower.includes('13b') || lower.includes('34b')) {
-      return undefined; // skip heavyweight models for Sentinel local OS intent
+      return undefined; // skip heavyweight models for Cero local OS intent
     }
     return {
       id: modelId,
@@ -443,7 +478,24 @@ export class ModelManager {
       lastVerified: Date.now()
     };
     this.setActiveModel(newInfo);
+    this.persistChoice(this.activeProvider.providerId, modelId);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cero:ai-status-changed'));
+    }
     return newInfo;
+  }
+
+  /**
+   * Single writer for the two localStorage preference keys.
+   * Called from setActiveProviderId and setModel.
+   */
+  private persistChoice(providerId: string, modelId?: string): void {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      localStorage.setItem(ModelManager.PREF_PROVIDER_KEY, providerId);
+      if (modelId) localStorage.setItem(ModelManager.PREF_MODEL_KEY, modelId);
+      else localStorage.removeItem(ModelManager.PREF_MODEL_KEY);
+    } catch { /* private mode or storage blocked: the choice lasts this session only */ }
   }
 
   public getActiveProvider(): ModelProvider {
@@ -458,8 +510,8 @@ export class ModelManager {
     if (!this.activeModelInfo) {
       this.activeModelInfo = {
         providerId: 'embedded',
-        modelId: 'sentinel-embedded',
-        displayName: 'Sentinel Embedded Model (Qwen2.5-3B)',
+        modelId: 'cero-embedded',
+        displayName: 'Cero Embedded Model (Qwen2.5-3B)',
         score: 100,
         sizeBytes: 2147483648,
         isReady: false,

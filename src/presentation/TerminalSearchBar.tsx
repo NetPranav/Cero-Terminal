@@ -211,7 +211,7 @@ export const TerminalSearchBar: React.FC<TerminalSearchBarProps> = ({
 
   return (
     <div
-      className="sentinel-terminal-search-bar"
+      className="cero-terminal-search-bar"
       data-testid="terminal-search-bar"
       style={{
         position: 'absolute',

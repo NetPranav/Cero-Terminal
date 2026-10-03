@@ -9,13 +9,18 @@ import {
   Cpu, 
   Clock,
   GitBranch,
-  Globe,
   HelpCircle,
-  Sparkles
+  Sparkles,
+  ListOrdered
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { isLinux, getShortcutModifier } from '../../shared/platform';
 import { EmbeddedEngineManager, EmbeddedStatus } from '../../ai/models/EmbeddedEngineManager';
+import { ModelManager, type ActiveModelInfo } from '../../ai/management/ModelManager';
+import { CloudApiProvider, CLOUD_CATALOG } from '../../ai/provider/CloudApiProvider';
+import { describeAi, type AiBadge } from '../../ai/management/AiStatus';
+import { PromptQueue } from '../../presentation/PromptQueue';
+import { ShieldAlert } from 'lucide-react';
 
 export interface StatusBarProps {
   currentShell?: string;
@@ -24,6 +29,7 @@ export interface StatusBarProps {
   onOpenWorkflows?: () => void;
   onOpenHelp?: () => void;
   onOpenAiSettings?: () => void;
+  onOpenQueue?: () => void;
   uiMode?: 'zen' | 'visual';
   memoryUsage?: number;
   cpuUsage?: number;
@@ -38,6 +44,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   onOpenWorkflows,
   onOpenHelp,
   onOpenAiSettings,
+  onOpenQueue,
   uiMode = 'zen',
   memoryUsage: initialMemory,
   cpuUsage: initialCpu,
@@ -45,6 +52,15 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   highlightHelp = false
 }) => {
   const displayShell = currentShell || (isLinux() ? 'bash' : 'zsh');
+  const [queueCount, setQueueCount] = useState<number>(() => PromptQueue.getInstance().size());
+  const [hasRunningTask, setHasRunningTask] = useState<boolean>(() => PromptQueue.getInstance().getRunningItem() !== null);
+
+  useEffect(() => {
+    return PromptQueue.getInstance().subscribe(items => {
+      setQueueCount(items.length);
+      setHasRunningTask(PromptQueue.getInstance().getRunningItem() !== null);
+    });
+  }, []);
   // Unknown until the first real reading; never show placeholder numbers
   const [memoryUsage, setMemoryUsage] = useState<number | undefined>(initialMemory);
   const [memoryTotal, setMemoryTotal] = useState<number | undefined>(undefined);
@@ -53,6 +69,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   );
   const [aiStatus, setAiStatus] = useState<EmbeddedStatus | null>(null);
+  const [activeModel, setActiveModel] = useState<ActiveModelInfo>(() => ModelManager.getInstance().getActiveModel());
 
   useEffect(() => {
     let isMounted = true;
@@ -66,15 +83,18 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     };
 
     fetchAiStatus();
-    // Status changes are also pushed via 'sentinel:ai-status-changed'; the poll is a slow backstop
+    // Status changes are also pushed via 'cero:ai-status-changed'; the poll is a slow backstop
     const interval = setInterval(fetchAiStatus, 10_000);
-    const handleStatusChanged = () => fetchAiStatus();
-    window.addEventListener('sentinel:ai-status-changed', handleStatusChanged);
+    const handleStatusChanged = () => {
+      fetchAiStatus();
+      setActiveModel(ModelManager.getInstance().getActiveModel());
+    };
+    window.addEventListener('cero:ai-status-changed', handleStatusChanged);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
-      window.removeEventListener('sentinel:ai-status-changed', handleStatusChanged);
+      window.removeEventListener('cero:ai-status-changed', handleStatusChanged);
     };
   }, []);
 
@@ -105,6 +125,23 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       return () => clearInterval(interval);
     }
   }, []);
+
+  const cloudCfg = CloudApiProvider.getInstance().getActiveConfig();
+  let cloudHost = '';
+  if (cloudCfg) {
+    try {
+      const url = cloudCfg.baseUrl || (cloudCfg.serviceId && CLOUD_CATALOG[cloudCfg.serviceId]?.defaultUrl) || '';
+      cloudHost = url ? new URL(url).host : (cloudCfg.baseUrl || '');
+    } catch {
+      cloudHost = cloudCfg.baseUrl || '';
+    }
+  }
+  const aiBadge = describeAi({
+    active: activeModel,
+    embedded: aiStatus,
+    cloudConfigured: !!cloudCfg?.apiKey,
+    cloudHost,
+  });
 
   // "7.0 / 8 GB" from megabytes; the total comes from the backend, never assumed
   const formatMemory = (mb?: number, totalMb?: number) => {
@@ -244,18 +281,22 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           </div>
         )}
 
-        {/* Embedded AI Inference Engine Status */}
+        {/* AI Inference Engine Status */}
         <button
           onClick={onOpenAiSettings}
-          title={aiStatus?.isRunning 
-            ? `Sentinel Embedded AI: Running (Port ${aiStatus.port})\nModel: ${aiStatus.activeModel || 'Qwen 2.5 Coder 3B'}${aiStatus.isCpuFallback ? ' (CPU Mode)' : ' (GPU Acceleration)'}\nClick to configure AI settings`
-            : `Sentinel Embedded AI: Offline\nClick to open AI settings and start engine`}
+          title={aiBadge.detail}
           style={{
-            background: aiStatus?.isRunning ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
-            border: aiStatus?.isRunning ? '1px solid rgba(255, 255, 255, 0.16)' : '1px solid rgba(255, 255, 255, 0.07)',
+            background: aiBadge.state === 'ready' ? 'rgba(255, 255, 255, 0.08)' 
+              : aiBadge.state === 'starting' ? 'rgba(255, 255, 255, 0.04)' 
+              : 'rgba(255, 255, 255, 0.02)',
+            border: aiBadge.state === 'ready' ? '1px solid rgba(255, 255, 255, 0.2)' 
+              : aiBadge.state === 'starting' ? '1px solid rgba(255, 255, 255, 0.12)' 
+              : '1px solid rgba(255, 255, 255, 0.07)',
             borderRadius: '4px',
             padding: '1px 7px',
-            color: aiStatus?.isRunning ? '#ffffff' : 'rgba(255, 255, 255, 0.55)',
+            color: aiBadge.state === 'ready' ? '#ffffff' 
+              : aiBadge.state === 'starting' ? 'rgba(255, 255, 255, 0.75)' 
+              : 'rgba(255, 255, 255, 0.45)',
             fontSize: '11px',
             fontFamily: 'inherit',
             cursor: 'pointer',
@@ -265,26 +306,38 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             transition: 'all 0.15s ease'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.09)';
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.12)';
+            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = aiStatus?.isRunning ? 'rgba(255, 255, 255, 0.05)' : (aiStatus?.isWarming ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.02)');
-            e.currentTarget.style.borderColor = aiStatus?.isRunning ? '1px solid rgba(255, 255, 255, 0.16)' : (aiStatus?.isWarming ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(255, 255, 255, 0.07)');
+            e.currentTarget.style.backgroundColor = aiBadge.state === 'ready' ? 'rgba(255, 255, 255, 0.08)' 
+              : aiBadge.state === 'starting' ? 'rgba(255, 255, 255, 0.04)' 
+              : 'rgba(255, 255, 255, 0.02)';
+            e.currentTarget.style.borderColor = aiBadge.state === 'ready' ? '1px solid rgba(255, 255, 255, 0.2)' 
+              : aiBadge.state === 'starting' ? '1px solid rgba(255, 255, 255, 0.12)' 
+              : '1px solid rgba(255, 255, 255, 0.07)';
           }}
         >
-          <span style={{
-            width: '6px',
-            height: '6px',
-            borderRadius: '50%',
-            backgroundColor: aiStatus?.isRunning ? '#ffffff' : (aiStatus?.isWarming ? 'rgba(255, 255, 255, 0.65)' : 'rgba(255, 255, 255, 0.25)'),
-            boxShadow: aiStatus?.isRunning ? '0 0 6px rgba(255, 255, 255, 0.6)' : (aiStatus?.isWarming ? '0 0 4px rgba(255, 255, 255, 0.35)' : 'none'),
-            display: 'inline-block',
-            flexShrink: 0
-          }} />
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-            <Sparkles size={11} style={{ opacity: aiStatus?.isRunning ? 0.9 : (aiStatus?.isWarming ? 0.7 : 0.45) }} />
-            <span>{aiStatus?.isRunning ? (aiStatus.isCpuFallback ? 'AI (CPU)' : 'AI: Ready') : (aiStatus?.isWarming ? 'AI: Warming...' : 'AI: Off')}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: aiBadge.state === 'ready' ? '#ffffff'
+                : aiBadge.state === 'starting' ? 'rgba(255, 255, 255, 0.65)'
+                : 'rgba(255, 255, 255, 0.25)',
+              boxShadow: aiBadge.state === 'ready' ? '0 0 6px rgba(255, 255, 255, 0.6)'
+                : aiBadge.state === 'starting' ? '0 0 4px rgba(255, 255, 255, 0.35)'
+                : 'none',
+              display: 'inline-block',
+              flexShrink: 0
+            }} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              {aiBadge.state === 'unavailable'
+                ? <ShieldAlert size={11} style={{ opacity: 0.45 }} />
+                : <Sparkles size={11} style={{ opacity: aiBadge.state === 'ready' ? 0.9 : (aiBadge.state === 'starting' ? 0.7 : 0.45) }} />}
+              <span>{aiBadge.label}</span>
+            </span>
           </span>
         </button>
 
@@ -312,15 +365,71 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           <span>{currentTime}</span>
         </span>
 
-        <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>
+        {/* Queue indicator (only when N > 0) */}
+        {queueCount > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={onOpenQueue}
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: '4px',
+                padding: '1px 7px',
+                color: '#ffffff',
+                fontSize: '11px',
+                fontFamily: 'inherit',
+                fontWeight: 500,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.14)';
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.35)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+              }}
+              title="View queued prompts (/queue)"
+            >
+              <ListOrdered size={11} style={{ opacity: 0.8 }} />
+              <span>Queue: {queueCount} {queueCount === 1 ? 'item' : 'items'}</span>
+            </button>
+            <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>
+          </>
+        )}
 
-        {/* UTF-8 indicator */}
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', opacity: 0.65 }}>
-          <Globe size={11} style={{ opacity: 0.7 }} />
-          <span>UTF-8</span>
-        </span>
-
-        <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>
+        {/* Task 2.2: Footer hint while a task runs */}
+        {hasRunningTask && (
+          <>
+            <span
+              style={{
+                color: 'rgba(255, 255, 255, 0.75)',
+                fontSize: '11px',
+                fontFamily: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+              title="Press Ctrl+C to stop running task"
+            >
+              <kbd style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: '3px',
+                padding: '0 4px',
+                fontSize: '10px',
+                color: '#ffffff'
+              }}>Ctrl+C</kbd>
+              <span>to stop</span>
+            </span>
+            <span style={{ color: 'rgba(255, 255, 255, 0.12)' }}>|</span>
+          </>
+        )}
 
         {/* [F1 help] button / pill */}
         <button

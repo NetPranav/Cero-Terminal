@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-export_colab_dataset.py — Python CLI Wrapper for Sentinel Dataset Compilation
+export_colab_dataset.py — Python CLI Wrapper for Cero Dataset Compilation
 
 Runs the dataset exporter and outputs the paths to:
-- sentinel_sft_dataset.jsonl
-- sentinel_dpo_dataset.jsonl
-- sentinel_training_package.zip
+- cero_sft_dataset.jsonl
+- cero_dpo_dataset.jsonl
+- cero_training_package.zip
 """
 
 import sys
@@ -20,7 +20,7 @@ def main():
         print(f"Error: Could not find {script_ts}")
         sys.exit(1)
 
-    print("Running Sentinel Dataset Exporter via tsx...")
+    print("Running Cero Dataset Exporter via tsx...")
     cmd = ["npx", "tsx", str(script_ts)]
     res = subprocess.run(cmd, cwd=str(root))
     sys.exit(res.returncode)

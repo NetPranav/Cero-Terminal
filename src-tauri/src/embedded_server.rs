@@ -53,10 +53,12 @@ pub struct EmbeddedLlmStatus {
     pub port: u16,
     pub is_cpu_fallback: bool,
     pub queued_requests: usize,
-    /// Whether ~/.sentinel/models/<model_file_name> exists (checked with a stat, no subprocess)
+    /// Whether ~/.cero/models/<model_file_name> exists (checked with a stat, no subprocess)
     pub model_downloaded: bool,
     /// Whether any llama-server binary can be found
     pub engine_installed: bool,
+    /// Memory-aware context window size (12288 if >= 8GB RAM, else 8192)
+    pub context_size: u32,
 }
 
 fn get_home_dir() -> Option<PathBuf> {
@@ -69,8 +71,8 @@ fn get_home_dir() -> Option<PathBuf> {
 /// Directory the in-app installer extracts the full llama.cpp release bundle into. Modern
 /// releases ship `llama-server` next to its shared libraries (libllama, libggml*), so the
 /// binary must be run from inside this directory rather than copied out on its own.
-fn sentinel_engine_dir() -> Option<PathBuf> {
-    get_home_dir().map(|home| home.join(".sentinel").join("engine").join("current"))
+fn cero_engine_dir() -> Option<PathBuf> {
+    get_home_dir().map(|home| home.join(".cero").join("engine").join("current"))
 }
 
 /// The engine's file name: `llama-server.exe` on Windows
@@ -90,12 +92,12 @@ fn find_on_path(binary: &str) -> Option<PathBuf> {
 fn find_llama_server_binary() -> Option<PathBuf> {
     let mut candidates = Vec::new();
 
-    if let Some(engine_dir) = sentinel_engine_dir() {
+    if let Some(engine_dir) = cero_engine_dir() {
         candidates.push(engine_dir.join(LLAMA_SERVER));
     }
 
     if let Some(home) = get_home_dir() {
-        candidates.push(home.join(".sentinel").join("bin").join(LLAMA_SERVER));
+        candidates.push(home.join(".cero").join("bin").join(LLAMA_SERVER));
         candidates.push(home.join(".local").join("bin").join(LLAMA_SERVER));
     }
 
@@ -122,7 +124,7 @@ fn find_llama_server_binary() -> Option<PathBuf> {
 /// Where llama-server's stderr goes, so a failed start (bad flag, missing library, model load
 /// error) can be diagnosed instead of silently disappearing.
 pub fn llama_server_log_path() -> Option<PathBuf> {
-    get_home_dir().map(|home| home.join(".sentinel").join("logs").join("llama-server.log"))
+    get_home_dir().map(|home| home.join(".cero").join("logs").join("llama-server.log"))
 }
 
 /// Server flags. Deliberately minimal so they work on both older and current llama.cpp builds:
@@ -135,13 +137,27 @@ pub fn llama_server_log_path() -> Option<PathBuf> {
 ///   slots that share (and split) the context.
 /// - `--cache-reuse 256`: reuse cached KV chunks across requests; together with the stable
 ///   system-prompt prefix this skips re-processing ~1.8k prompt tokens per request.
+/// Resolve memory-aware context window:
+/// 12288 tokens on machines with >= 8 GB RAM, otherwise 8192 tokens.
+pub fn resolve_context_size() -> u32 {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_memory();
+    let total_bytes = sys.total_memory();
+    if total_bytes >= 8 * 1024 * 1024 * 1024 {
+        12288
+    } else {
+        8192
+    }
+}
+
 pub fn build_server_args(model: &str, port: u16, gpu_layers: &str, lora: Option<&str>) -> Vec<String> {
+    let ctx_size = resolve_context_size();
     let mut args = vec![
         "--host".to_string(), "127.0.0.1".to_string(),
         "--port".to_string(), port.to_string(),
         "-m".to_string(), model.to_string(),
         "-ngl".to_string(), gpu_layers.to_string(),
-        "-c".to_string(), "8192".to_string(),
+        "-c".to_string(), ctx_size.to_string(),
         "-np".to_string(), "1".to_string(),
         "--cache-reuse".to_string(), "256".to_string(),
     ];
@@ -152,7 +168,7 @@ pub fn build_server_args(model: &str, port: u16, gpu_layers: &str, lora: Option<
     args
 }
 
-/// LoRA adapters live next to base models in ~/.sentinel/models; loading one as the base model
+/// LoRA adapters live next to base models in ~/.cero/models; loading one as the base model
 /// fails, so discovery must skip them.
 fn is_lora_adapter(path: &std::path::Path) -> bool {
     path.file_name()
@@ -171,11 +187,12 @@ fn find_model_file(preferred: Option<String>) -> Option<PathBuf> {
     let mut candidates = Vec::new();
 
     if let Some(home) = get_home_dir() {
-        let models_dir = home.join(".sentinel").join("models");
+        let models_dir = home.join(".cero").join("models");
         // The downloadable tiers, most capable first (see EMBEDDED_MODEL_TIERS in TypeScript)
         candidates.push(models_dir.join("Qwen3-4B-Instruct-2507-Q4_K_M.gguf"));
         candidates.push(models_dir.join("qwen2.5-coder-3b-instruct-q4_k_m.gguf"));
         candidates.push(models_dir.join("qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"));
+        candidates.push(models_dir.join("qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"));
         candidates.push(models_dir.join("model.gguf"));
 
         // Or search models_dir for any other base-model .gguf file
@@ -226,11 +243,11 @@ pub fn start_embedded_llm(
     gpu_layers: Option<i32>,
 ) -> Result<bool, String> {
     let bin_path = find_llama_server_binary().ok_or_else(|| {
-        "llama-server binary not found in ~/.sentinel/bin, /usr/lib/ollama, or /usr/bin".to_string()
+        "llama-server binary not found in ~/.cero/bin, /usr/lib/ollama, or /usr/bin".to_string()
     })?;
 
     let model_file = find_model_file(model_path).ok_or_else(|| {
-        "No GGUF model file found. Download a model into ~/.sentinel/models/".to_string()
+        "No GGUF model file found. Download a model into ~/.cero/models/".to_string()
     })?;
 
     let mut proc_guard = state.process.lock().map_err(|e| e.to_string())?;
@@ -343,7 +360,7 @@ pub fn get_embedded_llm_status(
     let model_downloaded = match (model_file_name, get_home_dir()) {
         // Only a bare file name is accepted, never a path
         (Some(name), Some(home)) if !name.contains('/') && !name.contains('\\') => home
-            .join(".sentinel")
+            .join(".cero")
             .join("models")
             .join(name)
             .is_file(),
@@ -388,6 +405,7 @@ pub fn get_embedded_llm_status(
         queued_requests: total_queued,
         model_downloaded,
         engine_installed,
+        context_size: resolve_context_size(),
     })
 }
 
@@ -547,7 +565,7 @@ mod tests {
 
     #[test]
     fn sha256_matches_known_vectors() {
-        let dir = std::env::temp_dir().join(format!("sentinel-sha-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("cero-sha-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let empty = dir.join("empty");
         let abc = dir.join("abc");
@@ -560,8 +578,8 @@ mod tests {
 
     #[test]
     fn lora_adapters_are_never_used_as_base_models() {
-        assert!(is_lora_adapter(std::path::Path::new("/m/sentinel_lora.gguf")));
-        assert!(is_lora_adapter(std::path::Path::new("/m/sentinel_mlx_LoRA.gguf")));
+        assert!(is_lora_adapter(std::path::Path::new("/m/cero_lora.gguf")));
+        assert!(is_lora_adapter(std::path::Path::new("/m/cero_mlx_LoRA.gguf")));
         assert!(!is_lora_adapter(std::path::Path::new("/m/qwen2.5-coder-3b-instruct-q4_k_m.gguf")));
     }
 
@@ -573,7 +591,7 @@ mod tests {
         assert!(!joined.contains("flash-attn"));
         assert!(!args.iter().any(|a| a == "-t"));
         assert!(joined.contains("-np 1"));
-        assert!(joined.contains("-c 8192"));
+        assert!(joined.contains("-c 8192") || joined.contains("-c 12288"));
         assert!(joined.contains("--cache-reuse 256"));
         assert!(joined.contains("--port 8847"));
         assert!(!joined.contains("--lora"));
@@ -665,9 +683,9 @@ mod tests {
     }
 }
 
-/// A llama-server left on Sentinel's port by an instance that did not exit cleanly (macOS has
+/// A llama-server left on Cero's port by an instance that did not exit cleanly (macOS has
 /// no parent-death signal, so a crash or `kill` leaves it holding ~2 GB of RAM). Only a process
-/// that is a llama-server started from ~/.sentinel is stopped; anything else is left alone.
+/// that is a llama-server started from ~/.cero is stopped; anything else is left alone.
 #[cfg(unix)]
 pub fn reap_orphaned_server(port: u16) {
     let Ok(out) = Command::new("lsof")
@@ -685,7 +703,7 @@ pub fn reap_orphaned_server(port: u16) {
             continue;
         };
         let command = String::from_utf8_lossy(&ps.stdout);
-        if is_orphaned_sentinel_server(&command) {
+        if is_orphaned_cero_server(&command) {
             crate::logger::log_info("LLM", &format!("Stopping orphaned llama-server (pid: {}) on port {}", pid, port));
             unsafe {
                 libc::kill(pid as libc::pid_t, libc::SIGTERM);
@@ -697,22 +715,22 @@ pub fn reap_orphaned_server(port: u16) {
 #[cfg(not(unix))]
 pub fn reap_orphaned_server(_port: u16) {}
 
-/// True for the command line of a llama-server launched from Sentinel's own directories.
-pub fn is_orphaned_sentinel_server(command: &str) -> bool {
+/// True for the command line of a llama-server launched from Cero's own directories.
+pub fn is_orphaned_cero_server(command: &str) -> bool {
     let first = command.split_whitespace().next().unwrap_or("");
-    first.ends_with("/llama-server") && first.contains("/.sentinel/")
+    first.ends_with("/llama-server") && first.contains("/.cero/")
 }
 
 #[cfg(test)]
 mod reap_tests {
-    use super::is_orphaned_sentinel_server;
+    use super::is_orphaned_cero_server;
 
     #[test]
-    fn only_sentinel_llama_servers_are_reaped() {
-        assert!(is_orphaned_sentinel_server("/Users/u/.sentinel/bin/llama-server --host 127.0.0.1 --port 8847"));
-        assert!(is_orphaned_sentinel_server("/home/u/.sentinel/engine/current/llama-server -m x"));
-        assert!(!is_orphaned_sentinel_server("/usr/local/bin/llama-server --port 8847"));
-        assert!(!is_orphaned_sentinel_server("/Users/u/.sentinel/bin/python -m http.server 8847"));
-        assert!(!is_orphaned_sentinel_server(""));
+    fn only_cero_llama_servers_are_reaped() {
+        assert!(is_orphaned_cero_server("/Users/u/.cero/bin/llama-server --host 127.0.0.1 --port 8847"));
+        assert!(is_orphaned_cero_server("/home/u/.cero/engine/current/llama-server -m x"));
+        assert!(!is_orphaned_cero_server("/usr/local/bin/llama-server --port 8847"));
+        assert!(!is_orphaned_cero_server("/Users/u/.cero/bin/python -m http.server 8847"));
+        assert!(!is_orphaned_cero_server(""));
     }
 }

@@ -1,7 +1,7 @@
 /**
  * Planner.ts — AI Operating Knowledge Base Orchestrator (Phase X Integrated)
  * 
- * The Planner orchestrates Sentinel's Local Intent AI System:
+ * The Planner orchestrates Cero's Local Intent AI System:
  * 1. IntentEngine classifies user intent, extracts entities, and creates structured execution plans
  * 2. For single or multi-step plans, WorkflowCompiler compiles corresponding tool workflows cleanly
  * 3. Returns compiled workflow with rich model telemetry and confidence score

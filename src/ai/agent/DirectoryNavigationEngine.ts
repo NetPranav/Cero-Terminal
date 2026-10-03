@@ -204,7 +204,7 @@ export class DirectoryNavigationEngine {
     }
 
     // Filter candidates by similarity:
-    // Distance <= 2 (for typos like sentinal -> sentinel, doc -> docs, backnd -> backend)
+    // Distance <= 2 (for typos like sentinal -> cero, doc -> docs, backnd -> backend)
     // or case-insensitive exact match
     const validMatches = candidates
       .filter(c => c.distance <= 2 || c.name.toLowerCase() === targetBase.toLowerCase())

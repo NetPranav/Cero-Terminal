@@ -6,13 +6,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        We welcome feature ideas and new tool proposals for Sentinel Terminal!
+        We welcome feature ideas and new tool proposals for Cero!
 
   - type: dropdown
     id: category
     attributes:
       label: Capability Domain / Area
-      description: Which area of Sentinel does this feature proposal belong to?
+      description: Which area of Cero does this feature proposal belong to?
       options:
         - AI Planning & Agent Loop
         - Developer Tooling & IDEs

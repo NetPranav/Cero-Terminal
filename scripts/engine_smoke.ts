@@ -2,7 +2,7 @@
  * engine_smoke.ts — live check of the self-hosted llama.cpp engine.
  *
  * Unit tests mock the model server, so they cannot tell whether a real llama-server accepts
- * Sentinel's launch flags and GBNF grammar, or whether prompt caching actually works. Run this
+ * Cero's launch flags and GBNF grammar, or whether prompt caching actually works. Run this
  * on a machine with an engine and a model installed:
  *
  *   npm run smoke:engine                               # auto-detect engine and model
@@ -25,8 +25,8 @@ function arg(name: string): string | undefined {
 
 function findServer(): string | undefined {
   const candidates = [
-    join(homedir(), '.sentinel', 'engine', 'current', 'llama-server'),
-    join(homedir(), '.sentinel', 'bin', 'llama-server'),
+    join(homedir(), '.cero', 'engine', 'current', 'llama-server'),
+    join(homedir(), '.cero', 'bin', 'llama-server'),
     '/usr/bin/llama-server',
     '/usr/local/bin/llama-server',
     '/opt/homebrew/bin/llama-server',
@@ -36,7 +36,7 @@ function findServer(): string | undefined {
 }
 
 function findModel(): string | undefined {
-  const dir = join(homedir(), '.sentinel', 'models');
+  const dir = join(homedir(), '.cero', 'models');
   if (!existsSync(dir)) return undefined;
   const gguf = readdirSync(dir).filter(f => f.endsWith('.gguf') && !f.includes('lora'));
   return gguf.length ? join(dir, gguf[0]) : undefined;
@@ -86,7 +86,7 @@ async function ask(goal: string): Promise<{ status: number; body: any; ms: numbe
       repeat_penalty: 1.0,
       cache_prompt: true,
       stream: false,
-      grammar: GbnfGrammarManager.getGrammar('SENTINEL_ACTION'),
+      grammar: GbnfGrammarManager.getGrammar('CERO_ACTION'),
     }),
   });
   const body = await res.json().catch(() => ({}));
@@ -95,7 +95,7 @@ async function ask(goal: string): Promise<{ status: number; body: any; ms: numbe
 
 async function main(): Promise<void> {
   if (!server || !model) {
-    console.error(`Missing ${!server ? 'llama-server binary' : 'GGUF model'}. Pass --server/--model or install via Sentinel.`);
+    console.error(`Missing ${!server ? 'llama-server binary' : 'GGUF model'}. Pass --server/--model or install via Cero.`);
     process.exit(2);
   }
   console.log(`engine: ${server}\nmodel:  ${model}\n`);
@@ -110,11 +110,11 @@ async function main(): Promise<void> {
 
   try {
     if (proc.pid === undefined) {
-      report('server starts with Sentinel flags', false, `could not spawn ${server}`);
+      report('server starts with Cero flags', false, `could not spawn ${server}`);
       return;
     }
     const healthy = await waitForHealth(180_000);
-    report('server starts with Sentinel flags', healthy, healthy ? '' : `\n${stderrTail}`);
+    report('server starts with Cero flags', healthy, healthy ? '' : `\n${stderrTail}`);
     if (!healthy) return;
 
     const first = await ask('check disk usage of my home partition');

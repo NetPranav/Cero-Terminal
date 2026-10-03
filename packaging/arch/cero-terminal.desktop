@@ -1,0 +1,18 @@
+[Desktop Entry]
+Name=Cero
+Comment=Autonomous AI-Native Linux Terminal Copilot
+GenericName=Terminal Emulator
+Exec=cero-terminal %U
+Icon=cero-terminal
+Type=Application
+Terminal=false
+StartupNotify=true
+StartupWMClass=cero-terminal
+Categories=Development;System;TerminalEmulator;Utility;
+Keywords=terminal;shell;copilot;prompt;pty;ai;
+MimeType=inode/directory;x-scheme-handler/cero;application/x-cero-workflow;
+Actions=NewWindow;
+
+[Desktop Action NewWindow]
+Name=Open New Window
+Exec=cero-terminal

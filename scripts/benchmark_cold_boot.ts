@@ -90,7 +90,7 @@ export async function runColdBootBenchmark(): Promise<{
 }
 
 if (process.argv[1]?.includes('benchmark_cold_boot')) {
-  console.log('⚡ Sentinel Terminal — Cold-Boot Startup Latency Benchmark (Phase 4)\n');
+  console.log('⚡ Cero — Cold-Boot Startup Latency Benchmark (Phase 4)\n');
   runColdBootBenchmark().then((res) => {
     res.metrics.forEach((m) => {
       console.log(`  • ${m.stage.padEnd(36)} : ${m.durationMs} ms`);

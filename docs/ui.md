@@ -1,6 +1,6 @@
-# Sentinel UI Design System & Aesthetic Architecture
+# Cero UI Design System & Aesthetic Architecture
 
-Sentinel Terminal is built around a philosophy of focused minimalism, low cognitive load, and visual precision. Inspired by professional audio equipment, high-end camera interfaces, and modern developer environments, Sentinel employs a strictly matte monochrome and grayscale palette. By stripping away visual clutter, neon glows, and saturated colors, the interface prioritizes text legibility, spatial hierarchy, and long-session ergonomic comfort.
+Cero is built around a philosophy of focused minimalism, low cognitive load, and visual precision. Inspired by professional audio equipment, high-end camera interfaces, and modern developer environments, Cero employs a strictly matte monochrome and grayscale palette. By stripping away visual clutter, neon glows, and saturated colors, the interface prioritizes text legibility, spatial hierarchy, and long-session ergonomic comfort.
 
 ---
 
@@ -54,7 +54,7 @@ Every UI component draws from a cohesive set of grayscale tokens:
 
 ## 3. Typography & Font System
 
-Sentinel utilizes a dual-font architecture:
+Cero utilizes a dual-font architecture:
 
 1. **System Interface Sans-Serif**:
    - **Font Stack**: `-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Inter, system-ui, sans-serif`
@@ -203,7 +203,7 @@ Sentinel utilizes a dual-font architecture:
 
 ## 8. Strict No-Emoji Policy & Terminal Glyph Design System
 
-Sentinel strictly enforces a **Zero-Emoji Policy** across the entire application interface, including React DOM components, modals, toasts, status telemetry, and CLI/terminal stdout/stderr banners:
+Cero strictly enforces a **Zero-Emoji Policy** across the entire application interface, including React DOM components, modals, toasts, status telemetry, and CLI/terminal stdout/stderr banners:
 
 ### Core Rules
 - **No Consumer Emojis**: Emojis such as `🛡️`, `📖`, `💡`, `⛔`, `⚠️`, `🚀`, `🔥`, `📁`, `📄`, or `✅` are completely forbidden.
@@ -222,7 +222,7 @@ Sentinel strictly enforces a **Zero-Emoji Policy** across the entire application
 ## 9. Onboarding Skeletons & Zen Mode Help Callout
 
 ### A. Terminal Experience Skeletons (`InstallerWizard.tsx`)
-During the first-time setup onboarding flow, users choose between **Zen Mode** and **Visual Mode**. Rather than generic descriptions or colorful illustrations, Sentinel presents realistic, live wireframe skeletons:
+During the first-time setup onboarding flow, users choose between **Zen Mode** and **Visual Mode**. Rather than generic descriptions or colorful illustrations, Cero presents realistic, live wireframe skeletons:
 - **Zen Mode Wireframe Skeleton**: Demonstrates the minimal workspace—showing a single terminal prompt, tab header noting hidden controls on rest, and a clean status line without auxiliary action buttons.
 - **Visual Mode Wireframe Skeleton**: Demonstrates the multi-pane development workspace—showing split panes (`npm run dev` alongside `htop`), active action pills (`Find`, `Split`), and the highlighted `[Workflows]` button in the status bar.
 

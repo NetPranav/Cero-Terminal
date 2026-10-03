@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ErrorDiagnosticsEngine, DiagnosticResult } from './ErrorDiagnosticsEngine';
 import { ProjectDiscoveryEngine, DiscoveredProject, FileSystemScanner } from '../../domain/discovery/ProjectDiscoveryEngine';
+import { throwIfAborted } from './Cancelled';
 
 export type PhaseStatus = 'pending' | 'running' | 'completed' | 'skipped' | 'failed' | 'awaiting_action';
 
@@ -76,10 +77,11 @@ export interface AdaptiveExecutionOptions {
   onStepOutput?: (output: string) => void;
   onPhysicalActionRequired?: (action: { prompt: string; cause: string; phaseId: string }) => Promise<boolean>;
   toolExecutor: {
-    execute: (toolId: string, params: any, cwd?: string, authHandler?: any) => Promise<any>;
+    execute: (toolId: string, params: any, cwd?: string, authHandler?: any, timeoutMs?: number, signal?: AbortSignal) => Promise<any>;
     hasDriver: (toolId: string) => boolean;
   };
   authorizationHandler?: any;
+  signal?: AbortSignal;
 }
 
 export interface PlannerModelProvider {
@@ -137,7 +139,7 @@ export class AdaptivePlanEngine {
           id: '1',
           title: preambleText,
           tool: 'shell.execute',
-          params: { command: resolvedPreambleCmd || `mkdir -p /tmp/sentinel-workflow-test`, explanation: preambleText },
+          params: { command: resolvedPreambleCmd || `mkdir -p /tmp/cero-workflow-test`, explanation: preambleText },
           status: 'pending'
         });
       }
@@ -192,6 +194,7 @@ export class AdaptivePlanEngine {
     options.onPlanUpdate?.(plan);
 
     for (let i = 0; i < plan.phases.length; i++) {
+      throwIfAborted(options.signal);
       const phase = plan.phases[i];
 
       // If phase was already skipped or completed, continue
@@ -297,6 +300,7 @@ export class AdaptivePlanEngine {
     options: AdaptiveExecutionOptions,
     executedSteps: PhaseExecutionStep[]
   ): Promise<{ success: boolean; cdPath?: string }> {
+    throwIfAborted(options.signal);
     let phaseCdPath: string | undefined;
 
     // Resolve tool and parameters if not already assigned
@@ -350,12 +354,21 @@ export class AdaptivePlanEngine {
       }
 
       try {
-        const result = await options.toolExecutor.execute(
-          phase.tool,
-          phase.params || {},
-          options.cwd,
-          options.authorizationHandler
-        );
+        const result = options.signal
+          ? await options.toolExecutor.execute(
+              phase.tool,
+              phase.params || {},
+              options.cwd,
+              options.authorizationHandler,
+              undefined,
+              options.signal
+            )
+          : await options.toolExecutor.execute(
+              phase.tool,
+              phase.params || {},
+              options.cwd,
+              options.authorizationHandler
+            );
 
         const stepRecord: PhaseExecutionStep = {
           phaseId: phase.id,
@@ -1025,7 +1038,7 @@ export class AdaptivePlanEngine {
   }
 
   private buildPhasePlanningPrompt(goal: string, context: { os: string; cwd: string }): string {
-    return `You are Sentinel's Core Workflow Planner on ${context.os}. Current directory: ${context.cwd}
+    return `You are Cero's Core Workflow Planner on ${context.os}. Current directory: ${context.cwd}
 
 Break the user request into clear, sequential execution phases to accomplish the goal completely.
 Each phase MUST include the exact bash shell command to execute.

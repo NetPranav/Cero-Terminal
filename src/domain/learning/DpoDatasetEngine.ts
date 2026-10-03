@@ -1,14 +1,14 @@
 /**
  * DpoDatasetEngine.ts — Direct Preference Optimization (DPO) Pair Generator
  * 
- * Part of Sentinel-SERL (Self-Evolving Reflexion Loop):
+ * Part of Cero-SERL (Self-Evolving Reflexion Loop):
  * Automatically constructs high-quality DPO training pairs (prompt, chosen, rejected)
  * from resolved knowledge deficits (Phase 4.2 & 4.3) and human corrections.
- * Persists datasets to ~/.sentinel/training/sentinel_dpo_pairs.jsonl
+ * Persists datasets to ~/.cero/training/cero_dpo_pairs.jsonl
  * formatted for HuggingFace TRL, Unsloth, and Apple Silicon MLX DPO fine-tuning.
  */
 
-import { writeSentinelFile } from '../../infrastructure/storage/SentinelFiles';
+import { writeCeroFile } from '../../infrastructure/storage/CeroFiles';
 import { invoke } from '@tauri-apps/api/core';
 import { KnowledgeDeficitLogger, KnowledgeDeficitRecord } from './KnowledgeDeficitLogger';
 import * as fs from 'fs';
@@ -71,7 +71,7 @@ export class DpoDatasetEngine {
       const home = typeof process !== 'undefined'
         ? (process.env.HOME || process.env.USERPROFILE || '/tmp')
         : '/tmp';
-      this.storageFilePath = path.join(home, '.sentinel', 'training', 'sentinel_dpo_pairs.jsonl');
+      this.storageFilePath = path.join(home, '.cero', 'training', 'cero_dpo_pairs.jsonl');
     }
     this.deficitLogger = options.deficitLogger;
     this.loadPairs();
@@ -89,7 +89,7 @@ export class DpoDatasetEngine {
     const verifiedCmd = deficit.resolutionCounterfactual.verifiedCommand.trim();
     const explanation = deficit.resolutionCounterfactual.explanation || `Execute: ${verifiedCmd}`;
 
-    // Format chosen response conforming to Sentinel's shell execution contract
+    // Format chosen response conforming to Cero's shell execution contract
     const chosen = JSON.stringify({
       action: 'execute',
       command: verifiedCmd,
@@ -250,7 +250,7 @@ export class DpoDatasetEngine {
    * Exports all DPO pairs into conversational format with role tags for Apple Silicon MLX DPO.
    */
   public exportConversational(systemPrompt?: string): ConversationalDpoSample[] {
-    const sys = systemPrompt || 'You are Sentinel, an autonomous shell copilot. Output JSON only: {"action": "execute", "command": "<cmd>", "explanation": "<reason>"}';
+    const sys = systemPrompt || 'You are Cero, an autonomous shell copilot. Output JSON only: {"action": "execute", "command": "<cmd>", "explanation": "<reason>"}';
 
     return Array.from(this.pairs.values()).map(pair => ({
       system: sys,
@@ -349,7 +349,7 @@ export class DpoDatasetEngine {
     // 2. Tauri IPC fallback via base64 encoding
     try {
       const lines = records.map(r => JSON.stringify(r)).join('\n');
-      writeSentinelFile('training/sentinel_dpo_pairs.jsonl', lines + '\n');
+      writeCeroFile('training/cero_dpo_pairs.jsonl', lines + '\n');
     } catch {
       // Ignore
     }

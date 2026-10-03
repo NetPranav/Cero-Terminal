@@ -72,7 +72,7 @@ describe('planFlow', () => {
     expect(plan.skipped).toEqual(['1: browser', '2: install', '3: clone', '4: teleport']);
   });
 
-  it('reads Sentinel workflow files too, and only simple launches count as desktop', () => {
+  it('reads Cero workflow files too, and only simple launches count as desktop', () => {
     const plan = planFlowFile(JSON.stringify({ name: 'mix', steps: [{ command: "open -a 'Safari'" }, { command: 'npm test' }] }), 'C:\\Users\\me\\mix.workflow.json', 'macos')!;
     expect(plan.name).toBe('mix');
     expect(plan.steps.map(s => s.kind)).toEqual(['desktop', 'terminal']);

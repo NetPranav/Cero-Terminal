@@ -1,6 +1,6 @@
-# Sentinel Terminal — Features Overview
+# Cero — Features Overview
 
-Sentinel is an autonomous, AI-native terminal engineered for modern developers, power users, and robotics engineers. Combining high-performance WebGL terminal emulation with an embedded offline AI reasoning engine, Sentinel eliminates manual syntax lookup, streamlines multi-task execution, and automates multi-stage workflows.
+Cero is an autonomous, AI-native terminal engineered for modern developers, power users, and robotics engineers. Combining high-performance WebGL terminal emulation with an embedded offline AI reasoning engine, Cero eliminates manual syntax lookup, streamlines multi-task execution, and automates multi-stage workflows.
 
 ---
 
@@ -11,11 +11,11 @@ Sentinel is an autonomous, AI-native terminal engineered for modern developers, 
   - `> take me to my rust project` ➔ Resolves directory and automatically navigates.
   - `> find all docker volumes created this week` ➔ Scans and formats volume listings.
   - `> write a python script in /tmp/netmon.py that monitors network speeds, then test run it` ➔ Executes multi-step generation, permission setting, and execution.
-- **Deep System Knowledge Scanner**: Automatically scans 8 Linux system dimensions on startup (desktop apps, developer runtimes, GPU/CPU/RAM specs, filesystem mounts/snapshots, dotfiles, network topology, system services, and desktop session) and persistently caches it to `~/.sentinel/knowledge/system_profile.json` to accelerate prompt reasoning.
+- **Deep System Knowledge Scanner**: Automatically scans 8 Linux system dimensions on startup (desktop apps, developer runtimes, GPU/CPU/RAM specs, filesystem mounts/snapshots, dotfiles, network topology, system services, and desktop session) and persistently caches it to `~/.cero/knowledge/system_profile.json` to accelerate prompt reasoning.
 - **Fuzzy Directory Navigation Engine**: Seamless directory switching via `> cd <name>` or `> switch pwd to <folder>`. Detects typos with fuzzy matching and offers interactive disambiguation or automatic directory creation if the folder does not exist.
 - **Multi-Model Architecture & Hardware Tiers**: Automatically recommends optimal local model tiers (`Budget <6GB`, `Balanced 6-12GB`, `Performance 12-24GB`, `Workstation >24GB`) and provides instant Cloud API Key integration for OpenAI, Anthropic, Groq, DeepSeek, OpenRouter, and custom endpoints with zero local memory overhead.
 - **Real-Time Prompt Progress Bar**: The bottom status bar features a live progress indicator displaying completion percentage (e.g. `45%`), active stage label (`Thinking...`, `Planning...`, `Running: ...`, `Verifying...`), remaining time countdown (`~1.8s`), and a sleek 36px micro-progress track.
-- **In-Loop Auto-Heal**: When commands fail, Sentinel analyzes `stderr` and offers instant remediation pills. Press `Tab` or type `>fix` / `>heal` to automatically diagnose and recover (e.g., terminating conflicting processes on occupied ports).
+- **In-Loop Auto-Heal**: When commands fail, Cero analyzes `stderr` and offers instant remediation pills. Press `Tab` or type `>fix` / `>heal` to automatically diagnose and recover (e.g., terminating conflicting processes on occupied ports).
 - **Session Undo Log & Rollback**: Ask `>what did you just do` to inspect the action log, or `>undo last step` to roll back destructive filesystem or git operations.
 
 ---
@@ -32,7 +32,7 @@ Sentinel is an autonomous, AI-native terminal engineered for modern developers, 
   ```
 - **Workflow & Macro Drawer (`WorkflowManagerDrawer.tsx`)**:
   - Inspect saved workflows, parameter interpolation (`{{target}}`), execution histories, and step-by-step stdout/stderr outputs.
-  - Replay individual steps, test workflows deterministically, and export workflow definitions to disk (`~/.sentinel/workflows/`).
+  - Replay individual steps, test workflows deterministically, and export workflow definitions to disk (`~/.cero/workflows/`).
 
 ---
 
@@ -79,7 +79,7 @@ Sentinel is an autonomous, AI-native terminal engineered for modern developers, 
 
 - **8-Category Command Safety Guardian (`CommandSafetyGuardian.ts`)**: Permanently refuses catastrophic system commands (root deletion, raw disk zeroing, partition formatting, permission lockouts, fork bombs, UEFI wipes, glibc removal, and obfuscated base64 pipes).
 - **Explicit Capability Refusal**: Outputs an ANSI refusal banner asserting:
-  `"Sentinel does not have the capability to execute '[command]'."`
+  `"Cero does not have the capability to execute '[command]'."`
   along with comprehensive consequence explanations and safe alternative suggestions.
 - **Dual-Layer Interception**: Blocks commands at both the terminal keyboard level before reaching the PTY buffer and at the AI agent loop level before invoking tools.
 - **Categorical Policy Engine**: Classifies operations into `SAFE`, `CONFIRMATION_REQUIRED`, `ADMIN_REQUIRED`, and `PERMANENTLY_REFUSED`.

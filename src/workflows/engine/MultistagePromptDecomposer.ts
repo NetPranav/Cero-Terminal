@@ -16,6 +16,8 @@ import {
 } from '../models/WorkflowTypes';
 import { CrossPlatformCommandAdapter } from './CrossPlatformCommandAdapter';
 
+import { parseSaveIntent, lastStepCount } from './SaveIntent';
+
 export interface DecomposedStage {
   id: string;
   name: string;
@@ -72,33 +74,11 @@ export class MultistagePromptDecomposer {
    * and natural language suffixes (e.g. "After successfully completing all of these steps, save the verified execution as a workflow named <name>").
    */
   public extractSaveAsDirective(prompt: string): WorkflowSaveDirective {
-    const trimmed = prompt.replace(/^>\s*/, '').trim();
-
-    // 1. Explicit delimited suffix: "task :: save [as] workflow <name>"
-    const delimitedMatch = trimmed.match(/^([\s\S]+?)\s*::\s*save\s+(?:as\s+)?workflow\s+["']?([a-zA-Z0-9_\-]+)["']?\s*$/i);
-    if (delimitedMatch) {
-      return {
-        taskPrompt: delimitedMatch[1].trim(),
-        workflowName: delimitedMatch[2].trim(),
-        isSaveAsWorkflow: true
-      };
+    const intent = parseSaveIntent(prompt);
+    if (intent.save && intent.task) {
+      return { taskPrompt: intent.task, workflowName: intent.name, isSaveAsWorkflow: true };
     }
-
-    // 2. Natural language concluding instruction:
-    // "After successfully completing all of these steps, save the verified execution as a workflow named workflow-basic-test."
-    const naturalMatch = trimmed.match(/^([\s\S]+?)(?:[.\r\n]+\s*|\s+)(?:after\s+(?:successfully\s+)?(?:completing|finishing)\s+(?:all\s+of\s+these\s+steps|everything|this|all\s+steps)[,.]?\s+)?(?:then\s+|and\s+)?save\s+(?:(?:the|this)\s+)?(?:verified\s+)?(?:execution|pipeline|result|steps|workflow)?\s*as\s+(?:a\s+)?workflow(?:\s+named|\s+called|\s*[:=])?\s+["']?([a-zA-Z0-9_\-]+)["']?\.?\s*$/i);
-    if (naturalMatch && naturalMatch[1].trim()) {
-      return {
-        taskPrompt: naturalMatch[1].trim(),
-        workflowName: naturalMatch[2].trim(),
-        isSaveAsWorkflow: true
-      };
-    }
-
-    return {
-      taskPrompt: trimmed,
-      isSaveAsWorkflow: false
-    };
+    return { taskPrompt: prompt.replace(/^>\s*/, '').trim(), isSaveAsWorkflow: false };
   }
 
   /**
@@ -108,24 +88,27 @@ export class MultistagePromptDecomposer {
   public parseScopedWorkflowSave(prompt: string): ScopedWorkflowSaveRequest | null {
     const trimmed = prompt.replace(/^>\s*/, '').trim();
     const match = trimmed.match(/^save\s+(?:as\s+)?workflow\s+["']?([a-zA-Z0-9_\-]+)["']?(?:\s+(.+))?$/i);
-    if (!match) return null;
-
-    const workflowName = match[1].trim();
-    const extra = (match[2] || '').trim();
-    let maxSteps = 10;
-
-    if (extra) {
-      const countMatch = extra.match(/(?:^|\b)(?:(?:with\s+)?(?:the\s+)?last\s+|-n\s+|--last[=\s])?(\d+)(?:\s*(?:steps?|commands?))?(?:\b|$)/i);
-      if (countMatch) {
-        maxSteps = parseInt(countMatch[1], 10);
+    if (match) {
+      const workflowName = match[1].trim();
+      const extra = (match[2] || '').trim();
+      let maxSteps = 10;
+      if (extra) {
+        const countMatch = extra.match(/(?:^|\b)(?:(?:with\s+)?(?:the\s+)?last\s+|-n\s+|--last[=\s])?(\d+)(?:\s*(?:steps?|commands?))?(?:\b|$)/i);
+        if (countMatch) maxSteps = parseInt(countMatch[1], 10);
       }
+      return { isSaveWorkflow: true, workflowName, maxSteps };
     }
 
-    return {
-      isSaveWorkflow: true,
-      workflowName,
-      maxSteps
-    };
+    // "save this as a workflow [called x]", "save the last 3 steps as a workflow": nothing else to run
+    const intent = parseSaveIntent(trimmed);
+    if (intent.save && !intent.task) {
+      return {
+        isSaveWorkflow: true,
+        workflowName: intent.name ? intent.name.replace(/\s+/g, '-') : '',
+        maxSteps: lastStepCount(trimmed),
+      };
+    }
+    return null;
   }
 
   /**

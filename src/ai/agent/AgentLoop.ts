@@ -20,7 +20,16 @@
 
 import { parseSystemAction, commandFor, suggestionsFor, TOPIC_NAMES, type SystemAction, type SystemCommand } from '../../domain/system/SystemControl';
 import { parseQuitRequest, listRunningCommand, parseRunning, matchRunning, quitCommand, type QuitRequest, type RunningItem } from '../../domain/system/AppControl';
-import { parseFlowCreateRequest, draftFlow, serializeFlow, describeDraft, draftNeedsTerminal, type FlowCreateRequest } from '../../workflows/flow/FlowAuthoring';
+import { parseFlowCreateRequest, draftFlow, serializeFlow, describeDraft, draftNeedsTerminal, type FlowCreateRequest, type FlowDraft } from '../../workflows/flow/FlowAuthoring';
+import { parseModelReply } from './ModelReply';
+import { parseAdviceRequest, snapshotScript, parseSnapshot, adviseFrom, formatAdvice } from '../../domain/system/SystemAdvisor';
+import { parseAppStatus, findRunningApp, describeStatus } from '../../domain/system/AppStatus';
+import { rankNames } from '../../domain/system/NameMatch';
+import { fixTypos } from './TypoFix';
+import { editDistance } from '../../domain/system/NameMatch';
+import { DiagnosticLogger } from '../../infrastructure/logging/DiagnosticLogger';
+import { parseSaveIntent, suggestWorkflowName, cleanName, type SaveIntent } from '../../workflows/engine/SaveIntent';
+import { actionsFromSteps, draftFromActions } from '../../workflows/flow/FlowFromSteps';
 import { appFlowIO, flowFolders, freeFlowPath, resolveCustomTarget, type FlowIO } from '../../workflows/flow/FlowStore';
 import { askChoice } from '../../presentation/ChoiceRequests';
 import { parsePortRequest, listListenersCommand, parseListeners, stopCommand, describeListeners, type PortRequest } from '../../domain/system/PortControl';
@@ -40,14 +49,48 @@ import { buildToolSpecs, buildSystemPrompt, ToolSpec } from './SystemPrompt';
 import { ToolRegistryState } from '../../tools/loader/ToolLoader';
 import { ExecutionPreviewPlan } from '../../domain/security/ExecutionEngine';
 import { EmbeddedEngineManager } from '../models/EmbeddedEngineManager';
-import { SentinelSerlCoordinator } from '../../domain/learning/SentinelSerlCoordinator';
+import { CeroSerlCoordinator } from '../../domain/learning/CeroSerlCoordinator';
 import { TldrKnowledgeEngine } from '../../domain/knowledge/TldrKnowledgeEngine';
 import { GbnfGrammarManager } from '../models/GbnfGrammarManager';
+import { buildDecisionCall } from './DecisionCall';
+import { getContextTokens } from './ContextBudget';
 import { StdinHangDetector } from '../../domain/terminal/StdinHangDetector';
 import { FailureClassifier } from './FailureClassifier';
 import { UndoLog } from '../../domain/session/UndoLog';
 import { IntentRouter } from '../router/IntentRouter';
 import { IntentStep } from '../schemas/IntentSchema';
+import { PromptQueue, parseQueueCommand, type QueueCommand } from '../../presentation/PromptQueue';
+import { ActionGate } from './ActionGate';
+import { parseAppLaunch, type AppLaunchRequest } from '../../domain/app/AppLaunchParser';
+import { parseOpenRequest, type OpenRequest } from '../../domain/system/OpenRequest';
+import { resolvePath, type PathProbe, type Resolution } from '../../domain/system/PathResolver';
+import { resolveAppProbe } from '../../domain/system/appPathProbe';
+import { openCommand, osOf } from '../../domain/system/OpenInApp';
+import { posixQuote } from '../../utils/shellQuote';
+import { AliasStore } from '../../domain/system/AliasStore';
+import { loadCatalog, resolveApp, launchCommand, type AppEntry } from '../../domain/system/AppCatalog';
+import { parseGitAction, type GitActionRequest } from '../../domain/git/GitActionParser';
+import { parseDirectoryAction, type DirectoryActionRequest } from '../../domain/system/DirectoryActionParser';
+
+export interface QueueIO {
+  list: () => readonly { id: string; label: string; kind?: string }[];
+  clear: () => void;
+  remove: (indexOrId: number | string) => boolean;
+  setPaused?: (paused: boolean) => void;
+  openPanel?: () => void;
+}
+
+export const defaultQueueIO: QueueIO = {
+  list: () => PromptQueue.getInstance().list(),
+  clear: () => PromptQueue.getInstance().clear(),
+  remove: (indexOrId) => PromptQueue.getInstance().remove(indexOrId),
+  setPaused: (paused) => PromptQueue.getInstance().setPaused(paused),
+  openPanel: () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cero:open-queue'));
+    }
+  },
+};
 
 export interface AgentEvent {
   type: 'thinking' | 'plan' | 'question' | 'tool_start' | 'tool_done' | 'done' | 'error' | 'step_output';
@@ -64,6 +107,8 @@ export interface AgentRunContext {
   attachedContext?: string;
   /** Terminal pane the request came from; long-running commands open next to it */
   paneId?: string;
+  /** Set by the caller; aborting it stops the request at the next safe point */
+  signal?: AbortSignal;
 }
 
 export type AgentAuthorizationHandler = (plan: ExecutionPreviewPlan) => Promise<boolean>;
@@ -71,11 +116,13 @@ export type AgentAuthorizationHandler = (plan: ExecutionPreviewPlan) => Promise<
 export interface AgentResult {
   success: boolean;
   summary: string;
-  steps: { tool: string; params: any; result: ToolExecutionResult }[];
+  steps: { tool: string; params: any; result: ToolExecutionResult; flowAction?: any }[];
   cdPath?: string; // If any step navigated to a directory, capture it
   awaitingInput?: boolean;
   /** The user declined a command in the confirmation dialog */
   declined?: boolean;
+  /** True when the run was stopped early by an abort signal */
+  cancelled?: boolean;
   /** Where the time went for this request */
   metrics?: AgentRunMetrics;
 }
@@ -85,8 +132,14 @@ export interface AgentRunMetrics {
   /** Number of model round-trips (0 for instant answers, learned patterns and replays) */
   modelCalls: number;
   modelMs: number;
+  actionGate?: {
+    accepted: number;
+    repaired: number;
+    asked: number;
+  };
 }
 
+import { CancelledError, throwIfAborted } from './Cancelled';
 import { AdaptivePlanEngine, AgentPlan, PlanPhase, PhaseStatus } from './AdaptivePlanEngine';
 import { ProjectDiscoveryEngine } from '../../domain/discovery/ProjectDiscoveryEngine';
 import { ToolParameterValidator } from './ToolParameterValidator';
@@ -102,6 +155,7 @@ import { approveBatch } from '../../domain/security/BatchApproval';
 import { planRosPipeline, RosPipeline } from '../../domain/ros/RosPipelinePlanner';
 import { parseTerminalAction, resolveTarget, describePane, readyForInput, TerminalAction } from '../../domain/terminal/TerminalActions';
 import { TerminalWorkspace, isLongRunningCommand, paneTitleFor } from '../../domain/terminal/TerminalWorkspace';
+import { SessionManager } from '../../domain/SessionManager';
 import { SecurityEngine } from '../../domain/security/SecurityEngine';
 import { chooseRosDistro, withRosEnvironmentForPane } from '../../domain/ros/RosEnvironment';
 import * as fs from 'fs';
@@ -152,40 +206,6 @@ const FAST_PATHS: {
   { pattern: /^focus\s+window\s+firefox\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({window = \"firefox\"})' >/dev/null 2>&1 || hyprctl dispatch focuswindow firefox >/dev/null 2>&1 || true)", explanation: 'Focus window firefox' }) },
   { pattern: /^move\s+current\s+window\s+to\s+workspace\s+2\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.move({workspace = \"2\"})' >/dev/null 2>&1 || hyprctl dispatch movetoworkspace 2 >/dev/null 2>&1 || true)", explanation: 'Move current window to workspace 2' }) },
   { pattern: /^toggle\s+window\s+floating\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.float()' >/dev/null 2>&1 || hyprctl dispatch togglefloating >/dev/null 2>&1 || true)", explanation: 'Toggle window floating' }) },
-  {
-    pattern: /^open\s+([a-zA-Z0-9_\-\s]+?)\s+and\s+(.+?)\s+(?:folder\s+|directory\s+)?in\s+([a-zA-Z0-9_\-]+)(?:\s+(?:in|on)\s+(\d+)(?:st|nd|rd|th)?\s+workspace)?\s*$/i,
-    tool: 'shell.execute',
-    paramsFn: (matches: RegExpMatchArray) => {
-      const appRaw = (matches[1] || '').trim().toLowerCase();
-      const pathRaw = (matches[2] || '').trim().replace(/^["']|["']$/g, '');
-      const editorRaw = (matches[3] || '').trim().toLowerCase();
-      const workspaceNum = matches[4];
-
-      let appCmd = `${appRaw} &`;
-      if (appRaw.includes('zen')) appCmd = 'zen-browser --new-window &';
-      else if (appRaw.includes('chrome')) appCmd = '(google-chrome-stable --new-window & || google-chrome &)';
-      else if (appRaw.includes('firefox')) appCmd = 'firefox --new-window &';
-
-      let editorCmd = `${editorRaw} "${pathRaw}" &`;
-      if (editorRaw.includes('code') || editorRaw.includes('vscode')) {
-        editorCmd = `code "${pathRaw}" &`;
-      }
-
-      let cmd = `${appCmd} ${editorCmd}`;
-      if (workspaceNum) {
-        const zeroIdx = Math.max(0, parseInt(workspaceNum, 10) - 1);
-        const dispatcher = `(hyprctl dispatch 'hl.dsp.focus({workspace = "${workspaceNum}"})' >/dev/null 2>&1 || hyprctl dispatch workspace ${workspaceNum} >/dev/null 2>&1 || swaymsg workspace number ${workspaceNum} >/dev/null 2>&1 || i3-msg workspace number ${workspaceNum} >/dev/null 2>&1 || qdbus org.kde.KWin /KWin setCurrentDesktop ${workspaceNum} >/dev/null 2>&1 || wmctrl -s ${zeroIdx} >/dev/null 2>&1 || xdotool set_desktop ${zeroIdx} >/dev/null 2>&1 || true)`;
-        cmd = `${dispatcher} ; (${appCmd}) ; (${editorCmd})`;
-      }
-
-      return {
-        command: cmd,
-        explanation: workspaceNum
-          ? `Switch to workspace ${workspaceNum}, launch ${matches[1].trim()} and open ${pathRaw} in ${matches[3].trim()}`
-          : `Launch ${matches[1].trim()} and open ${pathRaw} in ${matches[3].trim()}`
-      };
-    }
-  },
   { pattern: /^check\s+default\s+web\s+browser\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-settings get default-web-browser 2>/dev/null", explanation: 'Check default web browser' }) },
   { pattern: /^check\s+default\s+file\s+manager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-mime query default inode/directory 2>/dev/null", explanation: 'Check default file manager' }) },
   { pattern: /^check\s+default\s+pdf\s+reader\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-mime query default application/pdf 2>/dev/null", explanation: 'Check default pdf reader' }) },
@@ -206,7 +226,7 @@ const FAST_PATHS: {
   { pattern: /^increase\s+screen\s+brightness\s+by\s+10%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl set +10% 2>/dev/null || light -A 10 2>/dev/null", explanation: 'Increase screen brightness by 10%' }) },
   { pattern: /^decrease\s+screen\s+brightness\s+by\s+10%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl set 10%- 2>/dev/null || light -U 10 2>/dev/null", explanation: 'Decrease screen brightness by 10%' }) },
   { pattern: /^check\s+current\s+screen\s+brightness\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl get 2>/dev/null || light -G 2>/dev/null", explanation: 'Check current screen brightness' }) },
-  { pattern: /^show\s+clipboard\s+text\s+contents\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "printf 'Sentinel AI Clipboard Buffer Content' | (wl-copy 2>/dev/null || xclip -selection clipboard 2>/dev/null || true); wl-paste 2>/dev/null || xclip -o 2>/dev/null", explanation: 'Show clipboard text contents' }) },
+  { pattern: /^show\s+clipboard\s+text\s+contents\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "printf 'Cero AI Clipboard Buffer Content' | (wl-copy 2>/dev/null || xclip -selection clipboard 2>/dev/null || true); wl-paste 2>/dev/null || xclip -o 2>/dev/null", explanation: 'Show clipboard text contents' }) },
   { pattern: /^check\s+installed\s+desktop\s+applications\s+list\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find /usr/share/applications -name '*.desktop' 2>/dev/null | head -10", explanation: 'Check installed desktop applications list' }) },
 
   // Domain 8: Linux Dotfiles & Rice Management (Hyprland / Waybar) (8.1 to 8.50)
@@ -247,15 +267,7 @@ const FAST_PATHS: {
   { pattern: /^check\s+cursor\s+theme\s+and\s+size\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'gtk-cursor' ~/.config/gtk-3.0/settings.ini 2>/dev/null || echo -e 'gtk-cursor-theme-name = Bibata-Modern-Classic\\ngtk-cursor-theme-size = 24'", explanation: 'Check cursor theme and size' }) },
   { pattern: /^check\s+hyprland\s+animations\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -A 5 'animations {' ~/.config/hypr/hyprland.conf 2>/dev/null || echo -e 'animations {\\n    enabled = true\\n    bezier = myBezier, 0.05, 0.9, 0.1, 1.05\\n}'", explanation: 'Check hyprland animations configuration' }) },
 
-  // Domain 9: Multi-Stage Composite Workflows (9.1 to 9.50)
-  { pattern: /^save\s+workflow\s+release-gate\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"release-gate\", \"steps\": [\"git status\", \"npm run lint\", \"npm test\", \"npm run build\"]}' > ~/.sentinel/workflows/release-gate.json", explanation: 'Save workflow release-gate' }) },
-  { pattern: /^save\s+workflow\s+dev-boot\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"dev-boot\"}' > ~/.sentinel/workflows/dev-boot.json", explanation: 'Save workflow dev-boot' }) },
-  { pattern: /^save\s+workflow\s+desktop-reset\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"desktop-reset\"}' > ~/.sentinel/workflows/desktop-reset.json", explanation: 'Save workflow desktop-reset' }) },
-  { pattern: /^save\s+workflow\s+db-sync\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"db-sync\"}' > ~/.sentinel/workflows/db-sync.json", explanation: 'Save workflow db-sync' }) },
-  { pattern: /^save\s+workflow\s+pr-prep\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"pr-prep\"}' > ~/.sentinel/workflows/pr-prep.json", explanation: 'Save workflow pr-prep' }) },
   { pattern: /^check\s+git\s+conflict\s+markers\s+across\s+all\s+files\s+in\s+repository\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git diff --check 2>/dev/null", explanation: 'Check git conflict markers' }) },
-  { pattern: /^save\s+workflow\s+clean-rebuild\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"clean-rebuild\"}' > ~/.sentinel/workflows/clean-rebuild.json", explanation: 'Save workflow clean-rebuild' }) },
-  { pattern: /^save\s+workflow\s+ai-healthcheck\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "mkdir -p ~/.sentinel/workflows && echo '{\"name\": \"ai-healthcheck\"}' > ~/.sentinel/workflows/ai-healthcheck.json", explanation: 'Save workflow ai-healthcheck' }) },
 
   // Web browser navigation & URL shortcuts (with optional target browser)
   {
@@ -700,7 +712,7 @@ const FAST_PATHS: {
     paramsFn: (m) => ({ app: m[1].trim() })
   },
   {
-    pattern: /^(?:open|launch|start)\s+(?:the\s+)?(chrome|google\s+chrome|safari|firefox|brave|edge|vscode|vs\s+code|code|cursor|discord|slack|spotify|terminal|finder|notes|calendar|calculator|mail|messages|sublime|pycharm|intellij|webstorm|sentinel|sentinel\s+terminal|antigravity|antigravity\s+ide)\s*$/i,
+    pattern: /^(?:open|launch|start)\s+(?:the\s+)?(chrome|google\s+chrome|safari|firefox|brave|edge|vscode|vs\s+code|code|cursor|discord|slack|spotify|terminal|finder|notes|calendar|calculator|mail|messages|sublime|pycharm|intellij|webstorm|cero|cero\s+terminal|antigravity|antigravity\s+ide)\s*$/i,
     tool: 'application.open',
     paramsFn: (m) => ({ app: m[1].trim() })
   },
@@ -776,9 +788,32 @@ export function isExplicitFilesystemSearch(goal: string): boolean {
 /**
  * Normalizes common typos in terminal and command intents.
  */
+const LEADING_VERBS = ['open', 'launch', 'install', 'close', 'quit'];
+/** Real words that sit one letter from a command word: "clone" is not a slip for "close" */
+const REAL_FIRST_WORDS = new Set(['clone', 'cone', 'quiet', 'quote', 'oven', 'opens', 'opened', 'upen']);
+
+/**
+ * "opn firefox", "opne gitBrans", "instl express": the first word is one slip away from a command word.
+ * Only a dropped or swapped letter is corrected (never a longer word), so "star the repo" and "quite" stay.
+ */
+export function fixLeadingVerb(text: string): string {
+  const m = text.match(/^(\s*(?:>\s*)?(?:(?:please|can you|could you)\s+)?)([A-Za-z]{3,8})\b/i);
+  if (!m) return text;
+  const word = m[2].toLowerCase();
+  if (LEADING_VERBS.includes(word) || REAL_FIRST_WORDS.has(word)) return text;
+  for (const verb of LEADING_VERBS) {
+    if (word[0] !== verb[0] || word.length > verb.length) continue;
+    if (editDistance(word, verb) <= (verb.length >= 6 ? 2 : 1)) {
+      const fixed = m[2][0] === m[2][0].toUpperCase() && m[2][0] !== m[2][0].toLowerCase() ? verb[0].toUpperCase() + verb.slice(1) : verb;
+      return `${m[1]}${fixed}${text.slice(m[0].length)}`;
+    }
+  }
+  return text;
+}
+
 export function normalizeGoalText(text: string): string {
   if (!text) return text;
-  return text
+  return fixLeadingVerb(fixTypos(text))
     .replace(/\b(?:inilitilzie|initilize|initalize|initalise|initilise)\b/gi, 'initialize')
     .replace(/\b(?:adn|nad)\b/gi, 'and')
     .replace(/\b(?:avaialble|avaialable|availabe)\b/gi, 'available')
@@ -972,6 +1007,14 @@ export function isActionableGoal(goal: string): boolean {
   if (/^(?:who are you|what is your name|what can you do|help)$/i.test(stripped) || stripped === '' || /^(?:hi|hey|hello|yo|howdy|sup)$/i.test(lower)) {
     return false;
   }
+  // A knowledge question ("how does binary search work?", "explain closures") is answered, not run, unless it names
+  // something on this computer (a file, port, process, app...)
+  const isKnowledgeQuestion = /^(?:what|why|who|when|how\s+(?:does|do|is|are|can|would|should)|explain|define|describe|tell me (?:about|what|how))\b/i.test(stripped);
+  if (isKnowledgeQuestion && !/\b(?:folder|folders|directory|directories|dir|file|files|path|paths|network|wifi|wi-fi|bluetooth|port|ports|process|processes|cpu|ram|memory|storage|disk|battery|git|repo|repository|terminal|service|ip|address|volume|screen|here|this machine|my (?:computer|mac|pc|laptop|system))\b/i.test(stripped)
+    // a file name or path in the question ("what does scripts/deploy.sh do?") means the file has to be read
+    && !/(?:^|\s)[\w~./-]*[\w-]\.[a-z0-9]{1,5}(?=[\s?.!]|$)|\w\/\w/i.test(stripped.replace(/\b(?:e\.g|i\.e)\./g, ''))) {
+    return false;
+  }
   const actionablePatterns = [
     /\b(?:find|search|locate|list|show|get|check|scan|open|launch|start|run|kill|stop|terminate|restart|turn on|turn off|enable|disable|connect|disconnect|create|make|delete|remove|clone|pull|push|commit|status|log|diff|ping|test|install|build|deploy|try|change|set|switch|renew|refresh|modify|update|force|rotate|release|assign|configure|flush|reset|fix|solve|execute|do)\b/i,
     /\b(?:folder|folders|directory|directories|dir|dirs|file|files|path|paths|network|networks|wifi|wi-fi|bluetooth|port|ports|process|processes|cpu|ram|memory|storage|disk|battery|git|repo|repository|terminal|app|application|service|ip|address|dhcp|mac|dns|interface|adapter|volume|sound|audio|screen|display)\b/i,
@@ -999,7 +1042,7 @@ export function isReferentialFollowup(text: string): boolean {
 
 /**
  * Sanitize or transform a model refusal into concrete, professional terminal advice.
- * Completely eliminates robotic disclaimers like "as an AI language model..." from Sentinel.
+ * Completely eliminates robotic disclaimers like "as an AI language model..." from Cero.
  */
 export function cleanseConversationalRefusal(summary: string, goal: string, context: { os: string; cwd: string }): string {
   const lowerGoal = goal.toLowerCase();
@@ -1035,7 +1078,7 @@ export function cleanseConversationalRefusal(summary: string, goal: string, cont
     .trim();
 
   if (!cleaned || isConversationalRefusal(cleaned)) {
-    cleaned = `As Sentinel on ${context.os}, I have full terminal execution capabilities. For "${goal}", you can run system commands directly or use \`>learn: <cmd>\` to register a workflow.`;
+    cleaned = `As Cero on ${context.os}, I have full terminal execution capabilities. For "${goal}", you can run system commands directly or use \`>learn: <cmd>\` to register a workflow.`;
   }
 
   return cleaned;
@@ -1163,6 +1206,7 @@ export class AgentLoop {
   private shadowSimulator: ShadowPtySimulator;
 
   private static readonly MAX_STEPS = 8;
+  private static readonly highContextWarnedSessions = new Set<string>();
   public static readonly MAX_OBSERVATION_CHARS = 4000;
   public static readonly OBSERVATION_HEAD_LINES = 60;
   public static readonly OBSERVATION_TAIL_LINES = 20;
@@ -1325,21 +1369,28 @@ export class AgentLoop {
   private transcript: { goal: string; result: AgentResult; at: number }[] = [];
   private modelCalls = 0;
   private modelMs = 0;
+  private actionGateMetrics = { accepted: 0, repaired: 0, asked: 0 };
+  /** The person said "yes, this time" for this request: later steps of the same request use it without asking again */
+  private externalConsent: string | null = null;
 
   public async run(goal: string, context: AgentRunContext): Promise<AgentResult> {
     const started = performance.now();
     if (this.runDepth === 0) {
       this.modelCalls = 0;
       this.modelMs = 0;
+      this.actionGateMetrics = { accepted: 0, repaired: 0, asked: 0 };
+      this.externalConsent = null;
     }
     this.runDepth++;
     try {
+      throwIfAborted(context.signal);
       const result = await this.runRequest(goal, context);
       if (this.runDepth === 1) {
         result.metrics = {
           totalMs: Math.round(performance.now() - started),
           modelCalls: this.modelCalls,
-          modelMs: Math.round(this.modelMs)
+          modelMs: Math.round(this.modelMs),
+          actionGate: { ...this.actionGateMetrics }
         };
         AgentLoop.recentMetrics.push({ ...result.metrics, goal: goal.slice(0, 80), at: Date.now() });
         if (AgentLoop.recentMetrics.length > 50) AgentLoop.recentMetrics.shift();
@@ -1349,6 +1400,16 @@ export class AgentLoop {
         }
       }
       return result;
+    } catch (err: any) {
+      if (context.signal?.aborted || err instanceof CancelledError || err?.isCancelled) {
+        return {
+          success: false,
+          cancelled: true,
+          summary: 'Stopped.',
+          steps: []
+        };
+      }
+      throw err;
     } finally {
       this.runDepth--;
     }
@@ -1357,64 +1418,13 @@ export class AgentLoop {
   private async runRequest(goal: string, context: AgentRunContext): Promise<AgentResult> {
     goal = normalizeGoalText(goal);
 
-    // Simultaneous Task Execution + Named Workflow Save Pattern
-    // Syntax: "> <task to perform> :: save as workflow <name>" or ":: save workflow <name>"
+    // "<task> and save this as a workflow [called x]": run the task, then save what really happened
     const decomposer = MultistagePromptDecomposer.getInstance();
-    const saveDirective = decomposer.extractSaveAsDirective(goal);
-    if (saveDirective.isSaveAsWorkflow && saveDirective.workflowName) {
-      const taskGoal = saveDirective.taskPrompt;
-      const workflowName = saveDirective.workflowName;
-
-      this.emit({
-        type: 'thinking',
-        message: `Executing task and automatically saving workflow "${workflowName}"...`
-      });
-
-      // Run the inner task
-      const result = await this.run(taskGoal, context);
-
-      // Only save if execution was successful
-      if (result.success) {
-        const recorder = WorkflowRecorder.getInstance();
-        let savedWf: SavedWorkflowDefinition | null = null;
-
-        // Extract shell steps directly executed during this run
-        const shellSteps = (result.steps || [])
-          .filter(s => s.tool === 'shell.execute' && s.params?.command)
-          .map(s => ({
-            command: s.params.command as string,
-            name: (s.params.explanation as string) || (s.params.command as string).slice(0, 40),
-            cwd: context.cwd,
-            output: typeof s.result?.data === 'string' 
-              ? s.result.data 
-              : (s.result?.data?.stdout || s.result?.error || ''),
-            exitCode: s.result?.data?.code ?? (s.result?.success ? 0 : 1)
-          }));
-
-        if (shellSteps.length > 0) {
-          savedWf = await recorder.saveFromCommands(workflowName, shellSteps, {
-            description: `Auto-recorded workflow for task: ${taskGoal}`
-          });
-        } else if (decomposer.isMultistagePrompt(taskGoal)) {
-          const decomp = decomposer.decompose(taskGoal, { cwd: context.cwd, os: context.os });
-          decomp.name = workflowName;
-          savedWf = decomposer.toSavedWorkflow(decomp);
-          await DiskWorkflowStorage.getInstance().saveWorkflow(savedWf);
-        } else {
-          // Fallback to recent UndoLog entry for this task
-          savedWf = await recorder.saveFromUndoLog(workflowName, context.sessionId || 'default', 1, {
-            description: `Auto-recorded workflow for task: ${taskGoal}`
-          });
-        }
-
-        if (savedWf) {
-          const saveNotice = `Workflow "${workflowName}" saved (${savedWf.steps.length} step(s) written to ~/.sentinel/workflows/${workflowName}.json, schemaVersion: 1)`;
-          result.summary = `${result.summary}\n\n✓ ${saveNotice}`;
-          this.emit({ type: 'done', message: saveNotice });
-        }
-      }
-
-      return result;
+    const earlySave = decomposer.parseScopedWorkflowSave(goal);
+    if (earlySave) return await this.runRetrospectiveSave(earlySave, context);
+    const saveIntent = parseSaveIntent(goal);
+    if (saveIntent.save && saveIntent.task) {
+      return await this.runTaskAndSave(saveIntent, context);
     }
 
     // Decision explanation and transcript export (deterministic, zero AI inference)
@@ -1436,20 +1446,7 @@ export class AgentLoop {
     // Generic Workflow Save Directive (Deterministic, zero AI inference)
     const saveRequest = MultistagePromptDecomposer.getInstance().parseScopedWorkflowSave(goal);
     if (saveRequest) {
-      const { workflowName: name, maxSteps } = saveRequest;
-      const recorder = WorkflowRecorder.getInstance();
-      const saved = await recorder.saveFromUndoLog(name, context.sessionId || 'default', maxSteps);
-      const summary = `Workflow file written to disk: Saved ${saved.steps.length} step(s) to ~/.sentinel/workflows/${name}.json (schemaVersion: 1)`;
-      this.emit({ type: 'done', message: summary });
-      return {
-        success: true,
-        summary,
-        steps: [{
-          tool: 'workflow.save',
-          params: { name, maxSteps },
-          result: { success: true, data: saved }
-        }]
-      };
+      return await this.runRetrospectiveSave(saveRequest, context);
     }
 
     // Generic Workflow Run Directive (Deterministic, zero AI inference)
@@ -1567,6 +1564,29 @@ export class AgentLoop {
       goal = `${pending.goal}\nUser clarification: ${answer}`;
     }
 
+    // "list my workflows"
+    if (/^(?:please\s+)?(?:list|show)\s+(?:me\s+)?(?:all\s+)?(?:my\s+)?(?:saved\s+)?(?:workflows|flows|\.flow\s+files)\s*$/i.test(goal.trim().replace(/[?.!]+$/, ''))) {
+      const storage = DiskWorkflowStorage.getInstance();
+      let flows: SavedWorkflowDefinition[] = [];
+      try { flows = await storage.listWorkflows(); } catch { /* an unreadable folder reads as empty */ }
+      const summary = flows.length
+        ? `Saved workflows (${flows.length}) in ${storage.getWorkflowsDir()}:\n${flows.map(w => `- ${w.name} (${w.steps.length} step${w.steps.length === 1 ? '' : 's'})`).join('\n')}\nRun one with: run the workflow <name>`
+        : `No saved workflows yet in ${storage.getWorkflowsDir()}. Say "open something and save this as a workflow", or "make me a workflow that ...".`;
+      this.emit({ type: 'done', message: summary });
+      return { success: true, summary, steps: [] };
+    }
+
+    // "what do you remember about gitbrains" / "forget gitbrains" / "forget my folder shortcuts"
+    const aliasReply = this.handleAliasCommand(goal);
+    if (aliasReply) return aliasReply;
+
+    // "cd gitbrains" from anywhere: the same finder as "open the folder ..." (never creates anything)
+    const navTarget = DirectoryNavigationEngine.getInstance().parseIntent(goal);
+    if (navTarget.isNavigation && navTarget.target && !/^(?:~|\/|\.{1,2}(?:[\\/]|$)|[A-Za-z]:[\\/])/.test(navTarget.target) && !/[\\/]/.test(navTarget.target)) {
+      const found = await this.resolveFolderForCd(navTarget.target, context);
+      if (found) return found;
+    }
+
     // Smart Directory Navigation & Fuzzy Matching ("Did you mean?", "Ask to create")
     const navEngine = DirectoryNavigationEngine.getInstance();
     // "go to tab 2" / "switch to the next tab" are app actions, not folders
@@ -1632,13 +1652,13 @@ export class AgentLoop {
     // Conversational greetings & status fast paths (works instantly offline)
     const rawLower = goal.trim().toLowerCase();
     if (/^(?:hey|hi|hello|yo|howdy|sup|greetings)(?:\s+there)?[\s!.]*$/i.test(rawLower)) {
-      const greeting = "Hey there! I am Sentinel AI, your local terminal copilot. You can ask me to inspect listening ports, find high CPU tasks, scaffold projects, automate git workflows, or diagnose broken shell commands.";
+      const greeting = "Hey there! I am Cero AI, your local terminal copilot. You can ask me to inspect listening ports, find high CPU tasks, scaffold projects, automate git workflows, or diagnose broken shell commands.";
       this.emit({ type: 'done', message: greeting });
       return { success: true, summary: greeting, steps: [] };
     }
 
-    if (/^(?:who\s+are\s+you|what\s+can\s+you\s+do|help|what\s+is\s+sentinel)[\s?!.]*$/i.test(rawLower)) {
-      const helpMsg = "I am Sentinel AI — an autonomous terminal agent. You can ask me to:\n• Inspect listening ports: \">what is using port 3000\"\n• Kill zombie processes: \">kill node\"\n• Git actions: \">create a feature branch named auth\"\n• Fix shell errors: Press [Tab] on the Auto-Heal banner\n• Switch projects: Press Cmd+O\n• Search history: Press Ctrl+R\n• Manage the local AI model: Command Palette (Ctrl+Shift+P) > 'Sentinel Embedded AI'";
+    if (/^(?:who\s+are\s+you|what\s+can\s+you\s+do|help|what\s+is\s+cero)[\s?!.]*$/i.test(rawLower)) {
+      const helpMsg = "I am Cero AI — an autonomous terminal agent. You can ask me to:\n• Inspect listening ports: \">what is using port 3000\"\n• Kill zombie processes: \">kill node\"\n• Git actions: \">create a feature branch named auth\"\n• Fix shell errors: Press [Tab] on the Auto-Heal banner\n• Switch projects: Press Cmd+O\n• Search history: Press Ctrl+R\n• Manage the local AI model: Command Palette (Ctrl+Shift+P) > 'Cero Embedded AI'";
       this.emit({ type: 'done', message: helpMsg });
       return { success: true, summary: helpMsg, steps: [] };
     }
@@ -1661,7 +1681,7 @@ export class AgentLoop {
           await manager.startEngine();
         }
       }).catch(err => console.warn('[AgentLoop] setup-ai failed:', err));
-      const msg = `Downloading ${model.displayName} (~${(model.sizeBytes / 1e9).toFixed(1)} GB) into ~/.sentinel/models/.\nTrack progress in the Command Palette (Ctrl+Shift+P > 'Sentinel Embedded AI').`;
+      const msg = `Downloading ${model.displayName} (~${(model.sizeBytes / 1e9).toFixed(1)} GB) into ~/.cero/models/.\nTrack progress in the Command Palette (Ctrl+Shift+P > 'Cero Embedded AI').`;
       this.emit({ type: 'done', message: msg });
       return { success: true, summary: msg, steps: [] };
     }
@@ -1701,10 +1721,30 @@ export class AgentLoop {
     const appAction = parseAppAction(cleaned || goal);
     if (appAction) return this.runAppAction({ ...appAction, paneId: context.paneId });
 
+    // Queue management commands ("show the queue", "clear the queue", "cancel the second queued request")
+    const queueCmd = parseQueueCommand(cleaned || goal);
+    if (queueCmd) {
+      return this.runQueueCommand(queueCmd, context);
+    }
+
     // System settings: Wi-Fi, Bluetooth, brightness, volume, dark mode, settings pages
     const systemAction = parseSystemAction(cleaned || goal);
     if (systemAction) {
       const handled = await this.runSystemAction(systemAction, context);
+      if (handled) return handled;
+    }
+
+    // "any improvement you would recommend for my computer": look at this computer, then advise from what is found
+    const advice = parseAdviceRequest(cleaned || goal);
+    if (advice && osOf(context.os) !== 'windows') {
+      const handled = await this.runSystemAdvice(advice.focus, context);
+      if (handled) return handled;
+    }
+
+    // "is the amphetmine application running": list what is really running and match the name loosely
+    const appStatus = parseAppStatus(cleaned || goal);
+    if (appStatus) {
+      const handled = await this.runAppStatus(appStatus.name, context);
       if (handled) return handled;
     }
 
@@ -1830,6 +1870,61 @@ export class AgentLoop {
       if (handled) return handled;
     }
 
+    // Task 3.5: Pure domain parsers before calling the model
+    // 1. Folder / project in editor ("open folder gitBrains in cursor", "open ~/Projects in vscode")
+    const openReq = parseOpenRequest(cleaned || goal);
+    if (openReq) {
+      return this.runOpen(openReq, context);
+    }
+
+    // 1b. "what is in data.csv", "show notes.txt": read a named file (read-only, first 60 lines)
+    const showFile = (cleaned || goal).trim().replace(/[?.!]+$/, '').match(/^(?:what(?:'s|\s+is)\s+in|show(?:\s+me)?|print|display|cat|read)\s+(?:the\s+)?(?:file\s+)?["']?([^\s"']+\.[A-Za-z0-9]{1,6})["']?$/i);
+    if (showFile) {
+      return this.runShellStep(`head -n 60 -- ${posixQuote(showFile[1])}`, `Show ${showFile[1]}`, context, out => out || `${showFile[1]} is empty.`);
+    }
+
+    // 1b2. "find all python files in this directory", "locate all log files in /var/log": a plain find, no database, no sudo
+    const findByType = (cleaned || goal).trim().replace(/[?.!]+$/, '').match(/^(?:find|locate|list|show|search\s+for)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?([a-z]+)\s+files(?:\s+(?:in|under|inside)\s+(?:the\s+)?(\/\S*|~\S*|\.\S*|this\s+(?:directory|folder)|current\s+(?:directory|folder)))?$/i);
+    const EXT: Record<string, string> = { python: 'py', rust: 'rs', javascript: 'js', typescript: 'ts', log: 'log', logs: 'log', text: 'txt', markdown: 'md', json: 'json', yaml: 'yaml', csv: 'csv', shell: 'sh', java: 'java', html: 'html', css: 'css', go: 'go', ruby: 'rb', php: 'php', config: 'conf', image: 'png', pdf: 'pdf' };
+    if (findByType && EXT[findByType[1].toLowerCase()]) {
+      const where = findByType[2] && !/^this|^current/i.test(findByType[2]) ? findByType[2] : '.';
+      const target = where.startsWith('~') ? `"$HOME"${posixQuote(where.slice(1))}` : posixQuote(where);
+      return this.runShellStep(`find ${target} -type f -name ${posixQuote(`*.${EXT[findByType[1].toLowerCase()]}`)} -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -200`,
+        `Find .${EXT[findByType[1].toLowerCase()]} files in ${where === '.' ? 'this folder' : where}`, context, out => out || 'No matching files found.');
+    }
+
+    // 1b3. "create a new workflow called x" with no steps: say what to give, instead of guessing a command
+    if (/^(?:please\s+)?(?:create|make|build|start)\s+(?:me\s+)?(?:a\s+|an\s+)?(?:new\s+)?(?:workflow|flow)(?:\s+(?:called|named)\s+["']?[\w .-]+["']?)?\s*[.!?]?$/i.test((cleaned || goal).trim())) {
+      const summary = 'A workflow needs steps. Tell me what it should do, for example: make me a workflow called backup that runs npm run build and opens github in chrome. Or do the task now and add "and save this as a workflow".';
+      this.emit({ type: 'done', message: summary });
+      return { success: true, summary, steps: [] };
+    }
+
+    // 1c. "list the files in my notes folder": find the real folder first
+    const listFolder = (cleaned || goal).trim().replace(/[?.!]+$/, '').match(/^(?:list|show)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?files\s+(?:in|inside|of)\s+(?:the\s+)?["']?(.+?)["']?(?:\s+(?:folder|directory))?$/i);
+    if (listFolder && !/^(?:this|current|here|\.|\.\.|~|\/)/i.test(listFolder[1]) && !/[\\/]/.test(listFolder[1])) {
+      const listed = await this.runListFolder(listFolder[1], context);
+      if (listed) return listed;
+    }
+
+    // 2. Git inspection actions ("git status", "what git branch am i on", "git log", "git diff")
+    const gitReq = parseGitAction(cleaned || goal);
+    if (gitReq) {
+      return this.runGitAction(gitReq, context);
+    }
+
+    // 3. Directory actions ("make a folder called demo", "list files in src", "cd into src")
+    const dirReq = parseDirectoryAction(cleaned || goal);
+    if (dirReq) {
+      return this.runDirectoryAction(dirReq, context);
+    }
+
+    // 4. Application launch actions ("open firefox", "launch spotify", "start google chrome")
+    const appLaunchReq = parseAppLaunch(cleaned || goal, context.os);
+    if (appLaunchReq) {
+      return this.runAppLaunch(appLaunchReq, context);
+    }
+
     // Everything else goes to the model when one is available; the older fast-path table is
     // an offline fallback only.
     let isAIAvailable = false;
@@ -1838,7 +1933,7 @@ export class AgentLoop {
     } catch {
       isAIAvailable = false;
     }
-    if (!isAIAvailable && typeof process !== 'undefined' && process.env.NODE_ENV !== 'test' && process.env.SENTINEL_BENCHMARK !== 'true') {
+    if (!isAIAvailable && typeof process !== 'undefined' && process.env.NODE_ENV !== 'test' && process.env.CERO_BENCHMARK !== 'true') {
       try {
         const embeddedMgr = EmbeddedEngineManager.getInstance();
         if (await embeddedMgr.checkModelExists()) {
@@ -1952,20 +2047,7 @@ export class AgentLoop {
     // Generic Workflow Save / Run Fast-Path (Phase 1)
     const saveRequest = MultistagePromptDecomposer.getInstance().parseScopedWorkflowSave(goal);
     if (saveRequest) {
-      const { workflowName: name, maxSteps } = saveRequest;
-      const recorder = WorkflowRecorder.getInstance();
-      const saved = await recorder.saveFromUndoLog(name, context.sessionId || 'default', maxSteps);
-      const summary = `Workflow file written to disk: Saved ${saved.steps.length} step(s) to ~/.sentinel/workflows/${name}.json (schemaVersion: 1)`;
-      this.emit({ type: 'done', message: summary });
-      return {
-        success: true,
-        summary,
-        steps: [{
-          tool: 'workflow.save',
-          params: { name, maxSteps },
-          result: { success: true, data: saved }
-        }]
-      };
+      return await this.runRetrospectiveSave(saveRequest, context);
     }
 
     const runMatch = goal.match(/^run\s+workflow\s+([a-zA-Z0-9_\-]+)(?:\s+(.+))?$/i);
@@ -2119,7 +2201,7 @@ export class AgentLoop {
     const how = !result.metrics || result.metrics.modelCalls === 0
       ? 'answered without the model (instant answer, learned pattern, workflow or built-in command)'
       : `used ${result.metrics.modelCalls} model call${result.metrics.modelCalls === 1 ? '' : 's'} (${(result.metrics.modelMs / 1000).toFixed(1)} s of model time)`;
-    const lines = [`For "${goal}" Sentinel ${how}${result.metrics ? `, ${(result.metrics.totalMs / 1000).toFixed(1)} s in total` : ''}.`];
+    const lines = [`For "${goal}" Cero ${how}${result.metrics ? `, ${(result.metrics.totalMs / 1000).toFixed(1)} s in total` : ''}.`];
     result.steps.forEach((step, i) => {
       const what = step.params?.command ? `\`${step.params.command}\`` : step.tool;
       const why = step.params?.explanation ? ` (${step.params.explanation})` : '';
@@ -2132,7 +2214,7 @@ export class AgentLoop {
     return lines.join('\n');
   }
 
-  /** Write this tab's transcript as Markdown under ~/.sentinel/transcripts/ and return a notice. */
+  /** Write this tab's transcript as Markdown under ~/.cero/transcripts/ and return a notice. */
   public exportTranscript(): string {
     if (this.transcript.length === 0) return 'Nothing to export yet.';
     // Local time, so the file name matches the clock the user sees
@@ -2140,8 +2222,8 @@ export class AgentLoop {
     const pad = (n: number) => String(n).padStart(2, '0');
     const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
     const home = typeof process !== 'undefined' && process.env?.HOME ? process.env.HOME : '/tmp';
-    const file = `${home}/.sentinel/transcripts/session-${stamp}.md`;
-    const body = [`# Sentinel session transcript (${new Date().toLocaleString()})`, ''];
+    const file = `${home}/.cero/transcripts/session-${stamp}.md`;
+    const body = [`# Cero session transcript (${new Date().toLocaleString()})`, ''];
     for (const entry of this.transcript) {
       body.push(`## ${new Date(entry.at).toLocaleTimeString()} - ${entry.goal}`, '');
       for (const step of entry.result.steps) {
@@ -2151,9 +2233,9 @@ export class AgentLoop {
       body.push('', SecretRedactor.redact(entry.result.summary || ''), '');
     }
     try {
-      fs.mkdirSync(`${home}/.sentinel/transcripts`, { recursive: true });
+      fs.mkdirSync(`${home}/.cero/transcripts`, { recursive: true });
       fs.writeFileSync(file, body.join('\n'));
-      return `Saved ${this.transcript.length} request${this.transcript.length === 1 ? '' : 's'} to ~/.sentinel/transcripts/session-${stamp}.md (secrets redacted).`;
+      return `Saved ${this.transcript.length} request${this.transcript.length === 1 ? '' : 's'} to ~/.cero/transcripts/session-${stamp}.md (secrets redacted).`;
     } catch (err: any) {
       return `Could not write the transcript: ${err?.message || err}`;
     }
@@ -2325,6 +2407,7 @@ export class AgentLoop {
    * opened before). Goes through the same risk analysis and confirmation as any command.
    */
   public async runInPane(command: string, explanation: string | undefined, context: AgentRunContext, preApproved = false): Promise<ToolExecutionResult> {
+    throwIfAborted(context.signal);
     const risk = new SecurityEngine().analyzeCommand(command, [], explanation);
     if (!preApproved && (risk.level !== 'SAFE' || risk.requiresConsent)) {
       const plan: ExecutionPreviewPlan = {
@@ -2340,6 +2423,7 @@ export class AgentLoop {
       const approved = this.authorizationHandler ? await this.authorizationHandler(plan) : false;
       if (!approved) return { success: false, error: 'Declined in the confirmation dialog.', errorCode: 'USER_CANCELLED' };
     }
+    throwIfAborted(context.signal);
     try {
       const title = paneTitleFor(command);
       const { paneId, reused } = TerminalWorkspace.getInstance().spawn({
@@ -2348,6 +2432,13 @@ export class AgentLoop {
         title,
         requesterPaneId: context.paneId
       });
+      if (context.signal) {
+        context.signal.addEventListener('abort', () => {
+          try {
+            SessionManager.getInstance().write(paneId, '\x03');
+          } catch { /* ignore */ }
+        }, { once: true });
+      }
       return {
         success: true,
         data: { stdout: `Running \`${command}\` in ${reused ? 'the' : 'a new'} terminal pane "${title}".`, code: 0, paneId },
@@ -2380,76 +2471,90 @@ export class AgentLoop {
     const doneLines: string[] = [];
     const answers: string[] = [];
 
-    for (let i = 0; i < total; i++) {
-      const s = plan.steps[i];
-      const label = `Step ${i + 1}/${total}: ${s.clause}`;
+    try {
+      for (let i = 0; i < total; i++) {
+        throwIfAborted(context.signal);
+        const s = plan.steps[i];
+        const label = `Step ${i + 1}/${total}: ${s.clause}`;
 
-      if (s.enter) {
-        const target = resolveFolder(cwd, s.enter);
-        this.emit({ type: 'tool_start', message: label });
-        const check = await this.toolExecutor.execute('shell.execute', { command: `${cdCommand(target)} && pwd`, explanation: `Enter ${s.enter}` }, cwd, handler);
-        steps.push({ tool: 'shell.execute', params: { command: `cd ${target}` }, result: check });
-        const pwd = typeof check.data?.stdout === 'string' ? check.data.stdout.trim().split('\n').pop() : '';
-        if (!check.success || !pwd) {
-          const summary = `Stopped at step ${i + 1}: could not enter "${s.enter}" (${String(check.error || check.data?.stderr || 'no such folder').trim().split('\n')[0]}).`;
-          this.emit({ type: 'error', message: summary });
-          return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
+        if (s.enter) {
+          const target = resolveFolder(cwd, s.enter);
+          this.emit({ type: 'tool_start', message: label });
+          const check = context.signal
+            ? await this.toolExecutor.execute('shell.execute', { command: `${cdCommand(target)} && pwd`, explanation: `Enter ${s.enter}` }, cwd, handler, undefined, context.signal)
+            : await this.toolExecutor.execute('shell.execute', { command: `${cdCommand(target)} && pwd`, explanation: `Enter ${s.enter}` }, cwd, handler);
+          steps.push({ tool: 'shell.execute', params: { command: `cd ${target}` }, result: check });
+          const pwd = typeof check.data?.stdout === 'string' ? check.data.stdout.trim().split('\n').pop() : '';
+          if (!check.success || !pwd) {
+            const summary = `Stopped at step ${i + 1}: could not enter "${s.enter}" (${String(check.error || check.data?.stderr || 'no such folder').trim().split('\n')[0]}).`;
+            this.emit({ type: 'error', message: summary });
+            return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
+          }
+          cwd = pwd;
+          this.emit({ type: 'tool_done', message: `✓ ${s.clause}  (now in ${cwd})` });
+          doneLines.push(`cd ${cwd}`);
+          continue;
         }
-        cwd = pwd;
-        this.emit({ type: 'tool_done', message: `✓ ${s.clause}  (now in ${cwd})` });
-        doneLines.push(`cd ${cwd}`);
-        continue;
-      }
 
-      let command = s.command ?? planRecipe(s.clause, context.os)?.command;
-      if (!command) {
-        this.emit({ type: 'thinking', message: `Working out: ${s.clause}` });
-        command = (await this.commandForClause(s.clause, cwd, context, doneLines)) ?? undefined;
+        let command = s.command ?? planRecipe(s.clause, context.os)?.command;
         if (!command) {
-          const summary = `Stopped at step ${i + 1}: could not work out a command for "${s.clause}".`;
+          this.emit({ type: 'thinking', message: `Working out: ${s.clause}` });
+          command = (await this.commandForClause(s.clause, cwd, context, doneLines)) ?? undefined;
+          if (!command) {
+            const summary = `Stopped at step ${i + 1}: could not work out a command for "${s.clause}".`;
+            this.emit({ type: 'error', message: summary });
+            return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
+          }
+        }
+
+        if (s.longRunning || isLongRunningCommand(command)) {
+          this.emit({ type: 'tool_start', message: label });
+          const paneResult = await this.runInPane(command, s.clause, { ...context, cwd }, batch.approvedCommands.has(command));
+          steps.push({ tool: 'terminal.spawn', params: { command }, result: paneResult });
+          if (!paneResult.success) {
+            const declined = paneResult.errorCode === 'USER_CANCELLED';
+            const summary = declined ? `Not run: you declined \`${command}\`.` : `Stopped at step ${i + 1}: ${paneResult.error}`;
+            this.emit({ type: declined ? 'tool_done' : 'error', message: declined ? `✗ ${summary}` : summary });
+            return { success: false, summary, steps, declined, cdPath: cwd !== startCwd ? cwd : undefined };
+          }
+          this.emit({ type: 'tool_done', message: `✓ ${paneResult.data.stdout}` });
+          doneLines.push(`${command}  (running in its own pane)`);
+          continue;
+        }
+
+        this.emit({ type: 'tool_start', message: `${label}  (${command})` });
+        const result = context.signal
+          ? await this.toolExecutor.execute('shell.execute', { command, explanation: s.clause }, cwd, handler, undefined, context.signal)
+          : await this.toolExecutor.execute('shell.execute', { command, explanation: s.clause }, cwd, handler);
+        steps.push({ tool: 'shell.execute', params: { command }, result });
+        if (result.errorCode === 'USER_CANCELLED') {
+          const summary = `Not run: you declined \`${command}\`. Steps before it were completed.`;
+          this.emit({ type: 'tool_done', message: `✗ ${summary}` });
+          return { success: false, summary, steps, declined: true, cdPath: cwd !== startCwd ? cwd : undefined };
+        }
+        const failed = !result.success || (typeof result.data?.code === 'number' && result.data.code !== 0)
+          || hiddenFailure(String(result.data?.stderr || ''), String(result.data?.stdout || ''));
+        if (failed) {
+          const why = String(result.error || result.data?.stderr || 'failed').trim().split('\n').filter(Boolean).pop() || 'failed';
+          const summary = `Stopped at step ${i + 1} (${s.clause}): \`${command}\` failed: ${why}`;
           this.emit({ type: 'error', message: summary });
           return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
         }
-      }
-
-      if (s.longRunning || isLongRunningCommand(command)) {
-        this.emit({ type: 'tool_start', message: label });
-        const paneResult = await this.runInPane(command, s.clause, { ...context, cwd }, batch.approvedCommands.has(command));
-        steps.push({ tool: 'terminal.spawn', params: { command }, result: paneResult });
-        if (!paneResult.success) {
-          const declined = paneResult.errorCode === 'USER_CANCELLED';
-          const summary = declined ? `Not run: you declined \`${command}\`.` : `Stopped at step ${i + 1}: ${paneResult.error}`;
-          this.emit({ type: declined ? 'tool_done' : 'error', message: declined ? `✗ ${summary}` : summary });
-          return { success: false, summary, steps, declined, cdPath: cwd !== startCwd ? cwd : undefined };
+        this.emit({ type: 'tool_done', message: `✓ ${s.clause}`, data: result.data });
+        doneLines.push(command);
+        // Steps that answer something ("show the python version", "tell me how many files")
+        const printed = typeof result.data?.stdout === 'string' ? result.data.stdout.trim() : '';
+        if (printed && /^(?:show|list|display|print|tell|check|count|how\s+many|what|which|get|find)\b/i.test(s.clause)) {
+          answers.push(`${s.clause}:\n${AgentLoop.truncateObservation(printed).slice(0, 1500)}`);
         }
-        this.emit({ type: 'tool_done', message: `✓ ${paneResult.data.stdout}` });
-        doneLines.push(`${command}  (running in its own pane)`);
-        continue;
       }
-
-      this.emit({ type: 'tool_start', message: `${label}  (${command})` });
-      const result = await this.toolExecutor.execute('shell.execute', { command, explanation: s.clause }, cwd, handler);
-      steps.push({ tool: 'shell.execute', params: { command }, result });
-      if (result.errorCode === 'USER_CANCELLED') {
-        const summary = `Not run: you declined \`${command}\`. Steps before it were completed.`;
-        this.emit({ type: 'tool_done', message: `✗ ${summary}` });
-        return { success: false, summary, steps, declined: true, cdPath: cwd !== startCwd ? cwd : undefined };
+    } catch (err: any) {
+      if (err instanceof CancelledError || err?.name === 'CancelledError' || context.signal?.aborted) {
+        const summary = 'Stopped.';
+        this.emit({ type: 'done', message: summary });
+        return { success: false, cancelled: true, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
       }
-      const failed = !result.success || (typeof result.data?.code === 'number' && result.data.code !== 0)
-        || hiddenFailure(String(result.data?.stderr || ''), String(result.data?.stdout || ''));
-      if (failed) {
-        const why = String(result.error || result.data?.stderr || 'failed').trim().split('\n').filter(Boolean).pop() || 'failed';
-        const summary = `Stopped at step ${i + 1} (${s.clause}): \`${command}\` failed: ${why}`;
-        this.emit({ type: 'error', message: summary });
-        return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
-      }
-      this.emit({ type: 'tool_done', message: `✓ ${s.clause}`, data: result.data });
-      doneLines.push(command);
-      // Steps that answer something ("show the python version", "tell me how many files")
-      const printed = typeof result.data?.stdout === 'string' ? result.data.stdout.trim() : '';
-      if (printed && /^(?:show|list|display|print|tell|check|count|how\s+many|what|which|get|find)\b/i.test(s.clause)) {
-        answers.push(`${s.clause}:\n${AgentLoop.truncateObservation(printed).slice(0, 1500)}`);
-      }
+      throw err;
     }
 
     const done = `Done: ${total} steps${cwd !== startCwd ? `; now in ${cwd}` : ''}.`;
@@ -2478,7 +2583,10 @@ export class AgentLoop {
       cwd: context.cwd,
       authorizationHandler: this.authorizationHandler,
       executor: async (cmd: string, cwd?: string, authorize?: AgentAuthorizationHandler) => {
-        const res = await this.toolExecutor.execute('shell.execute', { command: cmd, cwd: cwd || context.cwd }, cwd || context.cwd, authorize ?? this.authorizationHandler);
+        throwIfAborted(context.signal);
+        const res = context.signal
+          ? await this.toolExecutor.execute('shell.execute', { command: cmd, cwd: cwd || context.cwd }, cwd || context.cwd, authorize ?? this.authorizationHandler, undefined, context.signal)
+          : await this.toolExecutor.execute('shell.execute', { command: cmd, cwd: cwd || context.cwd }, cwd || context.cwd, authorize ?? this.authorizationHandler);
         return {
           code: res.success ? (res.data?.code ?? 0) : (res.data?.code ?? 1),
           stdout: res.data?.stdout || '',
@@ -2486,6 +2594,7 @@ export class AgentLoop {
         };
       },
       onLongRunning: async (cmd, cwd) => {
+        throwIfAborted(context.signal);
         const r = await this.runInPane(cmd, `Workflow "${name}"`, { ...context, cwd: cwd || context.cwd }, true);
         return { ok: r.success, message: r.success ? r.data.stdout : (r.error || 'Could not open a terminal pane.') };
       },
@@ -2845,8 +2954,9 @@ export class AgentLoop {
     const prompt = `\`${request.command}\` fails${where} (exit ${code}). Its output:\n${AgentLoop.formatToolObservation('shell.execute', AgentLoop.truncateObservation(`${stdout}\n${stderr}`.trim()).slice(-3500))}\n${sources ? `Source files named in the error:\n${AgentLoop.formatToolObservation('filesystem.read', sources)}\n` : ''}Explain in two or three sentences why it fails (name the file and line) and how to fix it. Answer only from the output and files above.`;
     try {
       const response = await provider.generate(prompt, this.modelManager.getActiveModel().modelId, {
-        temperature: 0.1,
+        temperature: 0.4,
         maxTokens: 400,
+        mode: 'chat',
         messages: [
           { role: 'system', content: 'You explain why a command fails, from its output and the source code shown. Be specific and brief.' },
           { role: 'user', content: prompt }
@@ -2893,7 +3003,7 @@ export class AgentLoop {
     if (!read.success || !source.trim()) return finish(false, `Could not read ${request.file}: ${String(read.data?.stderr || read.error || 'not found').split('\n')[0]}`);
     if (source.length > 8000) return null;
     if (redactSecrets(source) !== source) {
-      return finish(false, `${request.file} contains what looks like a key or password, so Sentinel did not send it to the model. Remove the secret (for example into an environment variable) and ask again.`);
+      return finish(false, `${request.file} contains what looks like a key or password, so Cero did not send it to the model. Remove the secret (for example into an environment variable) and ask again.`);
     }
 
     this.emit({ type: 'tool_start', message: `Running ${request.file}` });
@@ -3059,9 +3169,718 @@ export class AgentLoop {
     this.flowIO = io;
   }
 
+  /** Queue access for queue management commands; tests replace it */
+  private queueIO: QueueIO = defaultQueueIO;
+  public setQueueIO(io: QueueIO): void {
+    this.queueIO = io;
+  }
+
+  /**
+   * Deterministic route for queue commands: "show the queue", "cancel the second queued request", "clear the queue".
+   */
+  private async runQueueCommand(cmd: QueueCommand, _context: AgentRunContext): Promise<AgentResult> {
+    const steps: AgentResult['steps'] = [];
+    const finish = (success: boolean, summary: string): AgentResult => {
+      this.emit({ type: success ? 'done' : 'error', message: summary });
+      return { success, summary, steps };
+    };
+
+    if (cmd.type === 'show') {
+      const items = this.queueIO.list();
+      if (!items || items.length === 0) {
+        return finish(true, 'The queue is empty.');
+      }
+      const lines = items.map((it, idx) => `  ${idx + 1}. [${it.kind || 'goal'}] ${it.label}`);
+      return finish(true, `Queue (${items.length}):\n${lines.join('\n')}`);
+    }
+
+    if (cmd.type === 'clear') {
+      this.queueIO.clear();
+      return finish(true, 'Queue cleared.');
+    }
+
+    if (cmd.type === 'remove') {
+      const ok = this.queueIO.remove(cmd.index);
+      if (ok) {
+        return finish(true, `Removed item ${cmd.index} from queue.`);
+      }
+      return finish(false, `Item ${cmd.index} not found in queue.`);
+    }
+
+    if (cmd.type === 'pause') {
+      this.queueIO.setPaused?.(true);
+      return finish(true, 'Queue paused.');
+    }
+
+    if (cmd.type === 'resume') {
+      this.queueIO.setPaused?.(false);
+      return finish(true, 'Queue resumed.');
+    }
+
+    if (cmd.type === 'open-panel') {
+      this.queueIO.openPanel?.();
+      return finish(true, 'Opened queue panel.');
+    }
+
+    return finish(false, 'Unknown queue command.');
+  }
+
+  /**
+   * The built-in model failed the action check twice. If an API model or Ollama is set up, offer to try
+   * this one request there. Always asks; "always" is never remembered, and nothing is sent without a yes.
+   */
+  private async offerExternalRetry(
+    active: ModelProvider,
+    goal: string,
+    context: AgentRunContext,
+    messages: { role: string; content: string }[],
+    gateContext: { cwd: string; os: string; sessionId?: string },
+  ): Promise<LLMResponse | null> {
+    if (active.providerId !== 'embedded') return null;
+    let other: ModelProvider | undefined;
+    try {
+      for (const candidate of this.modelManager.getProviders?.() ?? []) {
+        if (candidate.providerId !== 'embedded' && (await candidate.isAvailable())) { other = candidate; break; }
+      }
+    } catch {
+      return null;
+    }
+    if (!other) return null;
+    const isCloud = other.providerId === 'cloud_api';
+    let modelId: string | undefined;
+    let label = other.providerName || other.providerId;
+    try {
+      const models = await other.listModels();
+      modelId = models[0]?.id;
+      if (modelId) label = `${label} (${modelId})`;
+    } catch { /* the provider picks its own default */ }
+    if (this.externalConsent !== other.providerId) {
+      const answer = await askChoice({
+        title: `The built-in model could not do this reliably. Try it with ${label}?`,
+        lines: isCloud ? ['Your request, and the recent conversation, are sent to that service.'] : undefined,
+        options: [{ label: 'Yes, this time', detail: 'Only for this request' }, { label: 'No', detail: 'Stay with the built-in model' }],
+      });
+      if (!answer || !('index' in answer) || answer.index !== 0) return null;
+      this.externalConsent = other.providerId;
+    }
+    try {
+      const call = buildDecisionCall(goal, context, messages);
+      const response = await other.generate(call.messages[call.messages.length - 1]?.content || goal, modelId, { ...call.options, signal: context.signal });
+      this.modelCalls++;
+      this.modelMs += response.latencyMs ?? 0;
+      const reply = this.parseLLMResponse(response.content, response.finishReason === 'length');
+      if (!reply) return null;
+      if (reply.action === 'done') return reply;
+      const gate = await ActionGate.validate(reply, gateContext, this.toolSpecs);
+      return gate.ok ? ((gate.repairedAction || reply) as LLMResponse) : null;
+    } catch (err) {
+      if (context.signal?.aborted) throw err;
+      return null;
+    }
+  }
+
+  /** Read-only look at this computer's memory, disk, caches, project folders and processes, then advice built from it */
+  private async runSystemAdvice(focus: 'performance' | 'storage' | 'general', context: AgentRunContext): Promise<AgentResult | null> {
+    const os = osOf(context.os);
+    this.emit({ type: 'tool_start', message: 'Looking at this computer: memory, storage, caches, project folders, running apps. macOS may ask to let Cero look in Downloads or similar folders; choose Don\'t Allow to skip them.' });
+    const params = { command: snapshotScript(), explanation: 'Read memory, disk, caches, node_modules sizes and running processes (read-only)' };
+    const result = context.signal
+      ? await this.toolExecutor.execute('shell.execute', params, context.cwd, async () => true, undefined, context.signal)
+      : await this.toolExecutor.execute('shell.execute', params, context.cwd, async () => true);
+    const out = typeof result?.data?.stdout === 'string' ? result.data.stdout : '';
+    if (!out.includes('##ram')) return null;                             // could not read: let the normal path answer
+    const summary = formatAdvice(adviseFrom(parseSnapshot(out, os === 'macos' ? 'macos' : 'linux'), focus));
+    this.emit({ type: 'done', message: summary });
+    return { success: true, summary, steps: [{ tool: 'shell.execute', params, result }] };
+  }
+
+  /** Is this app running? Lists what really runs, matches the name loosely, and says which real app it matched. */
+  private async runAppStatus(name: string, context: AgentRunContext): Promise<AgentResult | null> {
+    const os = osOf(context.os);
+    const appOs = os;
+    this.emit({ type: 'tool_start', message: `Looking at what is running for "${name}"` });
+    const params = { command: listRunningCommand(appOs), explanation: 'List running apps' };
+    const listed = await this.toolExecutor.execute('shell.execute', params, context.cwd, async () => true);
+    const steps = [{ tool: 'shell.execute', params, result: listed }];
+    if (!listed?.success) return null;                                   // cannot list: let the normal path try
+    const match = findRunningApp(name, parseRunning(String(listed.data?.stdout ?? ''), appOs));
+    let installed: string | undefined;
+    if (match.kind === 'not-running') {
+      try {
+        const apps = await loadCatalog(os, async command => {
+          const r = await this.toolExecutor.execute('shell.execute', { command, explanation: 'List installed apps' }, context.cwd, async () => true);
+          return typeof r?.data?.stdout === 'string' ? r.data.stdout : '';
+        });
+        const res = resolveApp(name, apps);
+        if (res.type === 'found') installed = res.app.name;
+        else if (res.type === 'choose') installed = res.candidates[0]?.app.name;
+      } catch { /* the installed list is a bonus */ }
+    }
+    const summary = describeStatus(name, match, installed);
+    this.emit({ type: 'done', message: summary });
+    return { success: true, summary, steps };
+  }
+
+  /**
+   * A command failed because a name was not found. Look the name up in real state and answer from that:
+   *  - pgrep/pidof/pkill/killall <name>: what is running, matched loosely (never kills anything)
+   *  - open -a <name>: the installed apps
+   *  - ls/cat/cd ... <missing path>: the real folder or file (read-only commands are re-run on the real path)
+   *  - <name>: command not found: programs with a similar name on the PATH, asked before running
+   * Returns null when it has nothing better than the model's own next try.
+   */
+  private async smartFallback(command: string, result: ToolExecutionResult, context: AgentRunContext, steps: AgentResult['steps'], goal = ''): Promise<AgentResult | null> {
+    const text = `${result?.error ?? ''}\n${result?.data?.stderr ?? ''}\n${result?.data?.stdout ?? ''}`;
+    const os = osOf(context.os);
+    const first = command.trim().split(/\s+/)[0] ?? '';
+
+    // 1. a process name that matched nothing
+    const proc = command.match(/^(?:pgrep|pidof|pkill|killall)\b(?:\s+-[A-Za-z0-9]+)*\s+['"]?([^\s'"|;&]+)/);
+    if (proc) {
+      const base = await this.runAppStatus(proc[1], context);
+      if (base) {
+        const killer = /^(?:pkill|killall)\b/.test(command);
+        const summary = killer && /is running/.test(base.summary)
+          ? `${base.summary} Nothing was closed. Say "quit ${proc[1]}" and I will check and ask first.`
+          : base.summary;
+        this.emit({ type: 'done', message: summary });
+        return { ...base, summary, steps: [...steps, ...base.steps] };
+      }
+    }
+
+    // 2. an app that is not there under that name
+    const openApp = command.match(/^open\s+-a\s+(?:'([^']+)'|"([^"]+)"|(\S+))/);
+    if (openApp && /unable to find application|can't find application|no application knows|does not exist/i.test(text)) {
+      const wanted = openApp[1] || openApp[2] || openApp[3];
+      const launched = await this.runAppLaunch({ app: wanted.toLowerCase(), background: true }, context);
+      return { ...launched, steps: [...steps, ...launched.steps] };
+    }
+
+    // 3. a file or folder that is not there: read-only commands are re-run on the real path
+    const READ_ONLY = /^(?:ls|cat|head|tail|wc|stat|file|less|more|du|cd|tree|open)$/;
+    if (READ_ONLY.test(first) && /no such file or directory|cannot access|does not exist|not found/i.test(text)) {
+      const args = command.trim().split(/\s+/).slice(1).filter(a => !a.startsWith('-'));
+      const raw = (args[args.length - 1] ?? '').replace(/^['"]|['"]$/g, '');
+      if (raw && !/[;&|`$<>*?]/.test(raw)) {
+        const folderCmd = /^(?:ls|cd|du|tree)$/.test(first);
+        const name = raw.split(/[\\/]/).filter(Boolean).pop() ?? raw;
+        const parent = raw.includes('/') ? raw.replace(/[\\/][^\\/]*$/, '') : undefined;
+        let probe: PathProbe | null = null;
+        try { probe = this.pathProbe ?? await resolveAppProbe(); } catch { probe = null; }
+        if (probe) {
+          const res = await resolvePath({ name, kind: folderCmd ? 'folder' : 'file', locationHint: parent && parent !== '.' ? parent : undefined }, { cwd: context.cwd }, probe).catch(() => null);
+          let real: string | null | undefined;
+          if (res?.type === 'found') real = res.path;
+          else if (res?.type === 'choose') {
+            const shown = (p: string) => (probe!.home && p.startsWith(probe!.home) ? `~${probe!.home ? p.slice(probe!.home.length) : p}` : p);
+            real = await this.chooseCandidate({ kind: folderCmd ? 'folder' : 'file', name, create: false }, res, shown);
+          }
+          if (real) {
+            const flags = command.trim().split(/\s+/).slice(1).filter(a => a.startsWith('-'));
+            const fixed = [first, ...flags, posixQuote(real)].join(' ');
+            const again = await this.runShellStep(fixed, `${first} ${real} (found "${name}" there)`, context, out => out || '(done)');
+            return { ...again, summary: `"${raw}" does not exist; I found ${real}.\n${again.summary}`, steps: [...steps, ...again.steps], cdPath: first === 'cd' && again.success ? real : undefined };
+          }
+        }
+      }
+    }
+
+    // 4. a program that is not on the PATH
+    if (/command not found|not recognized as an internal or external command|is not recognized as the name of a cmdlet/i.test(text) && os !== 'windows' && !(goal && this.tryHeuristicFallback(goal, context))) {
+      const wanted = first;
+      const list = await this.toolExecutor.execute('shell.execute', { command: 'IFS=:; for d in $PATH; do ls -1 "$d" 2>/dev/null; done | sort -u', explanation: 'List programs on the PATH' }, context.cwd, async () => true);
+      const names = String(list?.data?.stdout ?? '').split('\n').map(n => n.trim()).filter(Boolean);
+      const ranked = rankNames(wanted, names, n => n, { min: 44, limit: 4 });
+      if (ranked.length) {
+        const answer = await askChoice({
+          title: `"${wanted}" is not installed. Did you mean "${ranked[0].item}"?`,
+          options: [...ranked.slice(0, 3).map(r => ({ label: r.item })), { label: 'No, none of these' }],
+        });
+        if (answer && 'index' in answer && answer.index < Math.min(3, ranked.length)) {
+          const fixed = `${ranked[answer.index].item}${command.trim().slice(wanted.length)}`;
+          const again = await this.runShellStep(fixed, fixed, context, out => out || '(done)');
+          return { ...again, steps: [...steps, ...again.steps] };
+        }
+      }
+    }
+    return null;
+  }
+
+  /** One read-only shell step with the usual authorization, shown as its output */
+  private async runShellStep(command: string, explanation: string, context: AgentRunContext, format: (stdout: string) => string): Promise<AgentResult> {
+    this.emit({ type: 'tool_start', message: explanation });
+    const auth = this.authorizationHandler || (async () => true);
+    const params = { command, explanation };
+    const result = context.signal
+      ? await this.toolExecutor.execute('shell.execute', params, context.cwd, auth, undefined, context.signal)
+      : await this.toolExecutor.execute('shell.execute', params, context.cwd, auth);
+    const ok = Boolean(result?.success);
+    const stdout = typeof result?.data?.stdout === 'string' ? result.data.stdout.trim() : '';
+    const summary = ok ? format(stdout) : `${explanation} failed: ${String(result?.error || result?.data?.stderr || 'error').split('\n')[0]}`;
+    this.emit({ type: ok ? 'done' : 'error', message: summary });
+    return { success: ok, summary, steps: [{ tool: 'shell.execute', params, result }] };
+  }
+
+  /** "list the files in <name>": find the folder by name (never a guessed path), then list it. null: not a folder request after all */
+  private async runListFolder(spoken: string, context: AgentRunContext): Promise<AgentResult | null> {
+    let probe: PathProbe;
+    try { probe = this.pathProbe ?? await resolveAppProbe(); } catch { return null; }
+    const shown = (p: string) => (probe.home && p.startsWith(probe.home) ? `~${p.slice(probe.home.length)}` : p);
+    let found: string | undefined;
+    // "my notes" first as written, then without "my"
+    for (const name of [spoken, spoken.replace(/^my\s+/i, '')]) {
+      if (!name) continue;
+      const res = await resolvePath({ name, kind: 'folder' }, { cwd: context.cwd }, probe).catch(() => null);
+      if (!res) return null;
+      if (res.type === 'found') { found = res.path; break; }
+      if (res.type === 'choose') {
+        const picked = await this.chooseCandidate({ kind: 'folder', name, create: false }, res, shown);
+        if (picked === undefined) return null;
+        if (picked === null) { const summary = 'Nothing was listed: you did not pick a folder.'; this.emit({ type: 'done', message: summary }); return { success: false, summary, steps: [], declined: true }; }
+        found = picked; break;
+      }
+    }
+    if (!found) return null;
+    return this.runShellStep(`ls -la -- ${posixQuote(found)}`, `List ${shown(found)}`, context, out => `${shown(found!)}:\n${out || '(empty)'}`);
+  }
+
+  /** Real file access for finding folders; tests replace it */
+  private pathProbe?: PathProbe;
+  public setPathProbe(probe: PathProbe): void {
+    this.pathProbe = probe;
+  }
+  /** How long to wait before checking an editor really started; tests set 0 */
+  private openVerifyDelayMs = 1500;
+  public setOpenVerifyDelay(ms: number): void {
+    this.openVerifyDelayMs = ms;
+  }
+
+  /**
+   * "open the folder gitBrains in VS Code": find the real folder (never create one), ask when it is not
+   * certain, remember the answer, and open it in one editor window. No model is involved.
+   */
+  private async runOpen(req: OpenRequest, context: AgentRunContext): Promise<AgentResult> {
+    const steps: AgentResult['steps'] = [];
+    const finish = (success: boolean, summary: string, extra: Partial<AgentResult> = {}): AgentResult => {
+      this.emit({ type: success ? 'done' : 'error', message: summary });
+      return { success, summary, steps, ...extra };
+    };
+    const noun = req.kind === 'folder' ? 'folder' : 'file';
+    this.emit({ type: 'tool_start', message: `Looking for the ${noun} "${req.name}"${req.locationHint ? ` in ${req.locationHint}` : ''}` });
+
+    let probe: PathProbe;
+    try {
+      probe = this.pathProbe ?? await resolveAppProbe();
+    } catch (e: any) {
+      return finish(false, `Could not search for "${req.name}": ${e?.message || e}`);
+    }
+    const shown = (p: string) => (probe.home && p.startsWith(probe.home) ? `~${p.slice(probe.home.length)}` : p);
+    const aliases = AliasStore.getInstance();
+    const remembered = aliases.lookup(req.name, req.kind)?.path;
+
+    let resolution: Resolution;
+    try {
+      resolution = await resolvePath({ name: req.name, kind: req.kind, locationHint: req.locationHint, remembered }, { cwd: context.cwd }, probe);
+    } catch (e: any) {
+      return finish(false, `Could not search for "${req.name}": ${e?.message || e}`);
+    }
+
+    let target: string | undefined;
+    if (resolution.type === 'found') {
+      target = resolution.path;
+    } else if (resolution.type === 'missing') {
+      if (req.create && req.kind === 'folder') {
+        const base = req.locationHint ? shownToAbsolute(req.locationHint, probe.home) : context.cwd;
+        target = `${base.replace(/[\\/]+$/, '')}/${req.name}`;
+        const params = { command: osOf(context.os) === 'windows' ? `New-Item -ItemType Directory -Force -Path '${target.replace(/'/g, "''")}'` : `mkdir -p '${target.replace(/'/g, `'\\''`)}'`, explanation: `Create ${shown(target)}` };
+        const made = await this.toolExecutor.execute('shell.execute', params, context.cwd, this.authorizationHandler || (async () => true));
+        steps.push({ tool: 'shell.execute', params, result: made });
+        if (!made.success) return finish(false, `Could not create ${shown(target)}: ${made.error || 'it failed'}`);
+      } else {
+        const where = resolution.searched.length ? ` I looked in: ${resolution.searched.slice(0, 8).join(', ')}.` : '';
+        return finish(false, `I could not find a ${noun} called "${req.name}".${where} Tell me the full path, or say "create it". Nothing was created or opened.`);
+      }
+    } else {
+      const picked = await this.chooseCandidate(req, resolution, shown);
+      if (picked === undefined) {
+        const list = resolution.candidates.slice(0, 5).map(c => shown(c.path)).join(', ');
+        return finish(false, `Several places could be "${req.name}": ${list}. Say the full path of the one you mean. Nothing was opened.`, { awaitingInput: true });
+      }
+      if (picked === null) return finish(false, `Nothing was opened: ${resolution.reason === 'typo' ? 'you did not confirm the match' : 'you chose none of them'}.`, { declined: true });
+      target = picked;
+      aliases.remember(req.name, req.kind, picked, req.withApp);
+    }
+
+    const os = osOf(context.os);
+    const open = openCommand(target, os, req.withApp);
+    const auth = this.authorizationHandler || (async () => true);
+    const attempts = [open.command, ...open.fallbacks];
+    let result: ToolExecutionResult | undefined;
+    let used = open.command;
+    for (const command of attempts) {
+      const params = { command, explanation: `Open ${shown(target)}${open.appName ? ` in ${open.appName}` : ''}` };
+      this.emit({ type: 'tool_start', message: params.explanation });
+      result = context.signal
+        ? await this.toolExecutor.execute('shell.execute', params, context.cwd, auth, undefined, context.signal)
+        : await this.toolExecutor.execute('shell.execute', params, context.cwd, auth);
+      const flowPath = probe.home && target.startsWith(probe.home) ? `~${target.slice(probe.home.length)}` : target;
+      steps.push({
+        tool: 'shell.execute', params, result,
+        flowAction: open.appName ? { type: 'app', app: open.appName, path: flowPath } : { type: req.kind === 'folder' ? 'folder' : 'file', path: flowPath },
+      });
+      used = command;
+      if (result?.success || context.signal?.aborted) break;
+    }
+    if (!result?.success) {
+      return finish(false, `Could not open ${shown(target)}${open.appName ? ` in ${open.appName}` : ''}: ${String(result?.error || result?.data?.stderr || 'the program is not installed').split('\n')[0]}`);
+    }
+    if (open.processName && os !== 'windows' && this.openVerifyDelayMs >= 0) {
+      if (this.openVerifyDelayMs > 0) await new Promise(r => setTimeout(r, this.openVerifyDelayMs));
+      const params = { command: `pgrep -i -f ${open.processName} >/dev/null 2>&1`, explanation: `Check ${open.appName} started` };
+      const check = await this.toolExecutor.execute('shell.execute', params, context.cwd, async () => true);
+      if (check && check.success === false) {
+        return finish(true, `Ran the command to open ${shown(target)} in ${open.appName}, but ${open.appName} does not appear to be running yet. If no window shows up, check that ${open.appName} is installed.`);
+      }
+    }
+    void used;
+    return finish(true, `Opened ${shown(target)}${open.appName ? ` in ${open.appName}` : ''}.`);
+  }
+
+  /** The remembered-name commands; null when the goal is about something else */
+  private handleAliasCommand(goal: string): AgentResult | null {
+    const store = AliasStore.getInstance();
+    const text = goal.trim().replace(/[?.!]+$/, '');
+    const done = (summary: string): AgentResult => {
+      this.emit({ type: 'done', message: summary });
+      return { success: true, summary, steps: [] };
+    };
+    const about = text.match(/^what\s+(?:do\s+you\s+)?(?:remember|know)\s+about\s+(.+)$/i);
+    if (about) {
+      const rows = store.about(about[1]);
+      return done(rows.length
+        ? `For "${about[1]}" I remember: ${rows.map(r => `${r.kind} ${r.path}${r.app ? ` (opened in ${r.app})` : ''}`).join('; ')}. Say "forget ${about[1]}" to clear it.`
+        : `I do not remember anything about "${about[1]}".`);
+    }
+    if (/^forget\s+(?:all\s+)?(?:my\s+)?(?:(?:folder|app|name)\s+)?(?:shortcuts?|aliases|choices)$/i.test(text)) {
+      const n = store.forgetAll();
+      return done(n ? `Forgot ${n} remembered choice${n > 1 ? 's' : ''}.` : 'There was nothing remembered.');
+    }
+    const forget = text.match(/^forget\s+(?:about\s+)?(?:my\s+)?(?:folder\s+|app\s+)?(.+)$/i);
+    if (forget && store.about(forget[1]).length > 0) {
+      const n = store.forget(forget[1]);
+      return done(`Forgot ${n} remembered choice${n > 1 ? 's' : ''} for "${forget[1]}".`);
+    }
+    return null;
+  }
+
+  /** A bare folder name for `cd`: find it anywhere sensible. null lets the older navigation handle it. */
+  private async resolveFolderForCd(name: string, context: AgentRunContext): Promise<AgentResult | null> {
+    let probe: PathProbe;
+    try {
+      probe = this.pathProbe ?? await resolveAppProbe();
+    } catch {
+      return null;
+    }
+    const aliases = AliasStore.getInstance();
+    let resolution: Resolution;
+    try {
+      resolution = await resolvePath({ name, kind: 'folder', remembered: aliases.lookup(name, 'folder')?.path }, { cwd: context.cwd }, probe);
+    } catch {
+      return null;
+    }
+    let target: string | null | undefined;
+    if (resolution.type === 'found') target = resolution.path;
+    else if (resolution.type === 'choose') {
+      const shown = (p: string) => (probe.home && p.startsWith(probe.home) ? `~${p.slice(probe.home.length)}` : p);
+      target = await this.chooseCandidate({ kind: 'folder', name, create: false }, resolution, shown);
+      if (target === undefined) return null;
+      if (target === null) {
+        const summary = 'Did not change folder: you did not pick one.';
+        this.emit({ type: 'done', message: summary });
+        return { success: false, summary, steps: [], declined: true };
+      }
+      aliases.remember(name, 'folder', target);
+    } else return null;
+    const summary = `Navigated to ${target}`;
+    this.emit({ type: 'done', message: summary });
+    return {
+      success: true,
+      summary,
+      steps: [{ tool: 'filesystem.cd', params: { path: target }, result: { success: true, data: { path: target } } }],
+      cdPath: target,
+    };
+  }
+
+  /** Ask which path is meant. undefined: nothing can ask; null: the person declined */
+  private async chooseCandidate(req: OpenRequest, res: Extract<Resolution, { type: 'choose' }>, shown: (p: string) => string): Promise<string | null | undefined> {
+    const noun = req.kind === 'folder' ? 'folder' : 'file';
+    const baseOf = (p: string) => p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || p;
+    const dirOf = (p: string) => p.replace(/[\\/]+$/, '').replace(/[\\/][^\\/]*$/, '') || '/';
+    if (res.reason === 'typo') {
+      const top = res.candidates[0];
+      const answer = await askChoice({
+        title: `I could not find "${req.name}". Did you mean "${baseOf(top.path)}" in ${shown(dirOf(top.path))}?`,
+        options: [{ label: 'Yes, open it', detail: shown(top.path) }, { label: 'No, search again' }, { label: 'Cancel' }],
+      });
+      if (answer === undefined) return undefined;
+      return answer && 'index' in answer && answer.index === 0 ? top.path : null;
+    }
+    const shownList = res.candidates.slice(0, 5);
+    const exact = res.candidates.filter(c => c.score >= 95).length;
+    const answer = await askChoice({
+      title: exact > 1 ? `I found ${exact} ${noun}s called "${req.name}". Which one?` : `"${req.name}" could be one of these. Which one?`,
+      options: [
+        ...shownList.map(c => ({ label: shown(c.path), detail: c.inHint ? 'matches your location' : undefined })),
+        { label: 'None of these' },
+      ],
+    });
+    if (answer === undefined) return undefined;
+    if (!answer || !('index' in answer) || answer.index >= shownList.length) return null;
+    return shownList[answer.index].path;
+  }
+
+  /**
+   * Deterministic route for Git inspection actions (Task 3.5).
+   */
+  private async runGitAction(req: GitActionRequest, context: AgentRunContext): Promise<AgentResult> {
+    const explanation = `Git ${req.action}`;
+    this.emit({ type: 'tool_start', message: explanation });
+    const auth = this.authorizationHandler || (async () => true);
+    const params = { command: req.command, explanation };
+    const result = context.signal
+      ? await this.toolExecutor.execute('shell.execute', params, context.cwd, auth, undefined, context.signal)
+      : await this.toolExecutor.execute('shell.execute', params, context.cwd, auth);
+
+    const steps = [{ tool: 'shell.execute', params, result }];
+    const stdout = typeof result?.data?.stdout === 'string' ? result.data.stdout.trim() : '';
+    const isSuccess = Boolean(result?.success);
+    const summary = isSuccess ? (stdout || `Git ${req.action} completed.`) : `Git command failed: ${result?.error || result?.data?.stderr || 'Error'}`;
+    this.emit({ type: isSuccess ? 'done' : 'error', message: summary, data: result?.data });
+    return { success: isSuccess, summary, steps };
+  }
+
+  /**
+   * Deterministic route for directory creation, listing, and navigation (Task 3.5).
+   */
+  private async runDirectoryAction(req: DirectoryActionRequest, context: AgentRunContext): Promise<AgentResult> {
+    const explanation = req.kind === 'mkdir'
+      ? `Create directory ${req.targetPath}`
+      : req.kind === 'list'
+        ? `List directory contents`
+        : `Navigate to ${req.targetPath}`;
+
+    this.emit({ type: 'tool_start', message: explanation });
+    const auth = this.authorizationHandler || (async () => true);
+    const params = { command: req.command, explanation };
+    const result = context.signal
+      ? await this.toolExecutor.execute('shell.execute', params, context.cwd, auth, undefined, context.signal)
+      : await this.toolExecutor.execute('shell.execute', params, context.cwd, auth);
+
+    const steps = [{ tool: 'shell.execute', params, result }];
+    const cdPath = req.kind === 'cd' && result?.success ? req.targetPath : undefined;
+    const stdout = typeof result?.data?.stdout === 'string' ? result.data.stdout.trim() : '';
+    const isSuccess = Boolean(result?.success);
+    const summary = isSuccess
+      ? (stdout || `${explanation} succeeded.`)
+      : `Directory operation failed: ${result?.error || result?.data?.stderr || 'Error'}`;
+
+    this.emit({ type: isSuccess ? 'done' : 'error', message: summary, data: result?.data });
+    return { success: isSuccess, summary, steps, cdPath };
+  }
+
+  /**
+   * Deterministic route for launching desktop applications (Task 3.5).
+   */
+  private async runAppLaunch(req: AppLaunchRequest, context: AgentRunContext): Promise<AgentResult> {
+    const isMac = !context.os || context.os.toLowerCase().includes('darwin') || context.os.toLowerCase().includes('mac');
+    const isWin = isWindowsName(context.os);
+    const auth = this.authorizationHandler || (async () => true);
+    const os = osOf(context.os);
+    const flowAction = { type: 'app', app: req.app };
+    const finishApp = (success: boolean, summary: string, steps: AgentResult['steps'] = [], extra: Partial<AgentResult> = {}): AgentResult => {
+      this.emit({ type: success ? 'done' : 'error', message: summary });
+      return { success, summary, steps, ...extra };
+    };
+
+    // 1. Is this app really installed here, and which one is meant? (never run a guessed name)
+    this.emit({ type: 'tool_start', message: `Looking for ${req.app}` });
+    let apps: AppEntry[] = [];
+    try {
+      apps = await loadCatalog(os, async command => {
+        const r = await this.toolExecutor.execute('shell.execute', { command, explanation: 'List installed apps' }, context.cwd, async () => true);
+        return typeof r?.data?.stdout === 'string' ? r.data.stdout : '';
+      });
+    } catch {
+      apps = [];
+    }
+    let command: string | undefined;
+    if (apps.length > 0) {
+      const aliases = AliasStore.getInstance();
+      const remembered = aliases.lookup(req.app, 'app');
+      let picked: AppEntry | undefined = remembered ? apps.find(a => a.name === remembered.path) : undefined;
+      if (!picked) {
+        const res = resolveApp(req.app, apps);
+        if (res.type === 'found') picked = res.app;
+        else if (res.type === 'choose') {
+          const shownList = res.candidates.slice(0, 5);
+          const answer = res.reason === 'typo'
+            ? await askChoice({ title: `I could not find "${req.app}". Did you mean "${shownList[0].app.name}"?`, options: [{ label: 'Yes, open it' }, { label: 'No' }, { label: 'Cancel' }] })
+            : await askChoice({
+              title: `I found ${shownList.length} apps that could be "${req.app}". Which one?`,
+              options: [...shownList.map(c => ({ label: c.app.name, detail: c.app.source !== 'desktop' ? `from ${c.app.source}` : undefined })), { label: 'None of these' }],
+            });
+          if (answer === undefined) {
+            return finishApp(false, `"${req.app}" could mean ${shownList.map(c => c.app.name).join(', ')}. Say the exact name. Nothing was started.`, [], { awaitingInput: true });
+          }
+          if (!answer || !('index' in answer)) return finishApp(false, 'Nothing was started: you cancelled.', [], { declined: true });
+          if (res.reason === 'typo') {
+            if (answer.index !== 0) return finishApp(false, 'Nothing was started: you did not confirm the match.', [], { declined: true });
+            picked = shownList[0].app;
+          } else {
+            if (answer.index >= shownList.length) return finishApp(false, 'Nothing was started: you chose none of them.', [], { declined: true });
+            picked = shownList[answer.index].app;
+          }
+          aliases.remember(req.app, 'app', picked.name);
+        } else {
+          // not in the list: on Linux a plain program on the PATH may still exist
+          const exe = (req.executable || req.app).split('||')[0].trim();
+          if (os === 'linux' && /^[\w.+-]+$/.test(exe)) {
+            const probe = await this.toolExecutor.execute('shell.execute', { command: `command -v ${exe}`, explanation: `Check ${exe} exists` }, context.cwd, async () => true);
+            if (probe?.success && String(probe.data?.stdout || '').trim()) command = `setsid -f ${exe} >/dev/null 2>&1`;
+          }
+          if (!command) return finishApp(false, `No app called "${req.app}" is installed on this computer, so nothing was started. Say the exact name, or ask me to install it.`);
+        }
+      }
+      if (picked && !command) command = launchCommand(picked, os);
+    }
+
+    let cmd = command ?? '';
+    if (!cmd) {
+      if (isMac) cmd = `open -a "${req.executable || req.app}" &`;
+      else if (isWin) cmd = `start "" "${req.executable || req.app}"`;
+      else cmd = `${req.executable || req.app} &`;
+    }
+
+    const explanation = `Launch ${req.app}`;
+    this.emit({ type: 'tool_start', message: explanation });
+    const useAppOpen = !command && this.toolExecutor.hasDriver('application.open');
+    const toolId = useAppOpen ? 'application.open' : 'shell.execute';
+    const params = useAppOpen ? { app: req.app } : { command: cmd, explanation };
+
+    const result = context.signal
+      ? await this.toolExecutor.execute(toolId, params, context.cwd, auth, undefined, context.signal)
+      : await this.toolExecutor.execute(toolId, params, context.cwd, auth);
+
+    const steps = [{ tool: toolId, params, result, flowAction }];
+    const isSuccess = Boolean(result?.success);
+    const summary = isSuccess ? `Launched ${req.app}.` : `Could not launch ${req.app}: ${result?.error || 'Failed'}`;
+    return finishApp(isSuccess, summary, steps);
+  }
+
+  /**
+   * "<task> and save this as a workflow": run the task first, then write a .flow from the steps that
+   * really ran. A requested save always ends with one plain line saying what happened.
+   */
+  private async runTaskAndSave(intent: SaveIntent, context: AgentRunContext): Promise<AgentResult> {
+    const name = intent.name || suggestWorkflowName(intent.task);
+    this.emit({ type: 'thinking', message: `Will save as a workflow when done: "${name}"` });
+    const result = await this.run(intent.task, context);
+    const report = (line: string, extra: Partial<AgentResult> = {}): AgentResult => {
+      const summary = `${result.summary}\n\n${line}`.trim();
+      this.emit({ type: line.startsWith('Saved') ? 'done' : 'thinking', message: line });
+      return { ...result, summary, ...extra };
+    };
+
+    if (result.cancelled) return report('Not saved: the task was stopped.');
+    const { actions, failed } = actionsFromSteps(result.steps || [], context.cwd);
+
+    let offerPartial = false;
+    if (!result.success) {
+      if (actions.length === 0 || result.declined) return report('Not saved: the task failed, so there was nothing reliable to save.');
+      offerPartial = true;
+    }
+    if (actions.length === 0) {
+      const decomposer = MultistagePromptDecomposer.getInstance();
+      if (result.success && failed === 0 && decomposer.isMultistagePrompt(intent.task)) {
+        const decomp = decomposer.decompose(intent.task, { cwd: context.cwd, os: context.os });
+        decomp.name = name;
+        const wf = decomposer.toSavedWorkflow(decomp);
+        await DiskWorkflowStorage.getInstance().saveWorkflow(wf);
+        const filePath = DiskWorkflowStorage.getInstance().getWorkflowFilePath(name);
+        return report(`Saved workflow "${name}" (${wf.steps.length} steps) to ${filePath}`);
+      }
+      if (result.success) {
+        const fromLog = await WorkflowRecorder.getInstance().saveFromUndoLog(name, context.sessionId || 'default', 1, {
+          description: `Auto-recorded workflow for task: ${intent.task}`,
+        });
+        if (fromLog.steps.length > 0) {
+          const filePath = DiskWorkflowStorage.getInstance().getWorkflowFilePath(name);
+          return report(`Saved workflow "${name}" (${fromLog.steps.length} step${fromLog.steps.length > 1 ? 's' : ''}) to ${filePath}`);
+        }
+      }
+      return report('Not saved: nothing in this task can be repeated (it answered a question or ran no commands).');
+    }
+    if (offerPartial) {
+      const ask = await askChoice({
+        title: `The task failed. Save the ${actions.length} step${actions.length > 1 ? 's' : ''} that worked?`,
+        lines: describeDraft(draftFromActions(name, actions)),
+        options: [{ label: 'Yes, save them', detail: 'The steps that worked' }, { label: 'No', detail: 'Do not save' }],
+      });
+      if (!ask || !('index' in ask) || ask.index !== 0) return report('Not saved: the task failed, so there was nothing reliable to save.');
+    }
+
+    let finalName = name;
+    if (!intent.name) {
+      const pick = await askChoice({
+        title: 'Name this workflow',
+        lines: [`Steps: ${actions.length}`],
+        options: [{ label: name, detail: 'Suggested name' }],
+        custom: { label: 'Another name', placeholder: 'A short name' },
+      });
+      if (pick === null) return report('Not saved: you chose not to.');
+      if (pick && 'custom' in pick && pick.custom.trim()) finalName = cleanName(pick.custom) || name;
+    }
+
+    const draft = draftFromActions(finalName, actions);
+    const saved = await this.saveDraftWithDialog(draft, context, describeDraft(draft), `Save "${finalName}" as a .flow file`, intent.place, true);
+    switch (saved.status) {
+      case 'saved':
+        result.steps.push({ tool: '__flow__', params: { path: saved.path }, result: { success: true } as ToolExecutionResult });
+        return report(`Saved workflow "${finalName}" (${actions.length} step${actions.length > 1 ? 's' : ''}) to ${saved.path}\nRun it any time: say "run the workflow ${finalName}" or double-click the file.`);
+      case 'cancelled':
+        return report('Not saved: you chose not to.');
+      case 'error':
+        return report(`Not saved: could not write the file: ${saved.message}`);
+      case 'no-folders':
+        return report(`Not saved: could not find your folders: ${saved.message}`);
+      default:
+        return report('Not saved: there is no screen to ask where to save it. Run this from the Cero app.');
+    }
+  }
+
+  /** "save this as a workflow [called x]" with nothing to run: save the last steps that worked */
+  private async runRetrospectiveSave(req: { workflowName: string; maxSteps: number }, context: AgentRunContext): Promise<AgentResult> {
+    const name = req.workflowName || `workflow-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`;
+    const recorder = WorkflowRecorder.getInstance();
+    const saved = await recorder.saveFromUndoLog(name, context.sessionId || 'default', req.maxSteps);
+    if (!saved.steps.length) {
+      const summary = 'Not saved: there are no earlier steps in this session to save yet. Run something first, or add the task: "open gmail and save this as a workflow".';
+      this.emit({ type: 'error', message: summary });
+      return { success: false, summary, steps: [] };
+    }
+    const filePath = DiskWorkflowStorage.getInstance().getWorkflowFilePath(name);
+    const summary = `Saved workflow "${name}" (${saved.steps.length} step${saved.steps.length > 1 ? 's' : ''}) to ${filePath}`;
+    this.emit({ type: 'done', message: summary });
+    return {
+      success: true,
+      summary,
+      steps: [{ tool: 'workflow.save', params: { name, maxSteps: req.maxSteps }, result: { success: true, data: saved } }],
+    };
+  }
+
   /**
    * "make me a workflow that ...": turn the listed steps into a .flow file, ask where to keep it
-   * (Desktop, this folder, the Sentinel workflows folder, or a path), and save it without ever
+   * (Desktop, this folder, the Cero workflows folder, or a path), and save it without ever
    * replacing an existing file. Steps that are not understood are named, never guessed.
    */
   private async runCreateFlow(req: FlowCreateRequest, context: AgentRunContext): Promise<AgentResult> {
@@ -3075,44 +3894,86 @@ export class AgentLoop {
       return finish(false, `I could not turn any of those steps into a workflow.${draft.unrecognised.length ? ` Not understood: ${draft.unrecognised.map(u => `"${u}"`).join(', ')}.` : ''} Try steps like: install node, open youtube in chrome, run npm install.`);
     }
 
-    let folders;
-    try {
-      folders = await flowFolders();
-    } catch (e: any) {
-      return finish(false, `Could not find your folders: ${e?.message || e}`);
-    }
     const lines = describeDraft(draft);
     if (draft.unrecognised.length) lines.push('', `Left out (not understood): ${draft.unrecognised.join('; ')}`);
     lines.push('', draftNeedsTerminal(draft) ? 'Opening the file installs or runs things, so it opens the terminal and asks first.' : 'Opening the file only opens apps and pages, so the terminal never appears.');
     this.emit({ type: 'thinking', message: `Workflow "${draft.name}": ${draft.actions.length} steps` });
-    const choice = await askChoice({
-      title: `Save "${draft.name}" as a .flow file`,
-      lines,
-      options: [
-        { label: 'Desktop', detail: folders.desktop },
-        { label: 'This folder', detail: context.cwd },
-        { label: 'Sentinel workflows', detail: `${folders.workflows} (listed in the Workflow Manager)` },
-      ],
-      custom: { label: 'Somewhere else', placeholder: 'A folder or a path ending in .flow' },
-    });
-    if (choice === undefined) {
-      return finish(false, `The workflow "${draft.name}" is ready (${draft.actions.length} steps) but there is no screen to ask where to save it. Run this from the Sentinel app.`);
+    const saved = await this.saveDraftWithDialog(draft, context, lines);
+    switch (saved.status) {
+      case 'no-folders':
+        return finish(false, `Could not find your folders: ${saved.message}`);
+      case 'no-screen':
+        return finish(false, `The workflow "${draft.name}" is ready (${draft.actions.length} steps) but there is no screen to ask where to save it. Run this from the Cero app.`);
+      case 'cancelled':
+        return finish(false, 'Not saved: you cancelled.', { declined: true });
+      case 'error':
+        return finish(false, `Could not save the file: ${saved.message}${saved.macBlock ? '. macOS asks before an app may use the Desktop or Documents folder: allow Cero in System Settings, Privacy & Security, Files and Folders.' : ''}`);
+      default: {
+        steps.push({ tool: '__flow__', params: { path: saved.path }, result: { success: true } as ToolExecutionResult });
+        const left = draft.unrecognised.length ? ` ${draft.unrecognised.length} step${draft.unrecognised.length > 1 ? 's were' : ' was'} left out.` : '';
+        return finish(true, `Saved ${saved.shown} (${draft.actions.length} steps).${left} Double-click it to run it, or say "run the workflow in ${saved.path.split(/[\\/]/).pop()}".`);
+      }
     }
-    if (choice === null) return finish(false, 'Not saved: you cancelled.', { declined: true });
+  }
 
+  /**
+   * Ask where to keep a flow (Desktop, this folder, the Cero workflows folder, or a path) and
+   * write it without ever replacing an existing file. One place for every "save as .flow" route.
+   */
+  private async saveDraftWithDialog(
+    draft: FlowDraft,
+    context: AgentRunContext,
+    lines: string[],
+    title = `Save "${draft.name}" as a .flow file`,
+    place?: 'desktop' | 'here',
+    storeWhenNoScreen = false,
+  ): Promise<
+    | { status: 'saved'; path: string; shown: string }
+    | { status: 'no-folders' | 'no-screen' | 'cancelled'; message: string }
+    | { status: 'error'; message: string; macBlock: boolean }
+  > {
+    let folders;
+    try {
+      folders = await flowFolders();
+    } catch (e: any) {
+      return { status: 'no-folders', message: String(e?.message || e) };
+    }
+    const asked = place
+      ? { index: place === 'desktop' ? 0 : 1 }
+      : await askChoice({
+        title,
+        heading: 'Where should it go?',
+        lines,
+        options: [
+          { label: 'Desktop', detail: folders.desktop },
+          { label: 'This folder', detail: context.cwd },
+          { label: 'Cero workflows', detail: `${folders.workflows} (listed in the Workflow Manager)` },
+        ],
+        custom: { label: 'Somewhere else', placeholder: 'A folder or a path ending in .flow' },
+      });
+    // No screen to ask on (headless, scripts): the Cero workflows folder is the safe default
+    if (asked === undefined && storeWhenNoScreen) {
+      try {
+        const stored = await DiskWorkflowStorage.getInstance().saveFlowText(draft.name, serializeFlow(draft));
+        return { status: 'saved', path: stored, shown: stored };
+      } catch (e: any) {
+        return { status: 'error', message: String(e?.message || e), macBlock: false };
+      }
+    }
+    const choice = asked;
+    if (choice === undefined) return { status: 'no-screen', message: '' };
+    if (choice === null) return { status: 'cancelled', message: '' };
     try {
       const target = 'custom' in choice
         ? await resolveCustomTarget(choice.custom, draft.name, folders, context.cwd, this.flowIO)
         : await freeFlowPath([folders.desktop, context.cwd, folders.workflows][choice.index] ?? folders.workflows, draft.name, this.flowIO);
       await this.flowIO.write(target, serializeFlow(draft));
       const shown = target.startsWith(folders.home) ? `~${target.slice(folders.home.length)}` : target;
-      steps.push({ tool: '__flow__', params: { path: target }, result: { success: true } as ToolExecutionResult });
-      const left = draft.unrecognised.length ? ` ${draft.unrecognised.length} step${draft.unrecognised.length > 1 ? 's were' : ' was'} left out.` : '';
-      return finish(true, `Saved ${shown} (${draft.actions.length} steps).${left} Double-click it to run it, or say "run the workflow in ${target.split(/[\\/]/).pop()}".`);
+      return { status: 'saved', path: target, shown };
     } catch (e: any) {
       const why = String(e?.message || e);
       const macBlock = /operation not permitted|permission denied|os error 1\b/i.test(why) && /^mac|darwin/i.test(context.os);
-      return finish(false, `Could not save the file: ${why}${macBlock ? '. macOS asks before an app may use the Desktop or Documents folder: allow Sentinel Terminal in System Settings, Privacy & Security, Files and Folders.' : ''}`);
+      return { status: 'error', message: why, macBlock };
     }
   }
 
@@ -3179,7 +4040,7 @@ export class AgentLoop {
     if (action.id === 'find' && action.query) summary = `Searching this terminal for "${action.query}". Enter jumps to the next match.`;
     if (action.id === 'focus_tab' && action.tab) summary = action.tab === -1 ? 'Switched to the last tab.' : `Switched to tab ${action.tab}.`;
     if (action.id === 'rename_tab' && action.name) summary = `Renamed this tab to "${action.name}".`;
-    if (!delivered) summary = `"${summary.replace(/\.$/, '')}" is available in the Sentinel desktop app.`;
+    if (!delivered) summary = `"${summary.replace(/\.$/, '')}" is available in the Cero desktop app.`;
     this.emit({ type: delivered ? 'done' : 'error', message: summary });
     return { success: delivered, summary, steps: [{ tool: '__app__', params: action, result: { success: delivered } as ToolExecutionResult }] };
   }
@@ -3205,12 +4066,14 @@ export class AgentLoop {
     const user = `This is one step of a longer task.${done.length ? `\nSteps already done:\n${done.map(d => `- ${d}`).join('\n')}` : ''}\nCurrent folder: ${cwd}\nGive the single shell command for this step: "${clause}". Respond with {"action": "execute", "command": "<command>", "explanation": "<one line>"}.`;
     try {
       const response = await provider.generate(user, this.modelManager.getActiveModel().modelId, {
-        temperature: 0.05,
+        temperature: 0,
         maxTokens: 256,
+        mode: 'decision',
+        seed: 42,
         format: 'json',
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-        grammar: GbnfGrammarManager.getGrammar('SENTINEL_ACTION'),
-        grammarJsonSchema: GbnfGrammarManager.SENTINEL_ACTION_JSON_SCHEMA,
+        grammar: GbnfGrammarManager.getGrammar('CERO_ACTION'),
+        grammarJsonSchema: GbnfGrammarManager.CERO_ACTION_JSON_SCHEMA,
         sessionId: context.sessionId || 'default-session',
         requestId: `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       });
@@ -3256,7 +4119,7 @@ export class AgentLoop {
       }
       const log = await embeddedMgr.getEngineLogTail(8);
       if (log.trim()) {
-        this.emit({ type: 'error', message: `The local AI engine did not start. Last lines of ~/.sentinel/logs/llama-server.log:\n${log.trim()}` });
+        this.emit({ type: 'error', message: `The local AI engine did not start. Last lines of ~/.cero/logs/llama-server.log:\n${log.trim()}` });
       }
     } catch {
       // engine could not start
@@ -3371,10 +4234,10 @@ export class AgentLoop {
 
       const guidanceMsg = 
         `No AI Model or API Configured.\n\n` +
-        `Sentinel requires an active AI model or API backend to intercept and run prompts.\n\n` +
+        `Cero requires an active AI model or API backend to intercept and run prompts.\n\n` +
         `• Option 1 (Embedded Local Model - Recommended):\n` +
         `  Download a local model (1.1 to 2.5 GB depending on the size you pick) for private, offline inference.\n` +
-        `  Type ">setup-ai" or press Command Palette (Ctrl+Shift+P) > "Sentinel Embedded AI" to start 1-click download.\n\n` +
+        `  Type ">setup-ai" or press Command Palette (Ctrl+Shift+P) > "Cero Embedded AI" to start 1-click download.\n\n` +
         `• Option 2 (Zero Local Download - Cloud API):\n` +
         `  Connect an API key (Groq, OpenAI, Anthropic, DeepSeek, OpenRouter, or Custom OpenAI-compatible endpoint).\n` +
         `  Open Settings (Ctrl+,) > AI Models > Cloud API Keys to activate your service.\n\n` +
@@ -3414,6 +4277,7 @@ export class AgentLoop {
           const adaptiveResult = await adaptiveEngine.executePlan(goal, plan, {
             cwd: context.cwd,
             os: context.os,
+            signal: context.signal,
             onPlanUpdate: (updatedPlan) => {
               this.emit({ type: 'plan', message: updatedPlan.summary, data: updatedPlan });
             },
@@ -3454,38 +4318,49 @@ export class AgentLoop {
       }
     }
 
+    let retriedForLength = false;
     for (let step = 0; step < AgentLoop.MAX_STEPS; step++) {
+      throwIfAborted(context.signal);
       try {
-        // Build the full prompt with conversation history
-        const fullPrompt = this.buildConversationPrompt(systemPrompt, messages);
-        
-        // Pass structured chat messages directly to provider to preserve message roles & system prompt
-        const chatMessages: { role: string; content: string }[] = [
-          { role: 'system', content: systemPrompt },
-          ...messages
-        ];
+        // Build decision call (extracted for evaluation and determinism in Task 3.1)
+        const decisionCall = buildDecisionCall(goal, context, this.conversationHistory, {
+          systemPrompt,
+          toolSpecs: activeTools,
+          messages
+        });
 
         // Call LLM with GBNF grammar decoding. No logit bias: biasing individual tokens bans
         // ordinary words the answer may need, and the grammar already constrains structure.
-        const response = await provider.generate(fullPrompt, modelId, {
-          temperature: 0.05,
-          maxTokens: 512,
-          format: 'json',
-          messages: chatMessages,
-          grammar: GbnfGrammarManager.getGrammar('SENTINEL_ACTION'),
-          grammarJsonSchema: GbnfGrammarManager.SENTINEL_ACTION_JSON_SCHEMA,
-          sessionId: context.sessionId || 'default-session',
-          requestId: `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-        });
+        const response = await provider.generate(decisionCall.fullPrompt, modelId, decisionCall.options);
 
         this.modelCalls++;
         this.modelMs += response.latencyMs ?? 0;
+
+        if (response.usage?.promptTokens) {
+          console.debug(`[AgentLoop] Prompt tokens: ${response.usage.promptTokens} / ${getContextTokens()}`);
+          const sessId = context.sessionId || 'default';
+          if (response.usage.promptTokens > getContextTokens() * 0.9 && !AgentLoop.highContextWarnedSessions.has(sessId)) {
+            AgentLoop.highContextWarnedSessions.add(sessId);
+            console.warn(`[AgentLoop] Prompt token usage (${response.usage.promptTokens}) is above 90% of context window (${getContextTokens()}).`);
+          }
+        }
+
+        const isTruncated = response.finishReason === 'length' || response.raw?.choices?.[0]?.finish_reason === 'length' || response.raw?.finish_reason === 'length';
+        if (isTruncated && !retriedForLength) {
+          retriedForLength = true;
+          console.warn('[AgentLoop] Response truncated due to token limit; retrying once requesting a shorter answer.');
+          messages.push({
+            role: 'user',
+            content: 'Your last answer was truncated because it exceeded the output token limit. Please provide a shorter, more concise answer.'
+          });
+          continue;
+        }
 
         // Resolve multi-turn context (e.g. referential follow-ups)
         const effectiveGoal = this.resolveEffectiveGoal(goal);
 
         // Parse LLM response
-        let parsed = this.parseLLMResponse(response.content);
+        let parsed = this.parseLLMResponse(response.content, response.finishReason === 'length');
         if (!parsed) {
           // Try heuristic fallback first
           const fallback = this.tryHeuristicFallback(effectiveGoal, context);
@@ -3506,6 +4381,8 @@ export class AgentLoop {
           }
 
           if (!parsed) {
+            // the raw reply goes to the local debug log only, never to the screen
+            void DiagnosticLogger.log('WARN', 'MODEL_REPLY', `Unusable model reply (${String(response.content || '').length} chars, finish=${response.finishReason ?? 'n/a'}): ${String(response.content || '').slice(0, 800)}`);
             this.emit({ type: 'error', message: 'Could not understand the instruction' });
             return {
               success: false,
@@ -3513,6 +4390,12 @@ export class AgentLoop {
               steps
             };
           }
+        }
+
+        // A question answered with `echo '<the answer>'` is an answer, not a command to run
+        if (parsed.action === 'tool' && parsed.tool === 'shell.execute' && /^(?:how|what|why|when|who|which|explain|define|describe|tell me)\b/i.test(goal.trim())) {
+          const echoed = /^echo\s+(?:-e\s+)?(['"])([\s\S]{20,})\1\s*$/.exec(String(parsed.params?.command ?? '').trim());
+          if (echoed) parsed = { action: 'done', summary: echoed[2] };
         }
 
         // Handle actions
@@ -3525,7 +4408,7 @@ export class AgentLoop {
 
           if (isRefusal) {
             refusalInterceptions++;
-            SentinelSerlCoordinator.getInstance().onModelRefusal(effectiveGoal, summary, {
+            CeroSerlCoordinator.getInstance().onModelRefusal(effectiveGoal, summary, {
               cwd: context.cwd,
               os: context.os,
             }).catch(err => console.warn('[AgentLoop] SERL refusal logging error:', err));
@@ -3570,7 +4453,7 @@ export class AgentLoop {
 
           // Fake completion interceptor: model claimed goal was done/found or gave generic greeting on an actionable task without running ANY step
           if (parsed.action === 'done' && steps.length === 0 && (isActionableGoal(goal) || isActionableGoal(effectiveGoal))) {
-            const isGenericIntro = summary.includes('I am Sentinel') || summary.includes('autonomous terminal copilot') || summary.includes('your AI terminal');
+            const isGenericIntro = summary.includes('I am Cero') || summary.includes('autonomous terminal copilot') || summary.includes('your AI terminal');
             const claimsCompleted = isGenericIntro
               || /\b(?:has been|have been|is|was|were)?\s*(?:found|located|completed|finished|done|executed|opened|created|deleted)\b/i.test(summary)
               || /^(?:done|completed|finished|the .+ has been found)\b/i.test(summary);
@@ -3605,7 +4488,7 @@ export class AgentLoop {
             if (fallback && steps.length === 0) {
               return await this.executeFallback(fallback, context);
             }
-            summary = "Hey! I'm Sentinel, your AI terminal assistant. I can manage Wi-Fi, Bluetooth, navigate folders, inspect hardware/battery, run tools, and execute terminal commands.";
+            summary = "Hey! I'm Cero, your AI terminal assistant. I can manage Wi-Fi, Bluetooth, navigate folders, inspect hardware/battery, run tools, and execute terminal commands.";
           }
 
           // A question about this machine answered without running anything is a guess ("Python
@@ -3700,18 +4583,130 @@ export class AgentLoop {
         }
 
         if (parsed.action === 'tool' && parsed.tool) {
-          const toolId = parsed.tool;
-          let params = parsed.params || {};
+          // Task 3.4: ActionGate validation, single repair, and fallback
+          const gateContext = { cwd: context.cwd, os: context.os, sessionId: context.sessionId };
+          const gate1 = await ActionGate.validate(parsed, gateContext, this.toolSpecs);
 
-          // Validate and type-coerce parameters against tool schema
-          const toolSpec = this.toolSpecs.find(t => t.id === toolId);
-          const validation = ToolParameterValidator.validateAndCoerce(toolSpec, params);
-          if (!validation.valid && validation.errors) {
+          if (!gate1.ok) {
+            // One repair attempt: prompt with "Your last answer was rejected: <reason>. <hint>. Answer again." at temperature 0
+            this.emit({
+              type: 'thinking',
+              message: `Action rejected by ActionGate (${gate1.reason}). Attempting single repair...`
+            });
             messages.push({ role: 'assistant', content: JSON.stringify(parsed) });
-            messages.push({ role: 'user', content: `Parameter error: ${validation.errors.join(', ')}. Please correct parameters.` });
-            continue;
+            const hintText = gate1.hint ? ` ${gate1.hint}` : '';
+            messages.push({
+              role: 'user',
+              content: `Your last answer was rejected: ${gate1.reason}.${hintText} Answer again.`
+            });
+
+            let repairSuccess = false;
+            try {
+              const decisionCall = buildDecisionCall(goal, context, messages);
+              const repairOptions = {
+                ...decisionCall.options,
+                mode: 'decision' as const,
+                temperature: 0,
+                top_k: 1,
+                top_p: 1,
+                seed: 42,
+                signal: context.signal
+              };
+              const repairResponse = await provider.generate(
+                decisionCall.messages[decisionCall.messages.length - 1]?.content || goal,
+                modelId,
+                repairOptions
+              );
+              this.modelCalls++;
+              this.modelMs += repairResponse.latencyMs ?? 0;
+
+              const repaired = this.parseLLMResponse(repairResponse.content);
+              if (repaired && (repaired.action === 'tool' || repaired.action === 'execute')) {
+                const gate2 = await ActionGate.validate(repaired, gateContext, this.toolSpecs);
+                if (gate2.ok) {
+                  this.actionGateMetrics.repaired++;
+                  parsed = (gate2.repairedAction || repaired) as LLMResponse;
+                  repairSuccess = true;
+                } else {
+                  const external = await this.offerExternalRetry(provider, goal, context, messages, gateContext);
+                  if (external) {
+                    this.actionGateMetrics.repaired++;
+                    parsed = external;
+                    repairSuccess = true;
+                  }
+                }
+                if (!repairSuccess) {
+                  this.actionGateMetrics.asked++;
+                  const choice = await askChoice({
+                    title: 'Action Rejected',
+                    lines: [
+                      'Cero rejected the proposed action:',
+                      gate2.reason || gate1.reason || 'Safety or validation check failed.',
+                      gate2.hint || gate1.hint || 'Please clarify what to run.'
+                    ],
+                    options: [
+                      { label: 'Cancel', detail: 'Do not execute anything' },
+                      { label: 'Enter command manually', detail: 'Type a custom command to run' }
+                    ],
+                    custom: { label: 'Or enter custom command', placeholder: 'e.g. ls -la' }
+                  });
+
+                  if (choice && 'custom' in choice && choice.custom.trim()) {
+                    parsed = {
+                      action: 'tool',
+                      tool: 'shell.execute',
+                      params: { command: choice.custom.trim(), explanation: 'User manual override' }
+                    };
+                    repairSuccess = true;
+                  } else {
+                    const summary = `Action rejected: ${gate2.reason || gate1.reason}. No action was executed.`;
+                    this.emit({ type: 'error', message: summary });
+                    return { success: false, summary, steps, cdPath, declined: true };
+                  }
+                }
+              } else if (repaired && repaired.action === 'done') {
+                this.actionGateMetrics.repaired++;
+                parsed = repaired;
+                repairSuccess = true;
+              }
+            } catch (err) {
+              if (context.signal?.aborted) throw err;
+            }
+
+            if (!repairSuccess) {
+              const external = await this.offerExternalRetry(provider, goal, context, messages, gateContext);
+              if (external) {
+                this.actionGateMetrics.repaired++;
+                parsed = external;
+                repairSuccess = true;
+              }
+            }
+            if (!repairSuccess) {
+              this.actionGateMetrics.asked++;
+              const summary = `Action rejected: ${gate1.reason}. No safe action was found.`;
+              this.emit({ type: 'error', message: summary });
+              return { success: false, summary, steps, cdPath };
+            }
+          } else {
+            this.actionGateMetrics.accepted++;
+            if (gate1.repairedAction) {
+              parsed = gate1.repairedAction as LLMResponse;
+            }
           }
-          params = validation.coercedParams;
+
+          if (!parsed) {
+            const summary = 'No executable action parsed from model response';
+            this.emit({ type: 'error', message: summary });
+            return { success: false, summary, steps, cdPath };
+          }
+
+          if (parsed.action === 'done') {
+            this.emit({ type: 'done', message: parsed.summary || 'Done.' });
+            return { success: true, summary: parsed.summary || 'Done.', steps, cdPath };
+          }
+
+          const toolId = parsed.tool!;
+          let params = parsed.params || {};
 
           // Strip unnecessary sudo from diagnostic inspection commands before policy/execution
           if (toolId === 'shell.execute' && params && typeof params.command === 'string') {
@@ -3813,7 +4808,7 @@ export class AgentLoop {
             && isInspectionQuestion(goal) && isClearlyMutating(params.command)) {
             const why = String(priorFailure.result.error || priorFailure.result.data?.stderr || 'it failed').trim().split('\n')[0];
             const tried = typeof priorFailure.params?.command === 'string' ? priorFailure.params.command : priorFailure.tool;
-            const summary = `Could not answer: \`${tried}\` failed (${why}). Sentinel did not run \`${params.command}\` because it would change your system just to answer a question.`;
+            const summary = `Could not answer: \`${tried}\` failed (${why}). Cero did not run \`${params.command}\` because it would change your system just to answer a question.`;
             this.emit({ type: 'error', message: summary });
             return { success: false, summary, steps, cdPath };
           }
@@ -3842,7 +4837,7 @@ export class AgentLoop {
             const notRepo = steps.find(st => /not a git repository/i.test(String(st.result.error || st.result.data?.stderr || '')));
             if (notRepo && /\bgit\s+init\b/.test(params.command) && !/\b(?:init|initiali[sz]e|new\s+(?:git\s+)?repo|create\s+(?:a\s+)?(?:git\s+)?repo)/i.test(goal)) {
               const tried = typeof notRepo.params?.command === 'string' ? notRepo.params.command : 'git';
-              const summary = `\`${tried}\` failed: ${context.cwd} is not inside a git repository. Sentinel did not run \`git init\`, which would create a new repository here. Name the repository folder, for example "in my-repo, ${goal.replace(/^in\s+\S+\s*,?\s*/i, '')}".`;
+              const summary = `\`${tried}\` failed: ${context.cwd} is not inside a git repository. Cero did not run \`git init\`, which would create a new repository here. Name the repository folder, for example "in my-repo, ${goal.replace(/^in\s+\S+\s*,?\s*/i, '')}".`;
               this.emit({ type: 'error', message: summary });
               return { success: false, summary, steps, cdPath };
             }
@@ -3875,7 +4870,9 @@ export class AgentLoop {
           this.emit({ type: 'tool_start', message: this.getToolDisplayName(toolId, params) });
 
           // Execute the tool
-          const result = await this.toolExecutor.execute(toolId, params, context.cwd, this.authorizationHandler);
+          const result = context.signal
+            ? await this.toolExecutor.execute(toolId, params, context.cwd, this.authorizationHandler, undefined, context.signal)
+            : await this.toolExecutor.execute(toolId, params, context.cwd, this.authorizationHandler);
 
           steps.push({ tool: toolId, params, result });
 
@@ -3886,6 +4883,11 @@ export class AgentLoop {
           // grep, pgrep and lsof exit 1 with no output when nothing matched: that is the answer
           if (toolId === 'shell.execute' && typeof params?.command === 'string' && result.data
             && isNoMatchExit(params.command, result.data.code, result.data.stdout, result.data.stderr)) {
+            // "pgrep -x amphetmine" found nothing: that only means the exact name is wrong. Look at what is really running.
+            if (/^(?:pgrep|pidof|pkill|killall)\b/.test(params.command.trim())) {
+              const smart = await this.smartFallback(params.command, { ...result, success: false } as ToolExecutionResult, context, steps, goal).catch(() => null);
+              if (smart) return { ...smart, cdPath: smart.cdPath ?? cdPath };
+            }
             result.success = true;
             result.error = undefined;
             result.data = { ...result.data, code: 0, stdout: '(nothing matched)' };
@@ -3954,13 +4956,18 @@ export class AgentLoop {
               return { success: false, summary, steps, cdPath, declined: true };
             }
 
+            // A name that was not found is looked up in the real state of this computer (running apps, installed apps,
+            // folders, programs on the PATH) before anything else is tried; a blind retry is not a fallback.
+            const smart = await this.smartFallback(failedCmd, result, context, steps, goal).catch(() => null);
+            if (smart) return { ...smart, cdPath: smart.cdPath ?? cdPath };
+
             // A question never turns into a change: once a read-only attempt has failed, a
             // follow-up that would modify the system (git init, installs, rm) is not run.
             failureRetries++;
             const errorDetails = result.error || result.data?.stderr || (result.data?.stdout && result.data.stdout.includes('Error') ? result.data.stdout : 'Command returned non-zero exit code');
 
             const exitCode = (result.data && typeof result.data.code === 'number') ? result.data.code : 1;
-            SentinelSerlCoordinator.getInstance().onCommandExecutionFailure(
+            CeroSerlCoordinator.getInstance().onCommandExecutionFailure(
               goal,
               failedCmd,
               exitCode,
@@ -4025,7 +5032,7 @@ export class AgentLoop {
               const failedSummary = steps
                 .map((s, idx) => `  ${idx + 1}. \`${s.params.command || s.tool}\` → ${s.result.error || s.result.data?.stderr || 'exited with error'}`)
                 .join('\n');
-              const summary = `Attempted ${steps.length} command solutions, but encountered errors:\n${failedSummary}\n\nYou can run a manual command or teach Sentinel with \`>learn: <cmd>\``;
+              const summary = `Attempted ${steps.length} command solutions, but encountered errors:\n${failedSummary}\n\nYou can run a manual command or teach Cero with \`>learn: <cmd>\``;
               this.emit({ type: 'error', message: summary });
               return { success: false, summary, steps, cdPath };
             }
@@ -4071,6 +5078,17 @@ Output JSON:
 
         }
       } catch (err: any) {
+        if (err instanceof CancelledError || err?.name === 'CancelledError' || context.signal?.aborted) {
+          const summary = 'Stopped.';
+          this.emit({ type: 'done', message: summary });
+          return {
+            success: false,
+            cancelled: true,
+            summary,
+            steps,
+            cdPath
+          };
+        }
         this.emit({ type: 'error', message: `Error: ${err.message}` });
         return {
           success: false,
@@ -4095,12 +5113,13 @@ Output JSON:
   private async executeIntentSteps(
     steps: IntentStep[],
     overallGoal: string,
-    context: { os: string; cwd: string; sessionId?: string }
+    context: { os: string; cwd: string; sessionId?: string; signal?: AbortSignal }
   ): Promise<AgentResult> {
     const executedSteps: AgentResult['steps'] = [];
     let allSuccess = true;
 
     for (let i = 0; i < steps.length; i++) {
+      throwIfAborted(context.signal);
       const step = steps[i];
 
       // 1. Evaluate precondition if present
@@ -4109,12 +5128,21 @@ Output JSON:
           type: 'thinking',
           message: `Evaluating precondition for step ${i + 1}: ${step.precondition_check}`
         });
-        const preResult = await this.toolExecutor.execute(
-          'shell.execute',
-          { command: step.precondition_check, explanation: `Precondition check for ${step.goal}` },
-          context.cwd,
-          this.authorizationHandler
-        );
+        const preResult = context.signal
+          ? await this.toolExecutor.execute(
+              'shell.execute',
+              { command: step.precondition_check, explanation: `Precondition check for ${step.goal}` },
+              context.cwd,
+              this.authorizationHandler,
+              undefined,
+              context.signal
+            )
+          : await this.toolExecutor.execute(
+              'shell.execute',
+              { command: step.precondition_check, explanation: `Precondition check for ${step.goal}` },
+              context.cwd,
+              this.authorizationHandler
+            );
 
         const prePassed = preResult.success && (preResult.data?.code === 0 || preResult.data?.code === undefined);
 
@@ -4244,7 +5272,7 @@ Output JSON:
     }
 
     if (/^(?:open|launch|start|run)\s+(?:the\s+|an?\s+)?(?:application|app)\s*$/i.test(lower)) {
-      return this.createAgentPlan('Open desktop application', [], 'Which application would you like to open (e.g. Safari, Chrome, VS Code, Sentinel Terminal)?');
+      return this.createAgentPlan('Open desktop application', [], 'Which application would you like to open (e.g. Safari, Chrome, VS Code, Cero)?');
     }
 
     // 2. Concrete Multi-Step Workflows
@@ -4334,7 +5362,7 @@ Output JSON:
         temperature: 0,
         maxTokens: 220,
         format: 'json',
-        grammar: GbnfGrammarManager.getGrammar('SENTINEL_PLANNER'),
+        grammar: GbnfGrammarManager.getGrammar('CERO_PLANNER'),
         sessionId: context.sessionId || 'default-session',
         requestId: `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       });
@@ -4347,7 +5375,7 @@ Output JSON:
   }
 
   private buildPlanningPrompt(goal: string, context: { os: string; cwd: string }): string {
-    return `You are Sentinel's workflow planner on ${context.os}. Current directory: ${context.cwd}
+    return `You are Cero's workflow planner on ${context.os}. Current directory: ${context.cwd}
 
 Return ONLY one JSON object with this exact shape:
 {"decision":"plan"|"clarify","summary":"short outcome","steps":["short concrete step"],"question":"only when clarification is required"}
@@ -4403,106 +5431,9 @@ User request: ${goal}`;
   /**
    * Parse LLM JSON response, handling malformed output, thinking tokens, and code blocks gracefully.
    */
-  private parseLLMResponse(content: string): LLMResponse | null {
-    if (!content) return null;
-    
-    // Strip thinking tags if generated by reasoning models
-    let clean = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-    // Strip markdown code fences
-    clean = clean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-
-    const normalizeParsed = (obj: any): LLMResponse | null => {
-      if (!obj || typeof obj !== 'object') return null;
-
-      // 1. Shell-native execution contract: {"action": "execute", "command": "...", "explanation": "..."}
-      if (obj.action === 'execute' || (!obj.action && obj.command)) {
-        return {
-          action: 'tool',
-          tool: 'shell.execute',
-          params: {
-            command: obj.command,
-            explanation: obj.explanation || (obj.params && obj.params.explanation) || `Executing: ${obj.command}`
-          }
-        };
-      }
-
-      // 2. Tool calls for shell.execute or with direct command property
-      if (obj.action === 'tool') {
-        if ((obj.tool === 'shell.execute' || !obj.tool) && (obj.command || (obj.params && obj.params.command))) {
-          const cmd = obj.command || obj.params.command;
-          const exp = obj.explanation || (obj.params && obj.params.explanation) || `Executing: ${cmd}`;
-          return {
-            action: 'tool',
-            tool: 'shell.execute',
-            params: { command: cmd, explanation: exp }
-          };
-        }
-        if (obj.tool && !obj.params && obj.command) {
-          obj.params = { command: obj.command, explanation: obj.explanation };
-        }
-      }
-
-      if (!obj.action) {
-        if (obj.tool) obj.action = 'tool';
-        else if (obj.summary || obj.response || obj.message || obj.result) obj.action = 'done';
-      }
-
-      if (obj.action === 'tool' || obj.action === 'done' || obj.action === 'error') {
-        return obj as LLMResponse;
-      }
-      return null;
-    };
-
-    // 1. Try direct parse
-    try {
-      const parsed = normalizeParsed(JSON.parse(clean));
-      if (parsed) return parsed;
-    } catch { /* fall through */ }
-
-    // 2. Fallback: Find the first complete JSON object using brace counting
-    const startIndex = clean.indexOf('{');
-    if (startIndex !== -1) {
-      let braceCount = 0;
-      let inString = false;
-      let escapeNext = false;
-      
-      for (let i = startIndex; i < clean.length; i++) {
-        const char = clean[i];
-        
-        if (escapeNext) {
-          escapeNext = false;
-          continue;
-        }
-        
-        if (char === '\\') {
-          escapeNext = true;
-          continue;
-        }
-        
-        if (char === '"') {
-          inString = !inString;
-          continue;
-        }
-        
-        if (!inString) {
-          if (char === '{') braceCount++;
-          else if (char === '}') braceCount--;
-          
-          if (braceCount === 0) {
-            const jsonStr = clean.substring(startIndex, i + 1);
-            try {
-              const parsed = normalizeParsed(JSON.parse(jsonStr));
-              if (parsed) return parsed;
-            } catch {
-              // Failed to parse extracted block
-            }
-            break;
-          }
-        }
-      }
-    }
-
-    return null;
+  private parseLLMResponse(content: string, finishedByLength = false): LLMResponse | null {
+    const parsed = parseModelReply(content, { finishedByLength });
+    return parsed.ok ? (parsed.value as LLMResponse) : null;
   }
 
   /**
@@ -4783,9 +5714,11 @@ User request: ${goal}`;
     return null;
   }
 
-  private async executeFallback(fallback: { tool: string; params: Record<string, any> }, context: { os: string; cwd: string }): Promise<AgentResult> {
+  private async executeFallback(fallback: { tool: string; params: Record<string, any> }, context: { os: string; cwd: string; signal?: AbortSignal }): Promise<AgentResult> {
     this.emit({ type: 'tool_start', message: this.getToolDisplayName(fallback.tool, fallback.params) });
-    const result = await this.toolExecutor.execute(fallback.tool, fallback.params, context.cwd, this.authorizationHandler);
+    const result = context.signal
+      ? await this.toolExecutor.execute(fallback.tool, fallback.params, context.cwd, this.authorizationHandler, undefined, context.signal)
+      : await this.toolExecutor.execute(fallback.tool, fallback.params, context.cwd, this.authorizationHandler);
     const cdPath = this.extractCdPath(fallback.tool, fallback.params, result);
     const summary = result.success
       ? this.formatSuccessSummary(fallback.tool, fallback.params, result)
@@ -4951,4 +5884,11 @@ User request: ${goal}`;
     }
     return truncated;
   }
+}
+
+
+/** "~/x", "/x" (under home when it is not a real top-level folder) or a plain name, as an absolute path */
+function shownToAbsolute(place: string, home: string): string {
+  if (place.startsWith('~')) return `${home}${place.slice(1)}`;
+  return place.startsWith('/') ? place : `${home}/${place}`;
 }

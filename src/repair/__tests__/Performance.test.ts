@@ -37,7 +37,7 @@ describe('Adaptive Verification & Self-Repair Engine — Performance & High-Thro
     const start = performance.now();
     const result = await verifier.verifyAction('wifi.connect', {
       success: true,
-      outputs: { connectedSSID: 'Sentinel_5G_Network' },
+      outputs: { connectedSSID: 'Cero_5G_Network' },
       warnings: [],
       timings: { executionMs: 5, dispatchMs: 0 },
     });

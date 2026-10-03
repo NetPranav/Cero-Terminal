@@ -17,7 +17,7 @@ describe('StateSnapshotManager — Immutable World Model Snapshots & History', (
     expect(current.snapshotId).toBe('test-snap-1');
     expect(current.applications).toBeDefined();
     expect(current.processes).toBeDefined();
-    expect(current.wifi.data.connectedSSID).toBe('Sentinel_5G_Network');
+    expect(current.wifi.data.connectedSSID).toBe('Cero_5G_Network');
     expect(current.battery.data.batteryLevel).toBe(92);
     expect(current.developerTools.data.activeIde).toBe('Cursor AI');
   });

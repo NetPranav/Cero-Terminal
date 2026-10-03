@@ -84,19 +84,19 @@ describe('SessionPersistenceEngine (Issue 5.3)', () => {
   });
 
   it('safely handles corrupted or invalid JSON in storage', () => {
-    mockStore['sentinel_session_state'] = '{ "invalid_json": true, ... corrupted';
+    mockStore['cero_session_state'] = '{ "invalid_json": true, ... corrupted';
     expect(engine.loadSession()).toBeNull();
   });
 
   it('safely handles malformed schema (missing tabs array)', () => {
-    mockStore['sentinel_session_state'] = JSON.stringify({ version: 1, tabs: "not_an_array" });
+    mockStore['cero_session_state'] = JSON.stringify({ version: 1, tabs: "not_an_array" });
     expect(engine.loadSession()).toBeNull();
   });
 
   it('clears stored session on clearSession call', () => {
-    mockStore['sentinel_session_state'] = JSON.stringify({ version: 1, tabs: [] });
+    mockStore['cero_session_state'] = JSON.stringify({ version: 1, tabs: [] });
     engine.clearSession();
-    expect(mockStore['sentinel_session_state']).toBeUndefined();
+    expect(mockStore['cero_session_state']).toBeUndefined();
   });
 
   it('saves and loads named workspace sessions', async () => {
@@ -130,7 +130,7 @@ describe('SessionPersistenceEngine (Issue 5.3)', () => {
 
       const resolved = engine.resolveInitialState('/home/user/new-requested-folder');
       // Set storage to savedSession first
-      mockStore['sentinel_session_state'] = JSON.stringify(savedSession);
+      mockStore['cero_session_state'] = JSON.stringify(savedSession);
       const resolvedFromStorage = engine.resolveInitialState('/home/user/new-requested-folder');
 
       expect(resolvedFromStorage.activePaneId).toBe('pane_prev');
@@ -149,7 +149,7 @@ describe('SessionPersistenceEngine (Issue 5.3)', () => {
         panePaths: { pane_prev: '/home/user/stale-old-dir' },
         timestamp: Date.now()
       };
-      mockStore['sentinel_session_state'] = JSON.stringify(savedSession);
+      mockStore['cero_session_state'] = JSON.stringify(savedSession);
 
       const resolved = engine.resolveInitialState();
       expect(resolved.activePaneId).toBe('pane_prev');
@@ -179,7 +179,7 @@ describe('SessionPersistenceEngine (Issue 5.3)', () => {
         panePaths: { pane_left: '/var/log', pane_right: '/home/user/workspace' },
         timestamp: Date.now()
       };
-      mockStore['sentinel_session_state'] = JSON.stringify(savedSession);
+      mockStore['cero_session_state'] = JSON.stringify(savedSession);
 
       const resolved = engine.resolveInitialState('/home/user/target-split');
       expect(resolved.activePaneId).toBe('pane_right');

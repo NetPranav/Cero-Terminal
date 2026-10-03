@@ -1,7 +1,7 @@
 /**
  * NodeTauriBridge.ts — Seamless Tauri IPC Polyfill for Node.js / CLI Environments
  * 
- * Enables all Sentinel Capability SDK drivers to execute real native macOS commands
+ * Enables all Cero Capability SDK drivers to execute real native macOS commands
  * directly in Node.js / CLI / test harnesses without requiring a Tauri GUI window.
  * 
  * Features:
@@ -85,7 +85,7 @@ export class NodeTauriBridge {
     return this.commandHistory.filter(c => 
       !c.isAuditLog && 
       !c.fullCommand.includes('learned_patterns.json') &&
-      !c.fullCommand.includes('test -f "$HOME/.sentinel/models')
+      !c.fullCommand.includes('test -f "$HOME/.cero/models')
     );
   }
 
@@ -130,8 +130,8 @@ export class NodeTauriBridge {
           };
 
           // Same contract as the app's execute_command: `timeoutMs` bounds the run when given.
-          // SENTINEL_CMD_TIMEOUT_MS caps every command in headless test runs.
-          const cap = Number(process.env.SENTINEL_CMD_TIMEOUT_MS) || 0;
+          // CERO_CMD_TIMEOUT_MS caps every command in headless test runs.
+          const cap = Number(process.env.CERO_CMD_TIMEOUT_MS) || 0;
           const requested = Number(payload.timeoutMs) || 0;
           const timeout = [requested, cap].filter(ms => ms > 0).reduce((a, b) => Math.min(a, b), Infinity);
           const result = spawnSync(command, args, {
@@ -157,7 +157,7 @@ export class NodeTauriBridge {
 
         const durationMs = performance.now() - startTime;
         const fullCommand = args.length > 0 ? `${command} ${args.join(' ')}` : command;
-        const isAuditLog = fullCommand.includes('.sentinel/audit.') || fullCommand.includes('audit.jsonl') || fullCommand.includes('audit.benchmark.jsonl');
+        const isAuditLog = fullCommand.includes('.cero/audit.') || fullCommand.includes('audit.jsonl') || fullCommand.includes('audit.benchmark.jsonl');
 
         const record: CommandExecutionRecord = {
           command,
@@ -281,9 +281,84 @@ export class NodeTauriBridge {
         return checkPath ? fs.existsSync(checkPath) : false;
       }
 
+      case 'find_paths': {
+        const a = payload as any;
+        return findPaths(String(a?.query ?? ''), (a?.roots ?? []) as string[], String(a?.kind ?? 'any'), Number(a?.maxDepth ?? a?.max_depth ?? 3), Number(a?.limit ?? 20));
+      }
+
       default:
         // No-op for GUI/window commands
         return null;
     }
   }
+}
+
+
+// ---- find_paths: the same bounded folder search the app does in Rust (src-tauri/src/path_search.rs) ----
+
+const SKIP_DIRS = new Set(['node_modules', '.git', '.cache', 'target', 'dist', 'build', '.venv', '__pycache__', 'Library', 'AppData', 'proc', 'sys', 'dev', 'snap']);
+const PROTECTED_UNDER_HOME = new Set(['Desktop', 'Documents', 'Downloads', 'Movies', 'Music', 'Pictures', 'Public']);
+const compactOf = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+
+function editDistanceLoose(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+function couldMatch(query: string, name: string): boolean {
+  if (!query) return true;
+  const q = compactOf(query);
+  const n = compactOf(name);
+  if (!q || !n) return false;
+  if (n.includes(q) || (q.includes(n) && n.length >= 3)) return true;
+  return Math.abs(q.length - n.length) <= 3 && editDistanceLoose(q, n) <= 3;
+}
+
+function findPaths(query: string, roots: string[], kind: string, maxDepth: number, limit: number): Array<{ path: string; name: string; is_dir: boolean }> {
+  const started = Date.now();
+  const cap = Math.max(1, limit) * 10;
+  const wantHidden = query.startsWith('.');
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  const out: Array<{ path: string; name: string; is_dir: boolean }> = [];
+  const seen = new Set<string>();
+  const queue: Array<[string, number]> = [];
+  for (const r of roots) {
+    const full = r === '~' ? home : r.startsWith('~/') ? path.join(home, r.slice(2)) : r;
+    try { if (fs.statSync(full).isDirectory()) queue.push([full, 0]); } catch { /* missing root */ }
+  }
+  let visited = 0;
+  while (queue.length) {
+    const [dir, depth] = queue.shift()!;
+    if (depth >= maxDepth || out.length >= cap || visited >= 20000 || Date.now() - started > 2000) break;
+    let real = dir;
+    try { real = fs.realpathSync(dir); } catch { /* keep */ }
+    if (seen.has(real)) continue;
+    seen.add(real);
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }).sort((x, y) => x.name.localeCompare(y.name)); } catch { continue; }
+    for (const e of entries) {
+      visited++;
+      const isDir = e.isDirectory();
+      const hidden = e.name.startsWith('.');
+      if (isDir) {
+        if (SKIP_DIRS.has(e.name) || (hidden && !wantHidden)) continue;
+        // macOS asks permission the first time an app looks inside these; a search from the home folder leaves them out
+        if (depth === 0 && dir === home && PROTECTED_UNDER_HOME.has(e.name)) continue;
+        queue.push([path.join(dir, e.name), depth + 1]);
+      } else if (hidden && !wantHidden) continue;
+      const kindOk = kind === 'dir' ? isDir : kind === 'file' ? !isDir : true;
+      if (kindOk && couldMatch(query, e.name)) {
+        out.push({ path: path.join(dir, e.name), name: e.name, is_dir: isDir });
+        if (out.length >= cap) break;
+      }
+    }
+  }
+  return out;
 }

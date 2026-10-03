@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUNDLE_ROOT="${REPO_ROOT}/src-tauri/target/release/bundle"
 
 echo "=========================================================="
-echo " Sentinel Terminal v2.0.0 - Multi-Distribution Packaging"
+echo " Cero v2.0.0 - Multi-Distribution Packaging"
 echo "=========================================================="
 
 cd "${REPO_ROOT}"

@@ -58,7 +58,7 @@ out=['# Codebase map','',
 'graph (entry points: `src/main.tsx` for the app, `scripts/*.ts` for the CLI and benchmark tools).',
 'Regenerate after large refactors; see "Regenerating" at the end.','',
 'Status: **app** = loaded by the desktop app; **cli** = only used by scripts; **unreachable** = imported by',
-'nothing that runs (candidates for removal, see docs/ROADMAP.md I-38).','',
+'nothing that runs (candidates for removal).','',
 f"Totals: {stats['app']} app, {stats['cli']} cli-only, {stats['unreachable']} unreachable.",'']
 for group in sorted(rows):
     items=rows[group]
@@ -77,9 +77,9 @@ rust_desc={
  'main.rs':'Binary entry point; calls the library run().',
  'lib.rs':'Tauri setup: plugins, managed state, command registration, window and exit handling.',
  'pty.rs':'Pseudo-terminal sessions (portable-pty): spawn the user shell, stream output, resize, kill.',
- 'process_cmds.rs':'execute_command (timeout, process-group kill, closed stdin, output cap), process list/kill, system stats, file helpers, ~/.sentinel store commands.',
+ 'process_cmds.rs':'execute_command (timeout, process-group kill, closed stdin, output cap), process list/kill, system stats, file helpers, ~/.cero store commands.',
  'embedded_server.rs':'llama-server lifecycle: binary/model discovery, launch flags, stderr log, status, inference slot bookkeeping, SHA-256 verification.',
- 'watcher.rs':'Error watcher backend: file tailing (rotation/truncation aware) and journalctl streaming, emitted as sentinel-watch-lines events.',
+ 'watcher.rs':'Error watcher backend: file tailing (rotation/truncation aware) and journalctl streaming, emitted as cero-watch-lines events.',
  'logger.rs':'Diagnostic logging to file for release builds.',
 }
 for f in sorted(os.listdir('src-tauri/src')):
@@ -94,8 +94,12 @@ SCRIPT_DESC = {
     'sync-shared.ps1': 'Pull only the OS-agnostic shared core from another branch (PowerShell).',
 }
 out += ['## `scripts/`','','| File | Purpose |','|---|---|']
+SCRIPT_DESC.update({'brand': 'Draws the Cero logo as vector art and renders the logo animation video.', 'eval': 'The model reliability test (`npm run eval:model`).', 'icons': 'Builds the .flow document icons.', 'stress': 'Headless stress tests of the real agent against a local model.'})
 for f in sorted(os.listdir('scripts')):
     p='scripts/'+f
+    if os.path.isdir(p):
+        out.append(f'| `{f}/` | {SCRIPT_DESC.get(f, "-")} |')
+        continue
     t=open(p,encoding='utf-8',errors='ignore').read()
     d=SCRIPT_DESC.get(f) or (describe(t) if f.endswith('.ts') else '')
     if not d:

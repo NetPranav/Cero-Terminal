@@ -1,6 +1,6 @@
-# Sentinel Terminal — Visual Aesthetic & Theme Architecture
+# Cero — Visual Aesthetic & Theme Architecture
 
-Sentinel is built around a philosophy of focused minimalism, low eye fatigue, and visual precision. Moving away from distracting neon gradients and oversaturated interface chrome, Sentinel implements a strictly matte monochrome and grayscale design system.
+Cero is built around a philosophy of focused minimalism, low eye fatigue, and visual precision. Moving away from distracting neon gradients and oversaturated interface chrome, Cero implements a strictly matte monochrome and grayscale design system.
 
 ---
 
@@ -15,7 +15,7 @@ Sentinel is built around a philosophy of focused minimalism, low eye fatigue, an
 
 ## 2. Zen Mode vs. Visual Mode
 
-Sentinel provides two distinct operational interface profiles toggled instantly via **`Ctrl + Shift + Z`** (or **`Cmd + Shift + Z`**):
+Cero provides two distinct operational interface profiles toggled instantly via **`Ctrl + Shift + Z`** (or **`Cmd + Shift + Z`**):
 
 ### A. Zen Mode (Default)
 - Designed for maximum immersion and distraction-free terminal work.
@@ -33,7 +33,7 @@ Sentinel provides two distinct operational interface profiles toggled instantly 
 
 ## 3. Dynamic Glassmorphism & Opacity Controls
 
-Sentinel provides granular control over window translucency and background blur:
+Cero provides granular control over window translucency and background blur:
 
 - **Acrylic Transparency**: Adjust window opacity dynamically from deep frosted obsidian to solid pitch black.
 - **Backdrop Blur Depth**: Configure blur radius (from `10px` to `30px`) to smoothly diffuse underlying desktop windows and wallpapers without impacting character sharpness.

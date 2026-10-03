@@ -23,7 +23,7 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(async () => ({ stdout: '/home/testuser' }))
 }));
 
-describe('Sentinel Settings Center & Multi-Tab Configuration Architecture', () => {
+describe('Cero Settings Center & Multi-Tab Configuration Architecture', () => {
   let store: Record<string, string> = {};
 
   beforeEach(() => {
@@ -76,96 +76,96 @@ describe('Sentinel Settings Center & Multi-Tab Configuration Architecture', () =
 
     const handleSelectMode = (mode: 'zen' | 'visual') => {
       activeMode = mode;
-      localStorage.setItem('sentinel_ui_mode', mode);
-      window.dispatchEvent(new CustomEvent('sentinel:ui-mode-changed', { detail: mode }));
+      localStorage.setItem('cero_ui_mode', mode);
+      window.dispatchEvent(new CustomEvent('cero:ui-mode-changed', { detail: mode }));
     };
 
     const listener = (e: any) => {
       dispatchedMode = e.detail;
     };
-    window.addEventListener('sentinel:ui-mode-changed', listener);
+    window.addEventListener('cero:ui-mode-changed', listener);
 
     // Switch to visual mode
     handleSelectMode('visual');
     expect(activeMode).toBe('visual');
-    expect(localStorage.getItem('sentinel_ui_mode')).toBe('visual');
+    expect(localStorage.getItem('cero_ui_mode')).toBe('visual');
     expect(dispatchedMode).toBe('visual');
 
     // Switch to zen mode
     handleSelectMode('zen');
     expect(activeMode).toBe('zen');
-    expect(localStorage.getItem('sentinel_ui_mode')).toBe('zen');
+    expect(localStorage.getItem('cero_ui_mode')).toBe('zen');
     expect(dispatchedMode).toBe('zen');
 
-    window.removeEventListener('sentinel:ui-mode-changed', listener);
+    window.removeEventListener('cero:ui-mode-changed', listener);
   });
 
   it('allows resetting first-run flags in General & Setup tab', () => {
-    localStorage.setItem('sentinel_onboarded', 'true');
-    localStorage.setItem('sentinel_zen_tip_shown', 'true');
-    expect(localStorage.getItem('sentinel_onboarded')).toBe('true');
-    expect(localStorage.getItem('sentinel_zen_tip_shown')).toBe('true');
+    localStorage.setItem('cero_onboarded', 'true');
+    localStorage.setItem('cero_zen_tip_shown', 'true');
+    expect(localStorage.getItem('cero_onboarded')).toBe('true');
+    expect(localStorage.getItem('cero_zen_tip_shown')).toBe('true');
 
     // Reset action performed in Settings General tab
-    localStorage.removeItem('sentinel_onboarded');
-    localStorage.removeItem('sentinel_zen_tip_shown');
+    localStorage.removeItem('cero_onboarded');
+    localStorage.removeItem('cero_zen_tip_shown');
 
-    expect(localStorage.getItem('sentinel_onboarded')).toBeNull();
-    expect(localStorage.getItem('sentinel_zen_tip_shown')).toBeNull();
+    expect(localStorage.getItem('cero_onboarded')).toBeNull();
+    expect(localStorage.getItem('cero_zen_tip_shown')).toBeNull();
   });
 
-  it('dispatches and receives sentinel:open-onboarding event from Settings General tab', () => {
+  it('dispatches and receives cero:open-onboarding event from Settings General tab', () => {
     let onboardingOpened = false;
     const listener = () => {
       onboardingOpened = true;
     };
-    window.addEventListener('sentinel:open-onboarding', listener);
+    window.addEventListener('cero:open-onboarding', listener);
 
-    window.dispatchEvent(new CustomEvent('sentinel:open-onboarding'));
+    window.dispatchEvent(new CustomEvent('cero:open-onboarding'));
     expect(onboardingOpened).toBe(true);
 
-    window.removeEventListener('sentinel:open-onboarding', listener);
+    window.removeEventListener('cero:open-onboarding', listener);
   });
 
-  it('manages Execution Plan HUD notification settings and dispatches sentinel:hud-settings-changed event', () => {
+  it('manages Execution Plan HUD notification settings and dispatches cero:hud-settings-changed event', () => {
     let settingsChangedCount = 0;
     const listener = () => {
       settingsChangedCount++;
     };
-    window.addEventListener('sentinel:hud-settings-changed', listener);
+    window.addEventListener('cero:hud-settings-changed', listener);
 
     // Verify defaults
-    expect(localStorage.getItem('sentinel_hud_plan_enabled')).toBeNull();
-    const defaultEnabled = localStorage.getItem('sentinel_hud_plan_enabled') !== 'false';
-    const defaultDuration = localStorage.getItem('sentinel_hud_plan_duration') || '8';
+    expect(localStorage.getItem('cero_hud_plan_enabled')).toBeNull();
+    const defaultEnabled = localStorage.getItem('cero_hud_plan_enabled') !== 'false';
+    const defaultDuration = localStorage.getItem('cero_hud_plan_duration') || '8';
     expect(defaultEnabled).toBe(true);
     expect(defaultDuration).toBe('8');
 
     // Toggle HUD to false
-    localStorage.setItem('sentinel_hud_plan_enabled', 'false');
-    window.dispatchEvent(new CustomEvent('sentinel:hud-settings-changed'));
-    expect(localStorage.getItem('sentinel_hud_plan_enabled')).toBe('false');
+    localStorage.setItem('cero_hud_plan_enabled', 'false');
+    window.dispatchEvent(new CustomEvent('cero:hud-settings-changed'));
+    expect(localStorage.getItem('cero_hud_plan_enabled')).toBe('false');
     expect(settingsChangedCount).toBe(1);
 
     // Change duration to '15'
-    localStorage.setItem('sentinel_hud_plan_duration', '15');
-    window.dispatchEvent(new CustomEvent('sentinel:hud-settings-changed'));
-    expect(localStorage.getItem('sentinel_hud_plan_duration')).toBe('15');
+    localStorage.setItem('cero_hud_plan_duration', '15');
+    window.dispatchEvent(new CustomEvent('cero:hud-settings-changed'));
+    expect(localStorage.getItem('cero_hud_plan_duration')).toBe('15');
     expect(settingsChangedCount).toBe(2);
 
     // Set duration to 'persistent'
-    localStorage.setItem('sentinel_hud_plan_duration', 'persistent');
-    window.dispatchEvent(new CustomEvent('sentinel:hud-settings-changed'));
-    expect(localStorage.getItem('sentinel_hud_plan_duration')).toBe('persistent');
+    localStorage.setItem('cero_hud_plan_duration', 'persistent');
+    window.dispatchEvent(new CustomEvent('cero:hud-settings-changed'));
+    expect(localStorage.getItem('cero_hud_plan_duration')).toBe('persistent');
     expect(settingsChangedCount).toBe(3);
 
     // Re-enable HUD
-    localStorage.setItem('sentinel_hud_plan_enabled', 'true');
-    window.dispatchEvent(new CustomEvent('sentinel:hud-settings-changed'));
-    expect(localStorage.getItem('sentinel_hud_plan_enabled')).toBe('true');
+    localStorage.setItem('cero_hud_plan_enabled', 'true');
+    window.dispatchEvent(new CustomEvent('cero:hud-settings-changed'));
+    expect(localStorage.getItem('cero_hud_plan_enabled')).toBe('true');
     expect(settingsChangedCount).toBe(4);
 
-    window.removeEventListener('sentinel:hud-settings-changed', listener);
+    window.removeEventListener('cero:hud-settings-changed', listener);
   });
 });
 

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=KonqPopupMenu/Plugin,inode/directory
+MimeType=inode/directory;
+Actions=openInCero;
+X-KDE-Priority=TopLevel
+
+[Desktop Action openInCero]
+Name=Open in Cero
+Icon=cero-terminal
+Exec=cero "%f"

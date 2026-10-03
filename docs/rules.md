@@ -1,6 +1,6 @@
-# Sentinel Development & Assistant Rules
+# Cero Development & Assistant Rules
 
-This document establishes behavioral constraints, operational rules, and quality standards for development and AI assistant interactions within Sentinel Terminal.
+This document establishes behavioral constraints, operational rules, and quality standards for development and AI assistant interactions within Cero.
 
 ---
 
@@ -57,7 +57,7 @@ This document establishes behavioral constraints, operational rules, and quality
 ## Rule 5: Non-Destructive Desktop Integrations
 
 - All desktop and system integrations must default to user-space (zero root/sudo required):
-  - CLI binary: `~/.local/bin/sentinel`.
+  - CLI binary: `~/.local/bin/cero`.
   - File manager hooks: `~/.local/share/nautilus/scripts/` (and equivalent user-space hook paths for Nemo, Dolphin, Thunar).
   - IDE profiles: Safely merge into `~/.config/Code/User/settings.json` without overwriting existing default profiles.
 - Always provide transparent explanations of what is installed, where it resides, and how it executes.

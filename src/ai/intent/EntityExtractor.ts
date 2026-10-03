@@ -1,7 +1,7 @@
 /**
  * EntityExtractor.ts — Comprehensive OS & Registry Entity Extractor
  * 
- * Reliably extracts all Sentinel required entities from natural language:
+ * Reliably extracts all Cero required entities from natural language:
  * paths, folders, files, URLs, repositories, applications, SSID, bluetooth devices,
  * ports, IP addresses, containers, services, packages, users, emails, device names, and custom entities.
  */

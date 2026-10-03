@@ -1,11 +1,11 @@
 # Visual Studio Code Terminal Integration
 
-Configure Sentinel Terminal as your integrated desktop terminal emulator inside Visual Studio Code.
+Configure Cero as your integrated desktop terminal emulator inside Visual Studio Code.
 
 ## Automated Wizard Configuration
-1. Open Sentinel Terminal.
+1. Open Cero.
 2. If greeted by the Initial Setup Wizard, toggle **Enable IDE Profiles**. Otherwise, access the wizard via the **Personalization** menu.
-3. Sentinel automatically edits your global VS Code user settings at `~/Library/Application Support/Code/User/settings.json`.
+3. Cero automatically edits your global VS Code user settings at `~/Library/Application Support/Code/User/settings.json`.
 
 ## Manual Settings Injection
 Add the profile directly to your VS Code user configurations:
@@ -13,15 +13,15 @@ Add the profile directly to your VS Code user configurations:
 ```json
 {
   "terminal.integrated.profiles.osx": {
-    "Sentinel Terminal": {
-      "path": "/Applications/Sentinel Terminal.app/Contents/MacOS/Sentinel Terminal",
+    "Cero": {
+      "path": "/Applications/Cero.app/Contents/MacOS/Cero",
       "icon": "terminal",
       "overrideName": true
     }
   },
-  "terminal.integrated.defaultProfile.osx": "Sentinel Terminal"
+  "terminal.integrated.defaultProfile.osx": "Cero"
 }
 ```
 
 ## Developer Workflow
-When integrated, opening a terminal panel in VS Code (`Control+~`) spins up a high-speed Sentinel PTY session inheriting your TrueColor themes and dotfile settings.
+When integrated, opening a terminal panel in VS Code (`Control+~`) spins up a high-speed Cero PTY session inheriting your TrueColor themes and dotfile settings.

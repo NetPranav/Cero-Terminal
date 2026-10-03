@@ -1,7 +1,7 @@
 /**
- * Sentinel Terminal — Plugin Marketplace Catalog
+ * Cero — Plugin Marketplace Catalog
  *
- * Provides a curated catalog of ecosystem extensions for Sentinel Terminal,
+ * Provides a curated catalog of ecosystem extensions for Cero,
  * with 1-click installation, permission verification, and hot-reloading.
  */
 
@@ -21,11 +21,11 @@ export interface MarketplacePlugin {
 
 export class PluginMarketplaceCatalog {
   private static instance: PluginMarketplaceCatalog;
-  private static STORAGE_KEY = 'sentinel_installed_plugins';
+  private static STORAGE_KEY = 'cero_installed_plugins';
 
   private catalog: MarketplacePlugin[] = [
     {
-      id: 'sentinel.k8s.lens',
+      id: 'cero.k8s.lens',
       name: 'Kubernetes Lens',
       version: '1.2.0',
       author: 'CloudNative Labs',
@@ -38,7 +38,7 @@ export class PluginMarketplaceCatalog {
       downloads: 4820
     },
     {
-      id: 'sentinel.ros2.telemetry',
+      id: 'cero.ros2.telemetry',
       name: 'ROS 2 Telemetry & Echo',
       version: '2.0.4',
       author: 'OpenRobotics Guild',
@@ -51,7 +51,7 @@ export class PluginMarketplaceCatalog {
       downloads: 6290
     },
     {
-      id: 'sentinel.docker.orchestrator',
+      id: 'cero.docker.orchestrator',
       name: 'Docker Compose Inspector',
       version: '1.4.1',
       author: 'ContainerCore',
@@ -64,7 +64,7 @@ export class PluginMarketplaceCatalog {
       downloads: 8120
     },
     {
-      id: 'sentinel.git.graph',
+      id: 'cero.git.graph',
       name: 'Git Branch & Stash Lens',
       version: '3.1.0',
       author: 'VCS Masters',
@@ -77,7 +77,7 @@ export class PluginMarketplaceCatalog {
       downloads: 12400
     },
     {
-      id: 'sentinel.aws.toolkit',
+      id: 'cero.aws.toolkit',
       name: 'AWS Cloud Profiles & Secrets',
       version: '1.0.8',
       author: 'Serverless Edge',
@@ -90,7 +90,7 @@ export class PluginMarketplaceCatalog {
       downloads: 3150
     },
     {
-      id: 'sentinel.hyprland.rice',
+      id: 'cero.hyprland.rice',
       name: 'Hyprland & Waybar Rice Live-Reload',
       version: '1.5.0',
       author: 'ArchRice Community',

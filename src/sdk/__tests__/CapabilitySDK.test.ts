@@ -148,7 +148,7 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
       expect(ytRes.data?.url).toContain('youtube.com');
       expect(ytRes.commandExecuted).toContain('open');
 
-      const ghRes = await browserDriver.search('Sentinel terminal', 'github');
+      const ghRes = await browserDriver.search('Cero terminal', 'github');
       expect(ghRes.data?.url).toContain('github.com/search');
     });
 
@@ -359,7 +359,7 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
       const allTools = loader.getState().toolIndex.getAll();
       expect(allTools.length).toBeGreaterThanOrEqual(91);
 
-      // Verify that every single loaded tool ID in the entire Sentinel capability library is bound to a concrete TypeScript driver
+      // Verify that every single loaded tool ID in the entire Cero capability library is bound to a concrete TypeScript driver
       for (const tool of allTools) {
         const toolId = tool.definition.id;
         const driver = registry.getDriver(toolId);

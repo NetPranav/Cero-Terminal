@@ -128,7 +128,7 @@ export const PluginMarketplaceModal: React.FC<PluginMarketplaceModalProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Puzzle size={20} color="#a855f7" />
             <div>
-              <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>Sentinel Plugin Marketplace</h2>
+              <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>Cero Plugin Marketplace</h2>
               <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
                 Hot-reload capabilities, cloud tools, robotics, and rice extensions
               </span>

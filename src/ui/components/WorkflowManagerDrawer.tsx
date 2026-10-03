@@ -16,12 +16,17 @@ import {
   Layers, 
   ShieldCheck, 
   Sliders,
-  Search
+  Search,
+  Upload,
+  Download
 } from 'lucide-react';
 import { DiskWorkflowStorage } from '../../workflows/storage/DiskWorkflowStorage';
 import { SavedWorkflowDefinition, WorkflowStepDefinition } from '../../workflows/models/WorkflowTypes';
 import { DeterministicReplayEngine, ReplayExecutionResult } from '../../workflows/engine/DeterministicReplayEngine';
 import { getRecommendedStarterWorkflowIds } from '../../workflows/templates/StarterWorkflows';
+import { workflowToFlow, slug } from '../../workflows/flow/FlowExport';
+import { parseWorkflowFile } from '../../workflows/storage/FlowImport';
+import { getPlatform } from '../../shared/platform';
 
 export interface WorkflowManagerDrawerProps {
   isOpen: boolean;
@@ -102,6 +107,106 @@ export const WorkflowManagerDrawer: React.FC<WorkflowManagerDrawerProps> = ({
       showToast(err?.message || 'Failed to seed starter workflows', 'error');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleImportFlow = async () => {
+    try {
+      let content = '';
+      let fileName = 'imported.flow';
+
+      try {
+        const tauriDialog = (window as any).__TAURI__?.dialog;
+        if (tauriDialog && typeof tauriDialog.open === 'function') {
+          const selected = await tauriDialog.open({
+            multiple: false,
+            filters: [{ name: 'Cero flow', extensions: ['flow'] }]
+          });
+          if (selected && typeof selected === 'string') {
+            const { readTextFile } = await import('@tauri-apps/plugin-fs');
+            content = await readTextFile(selected);
+            fileName = selected.split(/[\\/]/).pop() || 'imported.flow';
+          } else {
+            return;
+          }
+        } else {
+          throw new Error('Native dialog not available');
+        }
+      } catch {
+        // Fallback to browser file input
+        const file = await new Promise<File | null>((resolve) => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.flow';
+          input.onchange = () => {
+            resolve(input.files?.[0] || null);
+          };
+          input.click();
+        });
+        if (!file) return;
+        content = await file.text();
+        fileName = file.name;
+      }
+
+      if (!content.trim()) return;
+      const os = getPlatform() === 'linux' ? 'linux' : getPlatform() === 'windows' ? 'windows' : 'macos';
+      const wf = parseWorkflowFile(content, fileName, os);
+      if (!wf) {
+        showToast('Invalid .flow file format', 'error');
+        return;
+      }
+
+      const storage = DiskWorkflowStorage.getInstance();
+      await storage.saveWorkflow(wf);
+      showToast(`✓ Imported workflow "${wf.name}"`);
+      await fetchWorkflows();
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to import .flow file', 'error');
+    }
+  };
+
+  const handleExportFlow = async (wf: SavedWorkflowDefinition, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      const flowDoc = workflowToFlow(wf);
+      const text = JSON.stringify(flowDoc, null, 2) + '\n';
+      const defaultName = `${slug(wf.name)}.flow`;
+
+      let saved = false;
+      try {
+        const tauriDialog = (window as any).__TAURI__?.dialog;
+        if (tauriDialog && typeof tauriDialog.save === 'function') {
+          const selected = await tauriDialog.save({
+            defaultPath: defaultName,
+            filters: [{ name: 'Cero flow', extensions: ['flow'] }]
+          });
+          if (selected && typeof selected === 'string') {
+            const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+            await writeTextFile(selected, text);
+            saved = true;
+          }
+        } else {
+          throw new Error('Native dialog not available');
+        }
+      } catch {
+        // Fallback to browser download
+        const blob = new Blob([text], { type: 'application/x-cero-workflow' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = defaultName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        saved = true;
+      }
+
+      if (saved) {
+        showToast(`✓ Exported "${wf.name}" as .flow`);
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to export workflow', 'error');
     }
   };
 
@@ -359,6 +464,26 @@ export const WorkflowManagerDrawer: React.FC<WorkflowManagerDrawerProps> = ({
             >
               <Play size={11} />
               <span>Seed Starters</span>
+            </button>
+            <button
+              onClick={handleImportFlow}
+              title="Import .flow workflow"
+              disabled={isLoading}
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.09)',
+                borderRadius: '5px',
+                padding: '4px 8px',
+                color: 'rgba(255, 255, 255, 0.8)',
+                fontSize: '11px',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <Upload size={11} />
+              <span>Import .flow</span>
             </button>
             <button
               onClick={fetchWorkflows}
@@ -695,6 +820,34 @@ export const WorkflowManagerDrawer: React.FC<WorkflowManagerDrawerProps> = ({
                         }}
                       >
                         <Trash2 size={13} />
+                      </button>
+                      <button
+                        onClick={(e) => handleExportFlow(wf, e)}
+                        title="Export workflow as .flow"
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.04)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: '6px',
+                          padding: '6px',
+                          color: 'rgba(255, 255, 255, 0.45)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                          e.currentTarget.style.color = '#ffffff';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
+                          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                          e.currentTarget.style.color = 'rgba(255, 255, 255, 0.45)';
+                        }}
+                      >
+                        <Download size={13} />
                       </button>
                       <div style={{ color: 'rgba(255, 255, 255, 0.4)', marginLeft: '4px', display: 'flex', alignItems: 'center' }}>
                         {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
@@ -1044,7 +1197,7 @@ export const WorkflowManagerDrawer: React.FC<WorkflowManagerDrawerProps> = ({
             <ShieldCheck size={13} style={{ color: 'rgba(255, 255, 255, 0.55)' }} />
             <span>AST Verified</span>
           </div>
-          <span style={{ fontFamily: 'ui-monospace, monospace' }}>~/.sentinel/workflows/</span>
+          <span style={{ fontFamily: 'ui-monospace, monospace' }}>~/.cero/workflows/</span>
         </div>
 
         {/* Custom Grayscale Delete Confirmation Modal */}

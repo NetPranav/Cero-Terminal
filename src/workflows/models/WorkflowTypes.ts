@@ -298,7 +298,7 @@ export interface WorkflowVersion {
 }
 
 export interface WorkflowExportPayload {
-  readonly format: 'sentinel-workflow-v1';
+  readonly format: 'cero-workflow-v1';
   readonly exportedAt: number;
   readonly workflow: UserWorkflow;
   readonly templateId?: string;

@@ -1,8 +1,8 @@
 /**
- * CapabilitySDK.ts — Core Architecture for Sentinel Execution Capabilities
+ * CapabilitySDK.ts — Core Architecture for Cero Execution Capabilities
  * 
  * Defines the standard interfaces and base classes for concrete capability execution drivers.
- * Every capability in Sentinel must implement this interface, exposing four critical operations:
+ * Every capability in Cero must implement this interface, exposing four critical operations:
  * - execute(): Run platform-specific actions (Launch Services, native APIs, Node filesystem)
  * - verify(): Confirm action success via OS diagnostic queries or filesystem inspection
  * - rollback(): Revert changes safely if verification fails or user undoes action

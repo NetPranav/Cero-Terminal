@@ -10,7 +10,7 @@ const isVitest = Boolean(process.env.VITEST);
 export default defineConfig(async () => ({
   plugins: [react()],
   test: {
-    // Never let tests read or write the developer's real ~/.sentinel
+    // Never let tests read or write the developer's real ~/.cero
     setupFiles: ['./src/test/isolateHome.ts'],
   },
   resolve: {

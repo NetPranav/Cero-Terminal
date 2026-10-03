@@ -30,7 +30,7 @@ llama-ser 18931 pranav   30u  IPv4 0xfe01ab2345678901      0t0  TCP 127.0.0.1:88
 
     expect(ports[2].port).toBe(8847);
     expect(ports[2].category).toBe('AI Sidecar');
-    expect(ports[2].description).toContain('Sentinel Embedded AI');
+    expect(ports[2].description).toContain('Cero Embedded AI');
   });
 
   it('determines appropriate port category metadata', () => {

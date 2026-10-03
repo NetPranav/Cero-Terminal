@@ -18,7 +18,7 @@ describe('PromptNavigationEngine (Issue 9 Behavioral Specifications)', () => {
       const lines: BufferLineInfo[] = [
         { text: 'previous command output', isWrapped: false },
         { text: 'user@host:~$ > Create a temporary testing workspace', isWrapped: false }, // row 1
-        { text: 'at /tmp/sentinel-workflow-test. Inside it: create', isWrapped: true },  // row 2
+        { text: 'at /tmp/cero-workflow-test. Inside it: create', isWrapped: true },  // row 2
         { text: 'frontend.txt and backend.txt', isWrapped: true },                       // row 3
       ];
 

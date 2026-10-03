@@ -7,15 +7,15 @@ Please report security problems privately, not in a public issue: use
 Security tab. Include the version, your operating system and steps to reproduce. Reports are read by the
 maintainer as soon as possible.
 
-Supported version: the latest release (2.1.x). Fixes go into a new release of the affected platform.
+Supported version: the latest release (2.2.x). Fixes go into a new release of the affected platform.
 
-## How Sentinel keeps you in control
+## How Cero keeps you in control
 
 - **Nothing that changes your system runs without your approval.** A request that installs, deletes,
   stops a process, changes a setting or writes outside a folder you chose shows the exact command first.
   Commands that are high risk (stopping processes, deleting, super-user) need a click on **Run**; Enter is ignored.
-- **Sentinel never asks for your password.** Super-user commands ask in the terminal itself, where `sudo` belongs.
-- **Files opened with Sentinel** (`.flow`, workflows) show every command they will run, and start only
+- **Cero never asks for your password.** Super-user commands ask in the terminal itself, where `sudo` belongs.
+- **Files opened with Cero** (`.flow`, workflows) show every command they will run, and start only
   after you click Run. Values from a file are quoted so they cannot add shell syntax.
 - **Reading private keys and credential files always asks**, and keys and tokens are masked before any
   output reaches a model.
@@ -26,9 +26,9 @@ Supported version: the latest release (2.1.x). Fixes go into a new release of th
 
 - The built-in model runs on your computer (llama.cpp, listening on `127.0.0.1` only). With Ollama it stays
   local too. With a cloud key, your requests go to that provider and nowhere else.
-- History, transcripts, the audit log and learning data live in `~/.sentinel`, readable by you only.
+- History, transcripts, the audit log and learning data live in `~/.cero`, readable by you only.
   There is no telemetry, crash reporting or account.
-- Network requests Sentinel makes on its own: downloading the model and engine you ask for (checked against
+- Network requests Cero makes on its own: downloading the model and engine you ask for (checked against
   pinned SHA-256 digests), and the public-IP lookup (`api.ipify.org`) only when you ask "what is my ip".
 
 ## Known limits

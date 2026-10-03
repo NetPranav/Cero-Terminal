@@ -1,6 +1,6 @@
 <#
 ==============================================================================
- Sentinel Terminal — Cross-Platform Shared Core Synchronizer (PowerShell)
+ Cero — Cross-Platform Shared Core Synchronizer (PowerShell)
 
  Use this script on Windows PowerShell to pull ONLY the OS-agnostic shared core
  (Tools, AI Planning Engine, React UI, Workflows, Security Policy) without
@@ -22,12 +22,12 @@ $ErrorActionPreference = "Stop"
 try {
   $CurrentBranch = git rev-parse --abbrev-ref HEAD
 } catch {
-  Write-Error "Failed to detect current git branch. Ensure you are inside the Sentinel Terminal repository."
+  Write-Error "Failed to detect current git branch. Ensure you are inside the Cero repository."
   exit 1
 }
 
 Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "🔄 Sentinel Terminal — Shared Core Synchronizer" -ForegroundColor Cyan
+Write-Host "🔄 Cero — Shared Core Synchronizer" -ForegroundColor Cyan
 Write-Host "=================================================================" -ForegroundColor Cyan
 Write-Host "📌 Current Branch : $CurrentBranch" -ForegroundColor White
 Write-Host "🌐 Source Branch  : $SourceBranch" -ForegroundColor White

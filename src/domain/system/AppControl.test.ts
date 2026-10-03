@@ -17,7 +17,7 @@ describe('parseQuitRequest', () => {
 
   it('leaves terminals, servers, ports and tabs to their own handlers', () => {
     for (const goal of ['stop the server', 'stop the dev server', 'close this tab', 'close tab 2', 'stop tab 2', 'kill port 3000',
-      'kill the process on port 8080', 'kill 1234', 'close settings', 'stop it', 'quit sentinel', 'stop the build',
+      'kill the process on port 8080', 'kill 1234', 'close settings', 'stop it', 'quit cero', 'stop the build',
       'kill the process using port 5173', 'run npm test in tab 2', 'what is running', 'close safari and mail']) {
       expect(parseQuitRequest(goal), goal).toBeNull();
     }
@@ -39,14 +39,14 @@ const MAC_PS = [
   '/System/Applications/Journal.app/Contents/PlugIns/JournalWidgets.appex/Contents/MacOS/JournalWidgets',
   '/Applications/Safari.app/Contents/MacOS/Safari',
   '/Users/me/.local/bin/claude',
-  '/private/tmp/claude-501/x/Sentinel Terminal.app/Contents/MacOS/sentinel-terminal',
+  '/private/tmp/claude-501/x/Cero.app/Contents/MacOS/cero-terminal',
   'node',
 ].join('\n');
 
 describe('running apps', () => {
   it('reads app bundles on macOS, not their helpers, widgets or system agents', () => {
     const running = parseRunning(MAC_PS, 'macos');
-    expect(running.filter(r => r.app).map(r => r.name).sort()).toEqual(['Antigravity IDE', 'Claude', 'Safari', 'Sentinel Terminal']);
+    expect(running.filter(r => r.app).map(r => r.name).sort()).toEqual(['Antigravity IDE', 'Cero', 'Claude', 'Safari']);
     expect(running.find(r => r.name === 'claude')).toEqual({ name: 'claude', app: false });
     expect(running.some(r => /Helper|Journal|Finder/.test(r.name))).toBe(false);
   });

@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Passive PTY Output Stream Observer
+ * Cero — Passive PTY Output Stream Observer
  *
  * Monitors real-time terminal stdout/stderr stream from standard shell sessions.
  * When non-AI commands crash or fail with diagnostic signatures (e.g. EADDRINUSE,
@@ -8,7 +8,7 @@
  */
 
 import { ErrorDiagnosticsEngine } from '../../ai/agent/ErrorDiagnosticsEngine';
-import { SentinelSerlCoordinator } from '../learning/SentinelSerlCoordinator';
+import { CeroSerlCoordinator } from '../learning/CeroSerlCoordinator';
 import { getPlatform } from '../../shared/platform';
 
 /**
@@ -162,7 +162,7 @@ export class PtyOutputObserver {
     } else if (detectedCommand && reportsFailure(cleanChunk) && detectedCommand !== this.lastReportedFailure) {
       this.lastReportedFailure = detectedCommand;
       try {
-        SentinelSerlCoordinator.getInstance().onCommandExecutionFailure(
+        CeroSerlCoordinator.getInstance().onCommandExecutionFailure(
           `Shell command: ${detectedCommand}`,
           detectedCommand,
           1,

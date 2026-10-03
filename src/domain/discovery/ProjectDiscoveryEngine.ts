@@ -1,5 +1,5 @@
 /**
- * Sentinel Terminal — Project & Environment Discovery Engine
+ * Cero — Project & Environment Discovery Engine
  *
  * Scans development workspaces for project manifests (ROS 1/2, Node, Python,
  * Rust, Docker) to enable intelligent "Probe & Disambiguate" capabilities.

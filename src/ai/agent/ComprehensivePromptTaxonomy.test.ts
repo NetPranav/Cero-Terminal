@@ -16,7 +16,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
   let agent: AgentLoop;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-taxonomy-test-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-taxonomy-test-'));
     const storage = DiskWorkflowStorage.getInstance();
     storage.setCustomBaseDir(tmpDir);
 
@@ -94,13 +94,13 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
     it('handles conversational greeting queries', async () => {
       const res = await agent.run('hello there', { os: 'linux', cwd: '/home/test' });
       expect(res.success).toBe(true);
-      expect(res.summary).toContain('Sentinel AI');
+      expect(res.summary).toContain('Cero AI');
     });
 
     it('handles agent capabilities & help queries', async () => {
       const res = await agent.run('what can you do', { os: 'linux', cwd: '/home/test' });
       expect(res.success).toBe(true);
-      expect(res.summary).toContain('Sentinel AI — an autonomous terminal agent');
+      expect(res.summary).toContain('Cero AI — an autonomous terminal agent');
       expect(res.summary).toContain('port 3000');
     });
   });
@@ -245,7 +245,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
         'shell.execute',
         expect.objectContaining({ command: expect.stringContaining('.ts') }),
         '/home/test',
-        undefined
+        expect.any(Function)
       );
     });
   });
@@ -337,10 +337,10 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
   // =========================================================================
   describe('Archetype 10: Workflow Creation Directives', () => {
     it('executes task and saves simultaneously: "<task> :: save as workflow <name>"', async () => {
-      const prompt = 'date :: save as workflow get-time-wf';
+      const prompt = 'make a folder called get-time-dir :: save as workflow get-time-wf';
       const res = await agent.run(prompt, { os: 'linux', cwd: '/home/test' });
       expect(res.success).toBe(true);
-      expect(res.summary).toContain('Workflow "get-time-wf" saved');
+      expect(res.summary).toContain('Saved workflow \"get-time-wf\"');
 
       const storage = DiskWorkflowStorage.getInstance();
       const loaded = await storage.loadWorkflow('get-time-wf');
@@ -352,7 +352,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
       const prompt = 'first clean build, then build backend with cargo :: save as workflow cargo-build';
       const res = await agent.run(prompt, { os: 'linux', cwd: '/home/test' });
       expect(res.success).toBe(true);
-      expect(res.summary).toContain('Workflow "cargo-build" saved');
+      expect(res.summary).toContain('Saved workflow \"cargo-build\"');
 
       const storage = DiskWorkflowStorage.getInstance();
       const loaded = await storage.loadWorkflow('cargo-build');
@@ -375,7 +375,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
       });
 
       expect(res.success).toBe(true);
-      expect(res.summary).toContain('Saved 2 step(s)');
+      expect(res.summary).toContain('(2 steps)');
 
       const storage = DiskWorkflowStorage.getInstance();
       const loaded = await storage.loadWorkflow('my-scoped-pipeline');
@@ -414,7 +414,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
     it('handles greeting and conversational patterns as fast-path responses', async () => {
       const res = await agent.run('hello there', { os: 'linux', cwd: '/home/test' });
       expect(res.success).toBe(true);
-      expect(res.summary).toContain('Sentinel AI');
+      expect(res.summary).toContain('Cero AI');
       // Agent handles greetings without going to LLM
       expect(mockToolExecutor.execute).not.toHaveBeenCalled();
     });

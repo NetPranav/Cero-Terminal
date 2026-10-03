@@ -13,7 +13,7 @@ describe('CommandSafetyGuardian — 8-Category Threat Evaluation', () => {
       const res = guardian.evaluate('rm -rf /');
       expect(res.isBlocked).toBe(true);
       expect(res.category).toBe('ROOT_DESTRUCTION');
-      expect(res.capabilityRefusal).toContain("Sentinel does not have the capability to execute 'rm -rf /'");
+      expect(res.capabilityRefusal).toContain("Cero does not have the capability to execute 'rm -rf /'");
       expect(res.consequenceExplanation).toContain('permanently delete all files starting from the root directory');
     });
 
@@ -174,7 +174,7 @@ describe('CommandSafetyGuardian — 8-Category Threat Evaluation', () => {
     it('should format ANSI terminal banner properly when blocked without emojis', () => {
       const res = guardian.evaluate('rm -rf /');
       const banner = guardian.formatTerminalBanner(res, 'rm -rf /');
-      expect(banner).toContain('SENTINEL SECURITY GUARDIAN');
+      expect(banner).toContain('CERO SECURITY GUARDIAN');
       expect(banner).toContain('Capability Statement');
       expect(banner).toContain('Consequence & Impact Analysis');
       expect(banner).toContain('[!]');
