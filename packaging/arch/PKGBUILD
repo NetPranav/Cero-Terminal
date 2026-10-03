@@ -1,8 +1,8 @@
 # Maintainer: Cero Contributors
 pkgname=cero-terminal-bin
-pkgver=2.1.0
+pkgver=2.2.0
 pkgrel=1
-pkgdesc="Autonomous AI-Native Linux Terminal Copilot"
+pkgdesc="A terminal that takes requests in plain language and runs .flow setup files"
 arch=('x86_64')
 license=('MIT')
 depends=(
@@ -21,7 +21,8 @@ optdepends=(
     'xdg-utils: Desktop URL scheme and directory handling'
 )
 provides=('cero-terminal' 'cero')
-conflicts=('cero-terminal')
+conflicts=('cero-terminal' 'sentinel-terminal-bin')
+replaces=('sentinel-terminal-bin')
 options=('!debug')
 source=(
     "cero-terminal"

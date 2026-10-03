@@ -261,7 +261,8 @@ newest one for your system from the [Releases page](https://github.com/NetPranav
 
 | Platform | File |
 |---|---|
-| macOS, Apple Silicon | `Cero_2.2.0_aarch64.dmg` |
+| macOS, Apple Silicon | `Cero.Terminal_2.2.0_aarch64.dmg` |
+| macOS, Intel | `Cero_2.2.0_x64.dmg` |
 | Arch, Manjaro, EndeavourOS | `cero-terminal-bin-2.2.0-1-x86_64.pkg.tar.zst` |
 | Ubuntu 22.04+, Debian 12, Mint, Pop!_OS | `Cero_2.2.0_amd64.deb` |
 | Fedora 38+, openSUSE | `Cero-2.2.0-1.x86_64.rpm` |
