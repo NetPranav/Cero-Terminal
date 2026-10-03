@@ -262,3 +262,37 @@ describe('cd and remembered names', () => {
     expect(r.summary).toBe('There was nothing remembered.');
   });
 });
+
+describe('showing a file and listing a named folder', () => {
+  let loop: AgentLoop;
+  let execute: ReturnType<typeof vi.fn>;
+  const ctx = { os: 'linux', cwd: '/home/me/work' };
+  beforeEach(() => {
+    loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
+      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate: vi.fn() }),
+      getActiveModel: () => ({ modelId: 'mock' }),
+      initialize: vi.fn(),
+    } as any);
+    execute = vi.fn().mockResolvedValue({ success: true, data: { stdout: 'name,team\nana,red' } });
+    (loop as any).toolExecutor = { hasDriver: () => true, execute };
+  });
+  afterEach(() => setChoiceHandlerForTests(null));
+
+  it('"what is in data.csv" reads the file, without the model', async () => {
+    const r = await loop.run('what is in data.csv', ctx);
+    expect(execute.mock.calls[0][1].command).toBe("head -n 60 -- 'data.csv'");
+    expect(r.summary).toContain('ana,red');
+  });
+
+  it('"list the files in my notes folder" finds "my notes" and lists that real path', async () => {
+    loop.setPathProbe(fakeProbe(['/home/me/work/my notes']));
+    await loop.run('list the files in my notes folder', ctx);
+    expect(execute.mock.calls[0][1].command).toBe("ls -la -- '/home/me/work/my notes'");
+  });
+
+  it('a folder that cannot be found falls through instead of listing a guessed path', async () => {
+    loop.setPathProbe(fakeProbe(['/home/me/Projects/other']));
+    await loop.run('list the files in nowhere-xyz folder', ctx).catch(() => null);
+    expect(execute.mock.calls.every(c => !/nowhere-xyz/.test(String(c[1]?.command)) || !/^ls /.test(String(c[1]?.command)))).toBe(true);
+  });
+});

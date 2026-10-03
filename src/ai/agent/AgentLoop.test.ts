@@ -1794,6 +1794,7 @@ describe('fixLeadingVerb', () => {
     expect(fixLeadingVerb('instl express')).toBe('install express');
     expect(fixLeadingVerb('please clos port 8000')).toBe('please close port 8000');
     expect(fixLeadingVerb('star the repo')).toBe('star the repo');
+    expect(fixLeadingVerb('clone https://x.y/z into w')).toBe('clone https://x.y/z into w');
     expect(fixLeadingVerb('quite a lot of files here')).toBe('quite a lot of files here');
     expect(fixLeadingVerb('open firefox')).toBe('open firefox');
     expect(fixLeadingVerb('ls -la')).toBe('ls -la');

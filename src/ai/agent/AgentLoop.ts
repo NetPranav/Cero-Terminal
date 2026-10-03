@@ -62,6 +62,7 @@ import { parseOpenRequest, type OpenRequest } from '../../domain/system/OpenRequ
 import { resolvePath, type PathProbe, type Resolution } from '../../domain/system/PathResolver';
 import { resolveAppProbe } from '../../domain/system/appPathProbe';
 import { openCommand, osOf } from '../../domain/system/OpenInApp';
+import { posixQuote } from '../../utils/shellQuote';
 import { AliasStore } from '../../domain/system/AliasStore';
 import { loadCatalog, resolveApp, launchCommand, type AppEntry } from '../../domain/system/AppCatalog';
 import { parseGitAction, type GitActionRequest } from '../../domain/git/GitActionParser';
@@ -784,6 +785,8 @@ export function isExplicitFilesystemSearch(goal: string): boolean {
  * Normalizes common typos in terminal and command intents.
  */
 const LEADING_VERBS = ['open', 'launch', 'install', 'close', 'quit'];
+/** Real words that sit one letter from a command word: "clone" is not a slip for "close" */
+const REAL_FIRST_WORDS = new Set(['clone', 'cone', 'quiet', 'quote', 'oven', 'opens', 'opened', 'upen']);
 
 /**
  * "opn firefox", "opne gitBrans", "instl express": the first word is one slip away from a command word.
@@ -793,7 +796,7 @@ export function fixLeadingVerb(text: string): string {
   const m = text.match(/^(\s*(?:>\s*)?(?:(?:please|can you|could you)\s+)?)([A-Za-z]{3,8})\b/i);
   if (!m) return text;
   const word = m[2].toLowerCase();
-  if (LEADING_VERBS.includes(word)) return text;
+  if (LEADING_VERBS.includes(word) || REAL_FIRST_WORDS.has(word)) return text;
   for (const verb of LEADING_VERBS) {
     if (word[0] !== verb[0] || word.length > verb.length) continue;
     if (editDistance(word, verb) <= (verb.length >= 6 ? 2 : 1)) {
@@ -1846,6 +1849,19 @@ export class AgentLoop {
     const openReq = parseOpenRequest(cleaned || goal);
     if (openReq) {
       return this.runOpen(openReq, context);
+    }
+
+    // 1b. "what is in data.csv", "show notes.txt": read a named file (read-only, first 60 lines)
+    const showFile = (cleaned || goal).trim().replace(/[?.!]+$/, '').match(/^(?:what(?:'s|\s+is)\s+in|show(?:\s+me)?|print|display|cat|read)\s+(?:the\s+)?(?:file\s+)?["']?([^\s"']+\.[A-Za-z0-9]{1,6})["']?$/i);
+    if (showFile) {
+      return this.runShellStep(`head -n 60 -- ${posixQuote(showFile[1])}`, `Show ${showFile[1]}`, context, out => out || `${showFile[1]} is empty.`);
+    }
+
+    // 1c. "list the files in my notes folder": find the real folder first
+    const listFolder = (cleaned || goal).trim().replace(/[?.!]+$/, '').match(/^(?:list|show)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?files\s+(?:in|inside|of)\s+(?:the\s+)?["']?(.+?)["']?(?:\s+(?:folder|directory))?$/i);
+    if (listFolder && !/^(?:this|current|here|\.|\.\.|~|\/)/i.test(listFolder[1]) && !/[\\/]/.test(listFolder[1])) {
+      const listed = await this.runListFolder(listFolder[1], context);
+      if (listed) return listed;
     }
 
     // 2. Git inspection actions ("git status", "what git branch am i on", "git log", "git diff")
@@ -3218,6 +3234,44 @@ export class AgentLoop {
       if (context.signal?.aborted) throw err;
       return null;
     }
+  }
+
+  /** One read-only shell step with the usual authorization, shown as its output */
+  private async runShellStep(command: string, explanation: string, context: AgentRunContext, format: (stdout: string) => string): Promise<AgentResult> {
+    this.emit({ type: 'tool_start', message: explanation });
+    const auth = this.authorizationHandler || (async () => true);
+    const params = { command, explanation };
+    const result = context.signal
+      ? await this.toolExecutor.execute('shell.execute', params, context.cwd, auth, undefined, context.signal)
+      : await this.toolExecutor.execute('shell.execute', params, context.cwd, auth);
+    const ok = Boolean(result?.success);
+    const stdout = typeof result?.data?.stdout === 'string' ? result.data.stdout.trim() : '';
+    const summary = ok ? format(stdout) : `${explanation} failed: ${String(result?.error || result?.data?.stderr || 'error').split('\n')[0]}`;
+    this.emit({ type: ok ? 'done' : 'error', message: summary });
+    return { success: ok, summary, steps: [{ tool: 'shell.execute', params, result }] };
+  }
+
+  /** "list the files in <name>": find the folder by name (never a guessed path), then list it. null: not a folder request after all */
+  private async runListFolder(spoken: string, context: AgentRunContext): Promise<AgentResult | null> {
+    let probe: PathProbe;
+    try { probe = this.pathProbe ?? await resolveAppProbe(); } catch { return null; }
+    const shown = (p: string) => (probe.home && p.startsWith(probe.home) ? `~${p.slice(probe.home.length)}` : p);
+    let found: string | undefined;
+    // "my notes" first as written, then without "my"
+    for (const name of [spoken, spoken.replace(/^my\s+/i, '')]) {
+      if (!name) continue;
+      const res = await resolvePath({ name, kind: 'folder' }, { cwd: context.cwd }, probe).catch(() => null);
+      if (!res) return null;
+      if (res.type === 'found') { found = res.path; break; }
+      if (res.type === 'choose') {
+        const picked = await this.chooseCandidate({ kind: 'folder', name, create: false }, res, shown);
+        if (picked === undefined) return null;
+        if (picked === null) { const summary = 'Nothing was listed: you did not pick a folder.'; this.emit({ type: 'done', message: summary }); return { success: false, summary, steps: [], declined: true }; }
+        found = picked; break;
+      }
+    }
+    if (!found) return null;
+    return this.runShellStep(`ls -la -- ${posixQuote(found)}`, `List ${shown(found)}`, context, out => `${shown(found!)}:\n${out || '(empty)'}`);
   }
 
   /** Real file access for finding folders; tests replace it */
