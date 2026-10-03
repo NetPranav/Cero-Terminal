@@ -7,7 +7,7 @@ Please report security problems privately, not in a public issue: use
 Security tab. Include the version, your operating system and steps to reproduce. Reports are read by the
 maintainer as soon as possible.
 
-Supported version: the latest release (2.1.x). Fixes go into a new release of the affected platform.
+Supported version: the latest release (2.2.x). Fixes go into a new release of the affected platform.
 
 ## How Cero keeps you in control
 

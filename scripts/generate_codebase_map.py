@@ -94,8 +94,12 @@ SCRIPT_DESC = {
     'sync-shared.ps1': 'Pull only the OS-agnostic shared core from another branch (PowerShell).',
 }
 out += ['## `scripts/`','','| File | Purpose |','|---|---|']
+SCRIPT_DESC.update({'brand': 'Draws the Cero logo as vector art and renders the logo animation video.', 'eval': 'The model reliability test (`npm run eval:model`).', 'icons': 'Builds the .flow document icons.', 'stress': 'Headless stress tests of the real agent against a local model.'})
 for f in sorted(os.listdir('scripts')):
     p='scripts/'+f
+    if os.path.isdir(p):
+        out.append(f'| `{f}/` | {SCRIPT_DESC.get(f, "-")} |')
+        continue
     t=open(p,encoding='utf-8',errors='ignore').read()
     d=SCRIPT_DESC.get(f) or (describe(t) if f.endswith('.ts') else '')
     if not d:

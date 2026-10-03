@@ -34,7 +34,7 @@ export const LINUX_APP_DIRS = [
 /** Parse `grep -H` output of .desktop files: "/path/x.desktop:Key=Value" */
 export function parseDesktopEntries(output: string, source = 'desktop'): AppEntry[] {
   const files = new Map<string, Record<string, string>>();
-  for (const line of output.split('\n')) {
+  for (const line of output.split(/\r?\n/)) {
     const m = line.match(/^(.+?\.desktop):(Name|GenericName|Keywords|Exec|NoDisplay|Hidden)=(.*)$/);
     if (!m) continue;
     const rec = files.get(m[1]) ?? {};
@@ -55,7 +55,7 @@ export function parseDesktopEntries(output: string, source = 'desktop'): AppEntr
 
 /** `ls` of /Applications and friends: "Visual Studio Code.app" */
 export function parseMacApps(output: string): AppEntry[] {
-  return output.split('\n').map(l => l.trim()).filter(l => /\.app\/?$/.test(l)).map(l => {
+  return output.split(/\r?\n/).map(l => l.trim()).filter(l => /\.app\/?$/.test(l)).map(l => {
     const name = l.replace(/\/$/, '').replace(/\.app$/, '');
     return { name, aliases: [], launch: { kind: 'bundle' as const, value: name }, source: 'applications' };
   });
@@ -64,7 +64,7 @@ export function parseMacApps(output: string): AppEntry[] {
 /** `Get-StartApps | ConvertTo-Csv`-style "Name","AppID" lines, or "Name   AppID" columns */
 export function parseWindowsStartApps(output: string): AppEntry[] {
   const apps: AppEntry[] = [];
-  for (const raw of output.split('\n')) {
+  for (const raw of output.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line || /^"?Name"?[ ,]/i.test(line) || /^-+(\s+-+)*$/.test(line)) continue;
     const csv = line.match(/^"(.+?)","(.+)"$/);

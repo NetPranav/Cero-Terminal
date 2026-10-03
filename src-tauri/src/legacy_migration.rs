@@ -30,12 +30,78 @@ pub fn migrate_home(home: &Path) -> std::io::Result<bool> {
     Ok(true)
 }
 
+/// Copy a folder tree (files and folders only). Used for the app's own data folders, which are named after the
+/// bundle id and so change with the rename; the old copy is left in place.
+pub fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir(&entry.path(), &target)?;
+        } else if ty.is_file() {
+            std::fs::copy(entry.path(), &target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Old bundle ids whose data folders should follow the app to `org.cero.terminal`
+const OLD_IDS: [&str; 2] = ["org.sentinel.terminal", "com.pranav.sentinel-terminal"];
+const NEW_ID: &str = "org.cero.terminal";
+
+/// The folders an app keeps per bundle id on this OS: the web view's saved settings and the app's own data
+fn app_data_roots(home: &Path) -> Vec<std::path::PathBuf> {
+    let mut roots = Vec::new();
+    if cfg!(target_os = "macos") {
+        roots.push(home.join("Library/WebKit"));
+        roots.push(home.join("Library/Application Support"));
+    } else if cfg!(target_os = "windows") {
+        for var in ["LOCALAPPDATA", "APPDATA"] {
+            if let Ok(v) = std::env::var(var) {
+                roots.push(std::path::PathBuf::from(v));
+            }
+        }
+    } else {
+        roots.push(home.join(".local/share"));
+        roots.push(home.join(".config"));
+    }
+    roots
+}
+
+/// For each root, copy `<root>/<old id>` to `<root>/org.cero.terminal` when the new one does not exist yet.
+/// Returns how many folders were copied.
+pub fn migrate_app_data(roots: &[std::path::PathBuf]) -> usize {
+    let mut copied = 0;
+    for root in roots {
+        let new = root.join(NEW_ID);
+        if new.exists() {
+            continue;
+        }
+        for old_id in OLD_IDS {
+            let old = root.join(old_id);
+            if old.is_dir() && copy_dir(&old, &new).is_ok() {
+                copied += 1;
+                break;
+            }
+        }
+    }
+    copied
+}
+
 pub fn migrate_legacy_data() {
     let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) else { return };
-    match migrate_home(Path::new(&home)) {
+    // do the moves first and write the log after: logging can create ~/.cero, and the move needs it not to exist yet
+    let moved_home = migrate_home(Path::new(&home));
+    let copied = migrate_app_data(&app_data_roots(Path::new(&home)));
+    match moved_home {
         Ok(true) => crate::logger::log_info("MIGRATE", "Moved ~/.sentinel to ~/.cero"),
         Ok(false) => {}
         Err(e) => crate::logger::log_info("MIGRATE", &format!("Could not move ~/.sentinel to ~/.cero: {e}")),
+    }
+    if copied > 0 {
+        crate::logger::log_info("MIGRATE", &format!("Copied {copied} app data folder(s) from the old bundle id"));
     }
 }
 
@@ -76,6 +142,21 @@ mod tests {
         assert!(!migrate_home(&home).unwrap());
         assert!(home.join(".sentinel").exists());
         let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn copies_the_old_app_data_folder_once_and_keeps_the_old_one() {
+        let root = temp_home("appdata");
+        fs::create_dir_all(root.join("org.sentinel.terminal/WebsiteData/LocalStorage")).unwrap();
+        fs::write(root.join("org.sentinel.terminal/WebsiteData/LocalStorage/a.sqlite3"), "settings").unwrap();
+        assert_eq!(migrate_app_data(&[root.clone()]), 1);
+        assert_eq!(fs::read_to_string(root.join("org.cero.terminal/WebsiteData/LocalStorage/a.sqlite3")).unwrap(), "settings");
+        assert!(root.join("org.sentinel.terminal").exists());
+        // the new folder exists now, so a second run changes nothing
+        fs::write(root.join("org.cero.terminal/WebsiteData/LocalStorage/a.sqlite3"), "newer").unwrap();
+        assert_eq!(migrate_app_data(&[root.clone()]), 0);
+        assert_eq!(fs::read_to_string(root.join("org.cero.terminal/WebsiteData/LocalStorage/a.sqlite3")).unwrap(), "newer");
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

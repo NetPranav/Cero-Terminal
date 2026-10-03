@@ -45,7 +45,7 @@
     ],
     "category": "DeveloperTool",
     "shortDescription": "AI-native terminal for macOS, Linux and Windows",
-    "longDescription": "High-performance AI-native Linux terminal emulator with embedded llama-server, multi-stage workflow macros, and native system diagnostics.",
+    "longDescription": "A desktop terminal that takes requests in plain language, runs .flow setup files on macOS, Windows and Linux, and can use a model that runs on your own computer.",
     "copyright": "2026 Cero Contributors",
     "resources": {
       "icons/flow/flow.ico": "flow.ico"

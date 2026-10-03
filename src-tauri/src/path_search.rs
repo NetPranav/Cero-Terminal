@@ -152,7 +152,7 @@ mod tests {
     fn finds_loosely_named_folders_and_skips_noise() {
         let root = tree();
         let found = search("gitBrains", &[root.to_string_lossy().to_string()], "dir", 6, 20);
-        let paths: Vec<String> = found.iter().map(|f| f.path.replace(&root.to_string_lossy().to_string(), "")).collect();
+        let paths: Vec<String> = found.iter().map(|f| f.path.replace(&root.to_string_lossy().to_string(), "").replace('\\', "/")).collect();
         assert!(paths.iter().any(|p| p.ends_with("Projects/gitbrains")), "{paths:?}");
         assert!(!paths.iter().any(|p| p.contains("node_modules")), "{paths:?}");
         assert!(!paths.iter().any(|p| p.contains(".hidden")), "{paths:?}");

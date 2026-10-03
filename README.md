@@ -1,19 +1,21 @@
 <div align="center">
 
-<img src="assets/brand/cero-logo-animated.svg" alt="Cero" width="160" />
+<img src="assets/brand/cero-logo-animation.gif" alt="Cero" width="260" />
 
 # Cero
 
-**A terminal that also takes requests in plain language, runs `.flow` setup files on any OS, and uses a model that runs on your own computer.**
+**A terminal that also takes requests in plain language, runs `.flow` setup files on any OS, and can use a model that runs on your own computer.**
 
 [![CI](https://github.com/NetPranav/Sentinal-Terminal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NetPranav/Sentinal-Terminal/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/badge/release-2.2.0-1F222E)](https://github.com/NetPranav/Sentinal-Terminal/releases)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-1F222E)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1F222E)](LICENSE)
 
-[Download](#download) · [.flow files](#flow-files-write-a-setup-once-run-it-anywhere) · [What you can ask](#what-you-can-ask) · [System settings](#system-settings-by-request) · [Build from source](#build-from-source) · [Docs](#documentation)
+[Download](#download) · [Why Cero](#why-cero) · [.flow files](#flow-files-write-a-setup-once-run-it-anywhere) · [What you can ask](#what-you-can-ask) · [Open things by name](#open-folders-and-apps-by-name) · [Teaching](#teaching-cero) · [AI choices](#choose-your-ai) · [Build](#build-from-source) · [Docs](#documentation)
 
 <img src="docs/images/requests.png" alt="Cero answering requests: the total of a CSV column, the last two errors in a log, and suggestions for a bare 'bluetooth'" width="820">
+
+<sub>The logo animation as a video: [assets/brand/cero-logo-animation.mp4](assets/brand/cero-logo-animation.mp4)</sub>
 
 </div>
 
@@ -26,23 +28,27 @@ shell: zsh or bash on macOS and Linux, PowerShell on Windows. Start a line with 
 ```
 
 Cero works out the commands, shows the ones that change anything for your approval, runs them in your
-terminal and answers from their real output. Common requests run from tested recipes without a model call.
-Everything else goes to the AI you choose in Settings:
-- the built-in model (Qwen2.5-Coder 3B on llama.cpp, running on your computer, no account)
-- Ollama
-- a cloud key (OpenAI, Anthropic, Groq, DeepSeek, OpenRouter or any OpenAI-compatible endpoint)
+terminal and answers from their real output. Common requests run from tested code without a model call.
+Everything else goes to the AI you choose (see [Choose your AI](#choose-your-ai)).
 
-With the built-in model or Ollama, requests stay on your machine. With a cloud key they go to that provider.
+## Why Cero
+
+- **Plain language, real shell.** Ask for what you want; see the exact commands before anything that changes your
+  files, system or network runs. Nothing is hidden from you.
+- **`.flow` files run on any OS.** One file, one double-click: Cero picks the right commands for macOS, Windows or Linux.
+- **It finds the real thing.** Say "open the folder gitBrains in VS Code" and Cero looks for the folder (spelling and case
+  forgiven), asks when two match, and never creates a folder when you asked to open one.
+- **Same answer every time.** The built-in model is run deterministically; requests that code can answer never reach it.
+- **It learns only when you say so.** `/learn`, `/forget`. Nothing is learned by watching you.
+- **You can stop it.** Ctrl+C stops a running request and its command; waiting requests sit in a queue you can see and edit.
+- **Private by default.** The built-in model and Ollama keep requests on your computer. API keys live in the system keychain.
 
 ## Demo
 
 <div align="center">
 <img src="docs/media/flow-demo.gif" alt="Double-clicking dev-setup.flow: Cero lists every command, waits for a click on Run, then types each step into the terminal" width="820">
 
-**Watch the demo (2.5 min):** [docs/media/cero-demo.mp4](docs/media/cero-demo.mp4). One slide per feature, then the real
-app doing it, unedited: Wi-Fi off and on, joining a network, closing a port, quitting an app by name, then the main idea:
-telling the terminal the steps of a workflow, saving the `.flow` file, and double-clicking it to run.
-Recorded in the macOS release build. Made with the [product-demo](docs/demo/README.md) method.
+Double-clicking a `.flow` file: every command is listed, nothing runs until you click Run, then each step is typed into the terminal.
 </div>
 
 ## .flow files: write a setup once, run it anywhere
@@ -108,7 +114,44 @@ file, and a step it cannot understand is named and left out, never guessed.
 </tr>
 </table>
 
+### Save what you just did
+
+Add the save words anywhere in a request. Cero runs the task first, then writes a `.flow` from the steps that really ran:
+
+```text
+>open spotify and save this as a workflow called my music on the desktop
+>install node, save this as a workflow called node setup, then open vs code
+>save the last 3 steps as a workflow called deploy
+```
+
+Every request to save ends with one plain line: `Saved workflow "name" (N steps) to <path>` or `Not saved: <reason>`.
+Cero only ever writes `.flow` files (an old `.json` workflow is migrated, the original kept as `.json.bak`), and the file
+type has its own icon and opens in Cero on macOS, Windows and Linux.
+
 Format, actions and the package table: [docs/FLOW_FILES.md](docs/FLOW_FILES.md). Examples: [examples/flows](examples/flows).
+
+## Open folders and apps by name
+
+```text
+>Please open a folder named gitBrains in VS Code. It is inside /padhai_in_linux/Projects/
+>open crome
+>cd gitbrains
+```
+
+- The place you name is searched first (as written, then under your home folder), then the current folder, your usual project
+  folders and your home folder.
+- `gitBrains`, `git-brains` and `Git Brains` are the same name. A typo asks "Did you mean ...?". Two matches ask which one.
+  A name that is not found is reported with where Cero looked, and **nothing is created or opened**.
+- The editor gets the folder in one window (no second window). Apps are found in your installed apps (desktop entries on Linux,
+  `/Applications` on macOS, the Start menu on Windows); an app that is not installed is reported, never guessed.
+- Your answers are remembered (`what do you remember about gitbrains`, `forget gitbrains`).
+- A slipped first word is read as intended: `opne fldor docs in cod` becomes `open folder docs in code`.
+
+## Stop it, queue it
+
+- **Ctrl+C** stops the running request and the command it started; press it again to force the stop.
+- Requests typed while one is running **wait in a queue**. `/queue` shows them; remove, move or clear them there.
+- **Esc** closes Settings. Left and right arrows only move the cursor; the grey suggestion is accepted with Tab (or Right at the end of the line).
 
 ## What you can ask
 
@@ -148,9 +191,16 @@ private keys or credential files always asks. Keys and tokens are masked before 
 
 ## Teaching Cero
 
-Cero never learns by watching you. Type `/learn` after a request that worked and it remembers that request and its
-command; `/forget` removes one; `/learning on` lets it keep a record of its own failures (off by default). See
-[docs/LEARNING.md](docs/LEARNING.md).
+Cero never learns by watching you.
+
+| You type | What happens |
+|---|---|
+| `/learn` | Teaches the request just above, if it worked with one command. |
+| `/learn compress backups -> tar -czf backups.tgz ./backups` | Teaches a request and its command directly. |
+| `/learned`, `/forget <id>` | See what was taught; remove one. |
+| `/learning on` / `off` | Lets Cero keep a local record of its own failed requests. Off by default. |
+
+A request that failed is never learnable. Details: [docs/LEARNING.md](docs/LEARNING.md).
 
 ## System settings by request
 
@@ -171,15 +221,31 @@ and Cero lists what it can do for it on this OS. Typing `>turn blu` completes th
 Changes ask first. When a switch is blocked (no radio, a policy, an external monitor without brightness
 control), Cero says why and opens the matching settings page.
 
-## Settings
+## Choose your AI
 
 <div align="center">
 <img src="docs/images/settings.png" alt="Settings: choose the built-in model, Ollama or a cloud service" width="720">
 </div>
 
-One question: which AI answers your requests. The built-in model downloads its engine (llama.cpp: Metal on
-macOS, Vulkan or CPU on Windows and Linux) and the 2 GB model from here. Model size, hardware and cloud keys
-are under Advanced.
+One question: which AI answers your requests. Your choice is remembered across restarts, and the status bar shows what is
+really answering (`AI: local`, `AI: Ollama`, `AI: API`).
+
+| Choice | Notes |
+|---|---|
+| Built-in model | Runs on your computer through llama.cpp (Metal on macOS, Vulkan or CPU on Windows and Linux). No account. |
+| Ollama | Any model you already run. |
+| Cloud key | OpenAI, Anthropic, Groq, DeepSeek, OpenRouter or any OpenAI-compatible endpoint. Keys are stored in the macOS Keychain or Windows Credential Manager (a private file on Linux), not in browser storage. |
+
+Built-in model sizes (Settings, Advanced): **0.5B** (about 470 MB, for slow connections and old machines), **1.5B** (1.1 GB),
+**3B** (2.1 GB, the default) and **4B** (2.5 GB). A quantized model cannot be shrunk much by compressing it (measured:
+3.4%), so a smaller model is the way to a smaller download. Interrupted downloads resume, and every file is checked against
+its SHA-256.
+
+**How reliable is the built-in model?** Measured on a 3B model, 71 cases, the whole path (code routes, then the model, then the
+safety check): the same prompt gave the same answer every time (flip rate 0.0%), and 85.9% of cases were right on the first
+try. That is below the 95% we are aiming for, so the code answers more requests itself with every release. Method, numbers and
+the known misses: [docs/MODEL_RELIABILITY.md](docs/MODEL_RELIABILITY.md). If the built-in model fails its safety check twice
+and an API model is set up, Cero offers to retry that one request there (it asks first).
 
 ## Download
 
@@ -215,12 +281,14 @@ The optional `cero` command opens the app in a folder or runs a `.flow` file fro
 
 | | macOS | Linux | Windows |
 |---|---|---|---|
-| Builds and unit tests in CI | Yes | Yes | Yes |
-| Run by hand in the release build (requests, tabs, flows, settings) | Yes, Apple Silicon on macOS 26 | Not yet | Not yet |
-| System-settings commands | Read commands run on a Mac | Covered by tests | Every script parse-checked by PowerShell in CI; not yet run on a Windows PC |
+| Builds and unit tests in CI (2,390+ tests) | Yes | Yes | Yes |
+| Headless run of 120 complex requests against the real agent | Yes (macOS) | Not yet | Not yet |
+| Run by hand in the release build | Yes, Apple Silicon on macOS 26 | Not yet | Not yet |
+| `.flow` file type, icon and double-click | Built; checked in the macOS build | Packages written; not run on a Linux desktop | Installer written; not run on a Windows PC |
 
-Please [open an issue](https://github.com/NetPranav/Sentinal-Terminal/issues) if something does not work on
-your system.
+Linux and Windows builds come from CI and have not been run on those systems yet. The checklist for testing them is
+[docs/LINUX_TEST_REPORT.md](docs/LINUX_TEST_REPORT.md). Please [open an issue](https://github.com/NetPranav/Sentinal-Terminal/issues)
+if something does not work on your system.
 
 ## Build from source
 
@@ -248,9 +316,13 @@ Releases: `scripts/release.sh macos|linux|windows|all` pushes the platform branc
 | | |
 |---|---|
 | [docs/FLOW_FILES.md](docs/FLOW_FILES.md) | The `.flow` format and how each OS runs it |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | The current fix plan: step-by-step tasks for the problems found on Linux |
+| [docs/LEARNING.md](docs/LEARNING.md) | Teaching Cero |
+| [docs/MODEL_RELIABILITY.md](docs/MODEL_RELIABILITY.md) | How the built-in model is measured, and the results |
+| [docs/LINUX_TEST_REPORT.md](docs/LINUX_TEST_REPORT.md) | What was checked, and what still needs a real Linux desktop |
+| [docs/completed_roadmap.md](docs/completed_roadmap.md) | The record of the 2.2.0 work |
 | [docs/releases](docs/releases) | Release notes per platform |
 | [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md) | Where things live in the code |
+| [SECURITY.md](SECURITY.md) · [CONTRIBUTING.md](CONTRIBUTING.md) | Reporting a problem; contributing |
 
 ## License
 

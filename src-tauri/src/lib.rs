@@ -46,6 +46,9 @@ fn request_bluetooth_access() {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // first of all, before anything creates ~/.cero or opens the web view: bring settings and data from the old
+    // name (Sentinel Terminal) across
+    legacy_migration::migrate_legacy_data();
     logger::init();
     logger::log_info("BOOT", "Initializing Cero runtime");
     tauri::Builder::default()
@@ -62,8 +65,6 @@ pub fn run() {
         }))
         .setup(|app| {
             logger::log_info("SETUP", "Initializing core application services");
-            // before anything reads ~/.cero: bring an older ~/.sentinel across
-            legacy_migration::migrate_legacy_data();
             process_cmds::ensure_private_data_dir();
             file_association::ensure_registered(app.handle());
             // A previous instance that crashed or was killed can leave its model server running
