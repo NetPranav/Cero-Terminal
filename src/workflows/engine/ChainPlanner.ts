@@ -8,6 +8,9 @@
  */
 
 import { isLongRunningCommand } from '../../domain/terminal/TerminalWorkspace';
+import { planScaffold } from '../../domain/terminal/InteractiveCli';
+import { parseOpenRequest, type OpenRequest } from '../../domain/system/OpenRequest';
+import { parseAppLaunch, type AppLaunchRequest } from '../../domain/app/AppLaunchParser';
 
 export type ChainOs = 'linux' | 'macos' | 'windows';
 
@@ -20,6 +23,12 @@ export interface ChainStep {
   enter?: string;
   /** Keeps running: opens in its own terminal pane */
   longRunning: boolean;
+  /** "open the folder gitBrains in VS Code": found and opened the same way as on its own */
+  open?: OpenRequest;
+  /** "open zen browser": looked up among the installed apps, the same way as on its own */
+  app?: AppLaunchRequest;
+  /** Folder the step must leave behind (a new project); checked before the next step runs */
+  expectFolder?: string;
 }
 
 export interface ChainPlan {
@@ -74,9 +83,11 @@ interface ClauseContext {
   branch?: string;
   /** Virtual environment most recently created ("the python version inside it") */
   venv?: string;
+  /** A project just created that the chain has not gone into: "open it" means that folder */
+  unentered?: string;
 }
 
-function planClause(clause: string, os: ChainOs, ctx: ClauseContext): { step: ChainStep; folder?: string; branch?: string; venv?: string } {
+function planClause(clause: string, os: ChainOs, ctx: ClauseContext): { step: ChainStep; folder?: string; branch?: string; venv?: string; unentered?: string } {
   const lastFolder = ctx.folder;
   const q = os === 'windows' ? psQuote : quote;
   const c = clause.trim();
@@ -165,6 +176,12 @@ function planClause(clause: string, os: ChainOs, ctx: ClauseContext): { step: Ch
     return { step: step(forOs(os, `curl -fLO ${quote(url)}`, `curl.exe -fLO ${psQuote(url)}`)) };
   }
 
+  // "create a NextJS project named cero-test": the scaffolder with its defaults, never its questions
+  const scaffold = planScaffold(c);
+  if (scaffold) {
+    return { step: step(scaffold.command, { expectFolder: scaffold.name }), folder: scaffold.name, unentered: scaffold.name };
+  }
+
   // Node / Python project set-up
   if (/\bpackage\.json\b|\bnpm\s+init\b|^(?:initiali[sz]e|init|create|set\s*up|start)\s+(?:a\s+|an\s+)?(?:new\s+)?(?:node(?:\.?js)?|npm|javascript)\s+project/i.test(c)) {
     return { step: step('npm init -y') };
@@ -199,7 +216,9 @@ function planClause(clause: string, os: ChainOs, ctx: ClauseContext): { step: Ch
 
   // Opening things
   if (/^open\s+(?:it|this|that|the\s+(?:folder|project)|the\s+current\s+folder|here)?\s*(?:in|with)\s+(?:vs\s*code|vscode|visual\s+studio\s+code|code)$/i.test(c)) {
-    return { step: step(os === 'macos' ? 'code . 2>/dev/null || open -a "Visual Studio Code" .' : 'code .') };
+    // Right after creating a project the chain has not entered, "it" is that project
+    const target = ctx.unentered && !/\b(?:current\s+folder|here)\b/i.test(c) ? q(ctx.unentered) : '.';
+    return { step: step(os === 'macos' ? `code ${target} 2>/dev/null || open -a "Visual Studio Code" ${target}` : `code ${target}`) };
   }
   if (/^open\s+(?:it|this|that|the\s+(?:folder|project)|here)?\s*(?:in|with)\s+(?:finder|(?:the\s+)?file\s+(?:manager|browser)|files)$/i.test(c)) {
     return { step: step(os === 'macos' ? 'open .' : os === 'windows' ? 'explorer .' : 'xdg-open .') };
@@ -219,6 +238,12 @@ function planClause(clause: string, os: ChainOs, ctx: ClauseContext): { step: Ch
   m = c.match(/^(?:run|execute)\s+((?:git|npm|npx|pnpm|yarn|bun|node|deno|python3?|pip3?|uv|cargo|go|make|cmake|docker|kubectl|ls|pwd|cat|echo|tree|code|brew)\b[^;&|`$<>\\]*)$/i);
   if (m) return { step: step(m[1].trim()) };
 
+  // "open the folder gitBrains in VS Code", "open zen browser": the same lookups as when asked alone
+  const open = parseOpenRequest(c);
+  if (open) return { step: step(undefined, { open }) };
+  const app = parseAppLaunch(c, os);
+  if (app) return { step: step(undefined, { app }) };
+
   // Anything else: the model works this clause out, with the folder it will run in
   void lower;
   return { step: step() };
@@ -234,6 +259,10 @@ export function commandForSingleClause(clause: string, os: ChainOs): string | un
  * Steps without a command are for the model.
  */
 export function planChain(goal: string, os: ChainOs): ChainPlan | null {
+  // One open request ("open vs code and open gitBrains in it") stays one, unless the open parser
+  // would have to swallow another action to read it ("... inside /x and also open zen browser")
+  const whole = parseOpenRequest(goal);
+  if (whole && !openRequestSwallowsAction(whole)) return null;
   // "in demo-repo, create a branch ... and show the last 3 commits": every step runs there
   const inFolder = goal.trim().match(/^in\s+(?:the\s+)?(?:folder\s+|directory\s+|repo(?:sitory)?\s+)?["'`]?([\w@.+~/\\-]+)["'`]?\s*,?\s+(?=\S)/i);
   const body = inFolder && !/^(?:it|here|there|this|the|a|an)$/i.test(inFolder[1]) ? goal.trim().slice(inFolder[0].length) : goal;
@@ -246,15 +275,23 @@ export function planChain(goal: string, os: ChainOs): ChainPlan | null {
     ctx.folder = inFolder[1];
   }
   for (const clause of clauses) {
-    const { step, folder, branch, venv } = planClause(clause, os, ctx);
+    const { step, folder, branch, venv, unentered } = planClause(clause, os, ctx);
+    if (step.enter) ctx.unentered = undefined;
+    if (unentered) ctx.unentered = unentered;
     if (folder) ctx.folder = folder;
     if (branch) ctx.branch = branch;
     if (venv) ctx.venv = venv;
     steps.push(step);
   }
   // A chain the planner understood nothing of is better handled by the model as a whole
-  if (!steps.some(s => s.command || s.enter)) return null;
+  if (!steps.some(s => s.command || s.enter || s.open || s.app)) return null;
   return { steps };
+}
+
+/** An open request whose name, place or app holds another instruction ("/x and also open zen browser") */
+function openRequestSwallowsAction(req: OpenRequest): boolean {
+  const action = new RegExp(String.raw`(?:^|\s)(?:and\s+|then\s+|also\s+)*${VERB}\s+\S`, 'i');
+  return [req.name, req.locationHint, req.withApp].some(v => typeof v === 'string' && /\s(?:and|then|also)\s/i.test(` ${v} `) && action.test(v));
 }
 
 /** Resolve a folder the chain enters against the current one (absolute, ~ or relative). */

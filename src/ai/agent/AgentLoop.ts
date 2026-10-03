@@ -55,6 +55,7 @@ import { GbnfGrammarManager } from '../models/GbnfGrammarManager';
 import { buildDecisionCall } from './DecisionCall';
 import { getContextTokens } from './ContextBudget';
 import { StdinHangDetector } from '../../domain/terminal/StdinHangDetector';
+import { hasUnansweredPrompt, nonInteractiveForm } from '../../domain/terminal/InteractiveCli';
 import { FailureClassifier } from './FailureClassifier';
 import { UndoLog } from '../../domain/session/UndoLog';
 import { IntentRouter } from '../router/IntentRouter';
@@ -1332,7 +1333,73 @@ export class AgentLoop {
   }
 
   private emit(event: AgentEvent): void {
+    // Inside a multi-step request a step's own "done" or "error" is one finished step, not the
+    // end of the request (the terminal marks the whole prompt finished on "done")
+    if (this.stepDepth > 0 && (event.type === 'done' || event.type === 'error')) {
+      const mark = event.type === 'done' ? '✓' : '✗';
+      event = { ...event, type: 'tool_done', message: `${mark} ${String(event.message || '').replace(/^[✓✗]\s*/, '')}` };
+    }
     this.listener?.(event);
+  }
+
+  /** Above 0 while a chain runs one of its steps through a single-request route */
+  private stepDepth = 0;
+
+  /** Run a single-request route as one step of a longer request */
+  private async asStep(run: () => Promise<AgentResult>): Promise<AgentResult> {
+    this.stepDepth++;
+    try {
+      return await run();
+    } finally {
+      this.stepDepth--;
+    }
+  }
+
+  /** How often the hand-off below checks the pane, and how long it must stay at its prompt */
+  public static INTERACTIVE_POLL_MS = 250;
+  public static INTERACTIVE_SETTLE_MS = 1000;
+
+  /**
+   * A command that stopped to ask questions nobody could answer (agent steps have no stdin):
+   * run it again in a terminal pane with the keyboard, so the person answers the questions
+   * there, and wait until the program has finished and the shell prompt is back.
+   */
+  private async runInteractiveInPane(command: string, clause: string, context: AgentRunContext): Promise<{ ok: boolean; message: string }> {
+    const workspace = TerminalWorkspace.getInstance();
+    let paneId: string;
+    const title = paneTitleFor(command);
+    try {
+      ({ paneId } = workspace.spawn({
+        command: paneCommand(command, context.os),
+        cwd: context.cwd,
+        title,
+        requesterPaneId: context.paneId,
+        placement: 'split',
+        focus: true,
+      }));
+    } catch (err: any) {
+      return { ok: false, message: `\`${command}\` asks questions that need your answers, and no terminal pane could be opened for it (${err?.message || 'no terminal'}). Run it yourself in a terminal, then ask again for the rest.` };
+    }
+    if (context.signal) {
+      context.signal.addEventListener('abort', () => {
+        try { workspace.write(paneId, '\x03'); } catch { /* pane gone */ }
+      }, { once: true });
+    }
+    this.emit({ type: 'tool_start', message: `${clause}: \`${command}\` is asking questions. Answer them in the "${title}" pane; the remaining steps continue when it finishes.` });
+
+    let idleSince = 0;
+    for (;;) {
+      throwIfAborted(context.signal);
+      await new Promise(r => setTimeout(r, AgentLoop.INTERACTIVE_POLL_MS));
+      const pane = workspace.get(paneId);
+      if (!pane) return { ok: false, message: `The "${title}" pane was closed before \`${command}\` finished.` };
+      // A new pane is idle at its first prompt before the command is typed: wait for both
+      const finished = !workspace.hasPendingCommand(paneId) && !pane.busy && !pane.alternateScreen;
+      if (!finished) { idleSince = 0; continue; }
+      if (!idleSince) idleSince = Date.now();
+      if (Date.now() - idleSince >= AgentLoop.INTERACTIVE_SETTLE_MS) break;
+    }
+    return { ok: true, message: `\`${command}\` finished in the "${title}" pane.` };
   }
 
   /**
@@ -2496,6 +2563,21 @@ export class AgentLoop {
           continue;
         }
 
+        // Folders and apps: the same lookup (installed apps, real folder, approval) as when asked alone
+        if (!s.command && (s.open || s.app)) {
+          this.emit({ type: 'tool_start', message: label });
+          const stepContext = { ...context, cwd };
+          const sub = await this.asStep(() => (s.open ? this.runOpen(s.open, stepContext) : this.runAppLaunch(s.app!, stepContext)));
+          steps.push(...sub.steps);
+          if (!sub.success) {
+            const summary = `Stopped at step ${i + 1} (${s.clause}): ${sub.summary}`;
+            this.emit({ type: sub.declined ? 'tool_done' : 'error', message: sub.declined ? `✗ ${summary}` : summary });
+            return { success: false, summary, steps, declined: sub.declined, awaitingInput: sub.awaitingInput, cdPath: cwd !== startCwd ? cwd : undefined };
+          }
+          doneLines.push(`${s.clause}: ${sub.summary}`);
+          continue;
+        }
+
         let command = s.command ?? planRecipe(s.clause, context.os)?.command;
         if (!command) {
           this.emit({ type: 'thinking', message: `Working out: ${s.clause}` });
@@ -2505,6 +2587,8 @@ export class AgentLoop {
             this.emit({ type: 'error', message: summary });
             return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
           }
+          // A worked-out command that would stop to ask questions gets its non-interactive form
+          command = nonInteractiveForm(command);
         }
 
         if (s.longRunning || isLongRunningCommand(command)) {
@@ -2532,11 +2616,36 @@ export class AgentLoop {
           this.emit({ type: 'tool_done', message: `✗ ${summary}` });
           return { success: false, summary, steps, declined: true, cdPath: cwd !== startCwd ? cwd : undefined };
         }
+        // It stopped at a question (stdin is closed here), whatever its exit code says: the
+        // person answers it in a pane, and the chain goes on once the program has finished
+        if (hasUnansweredPrompt(`${result.data?.stdout ?? ''}\n${result.data?.stderr ?? ''}`)) {
+          const handed = await this.runInteractiveInPane(command, s.clause, { ...context, cwd });
+          if (!handed.ok) {
+            const summary = `Stopped at step ${i + 1} (${s.clause}): ${handed.message}`;
+            this.emit({ type: 'error', message: summary });
+            return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
+          }
+          const missing = s.expectFolder ? await this.folderMissing(s.expectFolder, cwd, context) : false;
+          if (missing) {
+            const summary = `Stopped at step ${i + 1} (${s.clause}): \`${command}\` finished but "${s.expectFolder}" was not created.`;
+            this.emit({ type: 'error', message: summary });
+            return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
+          }
+          this.emit({ type: 'tool_done', message: `✓ ${s.clause}  (${handed.message})` });
+          doneLines.push(`${command}  (answered in its own pane)`);
+          continue;
+        }
         const failed = !result.success || (typeof result.data?.code === 'number' && result.data.code !== 0)
           || hiddenFailure(String(result.data?.stderr || ''), String(result.data?.stdout || ''));
         if (failed) {
           const why = String(result.error || result.data?.stderr || 'failed').trim().split('\n').filter(Boolean).pop() || 'failed';
           const summary = `Stopped at step ${i + 1} (${s.clause}): \`${command}\` failed: ${why}`;
+          this.emit({ type: 'error', message: summary });
+          return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
+        }
+        // A scaffolder can exit 0 without creating anything: the next steps need the folder
+        if (s.expectFolder && await this.folderMissing(s.expectFolder, cwd, context)) {
+          const summary = `Stopped at step ${i + 1} (${s.clause}): \`${command}\` exited without creating "${s.expectFolder}".`;
           this.emit({ type: 'error', message: summary });
           return { success: false, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
         }
@@ -2563,6 +2672,15 @@ export class AgentLoop {
     // history, CLI) carries the answers so follow-up questions can use them
     const summary = answers.length ? `${done}\n\n${answers.join('\n\n')}` : done;
     return { success: true, summary, steps, cdPath: cwd !== startCwd ? cwd : undefined };
+  }
+
+  /** True when `folder` (relative to `cwd`) is not a directory after a step that should create it */
+  private async folderMissing(folder: string, cwd: string, context: AgentRunContext): Promise<boolean> {
+    const command = isWindowsName(context.os)
+      ? `if (Test-Path -PathType Container -LiteralPath '${folder.replace(/'/g, "''")}') { 'yes' } else { 'no' }`
+      : `[ -d '${folder.replace(/'/g, `'\\''`)}' ] && echo yes || echo no`;
+    const r = await this.toolExecutor.execute('shell.execute', { command, explanation: `Check ${folder} was created` }, cwd, async () => true);
+    return String(r?.data?.stdout ?? '').trim() !== 'yes';
   }
 
   /**
@@ -4798,6 +4916,8 @@ export class AgentLoop {
           if (toolId === 'shell.execute' && params?.command) {
             // Sanitize desktop application binaries & workspace dispatchers
             params.command = AgentLoop.sanitizeDesktopAppCommand(params.command, goal);
+            // No terminal behind this step: a program that asks questions gets its non-interactive form
+            params.command = nonInteractiveForm(params.command);
 
             // python -> python3 on macOS/Linux, python3 -> python on Windows
             params.command = portInterpreters(params.command, context.os);

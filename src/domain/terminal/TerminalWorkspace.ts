@@ -280,6 +280,8 @@ export function isLongRunningCommand(command: string): boolean {
   if (!c) return false;
   // Explicitly backgrounded or detached: returns immediately
   if (/&\s*$/.test(c) || /\b(?:nohup|setsid|disown)\b/.test(c) || /\bdocker\s+compose\s+up\b.*\s-d\b|\bdocker\s+run\b.*\s-d\b/.test(c)) return false;
+  // Project scaffolders ("npm create vite@latest web", "npx create-next-app x") finish; "vite" in them is not a dev server
+  if (/^(?:npx\s+(?:--yes\s+|-y\s+)?create-[\w-]+|(?:npm|pnpm|yarn|bun)\s+(?:create|init)\s+\S)/.test(c)) return false;
   return [
     /\bros2\s+(?:run|launch)\b/,
     /\bros2\s+topic\s+(?:echo|hz|bw|pub)\b(?![^;&|]*--once)(?![^;&|]*\s-1\b)/,
