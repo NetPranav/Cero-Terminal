@@ -62,8 +62,10 @@ When the search overlay is open:
 | Action | Shortcut | Description |
 | :--- | :--- | :--- |
 | **Summon AI Assistant** | `>` + *Instruction* | Prefix commands with `>` to trigger natural language execution. |
-| **Accept Ghost Text Suggestion** | `Tab` or `Right Arrow` | Autocompletes suggested commands from demonstration/episodic memory. |
+| **Accept Ghost Text Suggestion** | `Tab` (and `Right Arrow`, if turned on) | Autocompletes the grey suggestion at the end of the line. Arrow keys only move the cursor unless you turn on "accept with Right Arrow" in Settings. A suggestion is only accepted while it still matches exactly what is on the line: after a paste or an edit it is dropped. |
 | **Accept Auto-Heal Remediation** | `Tab` | When an error occurs with an active remediation pill, press `Tab` to execute. |
 | **Direct Auto-Heal Commands** | `>fix` or `>heal` | Manually triggers diagnostic auto-heal on recent terminal error output. |
-| **Cancel Active AI / Shell Process** | `Ctrl + C` | Cancels prompt generation or terminates running foreground process. |
+| **Cancel Active AI / Shell Process** | `Ctrl + C` | Cancels the running AI request: model call, running commands and open approval dialogs stop, and the task shows as cancelled. Prompts waiting in the queue are kept and the queue is paused (resume with `/queue resume` or the queue panel). Press `Ctrl + C` again within 1.5 seconds to clear the paused queue. A draft you are typing is kept. With no AI task running, `Ctrl + C` goes to the shell as usual. |
+| **Queue Panel** | `/queue`, or click the queue count in the status bar | Lists the running task and the waiting prompts in order, with remove, move, pause/resume and stop. `Escape` closes it while it has focus. |
+| **Close Settings** | `Escape` | Closes the Settings screen. A dropdown or field that is open inside Settings handles its own `Escape` first. |
 | **Clear Terminal Buffer** | `Ctrl + L` or `clear` | Wipes visual terminal screen while preserving session context. |

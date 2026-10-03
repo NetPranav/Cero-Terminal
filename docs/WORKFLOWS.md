@@ -63,6 +63,8 @@ Cero supports three natural mechanisms for saving workflows:
 #### 1. Simultaneous Task Execution + Named Save Directive
 Execute a natural language task and immediately persist the executed sequence as a named workflow using the `:: save as workflow <name>` syntax:
 
+You can also say it in a sentence, anywhere in the prompt: "open vscode and save this as a workflow called dev", "open vscode, save as workflow dev", "save workflow named dev, then open vscode", "make it a workflow called dev". The steps that actually ran are saved. A workflow saved to the Desktop or the current folder is also registered in the Cero workflows folder, so `run the workflow dev`, `list my workflows` and the Workflow Manager find it. The reply always says what was saved and where, or why nothing was saved.
+
 ```bash
 > clean build cache, run cargo test, and package release :: save as workflow release-prep
 ```
