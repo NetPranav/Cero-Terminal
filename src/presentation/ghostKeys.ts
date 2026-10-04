@@ -2,8 +2,8 @@
  * ghostKeys.ts — pure decision function for ghost-text key handling.
  *
  * Task 1.4: Arrow keys must move the cursor without inserting ghost text.
- * Only Tab (always) and Right (when cursor is at the end of the line and a
- * suggestion is showing) may accept the suggestion.  Every other key clears
+ * Only Tab and Right (when the cursor is at the end of the line, a suggestion is
+ * showing, and Right-accept has not been turned off in Settings) accept the suggestion.  Every other key clears
  * the ghost and passes through to the shell.
  */
 
@@ -14,7 +14,7 @@ export interface GhostKeyContext {
   cursorAtEnd: boolean;
   /** True when there is a visible ghost suggestion. */
   hasGhost: boolean;
-  /** Whether the "accept suggestion with Right arrow" setting is on. */
+  /** Whether the "accept suggestion with Right arrow" setting is on (the default). */
   acceptRight: boolean;
 }
 

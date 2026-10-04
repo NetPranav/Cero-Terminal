@@ -45,7 +45,8 @@ class PromptHarness {
   readonly term = new FakeTerm();
   readonly tracker = new InputLineTracker();
   readonly ghost: GhostTextRenderer;
-  acceptRight = false;
+  /** The real default, as a fresh install reads it */
+  acceptRight = readGhostAcceptRight({ getItem: () => null });
 
   constructor() {
     const termForGhost: any = { get buffer() { return harnessTerm.buffer; } };
@@ -99,11 +100,11 @@ class PromptHarness {
 
 describe('decideGhostKey: arrows only move the cursor', () => {
   const at = { cursorAtEnd: true, hasGhost: true };
-  it('Right never accepts unless the user opted in', () => {
+  it('Right accepts at the end unless the user turned it off', () => {
     expect(decideGhostKey(RIGHT, { ...at, acceptRight: false })).toBe('clear-ghost-and-pass');
     expect(decideGhostKey(RIGHT, { ...at, acceptRight: true })).toBe('accept-ghost');
   });
-  it('Right in the middle of the line never accepts, even when opted in', () => {
+  it('Right in the middle of the line never accepts', () => {
     expect(decideGhostKey(RIGHT, { cursorAtEnd: false, hasGhost: true, acceptRight: true })).toBe('clear-ghost-and-pass');
   });
   it('Left and the other movement keys clear the ghost and pass through', () => {
@@ -126,10 +127,11 @@ describe('decideGhostKey: arrows only move the cursor', () => {
 });
 
 describe('ghost preference', () => {
-  it('Right-arrow accept is off unless explicitly enabled', () => {
-    expect(readGhostAcceptRight({ getItem: () => null })).toBe(false);
-    expect(readGhostAcceptRight({ getItem: () => 'false' })).toBe(false);
+  it('Right-arrow accept is on unless the user turned it off in Settings', () => {
+    expect(readGhostAcceptRight({ getItem: () => null })).toBe(true);
     expect(readGhostAcceptRight({ getItem: () => 'true' })).toBe(true);
+    expect(readGhostAcceptRight({ getItem: () => 'false' })).toBe(false);
+    expect(readGhostAcceptRight({ getItem: () => { throw new Error('blocked'); } })).toBe(true);
   });
 });
 
@@ -170,12 +172,54 @@ describe('prompt input with grey suggestion text', () => {
     expect(h.key('\t')).toBe('\t');
   });
 
-  it('Right accepts at the end only when the user opted in', () => {
+  it('Right accepts at the end by default, exactly like Tab', () => {
+    const viaRight = new PromptHarness();
+    viaRight.type('git st');
+    viaRight.showSuggestion('git status');
+    expect(viaRight.key(RIGHT)).toBe('atus');
+
+    const viaTab = new PromptHarness();
+    viaTab.type('git st');
+    viaTab.showSuggestion('git status');
+    expect(viaTab.key('\t')).toBe('atus');
+
+    expect(viaRight.term.text).toBe('git status');
+    expect(viaRight.term.text).toBe(viaTab.term.text);
+    expect(viaRight.term.cursor).toBe(viaRight.term.text.length);
+    expect(viaRight.term.cursor).toBe(viaTab.term.cursor);
+  });
+
+  it('Right pressed several times inserts the suggestion once, then only moves the cursor', () => {
     const h = new PromptHarness();
-    h.acceptRight = true;
+    h.type('npm run b');
+    h.showSuggestion('npm run build');
+    for (let i = 0; i < 5; i++) h.key(RIGHT);
+    expect(h.term.text).toBe('npm run build');
+    expect(h.term.text.split('uild').length - 1).toBe(1);
+    expect(h.term.cursor).toBe('npm run build'.length);
+  });
+
+  it('Right with no suggestion only moves the cursor', () => {
+    const h = new PromptHarness();
+    h.type('echo hello');
+    h.key(LEFT); h.key(LEFT); h.key(LEFT);
+    expect(h.term.cursor).toBe(7);
+    h.key(RIGHT);
+    expect(h.term.cursor).toBe(8);
+    h.key(RIGHT); h.key(RIGHT); h.key(RIGHT);
+    expect(h.term.cursor).toBe(10);
+    expect(h.term.text).toBe('echo hello');
+  });
+
+  it('turned off in Settings, Right only moves the cursor and Tab still accepts', () => {
+    const h = new PromptHarness();
+    h.acceptRight = readGhostAcceptRight({ getItem: () => 'false' });
     h.type('git st');
     h.showSuggestion('git status');
     h.key(RIGHT);
+    expect(h.term.text).toBe('git st');
+    h.showSuggestion('git status');
+    h.key('\t');
     expect(h.term.text).toBe('git status');
   });
 
