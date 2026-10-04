@@ -62,7 +62,7 @@ When the search overlay is open:
 | Action | Shortcut | Description |
 | :--- | :--- | :--- |
 | **Summon AI Assistant** | `>` + *Instruction* | Prefix commands with `>` to trigger natural language execution. |
-| **Accept Ghost Text Suggestion** | `Tab` (and `Right Arrow`, if turned on) | Autocompletes the grey suggestion at the end of the line. Arrow keys only move the cursor unless you turn on "accept with Right Arrow" in Settings. A suggestion is only accepted while it still matches exactly what is on the line: after a paste or an edit it is dropped. |
+| **Accept Ghost Text Suggestion** | `Tab` or `Right Arrow` | Autocompletes the grey suggestion at the end of the line. Right Arrow accepts only at the end of the line; anywhere else it moves the cursor. Turn Right Arrow accept off with "Accept suggestion with Right arrow" in Settings; Tab always accepts. A suggestion is only accepted while it still matches exactly what is on the line: after a paste or an edit it is dropped. |
 | **Accept Auto-Heal Remediation** | `Tab` | When an error occurs with an active remediation pill, press `Tab` to execute. |
 | **Direct Auto-Heal Commands** | `>fix` or `>heal` | Manually triggers diagnostic auto-heal on recent terminal error output. |
 | **Cancel Active AI / Shell Process** | `Ctrl + C` | Cancels the running AI request: model call, running commands and open approval dialogs stop, and the task shows as cancelled. Prompts waiting in the queue are kept and the queue is paused (resume with `/queue resume` or the queue panel). Press `Ctrl + C` again within 1.5 seconds to clear the paused queue. A draft you are typing is kept. With no AI task running, `Ctrl + C` goes to the shell as usual. |
