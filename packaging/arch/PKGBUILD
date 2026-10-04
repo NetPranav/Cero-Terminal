@@ -1,6 +1,6 @@
 # Maintainer: Cero Contributors
 pkgname=cero-terminal-bin
-pkgver=2.2.2
+pkgver=2.2.3
 pkgrel=1
 pkgdesc="A terminal that takes requests in plain language and runs .flow setup files"
 arch=('x86_64')
