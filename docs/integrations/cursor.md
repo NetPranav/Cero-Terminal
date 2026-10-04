@@ -11,7 +11,10 @@ Cero smoothly interfaces with Cursor IDE to offer state-of-the-art terminal emul
 Launch Cero and click **Enable IDE Profiles** in the Setup Wizard. This injects the custom profile directly into Cursor user preferences:
 `~/Library/Application Support/Cursor/User/settings.json`
 
-## Manual JSON Settings
+## Linux
+The wizard (Settings, Desktop Integrations) merges a `Cero Shell` profile into `terminal.integrated.profiles.linux` in `~/.config/Cursor/User/settings.json` without touching your other profiles. The profile runs `~/.local/bin/cero-shell`, a small wrapper that starts your login shell with `CERO_TERMINAL=1` and `~/.local/bin` on the `PATH`.
+
+## macOS: manual settings
 ```json
 {
   "terminal.integrated.profiles.osx": {

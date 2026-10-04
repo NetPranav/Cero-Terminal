@@ -10,30 +10,32 @@ Every capability includes real-world natural language prompts, expected JSON too
 > - **Connect Soundcore Space One Headphone**: `network.bluetooth.connect` (`{"device": "soundcore space one headphone"}`)
 > - **Check Available Bluetooth Devices**: `network.bluetooth.list`
 >
-> All **101 capabilities** are fully covered below, with machine-readable automated test cases stored in [`tests/tool_test_cases.json`](file:///Users/dev/Project%20Folder/AI%20Terminal/tests/tool_test_cases.json).
+> All **101 capabilities** are fully covered below, with machine-readable automated test cases stored in [`tests/tool_test_cases.json`](../tests/tool_test_cases.json).
+
+> Written for 101 tools. The `tools/` folder now holds 103 tool folders; the table below has not been regenerated for the two newer ones.
 
 ---
 
-## 📊 Capability Coverage Summary
+## Capability Coverage Summary
 
 | Domain | Capabilities | Test Cases | Example Scenarios |
 | :--- | :---: | :---: | :--- |
-| 📡 **Network & Connectivity** | **14** | **30** | `network.bluetooth.connect`, `network.bluetooth.list`, `network.bluetooth.off` |
-| ⚡ **System Health & Hardware Surveillance** | **11** | **24** | `system.battery`, `system.cpu`, `system.gpu` |
-| 📁 **Filesystem Administration & Search** | **21** | **45** | `filesystem.compress`, `filesystem.copy`, `filesystem.create` |
-| 🖥️ **Desktop Application Lifecycle** | **10** | **21** | `application.close`, `application.focus`, `application.force_quit` |
-| 🌐 **Web Browser Automation** | **8** | **16** | `browser.bookmarks`, `browser.close_tabs`, `browser.downloads` |
-| 🌿 **Git Version Control** | **11** | **22** | `git.branch`, `git.checkout`, `git.clone` |
-| 🛠️ **Developer Environments & Tooling** | **8** | **16** | `developer.android_studio`, `developer.cursor`, `developer.github` |
-| 🐳 **Docker Container Orchestration** | **8** | **16** | `docker.compose_down`, `docker.compose_up`, `docker.exec` |
-| 📦 **Node.js & JavaScript Ecosystem** | **5** | **10** | `node.bun`, `node.npm_install`, `node.npm_run` |
-| 🐍 **Python Runtime & Virtual Environments** | **4** | **8** | `python.create_venv`, `python.notebook`, `python.pip_install` |
-| 🐚 **Shell & Compound Pipeline Execution** | **1** | **3** | `shell.execute` |
+|  **Network & Connectivity** | **14** | **30** | `network.bluetooth.connect`, `network.bluetooth.list`, `network.bluetooth.off` |
+|  **System Health & Hardware Surveillance** | **11** | **24** | `system.battery`, `system.cpu`, `system.gpu` |
+|  **Filesystem Administration & Search** | **21** | **45** | `filesystem.compress`, `filesystem.copy`, `filesystem.create` |
+|  **Desktop Application Lifecycle** | **10** | **21** | `application.close`, `application.focus`, `application.force_quit` |
+|  **Web Browser Automation** | **8** | **16** | `browser.bookmarks`, `browser.close_tabs`, `browser.downloads` |
+|  **Git Version Control** | **11** | **22** | `git.branch`, `git.checkout`, `git.clone` |
+|  **Developer Environments & Tooling** | **8** | **16** | `developer.android_studio`, `developer.cursor`, `developer.github` |
+|  **Docker Container Orchestration** | **8** | **16** | `docker.compose_down`, `docker.compose_up`, `docker.exec` |
+|  **Node.js & JavaScript Ecosystem** | **5** | **10** | `node.bun`, `node.npm_install`, `node.npm_run` |
+|  **Python Runtime & Virtual Environments** | **4** | **8** | `python.create_venv`, `python.notebook`, `python.pip_install` |
+|  **Shell & Compound Pipeline Execution** | **1** | **3** | `shell.execute` |
 | **TOTAL** | **101 Tools** | **211 Test Cases** | **100% Operational Capability Coverage** |
 
 ---
 
-## 🧠 Tool Calling Execution Model
+## Tool Calling Execution Model
 
 When a user submits a prompt in Cero:
 1. **Fast-Path Engine**: Evaluates high-frequency deterministic regex shortcuts (e.g., instant navigation `cd`, `turn on bluetooth`, `system info`) for sub-millisecond execution.
@@ -51,7 +53,7 @@ When a user submits a prompt in Cero:
 
 ---
 
-## 📡 Network & Connectivity (14 Tools · 30 Test Cases)
+## Network & Connectivity (14 Tools · 30 Test Cases)
 
 ### `network.bluetooth.connect` — Connect to Bluetooth Device
 
@@ -224,7 +226,7 @@ When a user submits a prompt in Cero:
 | `TC-NET-WIFI-SCAN-02` | **List reachable Wi-Fi SSIDs** | `what wifi networks are available nearby?` | `{"action":"tool","tool":"network.wifi.scan","params":{}}` | Polls wireless broadcast channels for active base stations. |
 
 
-## ⚡ System Health & Hardware Surveillance (11 Tools · 24 Test Cases)
+## System Health & Hardware Surveillance (11 Tools · 24 Test Cases)
 
 ### `system.battery` — Check Battery Level & Power Status
 
@@ -361,7 +363,7 @@ When a user submits a prompt in Cero:
 | `TC-SYS-UP-02` | **Check boot timestamp** | `check system uptime` | `{"action":"tool","tool":"system.uptime","params":{}}` | Returns machine uptime in days, hours, and minutes. |
 
 
-## 📁 Filesystem Administration & Search (21 Tools · 45 Test Cases)
+## Filesystem Administration & Search (21 Tools · 45 Test Cases)
 
 ### `filesystem.compress` — Compress Files to Archive
 
@@ -619,7 +621,7 @@ When a user submits a prompt in Cero:
 | `TC-FS-TRASH-02` | **Trash unused folder** | `trash unused_dir` | `{"action":"tool","tool":"filesystem.trash","params":{"path":"unused_dir"}}` | Recycles folder into system trash. |
 
 
-## 🖥️ Desktop Application Lifecycle (10 Tools · 21 Test Cases)
+## Desktop Application Lifecycle (10 Tools · 21 Test Cases)
 
 ### `application.close` — Close Desktop Application
 
@@ -743,7 +745,7 @@ When a user submits a prompt in Cero:
 | `TC-APP-UPD-02` | **Update developer tool** | `check updates for Docker Desktop` | `{"action":"tool","tool":"application.update","params":{"app":"Docker Desktop"}}` | Triggers update check and upgrade workflow. |
 
 
-## 🌐 Web Browser Automation (8 Tools · 16 Test Cases)
+## Web Browser Automation (8 Tools · 16 Test Cases)
 
 ### `browser.bookmarks` — Inspect Browser Bookmarks
 
@@ -842,7 +844,7 @@ When a user submits a prompt in Cero:
 | `TC-BRW-SRCH-02` | **Search documentation online** | `google latest TypeScript 5.5 release notes` | `{"action":"tool","tool":"browser.search","params":{"query":"latest TypeScript 5.5 release notes"}}` | Performs web search for release documentation. |
 
 
-## 🌿 Git Version Control (11 Tools · 22 Test Cases)
+## Git Version Control (11 Tools · 22 Test Cases)
 
 ### `git.branch` — Manage Git Branches
 
@@ -977,7 +979,7 @@ When a user submits a prompt in Cero:
 | `TC-GIT-STAT-02` | **Check modified files and branch** | `check git status and recent changes` | `{"action":"tool","tool":"git.status","params":{}}` | Returns working directory cleanliness report. |
 
 
-## 🛠️ Developer Environments & Tooling (8 Tools · 16 Test Cases)
+## Developer Environments & Tooling (8 Tools · 16 Test Cases)
 
 ### `developer.android_studio` — Open in Android Studio
 
@@ -1076,7 +1078,7 @@ When a user submits a prompt in Cero:
 | `TC-DEV-XC-02` | **Launch Xcode for iOS app** | `launch xcode` | `{"action":"tool","tool":"developer.xcode","params":{}}` | Spawns Apple Xcode developer environment. |
 
 
-## 🐳 Docker Container Orchestration (8 Tools · 16 Test Cases)
+## Docker Container Orchestration (8 Tools · 16 Test Cases)
 
 ### `docker.compose_down` — Stop Docker Compose Stack
 
@@ -1175,7 +1177,7 @@ When a user submits a prompt in Cero:
 | `TC-DKR-STOP-02` | **Halt background worker container** | `docker stop worker-node-1` | `{"action":"tool","tool":"docker.stop","params":{"container":"worker-node-1"}}` | Sends SIGTERM to stop target container. |
 
 
-## 📦 Node.js & JavaScript Ecosystem (5 Tools · 10 Test Cases)
+## Node.js & JavaScript Ecosystem (5 Tools · 10 Test Cases)
 
 ### `node.bun` — Execute via Bun Runtime
 
@@ -1238,7 +1240,7 @@ When a user submits a prompt in Cero:
 | `TC-NODE-YARN-02` | **Install packages via yarn** | `yarn install dependencies` | `{"action":"tool","tool":"node.yarn","params":{"command":"install"}}` | Installs packages from yarn.lock. |
 
 
-## 🐍 Python Runtime & Virtual Environments (4 Tools · 8 Test Cases)
+## Python Runtime & Virtual Environments (4 Tools · 8 Test Cases)
 
 ### `python.create_venv` — Create Python Virtual Environment
 
@@ -1289,7 +1291,7 @@ When a user submits a prompt in Cero:
 | `TC-PY-RUN-02` | **Run machine learning training script** | `run python script scripts/train_model.py` | `{"action":"tool","tool":"python.run_script","params":{"script":"scripts/train_model.py"}}` | Executes target python module. |
 
 
-## 🐚 Shell & Compound Pipeline Execution (1 Tools · 3 Test Cases)
+## Shell & Compound Pipeline Execution (1 Tools · 3 Test Cases)
 
 ### `shell.execute` — Execute Terminal Shell Command
 
@@ -1306,13 +1308,13 @@ When a user submits a prompt in Cero:
 
 ---
 
-## 🔄 Multi-Step Autonomous Workflows
+## Multi-Step Autonomous Workflows
 
 Cero's agent loop automatically decomposes complex multi-step objectives into sequences of tool calls:
 
-### 🎧 Complete Bluetooth Connection Flow
+### Complete Bluetooth Connection Flow
 1. **User Objective**: *"Connect my Soundcore Space One headphones"*
-2. **Step 1 (Radio Activation)**: 
+2. **Step 1 (Radio Activation)**:
    ```json
    { "action": "tool", "tool": "network.bluetooth.on", "params": {} }
    ```
@@ -1329,7 +1331,7 @@ Cero's agent loop automatically decomposes complex multi-step objectives into se
    { "action": "done", "summary": "Successfully activated Bluetooth, discovered Soundcore Space One, and established wireless audio connection." }
    ```
 
-### 🚀 Full-Stack Scaffolding & Git Init Flow
+### Full-Stack Scaffolding & Git Init Flow
 1. **User Objective**: *"Make a folder and initialize a frontend with next project and backend with python django"*
 2. **Step 1 (Scaffold Project)**:
    ```json
@@ -1346,7 +1348,7 @@ Cero's agent loop automatically decomposes complex multi-step objectives into se
 
 ---
 
-## 🧪 How to Execute & Verify These Test Cases
+## How to Execute & Verify These Test Cases
 
 ### 1. Interactive Terminal Verification
 Type any test prompt verbatim directly into the Cero prompt:
@@ -1358,7 +1360,7 @@ turn off bluetooth
 ```
 
 ### 2. Automated Programmatic Testing via Vitest
-All test definitions in [`tests/tool_test_cases.json`](file:///Users/dev/Project%20Folder/AI%20Terminal/tests/tool_test_cases.json) can be validated with Vitest against `AgentLoop`:
+All test definitions in [`tests/tool_test_cases.json`](../tests/tool_test_cases.json) can be validated with Vitest against `AgentLoop`:
 ```bash
 npx vitest run src/ai/agent/AgentLoop.test.ts
 ```

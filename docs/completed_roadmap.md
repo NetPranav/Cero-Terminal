@@ -29,15 +29,15 @@ All four tasks specified in `docs/roadmap.md` under Phase 1 (Tasks 1.1 through 1
 4. The close button lacked accessible labeling.
 
 **Approach & Implementation:**
-1. **Pure Decision Function:** Extracted `shouldCloseSettings({ key, defaultPrevented, settingsOpen, escOwnerOpen })` in [`src/presentation/escapeKey.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/escapeKey.ts).
+1. **Pure Decision Function:** Extracted `shouldCloseSettings({ key, defaultPrevented, settingsOpen, escOwnerOpen })` in [`src/presentation/escapeKey.ts`](../src/presentation/escapeKey.ts).
 2. **Dedicated Capture-Phase Effect:** Implemented a targeted `useEffect` in `App.tsx` listening on `window.addEventListener('keydown', onKey, true)`. The capture phase ensures the event is caught before child elements or xterm swallow it.
 3. **Child Esc-Owner Safety:** If an open dropdown or inline editor has `[data-esc-owner="true"]`, it receives the Escape key first to close itself without closing the whole Settings view.
 4. **Focus Restoration:** Centralized `closeSettings()` in `App.tsx` which calls `setShowAiSettings(false)` and schedules focus return to `.xterm-helper-textarea` via `activeTerminal.focus()` after a 50ms settling timeout. Wired to Escape keypress, header close button click, and `Cmd/Ctrl+,` keyboard shortcut.
-5. **Accessibility:** Added `aria-label="Close settings (Esc)"` to the close button in [`src/ui/components/AiSettingsPage.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/AiSettingsPage.tsx).
+5. **Accessibility:** Added `aria-label="Close settings (Esc)"` to the close button in [`src/ui/components/AiSettingsPage.tsx`](../src/ui/components/AiSettingsPage.tsx).
 6. **Dependency Array Cleanup:** Removed the stale Esc branch from the broad `handleKeyDown` effect and added `showAiSettings` to its dependency array.
 
 **Automated Verification:**
-- 5 unit tests in [`src/presentation/escapeKey.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/escapeKey.test.ts):
+- 5 unit tests in [`src/presentation/escapeKey.test.ts`](../src/presentation/escapeKey.test.ts):
   - Returns `true` when Esc is pressed with Settings open.
   - Returns `false` when Settings is closed.
   - Returns `false` for non-Escape keys.
@@ -65,12 +65,12 @@ All four tasks specified in `docs/roadmap.md` under Phase 1 (Tasks 1.1 through 1
    - If unavailable after all retries: keeps the user's choice, marks `isReady: false`, sets `unavailableReason: string` (e.g. "Ollama is not running"), and never silently overwrites preferences with the embedded engine.
 3. **Startup Ordering in `App.tsx`:** Added an initial startup effect that loads `CloudApiProvider.getInstance().getActiveConfig()` before invoking `ModelManager.getInstance().initialize()`.
 4. **UI Fallback & Warning:**
-   - In [`AiSettingsPage.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/AiSettingsPage.tsx), added an alert banner displaying `ShieldAlert` with `activeModel.unavailableReason` when an external provider cannot be reached.
+   - In [`AiSettingsPage.tsx`](../src/ui/components/AiSettingsPage.tsx), added an alert banner displaying `ShieldAlert` with `activeModel.unavailableReason` when an external provider cannot be reached.
    - Added a "Use the built-in model instead" fallback button that invokes `setActiveProviderId('embedded')`.
    - Passing explicit `modelId` across all provider switches.
 
 **Automated Verification:**
-- 9 unit tests in [`src/ai/__tests__/ModelManager.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/__tests__/ModelManager.test.ts):
+- 9 unit tests in [`src/ai/__tests__/ModelManager.test.ts`](../src/ai/__tests__/ModelManager.test.ts):
   - Applies saved provider and model immediately on `initialize()` and successfully verifies in background using fake timers.
   - Keeps saved provider and model when availability checks persistently fail, populates `unavailableReason`, and retains localStorage keys.
   - `setModel()` writes `cero_active_ai_model` to localStorage.
@@ -87,23 +87,23 @@ All four tasks specified in `docs/roadmap.md` under Phase 1 (Tasks 1.1 through 1
 `StatusBar.tsx` evaluated only `aiStatus?.isRunning` (the embedded engine status). Whenever an external API (OpenAI, Anthropic, Gemini, Groq) or local Ollama engine was active, the embedded engine was offline, causing the status bar to falsely display "AI: Off". Furthermore, button colors, borders, and hover effects were hardcoded to embedded engine states.
 
 **Approach & Implementation:**
-1. **Pure Status Evaluator:** Created pure function `describeAi({ active, embedded, cloudConfigured, cloudHost })` in [`src/ai/management/AiStatus.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/management/AiStatus.ts):
+1. **Pure Status Evaluator:** Created pure function `describeAi({ active, embedded, cloudConfigured, cloudHost })` in [`src/ai/management/AiStatus.ts`](../src/ai/management/AiStatus.ts):
    - **Embedded:** Running = `ready` with concise badge **`AI: local`**; Warming = `starting` ("AI: Starting..."); Stopped = `off` ("AI: Off").
    - **Cloud API:** Configured & Ready = `ready` with concise badge **`AI: API`**; Unconfigured = `unavailable` ("AI: unavailable").
    - **Ollama:** Ready = `ready` with concise badge **`AI: Ollama`**; Unavailable = `unavailable` with `unavailableReason`.
    - **Strict Invariant:** External providers NEVER return `off` ("Off" is strictly reserved for the stopped embedded engine).
 2. **Compact Bar & Deep Tooltip Context:**
    - Status bar labels are kept minimal (`AI: local`, `AI: API`, `AI: Ollama`) to prevent crowding the terminal status bar.
-   - Removed the redundant UTF-8 indicator from [`src/ui/components/StatusBar.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/StatusBar.tsx) to reclaim horizontal space.
+   - Removed the redundant UTF-8 indicator from [`src/ui/components/StatusBar.tsx`](../src/ui/components/StatusBar.tsx) to reclaim horizontal space.
    - Comprehensive details (provider name, full model identifier, host/port `127.0.0.1:8847`, `localhost:11434`, or cloud host, and operational status) are preserved in the tooltip detail without exposing API keys.
 3. **Monochrome Grayscale UI Mapping:**
-   - In [`src/ui/components/StatusBar.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/StatusBar.tsx), bound button `title` directly to `aiBadge.detail`.
+   - In [`src/ui/components/StatusBar.tsx`](../src/ui/components/StatusBar.tsx), bound button `title` directly to `aiBadge.detail`.
    - Unified background (`rgba(255,255,255,0.08)` for ready, `0.04` for starting, `0.02` for dim), border, and text colors directly to `aiBadge.state`.
    - Replaced color-only states with `ShieldAlert` icon from `lucide-react` for `unavailable` states.
 4. **Reactive Event Listener:** Subscribed `StatusBar.tsx` to `cero:ai-status-changed` events dispatched by `ModelManager`.
 
 **Automated Verification:**
-- 11 unit tests in [`src/ai/management/AiStatus.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/management/AiStatus.test.ts):
+- 11 unit tests in [`src/ai/management/AiStatus.test.ts`](../src/ai/management/AiStatus.test.ts):
   - Embedded running shows ready with concise `AI: local` label.
   - Embedded running with CPU fallback preserves `(CPU)` in tooltip detail.
   - Embedded warming up shows `AI: Starting...`.
@@ -129,11 +129,11 @@ All four tasks specified in `docs/roadmap.md` under Phase 1 (Tasks 1.1 through 1
 4. There was no user toggle to customize Right arrow acceptance behavior.
 
 **Approach & Implementation:**
-1. **Cursor Position Tracking:** Added `isCursorAtEnd(term)` and `getCursorEndInfo(term)` to [`src/presentation/InputLineTracker.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/InputLineTracker.ts):
+1. **Cursor Position Tracking:** Added `isCursorAtEnd(term)` and `getCursorEndInfo(term)` to [`src/presentation/InputLineTracker.ts`](../src/presentation/InputLineTracker.ts):
    - Computes buffer cursor position (`baseY + cursorY`, `cursorX`).
    - Resolves wrapped terminal rows and locates the column immediately following the last non-whitespace character (`endCol`).
    - Accurately detects whether the cursor is at the line end.
-2. **Pure Decision Engine:** Created `decideGhostKey(data, { cursorAtEnd, hasGhost, acceptRight })` in [`src/presentation/ghostKeys.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/ghostKeys.ts):
+2. **Pure Decision Engine:** Created `decideGhostKey(data, { cursorAtEnd, hasGhost, acceptRight })` in [`src/presentation/ghostKeys.ts`](../src/presentation/ghostKeys.ts):
    - `\t` (Tab) at end with ghost: `'accept-ghost'`.
    - `\t` (Tab) mid-line: `'pass'` (preserves shell tab completion).
    - Right arrow (`\x1b[C`, `\x1bOC`) at end with ghost and `acceptRight: true`: `'accept-ghost'`.
@@ -141,20 +141,20 @@ All four tasks specified in `docs/roadmap.md` under Phase 1 (Tasks 1.1 through 1
    - Left arrow (`\x1b[D`, `\x1bOD`), Up, Down, Home, End, word moves (`\x1b[1;5D`, `\x1b[1;5C`): `'clear-ghost-and-pass'`.
    - When `acceptRight: false`: Right arrow never accepts suggestion.
 3. **Overlay Positioning & Clearing:**
-   - In [`src/ui/components/GhostText.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/GhostText.ts), updated `render(suggestion, currentInput, endCol, cursorAtEnd)`:
+   - In [`src/ui/components/GhostText.ts`](../src/ui/components/GhostText.ts), updated `render(suggestion, currentInput, endCol, cursorAtEnd)`:
    - If `!cursorAtEnd` or `cursorX < endCol`, immediately calls `clear()` and exits.
    - Anchors overlay position to `offsetLeft + (endCol * cellWidth)` so ghost text stays pinned to the end of typed input.
 4. **Integration in `TerminalView.tsx`:**
    - Evaluates `inputLineRef.current.getCursorEndInfo(term)` on keystrokes.
    - Gates ghost recomputation strictly on printable characters and Backspace when the cursor remains at the end.
 5. **Configurable User Preference:**
-   - Added "Accept suggestion with Right arrow" toggle card in [`src/ui/components/AiSettingsPage.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/AiSettingsPage.tsx).
+   - Added "Accept suggestion with Right arrow" toggle card in [`src/ui/components/AiSettingsPage.tsx`](../src/ui/components/AiSettingsPage.tsx).
    - Defaults to `true` and persists under `cero_ghost_accept_right`.
 
 **Automated Verification:**
-- 19 unit tests in [`src/presentation/ghostKeys.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/ghostKeys.test.ts): all key branches, mid-line vs end-of-line, and `acceptRight` flag toggles.
-- 31 unit tests in [`src/presentation/InputLineTracker.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/InputLineTracker.test.ts): single line, multi-line wrapped buffers, and cursor position calculations.
-- 4 unit tests in [`src/ui/components/GhostText.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/GhostText.test.ts): clears overlay when cursor is mid-line, positions overlay at endCol, and verifies full reset on `clear()`.
+- 19 unit tests in [`src/presentation/ghostKeys.test.ts`](../src/presentation/ghostKeys.test.ts): all key branches, mid-line vs end-of-line, and `acceptRight` flag toggles.
+- 31 unit tests in [`src/presentation/InputLineTracker.test.ts`](../src/presentation/InputLineTracker.test.ts): single line, multi-line wrapped buffers, and cursor position calculations.
+- 4 unit tests in [`src/ui/components/GhostText.test.ts`](../src/ui/components/GhostText.test.ts): clears overlay when cursor is mid-line, positions overlay at endCol, and verifies full reset on `clear()`.
 
 ---
 
@@ -213,21 +213,21 @@ To test the built desktop application directly on macOS:
 **Problem:** Nothing in the agent could be cancelled. `AgentLoop.run` took no cancel signal; multi-step runners never checked one; provider model calls (`fetch`) ran without `AbortSignal`; and `ShellSDKCapability.cancel()` attempted to kill a `runningPid` that was only populated after the process had already exited.
 
 **Solution:**
-- **Rust process registry:** Added `RUNNING: OnceLock<Mutex<HashMap<String, u32>>>` in [`src-tauri/src/process_cmds.rs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/src/process_cmds.rs) tracking `run_id -> pid`.
+- **Rust process registry:** Added `RUNNING: OnceLock<Mutex<HashMap<String, u32>>>` in [`src-tauri/src/process_cmds.rs`](../src-tauri/src/process_cmds.rs) tracking `run_id -> pid`.
 - Added optional `run_id` parameter to `execute_command` and `run_command` in Rust.
-- Added `cancel_command(run_id: String)` Tauri command supporting process group termination (`killpg` with `SIGTERM` followed by 800ms `SIGKILL` fallback on Unix, and `taskkill /PID <pid> /T /F` on Windows), plus wildcard `run_id == "*"` support to cancel all running tasks. Registered in [`src-tauri/src/lib.rs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/src/lib.rs). Added `cancelled: bool` field to `CommandOutput` with exit code `130`.
-- **Cancellation primitive:** Created [`src/ai/agent/Cancelled.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/Cancelled.ts) defining `CancelledError`, `isCancelledError`, and `throwIfAborted(signal)`.
-- **Agent loop integration:** Added `signal?: AbortSignal` to `AgentRunContext` in [`src/ai/agent/AgentLoop.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/AgentLoop.ts), checking `throwIfAborted` at step boundaries, between plan phases, and inside loops.
-- **Provider abortion:** Added `signal?: AbortSignal` to `GenerateOptions` in [`src/ai/provider/Provider.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/provider/Provider.ts) and passed to `fetch(..., { signal })` in `EmbeddedProvider.ts`, `CloudApiProvider.ts`, and `OllamaProvider.ts`. Aborted requests throw `CancelledError` without falling back to grammar removal or retrying.
-- **Tool capability cancellation:** Updated [`src/sdk/capabilities/drivers/ShellSDKCapability.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/sdk/capabilities/drivers/ShellSDKCapability.ts) to generate UUID `runId`, pass to `execute_command`, and invoke `cancel_command({ runId })` on cancel.
-- Forwarded cancellation in [`src/ai/agent/ToolExecutor.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/ToolExecutor.ts) when `signal` aborts.
-- Forwarded cancellation in [`src/workflows/flow/FlowRunner.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/workflows/flow/FlowRunner.ts) between stages and steps.
+- Added `cancel_command(run_id: String)` Tauri command supporting process group termination (`killpg` with `SIGTERM` followed by 800ms `SIGKILL` fallback on Unix, and `taskkill /PID <pid> /T /F` on Windows), plus wildcard `run_id == "*"` support to cancel all running tasks. Registered in [`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs). Added `cancelled: bool` field to `CommandOutput` with exit code `130`.
+- **Cancellation primitive:** Created [`src/ai/agent/Cancelled.ts`](../src/ai/agent/Cancelled.ts) defining `CancelledError`, `isCancelledError`, and `throwIfAborted(signal)`.
+- **Agent loop integration:** Added `signal?: AbortSignal` to `AgentRunContext` in [`src/ai/agent/AgentLoop.ts`](../src/ai/agent/AgentLoop.ts), checking `throwIfAborted` at step boundaries, between plan phases, and inside loops.
+- **Provider abortion:** Added `signal?: AbortSignal` to `GenerateOptions` in [`src/ai/provider/Provider.ts`](../src/ai/provider/Provider.ts) and passed to `fetch(..., { signal })` in `EmbeddedProvider.ts`, `CloudApiProvider.ts`, and `OllamaProvider.ts`. Aborted requests throw `CancelledError` without falling back to grammar removal or retrying.
+- **Tool capability cancellation:** Updated [`src/sdk/capabilities/drivers/ShellSDKCapability.ts`](../src/sdk/capabilities/drivers/ShellSDKCapability.ts) to generate UUID `runId`, pass to `execute_command`, and invoke `cancel_command({ runId })` on cancel.
+- Forwarded cancellation in [`src/ai/agent/ToolExecutor.ts`](../src/ai/agent/ToolExecutor.ts) when `signal` aborts.
+- Forwarded cancellation in [`src/workflows/flow/FlowRunner.ts`](../src/workflows/flow/FlowRunner.ts) between stages and steps.
 
 **Tests:**
-- Rust tests in [`src-tauri/src/process_cmds.rs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/src/process_cmds.rs) (8 unit tests including process group cancellation, grand-children cleanup, and timeout termination).
-- [`src/ai/agent/Cancelled.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/Cancelled.test.ts) (4 tests).
-- [`src/sdk/capabilities/drivers/ShellSDKCapability.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/sdk/capabilities/drivers/ShellSDKCapability.test.ts) (2 tests).
-- [`src/ai/agent/AgentLoop.cancel.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/AgentLoop.cancel.test.ts) (4 tests).
+- Rust tests in [`src-tauri/src/process_cmds.rs`](../src-tauri/src/process_cmds.rs) (8 unit tests including process group cancellation, grand-children cleanup, and timeout termination).
+- [`src/ai/agent/Cancelled.test.ts`](../src/ai/agent/Cancelled.test.ts) (4 tests).
+- [`src/sdk/capabilities/drivers/ShellSDKCapability.test.ts`](../src/sdk/capabilities/drivers/ShellSDKCapability.test.ts) (2 tests).
+- [`src/ai/agent/AgentLoop.cancel.test.ts`](../src/ai/agent/AgentLoop.cancel.test.ts) (4 tests).
 
 ---
 
@@ -238,18 +238,18 @@ To test the built desktop application directly on macOS:
 **Problem:** In `term.onData` inside `TerminalView.tsx`, Ctrl+C (`\x03`) was unconditionally sent to the shell, even when the agent was busy running a background task. The user had no way to stop a runaway or slow agent task with Ctrl+C.
 
 **Solution:**
-- Created pure decision function `decideStopKey()` in [`src/presentation/stopKeys.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/stopKeys.ts) with signature `decideStopKey({ data, busy, hasSelection, lastStopAt, now })`.
+- Created pure decision function `decideStopKey()` in [`src/presentation/stopKeys.ts`](../src/presentation/stopKeys.ts) with signature `decideStopKey({ data, busy, hasSelection, lastStopAt, now })`.
 - Rules:
   - If text is selected in xterm, Ctrl+C copies selection (`'copy-selection'`).
   - If idle (`!busy`), Ctrl+C passes through to shell (`'pass'`).
   - If busy: first Ctrl+C returns `'abort-ai-task'`, aborts the active `AbortController`, and outputs `Stopping...`.
   - If second Ctrl+C arrives within 500ms while still stopping, returns `'force-kill-ai-task'`, invoking `cancel_command('*')` and sending `\x03` to PTY.
-- Managed `activeRunAbortControllerRef` `AbortController` in [`src/presentation/TerminalView.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/TerminalView.tsx) across `runAiGoal` and `runFlow`.
+- Managed `activeRunAbortControllerRef` `AbortController` in [`src/presentation/TerminalView.tsx`](../src/presentation/TerminalView.tsx) across `runAiGoal` and `runFlow`.
 - Updated `PromptProgressManager.completePrompt` to display "Stopped" instead of "Failed" on cancellation.
-- Updated running status footer hint in [`src/ui/components/StatusBar.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/StatusBar.tsx) to display `Ctrl+C to stop` while a task is running.
+- Updated running status footer hint in [`src/ui/components/StatusBar.tsx`](../src/ui/components/StatusBar.tsx) to display `Ctrl+C to stop` while a task is running.
 
 **Tests:**
-- [`src/presentation/stopKeys.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/stopKeys.test.ts) (6 tests).
+- [`src/presentation/stopKeys.test.ts`](../src/presentation/stopKeys.test.ts) (6 tests).
 
 ---
 
@@ -259,17 +259,17 @@ To test the built desktop application directly on macOS:
 **Problem:** The queue was an internal `aiQueueRef` array inside `TerminalView.tsx` with no identifiers, no visual UI, no ability to view, reorder, or cancel queued items, and `.flow` runs opened while busy were flatly rejected.
 
 **Solution:**
-- Created [`src/presentation/PromptQueue.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/PromptQueue.ts): singleton observable queue with items `{ id, label, addedAt, kind }`, methods `enqueue`, `add`, `list`, `remove`, `move`, `clear`, `takeNext`, `subscribe`, `isPaused`, `setPaused`, `togglePaused`, and running item tracking (`getRunningItem`, `setRunningItem`).
+- Created [`src/presentation/PromptQueue.ts`](../src/presentation/PromptQueue.ts): singleton observable queue with items `{ id, label, addedAt, kind }`, methods `enqueue`, `add`, `list`, `remove`, `move`, `clear`, `takeNext`, `subscribe`, `isPaused`, `setPaused`, `togglePaused`, and running item tracking (`getRunningItem`, `setRunningItem`).
 - Natural language and command parsing for `/queue`, `/queue clear`, `/queue remove <N>`, `/queue pause`, `/queue resume`, and plain English "show the queue", "cancel the second queued request", "clear the queue", "pause the queue", "resume the queue".
-- Created [`src/ui/components/QueuePanel.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/QueuePanel.tsx): dark grayscale matte UI (`#090b10`, `#0c0d12`, muted whites, 5-15% white borders), zero emojis (monochrome `lucide-react` icons: `StopCircle`, `ArrowUp`, `X`, `Pause`, `Play`, `Trash2`), displaying active running task with a `Stop` button (`cero:abort-active-run`), queued tasks with `Run Next` and `Remove` buttons, "Pause Queue" toggle, "Clear All" button, tooltip with full task label, and note "Queued prompts do not persist across restarts".
-- Wired `Queue: N items` indicator into [`src/ui/components/StatusBar.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/StatusBar.tsx) (visible when items are queued, clicking opens the queue panel).
-- Wired `cero:abort-active-run` and `cero:queue-resumed` listeners in [`src/presentation/TerminalView.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/TerminalView.tsx).
+- Created [`src/ui/components/QueuePanel.tsx`](../src/ui/components/QueuePanel.tsx): dark grayscale matte UI (`#090b10`, `#0c0d12`, muted whites, 5-15% white borders), zero emojis (monochrome `lucide-react` icons: `StopCircle`, `ArrowUp`, `X`, `Pause`, `Play`, `Trash2`), displaying active running task with a `Stop` button (`cero:abort-active-run`), queued tasks with `Run Next` and `Remove` buttons, "Pause Queue" toggle, "Clear All" button, tooltip with full task label, and note "Queued prompts do not persist across restarts".
+- Wired `Queue: N items` indicator into [`src/ui/components/StatusBar.tsx`](../src/ui/components/StatusBar.tsx) (visible when items are queued, clicking opens the queue panel).
+- Wired `cero:abort-active-run` and `cero:queue-resumed` listeners in [`src/presentation/TerminalView.tsx`](../src/presentation/TerminalView.tsx).
 - Flow queueing enabled in `submitRef.current`: busy state now queues flows `{ kind: 'flow', flowPlan, source }` rather than refusing them.
-- Deterministic queue routes in [`src/ai/agent/AgentLoop.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/AgentLoop.ts): defined `QueueIO` interface, `defaultQueueIO`, and `setQueueIO(io: QueueIO)`, routing "show the queue", "cancel the second queued request", "clear the queue" directly without invoking the LLM.
+- Deterministic queue routes in [`src/ai/agent/AgentLoop.ts`](../src/ai/agent/AgentLoop.ts): defined `QueueIO` interface, `defaultQueueIO`, and `setQueueIO(io: QueueIO)`, routing "show the queue", "cancel the second queued request", "clear the queue" directly without invoking the LLM.
 
 **Tests:**
-- [`src/presentation/PromptQueue.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/PromptQueue.test.ts) (14 unit tests covering add, remove, move, clear, takeNext, pause/resume, and command parsing).
-- [`src/ai/agent/AgentLoop.queue.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/AgentLoop.queue.test.ts) (6 unit tests verifying deterministic queue routes and `setQueueIO` mocking).
+- [`src/presentation/PromptQueue.test.ts`](../src/presentation/PromptQueue.test.ts) (14 unit tests covering add, remove, move, clear, takeNext, pause/resume, and command parsing).
+- [`src/ai/agent/AgentLoop.queue.test.ts`](../src/ai/agent/AgentLoop.queue.test.ts) (6 unit tests verifying deterministic queue routes and `setQueueIO` mocking).
 
 ---
 
@@ -282,13 +282,13 @@ To test the built desktop application directly on macOS:
 **Problem:** No standardized, quantitative measure existed to test whether model decisions were accurate or repeatable, making it impossible to detect regression or non-determinism.
 
 **Solution:**
-- Created [`scripts/eval/reliability.mts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/eval/reliability.mts) (`npm run eval:model`), which tests decisions against an active engine at `127.0.0.1:8847` without downloading anything.
-- Created [`scripts/eval/cases.json`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/eval/cases.json) containing 70 real-world benchmark cases covering opening folders in editors, opening apps, git status/log/branch, file search, dangerous operations, typos, and non-tool questions.
-- Extracted decision prompt construction into pure function `buildDecisionCall(goal, context, history)` in [`src/ai/agent/DecisionCall.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/DecisionCall.ts), ensuring evaluation runs the exact production code path.
+- Created [`scripts/eval/reliability.mts`](../scripts/eval/reliability.mts) (`npm run eval:model`), which tests decisions against an active engine at `127.0.0.1:8847` without downloading anything.
+- Created [`scripts/eval/cases.json`](../scripts/eval/cases.json) containing 70 real-world benchmark cases covering opening folders in editors, opening apps, git status/log/branch, file search, dangerous operations, typos, and non-tool questions.
+- Extracted decision prompt construction into pure function `buildDecisionCall(goal, context, history)` in [`src/ai/agent/DecisionCall.ts`](../src/ai/agent/DecisionCall.ts), ensuring evaluation runs the exact production code path.
 - Created `docs/MODEL_RELIABILITY.md`. CORRECTION: the baseline numbers first written here (78.4% / 18.6%) and the later ones (88.2%, 96.8%, 1.4%, 1.1%, 390 ms) were not backed by any saved run. They were replaced on 2026-10-02 by a real measurement: raw `pass@1` 83.1%, flip rate 0.0%, median 11.3 s (8 GB laptop). The `pass@1 >= 95%` target is NOT met.
 
 **Tests:**
-- [`src/ai/agent/DecisionCall.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/DecisionCall.test.ts) (4 unit tests).
+- [`src/ai/agent/DecisionCall.test.ts`](../src/ai/agent/DecisionCall.test.ts) (4 unit tests).
 
 ---
 
@@ -299,13 +299,13 @@ To test the built desktop application directly on macOS:
 **Problem:** Random sampling (`temperature: 0.05`, `top_k: 20`, no seed) and prompt cache reuse caused identical user goals to produce different actions across runs (`flip rate`: 18.6%).
 
 **Solution:**
-- Added `mode?: 'decision' | 'chat'` to `GenerateOptions` in [`src/ai/provider/Provider.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/provider/Provider.ts).
-- For `mode: 'decision'`, enforced deterministic sampling in [`src/ai/provider/EmbeddedProvider.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/provider/EmbeddedProvider.ts): `temperature: 0`, `top_k: 1`, `top_p: 1`, `seed: 42`, and `cache_prompt: false`.
-- Passed matching deterministic parameters in [`CloudApiProvider.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/provider/CloudApiProvider.ts) and [`OllamaProvider.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/provider/OllamaProvider.ts).
+- Added `mode?: 'decision' | 'chat'` to `GenerateOptions` in [`src/ai/provider/Provider.ts`](../src/ai/provider/Provider.ts).
+- For `mode: 'decision'`, enforced deterministic sampling in [`src/ai/provider/EmbeddedProvider.ts`](../src/ai/provider/EmbeddedProvider.ts): `temperature: 0`, `top_k: 1`, `top_p: 1`, `seed: 42`, and `cache_prompt: false`.
+- Passed matching deterministic parameters in [`CloudApiProvider.ts`](../src/ai/provider/CloudApiProvider.ts) and [`OllamaProvider.ts`](../src/ai/provider/OllamaProvider.ts).
 - Measured flip rate with these settings: 0.0% (142 runs). No before-measurement exists.
 
 **Tests:**
-- [`src/ai/provider/EmbeddedProvider.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/provider/EmbeddedProvider.test.ts) (verifies mode `'decision'` sends zero temperature, top_k 1, seed 42, and cache_prompt false).
+- [`src/ai/provider/EmbeddedProvider.test.ts`](../src/ai/provider/EmbeddedProvider.test.ts) (verifies mode `'decision'` sends zero temperature, top_k 1, seed 42, and cache_prompt false).
 
 ---
 
@@ -316,13 +316,13 @@ To test the built desktop application directly on macOS:
 **Problem:** Context was limited to 8192 tokens while `SystemPrompt.ts` alone consumed ~5,000 tokens plus tools and history, causing llama-server to silently drop rules from the beginning of conversations.
 
 **Solution:**
-- Created [`src/ai/agent/ContextBudget.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/ContextBudget.ts) defining `CONTEXT_TOKENS` (8192 / 12288), `RESERVED_FOR_REPLY` (700), `estimateTokens()`, and `fitMessages()`.
+- Created [`src/ai/agent/ContextBudget.ts`](../src/ai/agent/ContextBudget.ts) defining `CONTEXT_TOKENS` (8192 / 12288), `RESERVED_FOR_REPLY` (700), `estimateTokens()`, and `fitMessages()`.
 - `fitMessages()` prioritizes keeping the system prompt intact, keeps the latest user goal, drops oldest history when over budget, and trims large tool outputs (retaining first 600 and last 400 chars with `[... N characters removed ...]`).
-- Dynamically scales context in [`src-tauri/src/embedded_server.rs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/src/embedded_server.rs) to `-c 12288` when system RAM ≥ 8 GB.
+- Dynamically scales context in [`src-tauri/src/embedded_server.rs`](../src-tauri/src/embedded_server.rs) to `-c 12288` when system RAM ≥ 8 GB.
 - Added prompt tokens usage warning at 90% context in `AgentLoop.ts`, and single-retry on `finish_reason === 'length'`.
 
 **Tests:**
-- [`src/ai/agent/ContextBudget.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/ContextBudget.test.ts) (6 unit tests).
+- [`src/ai/agent/ContextBudget.test.ts`](../src/ai/agent/ContextBudget.test.ts) (6 unit tests).
 
 ---
 
@@ -332,12 +332,12 @@ To test the built desktop application directly on macOS:
 **Problem:** LLM-generated actions could attempt dangerous destructive commands, pass invalid schemas, reference non-existent paths, or invent placeholder credentials.
 
 **Solution:**
-- Created [`src/ai/agent/ActionGate.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/ActionGate.ts):
+- Created [`src/ai/agent/ActionGate.ts`](../src/ai/agent/ActionGate.ts):
   - Validates parameters against tool schemas using `ToolParameterValidator`.
   - Blocks dangerous destructive operations (`rm -rf /`, `mkfs`, `dd of=/dev`, bare `kill -9` / `kill -9 -1`, `chmod -R 777 /`, fork bombs, invented secret credentials).
   - Validates path existence on tools requiring target paths to exist (`filesystem.read`, `filesystem.navigate`, `filesystem.list`).
   - Verifies application names are non-empty and free of shell injection characters.
-- Wired into [`src/ai/agent/AgentLoop.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/AgentLoop.ts):
+- Wired into [`src/ai/agent/AgentLoop.ts`](../src/ai/agent/AgentLoop.ts):
   - If initial validation fails: model is called **once more** at `temperature: 0` with:
     `Your last answer was rejected: <reason>. <hint>. Answer again.`
   - If repaired answer passes: proceeds to execution and tracks `repaired++`.
@@ -345,7 +345,7 @@ To test the built desktop application directly on macOS:
   - Tracked counters (`accepted`, `repaired`, `asked`) inside `AgentRunMetrics` and `AgentLoop.recentMetrics`.
 
 **Tests:**
-- [`src/ai/agent/ActionGate.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/ActionGate.test.ts) (18 unit tests).
+- [`src/ai/agent/ActionGate.test.ts`](../src/ai/agent/ActionGate.test.ts) (18 unit tests).
 
 ---
 
@@ -356,18 +356,18 @@ To test the built desktop application directly on macOS:
 
 **Solution:**
 - Implemented pure domain parsers in `src/domain/...`:
-  - [`src/domain/app/AppLaunchParser.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/domain/app/AppLaunchParser.ts): parses "open firefox", "launch spotify", "start google chrome".
-  - [`src/domain/system/FolderOpenParser.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/domain/system/FolderOpenParser.ts): parses "open folder gitBrains in cursor", "open ~/Projects in vscode", "open project backend in clion".
-  - [`src/domain/git/GitActionParser.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/domain/git/GitActionParser.ts): parses "git status", "what git branch am i on", "show recent commits", "git diff".
-  - [`src/domain/system/DirectoryActionParser.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/domain/system/DirectoryActionParser.ts): parses "make a folder called demo", "create directory temp", "list files in src", "cd into src".
+  - [`src/domain/app/AppLaunchParser.ts`](../src/domain/app/AppLaunchParser.ts): parses "open firefox", "launch spotify", "start google chrome".
+  - `src/domain/system/FolderOpenParser.ts` (since replaced by [`OpenRequest.ts`](../src/domain/system/OpenRequest.ts)): parses "open folder gitBrains in cursor", "open ~/Projects in vscode", "open project backend in clion".
+  - [`src/domain/git/GitActionParser.ts`](../src/domain/git/GitActionParser.ts): parses "git status", "what git branch am i on", "show recent commits", "git diff".
+  - [`src/domain/system/DirectoryActionParser.ts`](../src/domain/system/DirectoryActionParser.ts): parses "make a folder called demo", "create directory temp", "list files in src", "cd into src".
 - Wired into `AgentLoop.runRequest` right before the model call, with corresponding runner methods (`runOpenFolder`, `runGitAction`, `runDirectoryAction`, `runAppLaunch`).
 - Guaranteed that deterministic requests execute in < 20ms without invoking the model.
 
 **Tests:**
-- [`src/domain/app/AppLaunchParser.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/domain/app/AppLaunchParser.test.ts) (15 tests).
-- [`src/domain/system/FolderOpenParser.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/domain/system/FolderOpenParser.test.ts) (13 tests).
-- [`src/domain/git/GitActionParser.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/domain/git/GitActionParser.test.ts) (14 tests).
-- [`src/domain/system/DirectoryActionParser.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/domain/system/DirectoryActionParser.test.ts) (14 tests).
+- [`src/domain/app/AppLaunchParser.test.ts`](../src/domain/app/AppLaunchParser.test.ts) (15 tests).
+- `FolderOpenParser.test.ts` (now [`OpenRequest.test.ts`](../src/domain/system/OpenRequest.test.ts)) (13 tests).
+- [`src/domain/git/GitActionParser.test.ts`](../src/domain/git/GitActionParser.test.ts) (14 tests).
+- [`src/domain/system/DirectoryActionParser.test.ts`](../src/domain/system/DirectoryActionParser.test.ts) (14 tests).
 
 ---
 
@@ -377,12 +377,12 @@ To test the built desktop application directly on macOS:
 **Problem:** Users had no frictionless method to turn an unexpected or incorrect AI response into a reproducible evaluation case, and model catalog hardware requirements were undocumented.
 
 **Solution:**
-- Created [`src/ai/agent/WrongAnswerReporter.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/WrongAnswerReporter.ts): formats `{ id, prompt, model, expect: { tool, must_include, must_not_include } }` matching `cases.json` specification with passwords/tokens automatically redacted.
-- Added "Report a wrong answer" button to the Execution Plan / AI result HUD footer in [`src/presentation/TerminalView.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/presentation/TerminalView.tsx). Clicking it copies the case JSON directly to clipboard with visual confirmation.
-- Documented model catalog sizing tiers (1.5B, 3B, 4B) and hardware RAM requirements in [`docs/MODEL_RELIABILITY.md`](file:///Users/pranav/Project%20Folder/AI%20Terminal/docs/MODEL_RELIABILITY.md).
+- Created [`src/ai/agent/WrongAnswerReporter.ts`](../src/ai/agent/WrongAnswerReporter.ts): formats `{ id, prompt, model, expect: { tool, must_include, must_not_include } }` matching `cases.json` specification with passwords/tokens automatically redacted.
+- Added "Report a wrong answer" button to the Execution Plan / AI result HUD footer in [`src/presentation/TerminalView.tsx`](../src/presentation/TerminalView.tsx). Clicking it copies the case JSON directly to clipboard with visual confirmation.
+- Documented model catalog sizing tiers (1.5B, 3B, 4B) and hardware RAM requirements in [`docs/MODEL_RELIABILITY.md`](../docs/MODEL_RELIABILITY.md).
 
 **Tests:**
-- [`src/ai/agent/WrongAnswerReporter.test.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/WrongAnswerReporter.test.ts) (3 unit tests).
+- [`src/ai/agent/WrongAnswerReporter.test.ts`](../src/ai/agent/WrongAnswerReporter.test.ts) (3 unit tests).
 
 ---
 
@@ -408,54 +408,54 @@ All eight tasks specified in `docs/roadmap.md` under Phase 4 (Tasks 4.1 through 
 
 ### Task 4.1 — One writer that always makes `.flow`
 **Status:** COMPLETE (Fully Verified)
-- Implemented `workflowToFlow()` in [`src/workflows/flow/FlowExport.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/workflows/flow/FlowExport.ts) serializing workflow definitions into canonical `FlowDocument` schemas with lossless preservation of extra metadata in `x`, parameters, platform commands, and prerequisites.
-- Updated `flowToWorkflow()` in [`src/workflows/storage/FlowImport.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/workflows/storage/FlowImport.ts) restoring `x` properties (`dependsOn`, `precondition_check`, `if_precondition_true`, `if_precondition_false`, `isDestructive`, `timeoutMs`, `expectedExitCode`).
-- Updated [`src/workflows/storage/DiskWorkflowStorage.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/workflows/storage/DiskWorkflowStorage.ts) to strictly write `.flow` files, find flows by name slug regardless of casing, deduplicate `.flow` over legacy `.json`, and run one-time auto-migration converting `.json` to `.flow` while renaming old files to `.json.bak`.
+- Implemented `workflowToFlow()` in [`src/workflows/flow/FlowExport.ts`](../src/workflows/flow/FlowExport.ts) serializing workflow definitions into canonical `FlowDocument` schemas with lossless preservation of extra metadata in `x`, parameters, platform commands, and prerequisites.
+- Updated `flowToWorkflow()` in [`src/workflows/storage/FlowImport.ts`](../src/workflows/storage/FlowImport.ts) restoring `x` properties (`dependsOn`, `precondition_check`, `if_precondition_true`, `if_precondition_false`, `isDestructive`, `timeoutMs`, `expectedExitCode`).
+- Updated [`src/workflows/storage/DiskWorkflowStorage.ts`](../src/workflows/storage/DiskWorkflowStorage.ts) to strictly write `.flow` files, find flows by name slug regardless of casing, deduplicate `.flow` over legacy `.json`, and run one-time auto-migration converting `.json` to `.flow` while renaming old files to `.json.bak`.
 - Purged 8 legacy hardcoded `FAST_PATHS` echoes in `AgentLoop.ts` and updated user notifications to report real `.flow` paths.
-- Added "Import .flow" and "Export as .flow" buttons to [`src/ui/components/WorkflowManagerDrawer.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/WorkflowManagerDrawer.tsx).
+- Added "Import .flow" and "Export as .flow" buttons to [`src/ui/components/WorkflowManagerDrawer.tsx`](../src/ui/components/WorkflowManagerDrawer.tsx).
 
 ### Task 4.2 — Design the icon
 **Status:** COMPLETE (Fully Verified)
-- Designed master SVG [`assets/brand/flow-icon.svg`](file:///Users/pranav/Project%20Folder/AI%20Terminal/assets/brand/flow-icon.svg) and small-size SVG [`assets/brand/flow-icon-small.svg`](file:///Users/pranav/Project%20Folder/AI%20Terminal/assets/brand/flow-icon-small.svg) conforming strictly to matte grayscale design rules (`#0c0d12` page, 14px border, 6px contrast shadow, 190px folded corner `#1a1c24`, 3 stepping circles with connector line, 76px run ring, and outlined `FLOW` text).
-- Created pure Node scripts [`scripts/icons/pack-ico.mjs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/icons/pack-ico.mjs) and [`scripts/icons/make-flow-icons.mjs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/icons/make-flow-icons.mjs) rendering crisp, anti-aliased PNGs across all resolutions (16, 24, 32, 48, 64, 96, 128, 256, 512, 1024), packing Windows `flow.ico`, generating macOS `flow.icns`, copying `application-x-cero-workflow.svg`, and producing [`docs/brand/flow-icon-preview.png`](file:///Users/pranav/Project%20Folder/AI%20Terminal/docs/brand/flow-icon-preview.png).
+- Designed master SVG [`assets/brand/flow-icon.svg`](../assets/brand/flow-icon.svg) and small-size SVG [`assets/brand/flow-icon-small.svg`](../assets/brand/flow-icon-small.svg) conforming strictly to matte grayscale design rules (`#0c0d12` page, 14px border, 6px contrast shadow, 190px folded corner `#1a1c24`, 3 stepping circles with connector line, 76px run ring, and outlined `FLOW` text).
+- Created pure Node scripts [`scripts/icons/pack-ico.mjs`](../scripts/icons/pack-ico.mjs) and [`scripts/icons/make-flow-icons.mjs`](../scripts/icons/make-flow-icons.mjs) rendering crisp, anti-aliased PNGs across all resolutions (16, 24, 32, 48, 64, 96, 128, 256, 512, 1024), packing Windows `flow.ico`, generating macOS `flow.icns`, copying `application-x-cero-workflow.svg`, and producing [`docs/brand/flow-icon-preview.png`](../docs/brand/flow-icon-preview.png).
 
 ### Task 4.3 — macOS association and icon
 **Status:** IMPLEMENTED (config and code checked; not yet run on a built macOS app - see Phase 8)
-- Configured `bundle.fileAssociations` in [`src-tauri/tauri.conf.json`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/tauri.conf.json) for `ext: ["flow"]`, `name: "Cero Flow"`, `role: "Editor"`, `mimeType: "application/x-cero-workflow"`.
+- Configured `bundle.fileAssociations` in [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) for `ext: ["flow"]`, `name: "Cero Flow"`, `role: "Editor"`, `mimeType: "application/x-cero-workflow"`.
 - Added `"Resources/flow.icns": "icons/flow/flow.icns"` to `bundle.macOS.files`.
-- Configured [`src-tauri/Info.plist`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/Info.plist) declaring `UTExportedTypeDeclarations` for `com.cero.flow` (`UTTypeIconFile = flow`) and `CFBundleDocumentTypes` (`CFBundleTypeIconFile = flow`, `LSHandlerRank = Owner`).
+- Configured [`src-tauri/Info.plist`](../src-tauri/Info.plist) declaring `UTExportedTypeDeclarations` for `com.cero.flow` (`UTTypeIconFile = flow`) and `CFBundleDocumentTypes` (`CFBundleTypeIconFile = flow`, `LSHandlerRank = Owner`).
 
 ### Task 4.4 — Windows association and icon
 **Status:** IMPLEMENTED (config and code checked; not yet run on Windows - see Phase 8)
-- Created [`src-tauri/windows/installer-hooks.nsh`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/windows/installer-hooks.nsh) implementing `NSIS_HOOK_POSTINSTALL` and `NSIS_HOOK_PREUNINSTALL` writing `Software\Classes\.flow`, `Content Type`, `Cero.Flow`, `DefaultIcon "$INSTDIR\flow.ico,0"`, and shell open command with `SHChangeNotify`.
+- Created [`src-tauri/windows/installer-hooks.nsh`](../src-tauri/windows/installer-hooks.nsh) implementing `NSIS_HOOK_POSTINSTALL` and `NSIS_HOOK_PREUNINSTALL` writing `Software\Classes\.flow`, `Content Type`, `Cero.Flow`, `DefaultIcon "$INSTDIR\flow.ico,0"`, and shell open command with `SHChangeNotify`.
 - Pointed `bundle.windows.nsis.installerHooks` to `windows/installer-hooks.nsh` and mapped `resources: { "icons/flow/flow.ico": "flow.ico" }` in `tauri.conf.json`.
 
 ### Task 4.5 — Linux association and icon
 **Status:** IMPLEMENTED (config and code checked; not yet run on Linux - see Phase 8)
-- Updated [`packaging/linux/cero-terminal-mime.xml`](file:///Users/pranav/Project%20Folder/AI%20Terminal/packaging/linux/cero-terminal-mime.xml) with `application/x-cero-workflow`, icon `application-x-cero-workflow`, `sub-class-of text/plain`, and `*.flow` glob with weight 80.
-- Created [`packaging/linux/postinst.sh`](file:///Users/pranav/Project%20Folder/AI%20Terminal/packaging/linux/postinst.sh) and [`packaging/linux/postrm.sh`](file:///Users/pranav/Project%20Folder/AI%20Terminal/packaging/linux/postrm.sh) refreshing MIME, desktop, and icon caches with failure tolerance (`|| true`).
+- Updated [`packaging/linux/cero-terminal-mime.xml`](../packaging/linux/cero-terminal-mime.xml) with `application/x-cero-workflow`, icon `application-x-cero-workflow`, `sub-class-of text/plain`, and `*.flow` glob with weight 80.
+- Created [`packaging/linux/postinst.sh`](../packaging/linux/postinst.sh) and [`packaging/linux/postrm.sh`](../packaging/linux/postrm.sh) refreshing MIME, desktop, and icon caches with failure tolerance (`|| true`).
 - Mapped all PNG icon sizes (16..512) and scalable SVG into `bundle.linux.deb.files` and `bundle.linux.rpm.files` in `tauri.conf.json`.
 - Updated `packaging/arch/PKGBUILD` and Flatpak manifest (`packaging/flatpak/org.cero.terminal.yml`, desktop file, and metainfo).
 
 ### Task 4.6 — Linux AppImage self-registration
 **Status:** IMPLEMENTED (config and code checked; not yet run on Linux - see Phase 8)
-- Implemented [`src-tauri/src/file_association.rs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/src/file_association.rs) embedding MIME XML, desktop file template, and icons.
+- Implemented [`src-tauri/src/file_association.rs`](../src-tauri/src/file_association.rs) embedding MIME XML, desktop file template, and icons.
 - `ensure_registered` activates when `APPIMAGE` is present and no system copy exists: writes user files into `~/.local/share/` and refreshes user caches.
 - Dynamic repair: updates desktop file `Exec` command if the AppImage path changes.
-- "Ask once" full-screen prompt implemented in [`src/ui/components/FileAssociationPrompt.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/FileAssociationPrompt.tsx) storing the decision in `~/.cero/association.json`.
-- Added manual toggle in **Settings > General** in [`src/ui/components/AiSettingsPage.tsx`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ui/components/AiSettingsPage.tsx).
+- "Ask once" full-screen prompt implemented in [`src/ui/components/FileAssociationPrompt.tsx`](../src/ui/components/FileAssociationPrompt.tsx) storing the decision in `~/.cero/association.json`.
+- Added manual toggle in **Settings > General** in [`src/ui/components/AiSettingsPage.tsx`](../src/ui/components/AiSettingsPage.tsx).
 
 ### Task 4.7 — Single-instance handling
 **Status:** COMPLETE (Fully Verified)
-- Added `tauri-plugin-single-instance = "2.5.2"` to [`src-tauri/Cargo.toml`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/Cargo.toml).
+- Added `tauri-plugin-single-instance = "2.5.2"` to [`src-tauri/Cargo.toml`](../src-tauri/Cargo.toml).
 - Registered `tauri_plugin_single_instance::init` first in `src-tauri/src/lib.rs`.
-- Implemented `launch::filter_flow_argv()` in [`src-tauri/src/launch.rs`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src-tauri/src/launch.rs) dropping flags, missing files, and non-flow files while preserving valid flow paths (including paths with spaces).
+- Implemented `launch::filter_flow_argv()` in [`src-tauri/src/launch.rs`](../src-tauri/src/launch.rs) dropping flags, missing files, and non-flow files while preserving valid flow paths (including paths with spaces).
 - Passes `.flow` paths to `remember_opened` and emits `cero-url`, focusing the main window if not a desktop-only flow.
 - Verified frontend queueing: flows arriving while the terminal/agent is busy are queued into `PromptQueue` and executed sequentially.
 
 ### Task 4.8 — Documentation
 **Status:** COMPLETE (Fully Verified)
-- Updated [`docs/FLOW_FILES.md`](file:///Users/pranav/Project%20Folder/AI%20Terminal/docs/FLOW_FILES.md) with comprehensive "Cero only writes `.flow`" and "Opening flows" sections detailing macOS, Windows, Linux, AppImage self-registration, cache reset commands, and single-instance queueing.
+- Updated [`docs/FLOW_FILES.md`](../docs/FLOW_FILES.md) with comprehensive "Cero only writes `.flow`" and "Opening flows" sections detailing macOS, Windows, Linux, AppImage self-registration, cache reset commands, and single-instance queueing.
 - Verified `README.md` contains no legacy `.json` workflow references.
 
 ---

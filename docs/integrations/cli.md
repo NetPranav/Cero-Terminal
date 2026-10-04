@@ -1,20 +1,22 @@
-# Cero Command Line Launcher (`cero`)
+# The `cero` command
 
-The `cero` CLI executable allows developers to interact with the Cero desktop application directly from standard macOS command shells.
+`cero` opens Cero from a shell.
 
-## Installation
-The standalone launcher is installed automatically to `/usr/local/bin/cero` (or fallback `~/.local/bin/cero`) when completing the **Initial Setup Wizard** inside Cero.
+## Install
+- Package installs (Arch, deb, rpm) put `cero` on the `PATH`.
+- Otherwise Settings, Desktop Integrations (or the setup wizard) installs it to `~/.local/bin/cero` with no root needed
+  (on macOS, `/usr/local/bin/cero` with `~/.local/bin/cero` as the fallback). Add `~/.local/bin` to your `PATH` if the
+  settings page says it is missing.
 
-## Command Reference
+## Use
+| Command | What it does |
+|---|---|
+| `cero` or `cero .` | Open Cero in the current folder |
+| `cero /path/to/folder` | Open Cero in that folder |
+| `cero file.flow` | Open and run a `.flow` file (it asks first) |
+| `cero --new-tab`, `cero --split` | Ask the running window for a new tab or a split |
+| `cero --help`, `--version` | Print help or the version |
+| `cero --debug` (`-d`, `--verbose`, `-v`) or `CERO_DEBUG=1 cero` | Run in the foreground with live logs ([TROUBLESHOOTING.md](../TROUBLESHOOTING.md)) |
 
-| Command | Description |
-| :--- | :--- |
-| `cero` or `cero .` | Open a new Cero window at current working directory |
-| `cero /path/to/project` | Open Cero at the specified folder |
-| `cero --new-tab [path]` | Spawn a new tab inside the current active window |
-| `cero --split [path]` | Split the active pane horizontally/vertically |
-| `cero --run "<command>"` | Launch Cero and immediately execute an interactive instruction |
-| `cero --help`, `-h` | Print summary of available commands |
-
-## Technical Mechanism
-Under the hood, the `cero` command line interface encodes target filesystem paths and commands into the `cero://` custom macOS protocol handler, resulting in instant application activation without spawning extraneous processes.
+On macOS the launcher passes paths to the app through the `cero://` URL scheme. On Linux it starts `cero-terminal`
+and detaches (except in debug mode).

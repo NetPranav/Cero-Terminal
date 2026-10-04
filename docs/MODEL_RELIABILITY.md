@@ -6,9 +6,9 @@ Tracks the reliability, determinism, and tool-calling accuracy of Cero's built-i
 
 ## 1. Reliability Test Architecture (Task 3.1)
 
-- **Test Runner:** [`scripts/eval/reliability.mts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/eval/reliability.mts) (`npm run eval:model`)
-- **Evaluation Dataset:** [`scripts/eval/cases.json`](file:///Users/pranav/Project%20Folder/AI%20Terminal/scripts/eval/cases.json) (70 test cases)
-- **Decision Engine Interface:** [`src/ai/agent/DecisionCall.ts`](file:///Users/pranav/Project%20Folder/AI%20Terminal/src/ai/agent/DecisionCall.ts)
+- **Test Runner:** [`scripts/eval/reliability.mts`](../scripts/eval/reliability.mts) (`npm run eval:model`)
+- **Evaluation Dataset:** [`scripts/eval/cases.json`](../scripts/eval/cases.json) (71 test cases)
+- **Decision Engine Interface:** [`src/ai/agent/DecisionCall.ts`](../src/ai/agent/DecisionCall.ts)
   - Uses the exact runtime decision call path (`buildDecisionCall`) to ensure evaluation tests real production execution rather than synthetic prompts.
 - **Repeat Count:** 10 evaluation iterations per case to accurately measure stability and flip rates.
 

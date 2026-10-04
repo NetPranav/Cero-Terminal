@@ -4,7 +4,18 @@ This document is the exhaustive, file-by-file technical reference for the workfl
 - `src/workflows/`: The enterprise declarative workflow library, AST/IR compiler, scheduling, telemetry, and zero-token deterministic replay system.
 - `src/domain/workflow/`: The runtime execution engine, step state tracker, priority task queue, and variable interpolation engine that coordinates with the ReAct agent and capability drivers.
 
-For high-level usage guides and CLI macro replay documentation, see [docs/WORKFLOWS.md](file:///home/user/project/docs/WORKFLOWS.md).
+For high-level usage guides and CLI macro replay documentation, see [WORKFLOWS.md](WORKFLOWS.md).
+
+> **Status (2.2.3).** This is a reference for the source folders, not a description of the app's behaviour. Only part
+> of it is reachable from the running app. Live: `ChainPlanner`, `CrossPlatformCommandAdapter`,
+> `DeterministicReplayEngine`, `MultistagePromptDecomposer`, `SaveIntent`, `WorkflowRecorder`, `WorkflowRequest`, everything
+> under `flow/`, `DiskWorkflowStorage`, `FlowImport`, `StarterWorkflows`, `WorkflowTypes`, and `src/domain/workflow/`.
+> Not reachable from the app: `WorkflowBuilder`, `ControlFlow`, `LoopEngine`, `WorkflowIRCompiler`,
+> `WorkflowGraphCompiler`, `WorkflowExecutionEngine`, `WorkflowRegistry`, `WorkflowScheduler`, `WorkflowSharing`,
+> `WorkflowStorage`, `WorkflowTelemetry`, `WorkflowHistory`, `WorkflowTemplates`, `WorkflowValidator`,
+> `WorkflowVariables` (see [CODEBASE_MAP.md](CODEBASE_MAP.md) and [FUTURE_SCOPE.md](FUTURE_SCOPE.md)). Saved
+> workflows are `.flow` files ([FLOW_FILES.md](FLOW_FILES.md)); sections below that show a `schemaVersion: 1` JSON
+> definition describe the older internal format that is still read and migrated.
 
 ---
 
@@ -138,7 +149,7 @@ src/domain/workflow/
 
 ### 3.1. Models & Type System (`src/workflows/models/WorkflowTypes.ts`)
 
-File: [src/workflows/models/WorkflowTypes.ts](file:///home/user/project/src/workflows/models/WorkflowTypes.ts)
+File: [src/workflows/models/WorkflowTypes.ts](../src/workflows/models/WorkflowTypes.ts)
 
 This file establishes the foundational domain contracts for the three-tier workflow library and the intermediate representation.
 
@@ -183,7 +194,7 @@ The `WorkflowIR` represents a fully resolved execution graph where:
 - Topological execution order (`executionOrder`) and parallel groups (`parallelGroups`) are computed.
 
 #### Saved Workflow File Schema (`schemaVersion: 1`)
-Persisted to `~/.cero/workflows/<name>.json`:
+Persisted to `~/.cero/workflows/<name>.flow`:
 - `schemaVersion`: Integer constant (`CURRENT_WORKFLOW_SCHEMA_VERSION = 1`).
 - `environmentPrerequisites`: Prerequisite checks (`requiredBinaries`, `requiredPorts`, `requiredPaths`, `requiredEnvVars`).
 - `steps`: Array of `WorkflowStepDefinition` objects with `command`, `cwd`, `timeoutMs`, `expectedExitCode`, `precondition_check`, `if_precondition_true`, `if_precondition_false`, and `platformCommands`.
@@ -192,7 +203,7 @@ Persisted to `~/.cero/workflows/<name>.json`:
 
 ### 3.2. Programmatic Workflow Builder (`src/workflows/builder/WorkflowBuilder.ts`)
 
-File: [src/workflows/builder/WorkflowBuilder.ts](file:///home/user/project/src/workflows/builder/WorkflowBuilder.ts)
+File: [src/workflows/builder/WorkflowBuilder.ts](../src/workflows/builder/WorkflowBuilder.ts)
 
 Provides a fluent, chainable API for programmatic construction of `UserWorkflow` objects.
 
@@ -221,7 +232,7 @@ Provides a fluent, chainable API for programmatic construction of `UserWorkflow`
 
 ### 3.3. Workflow Registry & Discovery (`src/workflows/registry/WorkflowRegistry.ts`)
 
-File: [src/workflows/registry/WorkflowRegistry.ts](file:///home/user/project/src/workflows/registry/WorkflowRegistry.ts)
+File: [src/workflows/registry/WorkflowRegistry.ts](../src/workflows/registry/WorkflowRegistry.ts)
 
 Decouples workflow discovery from storage persistence. Aggregates built-in templates, user workflows, and plugin workflows into a unified search and lookup layer.
 
@@ -244,7 +255,7 @@ Decouples workflow discovery from storage persistence. Aggregates built-in templ
 
 ### 3.4. Structural & Semantic Validation (`src/workflows/validation/WorkflowValidator.ts`)
 
-File: [src/workflows/validation/WorkflowValidator.ts](file:///home/user/project/src/workflows/validation/WorkflowValidator.ts)
+File: [src/workflows/validation/WorkflowValidator.ts](../src/workflows/validation/WorkflowValidator.ts)
 
 Enforces integrity rules on `UserWorkflow` instances before compilation or execution.
 
@@ -267,7 +278,7 @@ Returns `ValidationResult` containing `{ valid: boolean, errors: string[], warni
 
 ### 3.5. Control Flow Primitives (`src/workflows/conditions/ControlFlow.ts`)
 
-File: [src/workflows/conditions/ControlFlow.ts](file:///home/user/project/src/workflows/conditions/ControlFlow.ts)
+File: [src/workflows/conditions/ControlFlow.ts](../src/workflows/conditions/ControlFlow.ts)
 
 Resolves control flow directives and conditional assertions against resolved runtime variables.
 
@@ -290,7 +301,7 @@ Resolves control flow directives and conditional assertions against resolved run
 
 ### 3.6. Loop Iteration Engine (`src/workflows/loops/LoopEngine.ts`)
 
-File: [src/workflows/loops/LoopEngine.ts](file:///home/user/project/src/workflows/loops/LoopEngine.ts)
+File: [src/workflows/loops/LoopEngine.ts](../src/workflows/loops/LoopEngine.ts)
 
 Handles loop unrolling into flattened `WorkflowIRNode` structures during intermediate representation compilation.
 
@@ -307,7 +318,7 @@ Handles loop unrolling into flattened `WorkflowIRNode` structures during interme
 
 ### 3.7. Variable Typing & Resolution (`src/workflows/variables/WorkflowVariables.ts`)
 
-File: [src/workflows/variables/WorkflowVariables.ts](file:///home/user/project/src/workflows/variables/WorkflowVariables.ts)
+File: [src/workflows/variables/WorkflowVariables.ts](../src/workflows/variables/WorkflowVariables.ts)
 
 Manages runtime variable resolution, domain-specific typing, defaults, and parameter interpolation.
 
@@ -323,7 +334,7 @@ Manages runtime variable resolution, domain-specific typing, defaults, and param
 
 ### 3.8. Multi-Trigger Scheduler (`src/workflows/scheduler/WorkflowScheduler.ts`)
 
-File: [src/workflows/scheduler/WorkflowScheduler.ts](file:///home/user/project/src/workflows/scheduler/WorkflowScheduler.ts)
+File: [src/workflows/scheduler/WorkflowScheduler.ts](../src/workflows/scheduler/WorkflowScheduler.ts)
 
 Schedules and triggers workflows across 8 operational trigger modes.
 
@@ -348,15 +359,15 @@ Schedules and triggers workflows across 8 operational trigger modes.
 ### 3.9. Storage Subsystems
 
 #### In-Memory Versioned Storage (`src/workflows/storage/WorkflowStorage.ts`)
-File: [src/workflows/storage/WorkflowStorage.ts](file:///home/user/project/src/workflows/storage/WorkflowStorage.ts)
+File: [src/workflows/storage/WorkflowStorage.ts](../src/workflows/storage/WorkflowStorage.ts)
 - Manages in-memory storage of `UserWorkflow` definitions.
 - Automatic snapshotting: Creates a `WorkflowVersion` snapshot in `versionHistory` before any overwrite.
 - `rollback(id: string, version: string)`: Reverts a workflow to any historical version.
 - `exportAsJSON(id)` / `importFromJSON(jsonStr)`: Serializes workflows into `cero-workflow-v1` payloads with SHA-256 checksums.
 
 #### Disk Workflow Storage (`src/workflows/storage/DiskWorkflowStorage.ts`)
-File: [src/workflows/storage/DiskWorkflowStorage.ts](file:///home/user/project/src/workflows/storage/DiskWorkflowStorage.ts)
-- Persists workflows as JSON files in `~/.cero/workflows/<name>.json` (Windows: `%USERPROFILE%\.cero\workflows\<name>.json`).
+File: [src/workflows/storage/DiskWorkflowStorage.ts](../src/workflows/storage/DiskWorkflowStorage.ts)
+- Persists workflows as JSON files in `~/.cero/workflows/<name>.flow` (Windows: `%USERPROFILE%\.cero\workflows\<name>.flow`).
 - Uses Tauri Rust filesystem bridge (`@tauri-apps/plugin-fs`) in desktop mode with Node.js `fs` fallback for headless testing.
 - Enforces `schemaVersion: 1` and automatically migrates legacy unversioned workflow definitions.
 - Sanitizes file paths to allow only alphanumeric characters, underscores, and hyphens.
@@ -381,38 +392,38 @@ Execution via Phase 4 Runtime Engine
 ```
 
 #### `WorkflowIRCompiler.ts`
-File: [src/workflows/engine/WorkflowIRCompiler.ts](file:///home/user/project/src/workflows/engine/WorkflowIRCompiler.ts)
+File: [src/workflows/engine/WorkflowIRCompiler.ts](../src/workflows/engine/WorkflowIRCompiler.ts)
 - Compiles `UserWorkflow` + runtime inputs into a `WorkflowIR`.
 - Recursively expands nodes, evaluates conditions, unrolls loops via `LoopEngine`, inlines nested workflows (up to `maxNestedDepth = 10`), and partitions tasks into parallel execution groups via topological sort.
 
 #### `WorkflowGraphCompiler.ts`
-File: [src/workflows/engine/WorkflowGraphCompiler.ts](file:///home/user/project/src/workflows/engine/WorkflowGraphCompiler.ts)
+File: [src/workflows/engine/WorkflowGraphCompiler.ts](../src/workflows/engine/WorkflowGraphCompiler.ts)
 - Converts `WorkflowIRNode` entries into standard `ActionNode` definitions compatible with the agent execution runtime.
 
 #### `WorkflowExecutionEngine.ts`
-File: [src/workflows/engine/WorkflowExecutionEngine.ts](file:///home/user/project/src/workflows/engine/WorkflowExecutionEngine.ts)
+File: [src/workflows/engine/WorkflowExecutionEngine.ts](../src/workflows/engine/WorkflowExecutionEngine.ts)
 - Orchestrates the full lifecycle: compiles IR, produces `ActionGraph`, dispatches nodes, records `WorkflowInstance` records into `WorkflowHistory`, and logs metrics to `WorkflowTelemetry`.
 
 #### `DeterministicReplayEngine.ts`
-File: [src/workflows/engine/DeterministicReplayEngine.ts](file:///home/user/project/src/workflows/engine/DeterministicReplayEngine.ts)
-- Replays saved workflows (`~/.cero/workflows/<name>.json`) with zero LLM inference tokens in ~22ms.
+File: [src/workflows/engine/DeterministicReplayEngine.ts](../src/workflows/engine/DeterministicReplayEngine.ts)
+- Replays saved workflows (`~/.cero/workflows/<name>.flow`) with zero LLM inference tokens in ~22ms.
 - Pre-execution validation: Verifies required binaries, ports, and paths, preventing environment drift.
 - Parameter substitution: Injects CLI overrides (`--port=9000`) into commands.
 - Categorical zero-trust safety: Inspects every command through `SecurityEngine` and halts on `SENSITIVE` operations unless pre-approved.
 - Reversibility: Appends all executed steps to the session `UndoLog`.
 
 #### `MultistagePromptDecomposer.ts`
-File: [src/workflows/engine/MultistagePromptDecomposer.ts](file:///home/user/project/src/workflows/engine/MultistagePromptDecomposer.ts)
+File: [src/workflows/engine/MultistagePromptDecomposer.ts](../src/workflows/engine/MultistagePromptDecomposer.ts)
 - Parses natural language composite instructions (e.g. `build frontend, run tests, and package release :: save as workflow ci-pipeline`).
 - Extracts pipeline stages, parameter tokens, required ports, and prerequisite binaries.
 
 #### `CrossPlatformCommandAdapter.ts`
-File: [src/workflows/engine/CrossPlatformCommandAdapter.ts](file:///home/user/project/src/workflows/engine/CrossPlatformCommandAdapter.ts)
+File: [src/workflows/engine/CrossPlatformCommandAdapter.ts](../src/workflows/engine/CrossPlatformCommandAdapter.ts)
 - Translates shell commands between POSIX environments (Linux Debian/Arch/Fedora/Alpine, macOS) and Windows PowerShell.
 - Handles platform-specific command overrides declared in workflow step definitions.
 
 #### `WorkflowRecorder.ts`
-File: [src/workflows/engine/WorkflowRecorder.ts](file:///home/user/project/src/workflows/engine/WorkflowRecorder.ts)
+File: [src/workflows/engine/WorkflowRecorder.ts](../src/workflows/engine/WorkflowRecorder.ts)
 - Records interactive CLI command sequences, recent steps from the session `UndoLog`, or multi-phase `AgentPlan` hierarchies into `SavedWorkflowDefinition` JSON files.
 
 ---
@@ -420,11 +431,11 @@ File: [src/workflows/engine/WorkflowRecorder.ts](file:///home/user/project/src/w
 ### 3.11. Telemetry & Execution History
 
 #### `WorkflowTelemetry.ts`
-File: [src/workflows/telemetry/WorkflowTelemetry.ts](file:///home/user/project/src/workflows/telemetry/WorkflowTelemetry.ts)
+File: [src/workflows/telemetry/WorkflowTelemetry.ts](../src/workflows/telemetry/WorkflowTelemetry.ts)
 - Collects runtime execution metrics: `totalExecutions`, `successes`, `failures`, `successRate` (percentage), `totalDurationMs`, `averageDurationMs`, `repairRate` (automated repairs per execution), and `mostUsedWorkflows` (top 5 by frequency).
 
 #### `WorkflowHistory.ts`
-File: [src/workflows/history/WorkflowHistory.ts](file:///home/user/project/src/workflows/history/WorkflowHistory.ts)
+File: [src/workflows/history/WorkflowHistory.ts](../src/workflows/history/WorkflowHistory.ts)
 - Maintains an in-memory ring-buffer repository of up to 5,000 `WorkflowInstance` execution records.
 - Provides filtering by `workflowId` and calculates aggregate statistics (`getStats`: total, successes, failures, average duration, total repairs).
 
@@ -432,7 +443,7 @@ File: [src/workflows/history/WorkflowHistory.ts](file:///home/user/project/src/w
 
 ### 3.12. Workflow Sharing (`src/workflows/sharing/WorkflowSharing.ts`)
 
-File: [src/workflows/sharing/WorkflowSharing.ts](file:///home/user/project/src/workflows/sharing/WorkflowSharing.ts)
+File: [src/workflows/sharing/WorkflowSharing.ts](../src/workflows/sharing/WorkflowSharing.ts)
 
 Implements the `cero-workflow-v1` sharing and portability protocol.
 - Computes SHA-256 integrity checksums over workflow definitions to guarantee payload integrity.
@@ -443,7 +454,7 @@ Implements the `cero-workflow-v1` sharing and portability protocol.
 
 ### 3.13. Starter Templates (`src/workflows/templates/WorkflowTemplates.ts`)
 
-File: [src/workflows/templates/WorkflowTemplates.ts](file:///home/user/project/src/workflows/templates/WorkflowTemplates.ts)
+File: [src/workflows/templates/WorkflowTemplates.ts](../src/workflows/templates/WorkflowTemplates.ts)
 
 Contains 6 immutable built-in starter templates:
 1. **`tpl-morning-development`** (`Morning Development`): Launches developer editor, terminal, browser, and connects to development WiFi.
@@ -460,7 +471,7 @@ Contains 6 immutable built-in starter templates:
 While `src/workflows/` handles high-level authoring, compilation, and declarative DAGs, `src/domain/workflow/` orchestrates immediate step execution during active agent operations.
 
 ### 4.1. `WorkflowEngine.ts`
-File: [src/domain/workflow/WorkflowEngine.ts](file:///home/user/project/src/domain/workflow/WorkflowEngine.ts)
+File: [src/domain/workflow/WorkflowEngine.ts](../src/domain/workflow/WorkflowEngine.ts)
 - **Active State Tracking**: Tracks running workflows in an `executions` map (`Map<string, Map<string, WorkflowTaskExecution>>`).
 - **DAG Readiness Resolution (`getNextTasks`)**: Evaluates the dependency graph and returns steps that are `PENDING` with all prerequisite dependencies `COMPLETED`.
 - **Task Lifecycle**: Coordinates state transitions: `PENDING` -> `RUNNING` -> `COMPLETED` | `FAILED` | `CANCELLED`.
@@ -468,19 +479,19 @@ File: [src/domain/workflow/WorkflowEngine.ts](file:///home/user/project/src/doma
 - **Rollback Tracking**: Stores `rollbackAction` closures for every completed step to support reversibility.
 
 ### 4.2. `TaskQueue.ts`
-File: [src/domain/workflow/TaskQueue.ts](file:///home/user/project/src/domain/workflow/TaskQueue.ts)
+File: [src/domain/workflow/TaskQueue.ts](../src/domain/workflow/TaskQueue.ts)
 - Implements a priority-based queue for `QueuedTask` objects.
 - Sorts tasks dynamically by descending priority (`priority` score).
 - Provides execution controls: `enqueue`, `dequeue`, `peek`, `pause`, `resume`, and `removeByWorkflowId`.
 
 ### 4.3. `VariableEngine.ts`
-File: [src/domain/workflow/VariableEngine.ts](file:///home/user/project/src/domain/workflow/VariableEngine.ts)
+File: [src/domain/workflow/VariableEngine.ts](../src/domain/workflow/VariableEngine.ts)
 - Handles variable interpolation across strings, arrays, and nested objects.
 - Supports dot-notation path traversal (e.g. `{{user.credentials.token}}`).
 - Type-preserving single-variable extraction: If a string is exactly `"{{var}}"`, it returns the raw underlying type (e.g. number or object) rather than coercing to string.
 
 ### 4.4. `types.ts`
-File: [src/domain/workflow/types.ts](file:///home/user/project/src/domain/workflow/types.ts)
+File: [src/domain/workflow/types.ts](../src/domain/workflow/types.ts)
 - Defines runtime domain interfaces and Zod validation schemas (`workflowSchema`, `retryPolicySchema`).
 - **10 Primitive Step Types (`StepType`)**:
   - `ExecuteCapability`: Dispatches an SDK capability.
@@ -501,16 +512,16 @@ The workflow implementations are validated by 13 comprehensive test suites guara
 
 | Test Suite File | Tested Subsystem | Key Verification Scenarios |
 | :--- | :--- | :--- |
-| [`CrossPlatformCommandAdapter.test.ts`](file:///home/user/project/src/workflows/__tests__/CrossPlatformCommandAdapter.test.ts) | CrossPlatformCommandAdapter | Linux distro detection, macOS POSIX handling, Windows PowerShell translation, override resolution. |
-| [`DeterministicReplayEngine.test.ts`](file:///home/user/project/src/workflows/__tests__/DeterministicReplayEngine.test.ts) | DeterministicReplayEngine | Zero-token replay latency, parameter interpolation, drift detection, dry-run simulation, SecurityEngine consent halting. |
-| [`Execution.test.ts`](file:///home/user/project/src/workflows/__tests__/Execution.test.ts) | WorkflowExecutionEngine | Runtime Reuse pipeline: IR compilation -> Graph compilation -> Action execution -> Telemetry/History recording. |
-| [`MultistagePromptDecomposer.test.ts`](file:///home/user/project/src/workflows/__tests__/MultistagePromptDecomposer.test.ts) | MultistagePromptDecomposer | Natural language sequential conjunction parsing, parameter extraction, binary prerequisite detection. |
-| [`Performance.test.ts`](file:///home/user/project/src/workflows/__tests__/Performance.test.ts) | Compilers & Engines | Large DAG compilation benchmarking, memory usage, unrolling performance under 1,000 iterations. |
-| [`Scheduler.test.ts`](file:///home/user/project/src/workflows/__tests__/Scheduler.test.ts) | WorkflowScheduler | Time calculations, cron intervals, login/startup triggers, filesystem event path matching, application bundle ID filtering. |
-| [`Storage.test.ts`](file:///home/user/project/src/workflows/__tests__/Storage.test.ts) | WorkflowStorage | In-memory persistence, version snapshotting, rollback verification, JSON export/import with SHA-256 checks. |
-| [`DiskWorkflowStorage.test.ts`](file:///home/user/project/src/workflows/storage/DiskWorkflowStorage.test.ts) | DiskWorkflowStorage | File path sanitization, `schemaVersion: 1` validation, legacy migration, atomic file I/O. |
-| [`Templates.test.ts`](file:///home/user/project/src/workflows/__tests__/Templates.test.ts) | WorkflowTemplates & Registry | Immutability of built-ins, instantiation to UserWorkflow, validation of all 6 starter templates. |
-| [`Validation.test.ts`](file:///home/user/project/src/workflows/__tests__/Validation.test.ts) | WorkflowValidator | 11 validation gates: duplicate IDs, missing dependencies, DFS circular dependency detection, output source validation. |
-| [`Variables.test.ts`](file:///home/user/project/src/workflows/__tests__/Variables.test.ts) | WorkflowVariables | Strict typing across 11 domains, default value fallback, required checks, mustache parameter substitution. |
-| [`WorkflowBuilder.test.ts`](file:///home/user/project/src/workflows/__tests__/WorkflowBuilder.test.ts) | WorkflowBuilder | Fluent builder construction, duplicate/clone utilities, nested workflow linkage. |
-| [`WorkflowRecorder.test.ts`](file:///home/user/project/src/workflows/__tests__/WorkflowRecorder.test.ts) | WorkflowRecorder | Command sequence capture, UndoLog step extraction, AgentPlan translation to SavedWorkflowDefinition. |
+| [`CrossPlatformCommandAdapter.test.ts`](../src/workflows/__tests__/CrossPlatformCommandAdapter.test.ts) | CrossPlatformCommandAdapter | Linux distro detection, macOS POSIX handling, Windows PowerShell translation, override resolution. |
+| [`DeterministicReplayEngine.test.ts`](../src/workflows/engine/DeterministicReplayEngine.test.ts) | DeterministicReplayEngine | Zero-token replay latency, parameter interpolation, drift detection, dry-run simulation, SecurityEngine consent halting. |
+| [`Execution.test.ts`](../src/workflows/__tests__/Execution.test.ts) | WorkflowExecutionEngine | Runtime Reuse pipeline: IR compilation -> Graph compilation -> Action execution -> Telemetry/History recording. |
+| [`MultistagePromptDecomposer.test.ts`](../src/workflows/engine/MultistagePromptDecomposer.test.ts) | MultistagePromptDecomposer | Natural language sequential conjunction parsing, parameter extraction, binary prerequisite detection. |
+| [`Performance.test.ts`](../src/workflows/__tests__/Performance.test.ts) | Compilers & Engines | Large DAG compilation benchmarking, memory usage, unrolling performance under 1,000 iterations. |
+| [`Scheduler.test.ts`](../src/workflows/__tests__/Scheduler.test.ts) | WorkflowScheduler | Time calculations, cron intervals, login/startup triggers, filesystem event path matching, application bundle ID filtering. |
+| [`Storage.test.ts`](../src/workflows/__tests__/Storage.test.ts) | WorkflowStorage | In-memory persistence, version snapshotting, rollback verification, JSON export/import with SHA-256 checks. |
+| [`DiskWorkflowStorage.test.ts`](../src/workflows/storage/DiskWorkflowStorage.test.ts) | DiskWorkflowStorage | File path sanitization, `schemaVersion: 1` validation, legacy migration, atomic file I/O. |
+| [`Templates.test.ts`](../src/workflows/__tests__/Templates.test.ts) | WorkflowTemplates & Registry | Immutability of built-ins, instantiation to UserWorkflow, validation of all 6 starter templates. |
+| [`Validation.test.ts`](../src/workflows/__tests__/Validation.test.ts) | WorkflowValidator | 11 validation gates: duplicate IDs, missing dependencies, DFS circular dependency detection, output source validation. |
+| [`Variables.test.ts`](../src/workflows/__tests__/Variables.test.ts) | WorkflowVariables | Strict typing across 11 domains, default value fallback, required checks, mustache parameter substitution. |
+| [`WorkflowBuilder.test.ts`](../src/workflows/__tests__/WorkflowBuilder.test.ts) | WorkflowBuilder | Fluent builder construction, duplicate/clone utilities, nested workflow linkage. |
+| [`WorkflowRecorder.test.ts`](../src/workflows/engine/WorkflowRecorder.test.ts) | WorkflowRecorder | Command sequence capture, UndoLog step extraction, AgentPlan translation to SavedWorkflowDefinition. |

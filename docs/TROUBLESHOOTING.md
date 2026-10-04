@@ -6,24 +6,24 @@ Encountering an unexpected behavior in Cero? Follow these step-by-step diagnosti
 
 ## 1. Embedded AI Inference Engine Diagnostics
 
-### A. AI Status Shows "AI: Off" in Bottom Status Bar
-If the status indicator displays `AI: Off`:
-1. **Check AI Settings**: Click the `AI: Off` button or open AI Settings via the Command Palette (`Ctrl+Shift+P`).
-2. **Start Engine Manually**: In the AI Settings drawer, click **Start Engine**. Cero will spawn `llama-server` on the next available port.
-3. **Check Port Availability**: The embedded server defaults to port `8080`. If another process occupies port 8080, Cero automatically increments to `8081`, `8082`, etc. Verify running status via:
+### A. The status bar says "AI: Off"
+`AI: Off` appears only when the built-in engine is stopped. A working API or Ollama model shows `AI: API` or `AI: Ollama`.
+1. Click the status pill or open Settings (`Ctrl+,`), AI tab, and choose **Start Engine**. If the model is not
+   downloaded yet the status says "Download Required"; start the download there.
+2. The engine listens on port `8847` (fixed). Check it with:
    ```bash
-   curl http://localhost:8080/health
-   # or
-   curl http://localhost:8081/health
+   curl http://localhost:8847/health
    ```
-4. **Inspect Lingering Processes**: If an unexpected crash left an orphan process running, terminate it cleanly:
+3. Cero removes a `llama-server` left on that port by a crash when it starts. To do it by hand:
    ```bash
    pkill -f llama-server
    ```
+4. If the chosen provider cannot be reached, Cero shows the reason and retries; it does not fall back to the built-in model by itself.
 
-### B. Slow AI Inference or GPU VRAM Exhaustion
-- **VRAM Exhaustion**: If running alongside heavy 3D rendering (e.g. Gazebo or Blender), your GPU may run out of memory for the 3B model.
-- **CPU Fallback**: In the AI Settings drawer, toggle **CPU Fallback Mode**. Cero will offload model computation layers to your host CPU threads, ensuring uninterrupted inference.
+### B. Slow answers or GPU memory exhaustion
+- If the GPU runs out of memory (for example next to Blender or Gazebo), the engine falls back to the CPU on its own and
+  Settings shows `Running (CPU)`. There is no toggle.
+- On a slow machine choose a smaller model in Settings (Qwen 2.5 Coder 0.5B or 1.5B), or use an API provider.
 
 ### C. GBNF Grammar Initialization Errors
 - **Error Code 400 (`failed to parse grammar`)**: Older `llama-server` builds forbid underscores in rule names (e.g. `action_done`). Cero's `GbnfGrammarManager.ts` automatically sanitizes rule identifiers to hyphen-case (`action-done`).
@@ -33,16 +33,19 @@ If the status indicator displays `AI: Off`:
 
 ## 2. Shell Input, PTY & Keyboard Behaviors
 
-### A. `Ctrl+Shift+P` vs. `Ctrl+Alt+P` Conflict
-- **Command Palette**: Bound to **`Ctrl + Shift + P`** (or `Cmd + Shift + P`).
-- **Listening Ports Drawer**: Bound to **`Ctrl + Alt + P`** (or `Ctrl + Option + P`).
-- If a shortcut does not trigger, open **`[F1 help]`** in the status bar to verify active keybindings.
+### A. A shortcut does nothing
+- Check [KEYBOARD_SHORTCUTS.md](KEYBOARD_SHORTCUTS.md): some keys that older pages listed (`Ctrl+Shift+Z`, `Ctrl+1..9`, `Ctrl+Alt+P`) are not built.
+- The F1 help screen still shows the wrong split keys; the real ones are `Ctrl+D` and `Ctrl+Shift+D`.
+- The command palette is `Ctrl+Shift+P`.
 
 ### B. `Ctrl+R` History Search Interception
 - Cero intercepts `Ctrl+R` in the terminal to display an interactive, visual fuzzy history search modal.
-- If raw bash reverse-search (`(reverse-i-search)`) appears instead, ensure your terminal is running Cero version 5.0+ where keydown events are captured prior to PTY byte transmission.
+- If raw bash reverse-search (`(reverse-i-search)`) appears instead, update Cero: `Ctrl+R` is captured before it reaches the shell in every current version.
 
-### C. Fullscreen Interactive Programs (`vim`, `nano`, `htop`, `tmux`)
+### C. History (`Ctrl+R`) is missing recent commands
+Fixed in 2.2.3: newer systemd versions add invisible markers around each prompt, which hid the prompt from Cero, so only the first commands of a session were saved. Update to 2.2.3 or later.
+
+### D. Fullscreen Interactive Programs (`vim`, `nano`, `htop`, `tmux`)
 - Cero's PTY state tracker detects the alternate screen buffer (`\x1b[?1049h`) and automatically suspends ghost-text autocompletions and output observers, preventing cursor jumping or display glitches during interactive editing.
 
 ---
@@ -50,7 +53,7 @@ If the status indicator displays `AI: Off`:
 ## 3. Linux Desktop & Wayland Integration
 
 ### A. Virtual Keyboard & Mouse Automation (`ydotoold`)
-- For desktop application automation under Wayland / Hyprland, Cero interfaces with `ydotoold`.
+- For desktop application automation under Wayland / Hyprland, Cero can use `ydotoold` (`InputDaemonProbe.ts` checks for it).
 - If automation commands fail with `cannot open /dev/uinput`:
   1. Add your user to the `input` group:
      ```bash
@@ -116,7 +119,7 @@ All log output adheres strictly to zero-emoji, grayscale terminal standards with
 ```text
 ================================================================================
 [YYYY-MM-DDTHH:MM:SSZ] [SYSTEM] Cero Diagnostic Logging ACTIVE (PID: <pid>)
-[YYYY-MM-DDTHH:MM:SSZ] [SYSTEM] OS: linux | Arch: x86_64 | Release: 2.0.0
+[YYYY-MM-DDTHH:MM:SSZ] [SYSTEM] OS: linux | Arch: x86_64 | Release: 2.2.3
 ================================================================================
 [YYYY-MM-DDTHH:MM:SSZ] [INFO ] [BOOT] Initializing Cero runtime
 [YYYY-MM-DDTHH:MM:SSZ] [INFO ] [SETUP] Initializing core application services

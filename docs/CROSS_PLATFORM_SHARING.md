@@ -1,86 +1,49 @@
-# Cero — Cross-Platform Shared Architecture & Synchronization Guide
+# Cross-platform layout and shared-core sync
 
-This document outlines how Cero's cross-platform architecture is organized across operating systems (`macOS`, `Windows`, `Linux`) and how developers on different platform branches pull shared code without causing merge conflicts.
+Cero runs on macOS, Windows and Linux from one code base, kept in per-platform branches.
 
----
+## Layers
+1. **Shared, OS-agnostic core** (most of the code):
+   - `tools/`: the tool schemas, examples, knowledge files and tests (103 tool folders).
+   - `src/ai/`: agent loop, planner, prompts, providers, memory.
+   - `src/presentation/`: terminal view, output formatting.
+   - `src/workflows/`: `.flow` authoring, saving, replay.
+   - `src/domain/security/`: command safety guardian, policy, audit log.
+2. **Platform layer**:
+   - `src-tauri/`: the Rust side (`pty.rs`, `embedded_server.rs`, `file_association.rs`, `launch.rs`, `secrets.rs`, ...).
+   - `src/sdk/capabilities/drivers/`: per-OS drivers (for example `bluetoothctl` on Linux, `blueutil` on macOS, PowerShell on Windows).
+   - `packaging/`: `arch`, `linux`, `desktop`, `flatpak`, `snap`.
 
-## 🏗️ Architecture Overview
+## Branches
+| Branch | Purpose |
+|---|---|
+| `main` | macOS-first development; source of the shared core |
+| `windows`, `linux` | Platform development branches (`linux-v2-update` is the current Linux line) |
+| `release/macos`, `release/windows`, `release/linux` | What CI builds and publishes for each platform |
+| `sync/shared-core-to-*` | Pull requests opened by the sync workflow |
 
-Cero is structured into two clear layers:
+Release notes for each platform are in [releases/](releases/linux.md). A platform is released only after its own check
+([LINUX_TEST_REPORT.md](LINUX_TEST_REPORT.md)).
 
-1. **Shared OS-Agnostic Core (~85% of codebase)**:
-   - `tools/`: All 101 tool calling JSON schemas, parameters, knowledge artifacts, examples, and tests.
-   - `src/ai/`: Agent loop, Adaptive Planning Engine, prompt builders, intent normalizers, and memory stores.
-   - `src/presentation/`: React UI components, TerminalView overlays, OutputFormatter, and CSS themes.
-   - `src/workflows/`: Declarative multi-step workflows, validation, and state machines.
-   - `src/domain/security/`: Risk scoring engine, PolicyEngine, PermissionManager, and audit logger.
+## Pulling the shared core
+Do not merge `main` into a platform branch. Run the sync script, which checks out only the shared paths:
 
-2. **Platform-Specific Execution Layer (~15% of codebase)**:
-   - `src-tauri/`: Rust PTY spawning (`pty.rs` on Unix vs `pty_windows.rs` ConPTY on Windows).
-   - `src/sdk/capabilities/drivers/`: Concrete OS drivers (e.g. `blueutil` / AppleScript on macOS, PowerShell / WinRT on Windows, `bluetoothctl` / `systemctl` on Linux).
-
----
-
-## 🌿 Branching Model
-
-| Branch | Primary Platform | Maintained By | Codebase Focus |
-| :--- | :--- | :--- | :--- |
-| **`main`** | macOS | Pranav | macOS capability drivers, AppleScript integration, core AI, UI |
-| **`windows`** | Windows | Adarsh | Windows ConPTY, PowerShell drivers, WinRT capabilities |
-| **`linux`** | Linux | Burhanuddin | Linux POSIX PTY, systemd, BlueZ / bluetoothctl drivers |
-
----
-
-## 🔄 How Colleagues Pull Only Shared Code
-
-To prevent merge conflicts between macOS, Windows, and Linux codebases, **never merge branches directly** (e.g., do not run `git merge main` inside `windows`). 
-
-Instead, use the automated sync utilities to pull **only the shared core**:
-
-### 🪟 On Windows (PowerShell)
-Open PowerShell in your Windows branch and run:
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\sync-shared.ps1
+```bash
+./scripts/sync-shared.sh                 # from origin/main
+./scripts/sync-shared.sh origin/main     # or another source
 ```
+On Windows: `powershell -ExecutionPolicy Bypass -File .\scripts\sync-shared.ps1`.
 
-Or manually via Git:
+By hand:
 ```bash
 git fetch origin main
 git checkout origin/main -- tools/ src/ai/ src/presentation/ src/workflows/ src/domain/security/
-git commit -m "chore(sync): update shared core from main"
 ```
 
----
+`.github/workflows/sync-shared.yml` does the same automatically: a push to `main` that touches `tools/`, `src/ai/`,
+`src/presentation/`, `src/workflows/` or `src/domain/security/` opens a pull request into `windows` and `linux`.
 
-### 🐧 On Linux or macOS (Bash / Zsh)
-In your terminal, run:
-```bash
-./scripts/sync-shared.sh
-```
-
-Or specify a custom remote or branch:
-```bash
-./scripts/sync-shared.sh origin/main
-```
-
----
-
-## 🤖 Automated GitHub Actions Sync
-
-Whenever a commit is pushed to `main` that touches `tools/`, `src/ai/`, or `src/presentation/`, the automated GitHub Action (`.github/workflows/sync-shared.yml`) will:
-1. Detect changes in the shared core.
-2. Automatically create a synchronization Pull Request into `windows` and `linux`.
-3. Platform maintainers simply review and click **Merge** on GitHub. No manual git operations required!
-
----
-
-## 🛡️ Synchronization Safety Checklist
-
-Before committing synced shared code:
-1. Run `git status` to verify that **no platform-specific files** (`src-tauri/`, `drivers/`) were overwritten.
-2. Run `npm test` to verify that the shared AI engine and tool loader pass all tests.
-3. Commit and push:
-   ```bash
-   git commit -m "chore(sync): update shared core from main"
-   git push origin <your-branch>
-   ```
+## Before committing a sync
+1. `git status`: no platform file (`src-tauri/`, `drivers/`, `packaging/`) was overwritten.
+2. `npm run check:triple` (`npm test && npm run build && cargo check --manifest-path src-tauri/Cargo.toml`).
+3. Commit as `chore(sync): update shared core from main`.

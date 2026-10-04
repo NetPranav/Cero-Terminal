@@ -70,4 +70,5 @@ This document establishes behavioral constraints, operational rules, and quality
   1. `npm test` (all test suites must pass 100%).
   2. `npm run build` (zero TypeScript errors, zero build failures).
   3. Visual or functional verification for UI-facing changes.
-- Documentation in `docs/` and `walkthrough.md` must be kept updated with current system state and progress.
+- Documentation in `docs/` must be kept updated with the current state of the app. A feature a guide describes but the app does not have goes to `docs/FUTURE_SCOPE.md`, not into the guide.
+- Run `npm run check:triple` (tests, build and `cargo check`) before a commit.

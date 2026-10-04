@@ -15,29 +15,24 @@ Cero is built around a philosophy of focused minimalism, low eye fatigue, and vi
 
 ## 2. Zen Mode vs. Visual Mode
 
-Cero provides two distinct operational interface profiles toggled instantly via **`Ctrl + Shift + Z`** (or **`Cmd + Shift + Z`**):
+Cero has two interface profiles. Switch between them in Settings (Terminal) or with "Toggle UI mode" in the command palette (a `Ctrl+Shift+Z` shortcut is planned: see [FUTURE_SCOPE.md](FUTURE_SCOPE.md)):
 
 ### A. Zen Mode (Default)
 - Designed for maximum immersion and distraction-free terminal work.
-- Hides auxiliary action buttons (`[Projects]`, `[Ports]`, `[Workflows]`) from the footer status bar.
-- Retains only essential shell details, directory path breadcrumbs, live hardware telemetry, and the embedded AI status indicator.
+- Hides the Workflows button from the footer status bar.
+- Keeps the shell name, folder breadcrumbs, CPU and RAM, the clock and the AI status.
 
 ### B. Visual Mode
 - Designed for rich mouse-and-keyboard multitasking.
-- Surfaces dedicated one-click launcher buttons in the status bar:
-  - **`[Projects]`**: Opens the Workspace & Git Repository Switcher (`Ctrl+O`).
-  - **`[Ports]`**: Opens the Listening Ports & Process Inspector drawer (`Ctrl+Alt+P`).
-  - **`[Workflows]`**: Opens the Workflow & Macro Manager drawer.
+- Adds a **Workflows** button to the status bar that opens the Workflow Manager (`Ctrl+Shift+W`).
+- Projects and ports have no buttons: ask in the terminal (`>show listening ports`, `>switch to <folder>`).
 
 ---
 
-## 3. Dynamic Glassmorphism & Opacity Controls
+## 3. Surfaces
 
-Cero provides granular control over window translucency and background blur:
-
-- **Acrylic Transparency**: Adjust window opacity dynamically from deep frosted obsidian to solid pitch black.
-- **Backdrop Blur Depth**: Configure blur radius (from `10px` to `30px`) to smoothly diffuse underlying desktop windows and wallpapers without impacting character sharpness.
-- **Sub-Pixel Hairline Borders**: Modals, tabs, and split dividers utilize subtle hairline borders (`rgba(255, 255, 255, 0.08)` to `rgba(255, 255, 255, 0.14)`) providing crisp edge definition on Retina and 4K displays.
+Panels use translucent dark surfaces with a backdrop blur and hairline borders (`rgba(255, 255, 255, 0.08)` to `0.14`).
+The blur and opacity are fixed in CSS; adjustable sliders are not built yet ([FUTURE_SCOPE.md](FUTURE_SCOPE.md)).
 
 ---
 
@@ -52,4 +47,4 @@ Cero provides granular control over window translucency and background blur:
 ## 5. Comprehensive Design System Reference
 
 For the exhaustive specification of color tokens, surface elevations, type scales, border definitions, and component hierarchies, refer to:
-- **[`docs/ui.md`](file:///docs/ui.md)** — Master UI Design System & Aesthetic Architecture.
+- **[`ui.md`](ui.md)** — Master UI Design System & Aesthetic Architecture.

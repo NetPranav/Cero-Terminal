@@ -1,45 +1,33 @@
-# Cero — High-Performance Shell & PTY Architecture
+# The terminal
 
-At its core, Cero provides a robust, native terminal emulator engineered for speed, interactive compatibility, and seamless multitasking. Whether running intensive server builds or editing code via interactive text editors, Cero delivers sub-millisecond responsiveness.
+Cero is a Tauri v2 desktop terminal: xterm.js in the window, a real PTY and your login shell behind it.
 
----
+## Rendering
+- `@xterm/xterm` with the WebGL addon. If the graphics context is lost, Cero falls back to the standard renderer
+  and redraws the cursor.
+- Full-screen programs (`vim`, `nano`, `tmux`, `htop`) work. `PtyStateTracker` detects the alternate screen and
+  switches off the grey suggestion and output observers while one runs.
+- Environment given to every session: `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=Cero`, `CERO_TERMINAL=1`.
 
-## 1. Hardware-Accelerated WebGL Rendering
+## Tabs and panes
+- New tab `Ctrl+T`, close tab or pane `Ctrl+W`. Double-click a tab to rename it.
+- Split side by side `Ctrl+D`, split stacked `Ctrl+Shift+D`. Drag the divider to resize (8 px grab area).
+- Each tab and pane keeps its own output history, shell and working directory.
+- Not built yet: `Ctrl+1..9`, `Ctrl+Tab` and `Alt+Arrow` for tab and pane navigation (see [FUTURE_SCOPE.md](FUTURE_SCOPE.md)).
 
-Say goodbye to input buffering and display latency:
-- **Sub-Millisecond Drawing**: Built with an advanced **WebGL rendering pipeline** (`@xterm/addon-webgl`) that accelerates character drawing and scrolling animations directly on your computer's GPU.
-- **Flawless Interactive Tooling**: High-performance pseudo-terminal (PTY) synchronization guarantees 100% compatibility with full-screen CLI tools like `vim`, `nano`, `tmux`, `git interactive rebase`, `htop`, and Docker monitoring interfaces.
-- **PTY State Tracking (`PtyStateTracker.ts`)**: Detects alternate screen buffer switches (`\x1b[?1049h`). Automatically suspends autocomplete ghost text and output observers during interactive text editing sessions to prevent cursor jumping or visual artifacts.
+## Search (`Ctrl+Shift+F`)
+Opens a search bar in the focused pane with a live match count. `Enter` goes to the next match, `Shift+Enter` to the
+previous one. `Alt+C` toggles case, `Alt+W` whole word, `Alt+R` regular expression; `Esc` closes it.
+You can also ask: "search the terminal for ERROR".
 
----
+## Copy, paste, clear, history
+- Copy: `Ctrl+Shift+C`, or `Ctrl+C` while text is selected. Paste: `Ctrl+V`, `Ctrl+Shift+V` or `Shift+Insert`.
+- Clear: `Ctrl+K` (or `Ctrl+L` / `clear` in the shell).
+- History: `Ctrl+R` opens a fuzzy search over every command and `>` request you ran.
 
-## 2. Multi-Pane Workspace & Split Routing
-
-Eliminate desktop clutter by dividing your command workflow into multi-directional workspaces:
-- **Vertical & Horizontal Split Panes**:
-  - Vertical split: `Ctrl + Shift + D` (or `Cmd + D`).
-  - Horizontal split: `Ctrl + Shift + H` (or `Cmd + Shift + D`).
-  - Dividers feature an invisible 8px grab hitbox for easy mouse targeting and an active window-wide drag overlay that prevents canvas event capture during resizing.
-- **Session Memory Persistence**: Cero utilizes dedicated output ring-buffers for every open session tab and split pane. When switching tabs, resizing windows, or dividing views, your full terminal scrollback history and active shell processes remain preserved without blinking or vanishing.
-- **Tab Customization**: Double-click any tab pill to assign persistent custom labels. Use `Ctrl+1` through `Ctrl+9` for instant tab switching.
-
----
-
-## 3. Terminal Search Bar Overlay (`Ctrl + F`)
-
-- **Floating Glassmorphic Search**: Press **`Ctrl + F`** (or **`Cmd + F`**) to reveal the terminal search bar floating at the top-right of the active pane.
-- **Instant Match Navigation**: Displays live match counters (e.g. `4 of 28`) with `Enter` (next) and `Shift+Enter` (previous) navigation.
-- **Keyboard-Driven Toggles**:
-  - **`Alt + C`**: Toggle Case Sensitive matching.
-  - **`Alt + W`**: Toggle Whole Word matching.
-  - **`Alt + R`**: Toggle Regular Expression matching.
-
----
-
-## 4. Intelligent Shell Integration & Autocomplete
-
-- **Interactive Autocomplete Engine (`AutocompleteEngine.ts`)**: Combines multiple predictive providers to deliver low-latency ghost-text suggestions:
-  - **History Provider**: Suggests recent commands filtered by current working directory.
-  - **Workspace Context Provider**: Predicts file targets, scripts, and commands based on project manifests (`package.json`, `Cargo.toml`).
-  - **Demonstration Memory Provider**: Suggests learned workflows from user demonstrations.
-- **Safe Line Clearing (`safeClearLine`)**: Cancels pending command-line inputs cleanly without sending SIGINT (`\x03`) to running foreground processes.
+## Suggestions (grey text)
+`AutocompleteEngine` shows one suggestion after the cursor from command history (filtered by folder), project files
+and scripts (`package.json`, `Cargo.toml`), and patterns you taught with `/learn`.
+- `Tab` accepts it. `Right` at the end of the line accepts it too (Settings, Terminal, "Accept suggestion with Right arrow").
+- Other arrow keys, Home and End only move the cursor. A suggestion that no longer matches the line (after a paste or edit) is dropped.
+- Up and Down move between the lines of a long wrapped prompt (`PromptNavigationEngine`) and otherwise recall shell history.

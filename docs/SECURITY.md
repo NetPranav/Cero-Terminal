@@ -1,6 +1,6 @@
 # Cero — Security & Safeguards Guide
 
-Allowing an autonomous AI agent to interact with your operating system requires absolute trust, verifiable boundaries, and zero-leakage guarantees. Cero implements a comprehensive **Zero-Trust Security Engine** engineered to protect your local environment from accidental destruction, privilege escalation, and prompt injection attacks.
+Allowing an autonomous AI agent to interact with your operating system needs clear boundaries. Cero checks every command it runs, asks before anything that changes your system, and refuses a fixed set of catastrophic commands.
 
 ---
 
@@ -39,7 +39,7 @@ Cero evaluates all proposed operations—both interactive terminal keystrokes an
 When a blocked command is detected:
 1. **Explicit Capability Limitation**: The terminal responds that Cero does not have the capability to execute the command:
    ```text
-   ✕ Capability Statement: Cero does not have the capability to execute '[command]'.
+   ✗ Capability Statement: Cero does not have the capability to execute '[command]'.
    ```
 2. **Consequence & Impact Analysis**: Cero explains the exact technical destruction that would occur if the command were executed (e.g. recursive inode deletion, loss of the C standard library, kernel panic, or irrecoverable UEFI NVRAM bricking).
 3. **Safe Alternative**: Cero suggests safe, non-destructive commands (e.g. `pacman -Sc`, `apt clean`, `ncdu /`).
@@ -51,7 +51,7 @@ When a blocked command is detected:
    ┌──────────────────────────────────────────────────────────────────────────┐
    │ [!] CERO SECURITY GUARDIAN — ACTION PERMANENTLY REFUSED              │
    └──────────────────────────────────────────────────────────────────────────┘
-   ✕ Capability Statement: Cero does not have the capability to execute 'rm -rf /'.
+   ✗ Capability Statement: Cero does not have the capability to execute 'rm -rf /'.
      • Attempted Command : rm -rf /
      • Threat Category   : ROOT_DESTRUCTION (Target: Root Filesystem (/))
 
@@ -70,8 +70,9 @@ When a blocked command is detected:
 ## 2. Asynchronous Non-Blocking Consent Queue (`ConsentQueue.ts`)
 
 - **Tab-Scoped Approvals**: When a tool action requires authorization, the request is dispatched to an asynchronous consent queue tagged with the initiating session/tab ID.
-- **Non-Blocking UI**: Background terminal processes continue operating while the security modal awaits user decision.
-- **Detailed Action Preview**: The authorization modal presents a transparent diff of proposed shell commands, targeted filesystem paths, and potential system impacts before the user clicks **Approve** or **Deny**.
+- **Non-Blocking UI**: Background terminal processes continue operating while the approval card waits for a decision.
+- **One card for every approval** (`ApprovalDock.tsx`): a small card in the bottom-right corner that never takes the keyboard, so a prompt you are typing is never interrupted. It lists the commands and paths involved. Answer with a click on **Run** or **Deny**; Enter and Esc do not answer it.
+- **Flow files**: opening a `.flow` shows one card listing every command; nothing runs until you click Run (see [FLOW_FILES.md](FLOW_FILES.md)).
 
 ---
 
@@ -79,28 +80,27 @@ When a blocked command is detected:
 
 - **Pre-Execution Syntax Analysis**: Model-generated shell commands are parsed by a dedicated Abstract Syntax Tree (AST) engine prior to execution.
 - **Subshell & Obfuscation Detection**: Automatically flags hidden command chaining, subshell injection (`` `...` ``, `$(...)`), and pipe-to-interpreter patterns (`curl ... | bash`).
-- **Path Confinement**: Ensures file mutations stay confined to authorized workspace directories.
 
 ---
 
 ## 4. Prompt Injection Defense & Data Protection
 
-- **Delimited Tool Observations**: Tool outputs fed back into the LLM context window are strictly wrapped in distinct XML-style boundary delimiters (`<tool_output>...</tool_output>`). This prevents untrusted external data (such as malicious README files or web scrape contents) from hijacking model instructions.
+- **Untrusted output**: file contents and command output are only data for the model. Any command the model then proposes still goes through the safety guardian and, if it changes anything, your approval.
 - **Automated Secret Redaction (`SecretRedactor.ts`)**: Scans all command arguments, environment outputs, and execution logs for API keys, AWS credentials, private SSH keys, and password patterns, replacing them with `[REDACTED]` before writing to disk.
-- **Local Sovereignty**: All reasoning occurs within the local embedded `llama-server` in machine RAM. Zero keystrokes, source code snippets, or environment variables ever leave your machine.
+- **Where data goes**: with the built-in model or Ollama, reasoning stays on your machine. With an API provider, your request and the output needed to answer it are sent to that provider. API keys live in the OS keychain (a private `0600` file on Linux).
 
 ---
 
 ## 5. Session Undo Log & Destructive Rollback (`UndoLog.ts`)
 
-- **Transactional Action Tracking**: Reversible actions (file edits, branch creation, package installations) are recorded in an in-memory session undo log.
+- **Transactional Action Tracking**: Reversible actions (file edits, branch creation, package installations) are recorded in an in-memory session undo log (it is gone when Cero closes).
 - **Action Inspection**: Ask `>what did you just do` at any time to receive a transparent summary of recently performed modifications.
 - **One-Command Rollback**: Ask `>undo last step` to trigger deterministic compensation actions (restoring pre-modification `.bak` file snapshots, reverting git stashes, or untrashing deleted files).
 
 ---
 
-## 6. Immutable Audit Trails & Benchmark Isolation
+## 6. Audit Trails & Benchmark Isolation
 
-- **Production Audit Logging**: Every capability invocation, parameter payload, policy tier evaluation, and completion timestamp is recorded to `~/.cero/audit.jsonl`.
+- **Production Audit Logging**: Capability invocations are appended to `~/.cero/audit.jsonl` (`AuditLogger.ts`), which also provides a hash-chain integrity check.
 - **Benchmark Isolation**: Test harnesses and automated benchmarks write exclusively to isolated logs (`~/.cero/audit.benchmark.jsonl`), ensuring production development records remain unpolluted.
-- **Binary & Model Integrity**: Downloads for embedded binaries (`llama-server`) and GGUF models are verified against SHA-256 cryptographic checksums before loading into memory.
+- **Binary & Model Integrity**: Downloads of the `llama-server` build and the GGUF models are verified against pinned SHA-256 checksums; a mismatch is discarded.

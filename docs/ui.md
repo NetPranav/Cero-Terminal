@@ -21,7 +21,7 @@ Every UI component draws from a cohesive set of grayscale tokens:
 
 | Token Name | Value | Purpose |
 | :--- | :--- | :--- |
-| `surface-canvas` | `#0A0A0C` | Root application window canvas under acrylic blur |
+| `surface-canvas` | `#0A0A0C` | Root application canvas (full-screen views use solid `#090b10`) |
 | `surface-app` | `rgba(16, 18, 22, 0.92)` | Main application frame with active frosted glass filtering |
 | `surface-tabs` | `rgba(16, 18, 24, 0.90)` | Top window header and tab bar strip |
 | `surface-status` | `rgba(18, 20, 24, 0.95)` | Bottom persistent telemetry and telemetry bar |
@@ -95,10 +95,10 @@ Cero utilizes a dual-font architecture:
 |  | > natural language prompt trigger |                                   |  |
 |  +-----------------------------------+-----------------------------------+  |
 |                                                                             |
-|  [Floating Overlays: Command Palette | Workspace Switcher | Workflow Drawer]|
+|  [Floating Overlays: Command Palette | Workflow Drawer | History Search]|
 |                                                                             |
 +-----------------------------------------------------------------------------+
-|  [Status Bar]  ❯_ bash | ~/Projects/sentinal  | [45% Thinking...] [CPU] [RAM]|
+|  [Status Bar]  ❯_ bash | ~/Projects/cero  | [45% Thinking...] [CPU] [RAM]|
 +-----------------------------------------------------------------------------+
 ```
 
@@ -121,7 +121,7 @@ Cero utilizes a dual-font architecture:
   - Active dragging indicator: Bright hairline divider (`rgba(255, 255, 255, 0.5)`) accompanied by an invisible full-window drag overlay to prevent canvas event capture.
 
 ### C. Terminal Search Bar Overlay (`TerminalSearchBar.tsx`)
-- Positioned floating at the top-right of the active terminal pane with frosted glass backdrop.
+- Opened with `Ctrl+Shift+F`, positioned floating at the top-right of the active terminal pane with frosted glass backdrop.
 - Search input with inline match count indicator (e.g. `3 of 12`).
 - Monochrome toggle pills for **Case Sensitive (`Alt+C`)**, **Whole Word (`Alt+W`)**, and **Regex (`Alt+R`)**. Active state indicated by solid white border and elevated background.
 
@@ -132,15 +132,14 @@ Cero utilizes a dual-font architecture:
   - Shell badge (`❯_ bash`) in high-contrast white.
   - Clickable breadcrumb path navigation with subtle right chevron separators. Clicking any folder segment issues an automatic directory change command.
 - **Right Cluster**:
-  - Quick launcher buttons (`[Projects]`, `[Ports]`, `[Workflows]`) in Visual Mode.
+  - A Workflows button in Visual Mode.
   - **Embedded AI Status**:
-    - **Active Engine**: Muted monochrome status pill (`● AI: Ready` or `● AI (CPU)`) with glowing white status dot indicating native sidecar readiness. Clicking opens AI settings.
-    - **Offline Engine**: Soft muted pill (`● AI: Off`) with `rgba(255, 255, 255, 0.25)` dot.
+    - **Working provider**: a muted pill reading `AI: local`, `AI: API` or `AI: Ollama`. Clicking opens AI settings.
+    - **Stopped built-in engine**: `AI: Off` with a dim dot. It is never shown for a working API or Ollama model.
   - **Telemetry Indicators**:
     - CPU usage percentage with hardware icon.
     - RAM memory allocation (`MB` / `GB`).
     - Local time clock (24h format).
-    - Text encoding (`UTF-8`).
     - Help shortcut launcher (`[F1 help]`).
 
 ---
@@ -154,10 +153,9 @@ Cero utilizes a dual-font architecture:
 - Full keyboard navigation with `ArrowUp`, `ArrowDown`, `Enter` selection, and `Escape` exit.
 - Highlighted items use an elevated white surface (`rgba(255, 255, 255, 0.08)`) with crisp white primary text.
 
-### B. Workspace Switcher (`WorkspaceSwitcherModal.tsx`)
-- Invocation: `Ctrl+O`.
-- Automatically indexes directories, Git repositories, Node.js packages, Rust crates, and ROS2 workspaces.
-- Filterable search bar with monospace path tags and repository branch status badges.
+### B. Approval card (`ApprovalDock.tsx`)
+- A small card in the bottom-right corner, the same for every approval. It never takes the keyboard.
+- Answered by clicking **Run** or **Deny**.
 
 ### C. Fuzzy Command History Search (`HistorySearchModal.tsx`)
 - Invocation: `Ctrl+R`.
@@ -195,9 +193,9 @@ Cero utilizes a dual-font architecture:
 
 - **WCAG AAA Text Legibility**: Primary text meets a minimum contrast ratio of 12:1 against the charcoal canvas; secondary text exceeds 7:1.
 - **Zen Mode vs. Visual Mode**:
-  - **Zen Mode**: Hides all secondary buttons, port indicators, and auxiliary controls for maximum terminal buffer focus.
-  - **Visual Mode**: Reveals graphical workspace management buttons, port inspection triggers, and workflow tools.
-- **Keyboard-First Design**: 100% of modals, split management, search tools, and workflows can be accessed, navigated, and dismissed entirely via standard keyboard shortcuts without requiring mouse movement.
+  - **Zen Mode** (default): hides the Workflows button and other extras.
+  - **Visual Mode**: shows the Workflows button.
+- **Keyboard access**: palette, settings, history, search, splits, tabs (new and close), workflows and help have shortcuts ([KEYBOARD_SHORTCUTS.md](KEYBOARD_SHORTCUTS.md)).
 
 ---
 
@@ -215,6 +213,7 @@ Cero strictly enforces a **Zero-Emoji Policy** across the entire application int
   - **Navigation / Pointers**: `->` or `›` or `•`.
   - **Filesystem Entries**: Clean text badges like `[DIR]` and `[FILE]` instead of folder/file icons.
   - **Hardware / Battery**: `[AC]` (charging) and `[BAT]` (discharging).
+- **Color**: ANSI colors appear only in terminal output (syntax, safety banners); the interface chrome stays grayscale.
 - **Terminal Refusal Banners**: Box-drawing characters (`┌`, `─`, `┐`, `│`, `└`, `┘`) must be used for framing with uniform padding and zero emoji jitter.
 
 ---
@@ -230,4 +229,4 @@ During the first-time setup onboarding flow, users choose between **Zen Mode** a
 When a user selects Zen Mode, an unobtrusive floating callout appears after onboarding completion:
 - Directly explains that all controls remain fully accessible via keyboard shortcuts.
 - Prominently highlights the `[F1 help]` button in the bottom status bar with a high-contrast white border.
-- Informs the user of the toggle shortcut: `Ctrl+Shift+Z` to seamlessly switch between Zen Mode and Visual Mode at any moment.
+- The callout mentions `Ctrl+Shift+Z` to switch modes, but that key is not wired yet (use Settings or the command palette); see [FUTURE_SCOPE.md](FUTURE_SCOPE.md).
