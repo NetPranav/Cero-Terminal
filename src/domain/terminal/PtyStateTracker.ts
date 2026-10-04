@@ -20,6 +20,8 @@ export class PtyStateTracker {
   private listeners: Set<PtyStateListener> = new Set();
   private lastActivityTimestamp: number = Date.now();
   private outputBuffer: string = '';
+  /** Recent raw output, control sequences included (see feedOutput) */
+  private rawTail: string = '';
 
   constructor(initialState: PtyState = 'idle-at-prompt') {
     this.state = initialState;
@@ -100,9 +102,13 @@ export class PtyStateTracker {
       return;
     }
 
-    // 2. Accumulate clean text for prompt detection
-    const clean = chunk.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
-    this.outputBuffer = (this.outputBuffer + clean).slice(-500);
+    // 2. Accumulate clean text for prompt detection. Control sequences are removed from the raw
+    // tail, not per chunk, so one split across two reads is still removed whole. Shells print
+    // long invisible ones on the prompt line (systemd's OSC 3008 command markers, the window
+    // title): left in, they pushed the prompt character past the 100-column check below, and
+    // the pane counted as running a program forever after its first command.
+    this.rawTail = (this.rawTail + chunk).slice(-4000);
+    this.outputBuffer = stripControlSequences(this.rawTail).slice(-500);
 
     // Heuristic: Check if output ends with a common shell prompt sequence
     // Examples: 'user@host:~$ ', '[user@host ~]# ', '➜  sentinal git:(main) ✗ ', 'user@host ~/dir ❯ '
@@ -159,4 +165,18 @@ export class PtyStateTracker {
       }
     }
   }
+}
+
+/**
+ * Visible text only: OSC (window title, OSC 3008 / 133 / 7 markers), DCS/APC/PM strings, CSI
+ * (colours, cursor moves, private modes such as \x1b[?2004h), charset selects and other
+ * two-byte escapes. An OSC still being received at the end of the output is dropped too.
+ */
+export function stripControlSequences(text: string): string {
+  return text
+    .replace(/\x1b[\]PX^_][\s\S]*?(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b[\]PX^_][^\x07\x1b]*$/, '')
+    .replace(/\x1b\[[0-?]*[ -\/]*[@-~]/g, '')
+    .replace(/\x1b[()*+][A-Za-z0-9]/g, '')
+    .replace(/\x1b[=>78DEHMNOc]/g, '');
 }
