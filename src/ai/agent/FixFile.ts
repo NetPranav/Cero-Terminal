@@ -23,13 +23,13 @@ export function parseFixFileRequest(goal: string): FixFileRequest | null {
 }
 
 /** The command that runs a script, or null when it cannot be run directly on this OS. */
-export function runCommandFor(file: string, os: string): string | null {
-  const win = /^win/i.test(os);
-  const q = win ? `'${file.replace(/'/g, "''")}'` : `'${file.replace(/'/g, `'\\''`)}'`;
+export function runCommandFor(file: string, _os: string): string | null {
+  const q = `'${file.replace(/'/g, "''")}'`;
   const ext = file.split('.').pop()!.toLowerCase();
   const interp: Record<string, string | null> = {
-    py: win ? 'python' : 'python3', js: 'node', mjs: 'node', cjs: 'node', rb: 'ruby', pl: 'perl', php: 'php', lua: 'lua',
-    sh: win ? null : 'sh',
+    py: 'python', js: 'node', mjs: 'node', cjs: 'node', rb: 'ruby', pl: 'perl', php: 'php', lua: 'lua',
+    // TODO(4.2): .sh scripts through Git Bash when it is installed
+    sh: null,
   };
   const bin = interp[ext];
   return bin ? `${bin} ${q}` : null;

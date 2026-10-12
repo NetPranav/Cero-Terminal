@@ -288,6 +288,7 @@ export function isLongRunningCommand(command: string): boolean {
     /\bros2\s+bag\s+(?:record|play)\b/,
     /\b(?:roslaunch|rosrun|roscore|rviz2?|rqt\w*|gazebo|gz\s+sim|ign\s+gazebo)\b/,
     /\btail\b[^;&|]*\s(?:-[a-zA-Z]*[fF][a-zA-Z]*|--follow)\b/,
+    /\bGet-Content\b[^;&|]*\s-Wait\b/i,
     /\bjournalctl\b.*\s-f\b/,
     /\bwatch\s+\S/,
     /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve|watch|preview)\b/,

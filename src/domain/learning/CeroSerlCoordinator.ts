@@ -108,7 +108,7 @@ export interface CeroSerlCoordinatorOptions {
   toolTestCasesPath?: string;
   /** Replay buffer configuration */
   replayBufferConfig?: ReplayBufferConfig;
-  /** Power source probe (defaults to sysfs/pmset via readPowerState) */
+  /** Power source probe (defaults to Win32_Battery via readPowerState) */
   powerChecker?: () => Promise<PowerState>;
 }
 
@@ -171,7 +171,7 @@ export class CeroSerlCoordinator {
       }
       return readPowerState(async (cmd) => {
         const { invoke } = await import('@tauri-apps/api/core');
-        return invoke<{ stdout: string }>('execute_command', { command: 'sh', args: ['-c', cmd], timeoutMs: 5000 });
+        return invoke<{ stdout: string }>('execute_command', { command: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', cmd], timeoutMs: 5000 });
       });
     });
 
@@ -194,7 +194,7 @@ export class CeroSerlCoordinator {
       shadowSimulator: this.shadowSimulator,
       dpoEngine: this.dpoEngine,
       deficitLogger: this.deficitLogger,
-      // Portable replacements for the macOS-only pmset/ioreg probes
+      // The coordinator's own power and idle probes
       powerChecker: () => this.powerChecker(),
       idleChecker: async () => Math.round((Date.now() - this.lastActivityTimestamp) / 1000),
     });
@@ -278,7 +278,7 @@ export class CeroSerlCoordinator {
         modelOutput,
         context: {
           cwd: context?.cwd || '~',
-          os: context?.os || 'macos',
+          os: context?.os || 'windows',
         },
       });
     }
@@ -315,7 +315,7 @@ export class CeroSerlCoordinator {
         stderr,
         context: {
           cwd: context?.cwd || '~',
-          os: context?.os || 'macos',
+          os: context?.os || 'windows',
         },
       });
     }
@@ -347,7 +347,7 @@ export class CeroSerlCoordinator {
     this.episodicMemory.recordMemory(goal, verifiedCommand, {
       explanation: explanation || `Verified human demonstration: ${verifiedCommand}`,
       cwd: process.cwd(),
-      os: process.platform === 'darwin' ? 'mac' : 'linux',
+      os: 'windows',
       source: 'demonstration',
     });
 
@@ -725,17 +725,16 @@ export class CeroSerlCoordinator {
     grammar?: string;
     logitBias?: Record<string, number>;
   }> {
-    const os = context?.os || (process.platform === 'darwin' ? 'macos' : 'linux');
+    const os = context?.os || 'windows';
     const cwd = context?.cwd || '~';
 
     // 1. Check Deterministic Rule Oracle if recovering from prior command failure
     if (context?.previousFailedCmd && context?.previousStderr) {
-      const isMac = os.toLowerCase().includes('mac') || os.toLowerCase().includes('darwin');
       const rem = this.ruleOracle.diagnose({
         command: context.previousFailedCmd,
         output: context.previousStderr,
         cwd,
-        os: isMac ? 'mac' : 'linux'
+        os
       });
       if (rem && rem.fixedCommand) {
         const syntax = ShellAstParser.validateSyntax(rem.fixedCommand);

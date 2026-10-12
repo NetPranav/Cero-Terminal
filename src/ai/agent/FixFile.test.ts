@@ -9,11 +9,11 @@ describe('FixFile', () => {
     expect(parseFixFileRequest('fix README.md')).toBeNull();
   });
 
-  it('picks the interpreter per OS', () => {
-    expect(runCommandFor('a b.py', 'macos')).toBe("python3 'a b.py'");
-    expect(runCommandFor('x.py', 'windows')).toBe("python 'x.py'");
+  it('picks the interpreter, quoted for PowerShell', () => {
+    expect(runCommandFor("a b's.py", 'windows')).toBe("python 'a b''s.py'");
+    expect(runCommandFor('x.js', 'windows')).toBe("node 'x.js'");
     expect(runCommandFor('x.sh', 'windows')).toBeNull();
-    expect(runCommandFor('x.ts', 'linux')).toBeNull();
+    expect(runCommandFor('x.ts', 'windows')).toBeNull();
   });
 
   it('extracts the corrected file and the note', () => {

@@ -7,7 +7,12 @@
  * 
  * Key Pillars:
  * 1. Multi-Hypothesis Candidate Expansion: Generates $K=3$ candidate strategies,
- *    correcting platform-specific pitfalls (macOS vs Linux flags, BSD vs GNU utils).
+ *    correcting platform-specific pitfalls.
+ *
+ * TODO(4.3): the sandbox checks with POSIX predicates (kill -0, test -e, zsh -n) and the platform
+ * rewrites were macOS fixes; neither applies to PowerShell. On Windows no command has a platform
+ * alternative, so the agent never speculates (hasPlatformAlternatives is false) until Windows
+ * rewrites and predicates exist.
  * 2. Zero-Risk Non-Destructive Predicate Transformation: Destructive operations
  *    (kill, rm, git commit) are converted into non-destructive predicates
  *    (kill -0, test -e, git status, zsh -n syntax verification).
@@ -142,8 +147,7 @@ export class ShadowPtySimulator {
   }
 
   /**
-   * True when the command has a known platform-specific rewrite worth testing (e.g. GNU flags
-   * on macOS). Callers use this to skip speculation entirely otherwise, so read-only commands
+   * True when the command has a known platform-specific rewrite worth testing. Callers use this to skip speculation entirely otherwise, so read-only commands
    * are not executed twice for nothing.
    */
   public hasPlatformAlternatives(goal: string, primaryCommand: string, context: { os: string; cwd: string }): boolean {
@@ -154,7 +158,6 @@ export class ShadowPtySimulator {
   /**
    * Generates candidate hypotheses:
    * - Primary command
-   * - Platform-adapted command (macOS vs Linux corrections)
    * - Semantic probe variations
    */
   public generateHypotheses(
@@ -163,7 +166,6 @@ export class ShadowPtySimulator {
     context: { os: string; cwd: string }
   ): CandidateHypothesis[] {
     const trimmed = primaryCommand.trim();
-    const isMac = !context.os || context.os.toLowerCase().includes('mac') || context.os.toLowerCase().includes('darwin');
     const hypotheses: CandidateHypothesis[] = [];
 
     // 1. Primary hypothesis
@@ -175,158 +177,7 @@ export class ShadowPtySimulator {
       estimatedRisk: this.classifyRisk(trimmed)
     });
 
-    // 2. Platform-adapted variations
-    if (isMac) {
-      // Pitfall: Linux 'fuser' vs macOS 'lsof'
-      if (/\bfuser\b/i.test(trimmed)) {
-        const portMatch = trimmed.match(/(\d+)/);
-        if (portMatch) {
-          const port = portMatch[1];
-          if (/(-k|--kill)/i.test(trimmed)) {
-            hypotheses.push({
-              id: 'branch_platform_lsof_kill',
-              command: `lsof -ti:${port} | xargs kill -9`,
-              explanation: `macOS standard: kill process on port ${port} using lsof`,
-              source: 'platform_optimized',
-              estimatedRisk: 'safe_mutation'
-            });
-          } else {
-            hypotheses.push({
-              id: 'branch_platform_lsof_check',
-              command: `lsof -i :${port}`,
-              explanation: `macOS standard: check port ${port} using lsof`,
-              source: 'platform_optimized',
-              estimatedRisk: 'read_only'
-            });
-            hypotheses.push({
-              id: 'branch_platform_lsof_listen',
-              command: `lsof -iTCP:${port} -sTCP:LISTEN -P -n`,
-              explanation: `macOS listening socket probe for port ${port}`,
-              source: 'variation',
-              estimatedRisk: 'read_only'
-            });
-          }
-        }
-      }
-
-      // Pitfall: Linux 'ip addr' / 'ip a' vs macOS 'ifconfig'
-      if (/^\s*ip\s+(addr|a|route)\b/i.test(trimmed)) {
-        hypotheses.push({
-          id: 'branch_platform_ifconfig',
-          command: 'ifconfig',
-          explanation: 'macOS network interface inspection using ifconfig',
-          source: 'platform_optimized',
-          estimatedRisk: 'read_only'
-        });
-        hypotheses.push({
-          id: 'branch_platform_networksetup',
-          command: 'networksetup -listallhardwareports',
-          explanation: 'macOS hardware ports list',
-          source: 'variation',
-          estimatedRisk: 'read_only'
-        });
-      }
-
-      // Pitfall: GNU 'sed -i' vs macOS BSD 'sed -i \'\''
-      if (/\bsed\s+-i\s+['"][^'"]+['"]/i.test(trimmed) && !/\bsed\s+-i\s+['"]['"]/i.test(trimmed)) {
-        const correctedSed = trimmed.replace(/\bsed\s+-i\s+/, "sed -i '' ");
-        hypotheses.push({
-          id: 'branch_platform_bsd_sed',
-          command: correctedSed,
-          explanation: 'macOS BSD sed syntax with empty extension flag',
-          source: 'platform_optimized',
-          estimatedRisk: 'safe_mutation'
-        });
-      }
-
-      // Pitfall: GNU 'grep -P' (Perl regex not supported in macOS BSD grep)
-      if (/\bgrep\s+(?:--perl-regexp|-P|-[\w]*P[\w]*)\b/i.test(trimmed)) {
-        const correctedGrep = trimmed.replace(/(-[\w]*)P([\w]*)/, '$1E$2').replace(/--perl-regexp/, '-E');
-        hypotheses.push({
-          id: 'branch_platform_bsd_grep',
-          command: correctedGrep,
-          explanation: 'macOS extended regex (grep -E) instead of unsupported grep -P',
-          source: 'platform_optimized',
-          estimatedRisk: 'read_only'
-        });
-      }
-
-      // Pitfall: 'which <tool>' vs 'command -v <tool>' (posix compliant, avoids csh aliases)
-      if (/^\s*which\s+([a-zA-Z0-9_-]+)/i.test(trimmed)) {
-        const toolMatch = trimmed.match(/^\s*which\s+([a-zA-Z0-9_-]+)/i);
-        if (toolMatch) {
-          hypotheses.push({
-            id: 'branch_posix_command_v',
-            command: `command -v ${toolMatch[1]}`,
-            explanation: `POSIX compliant binary resolution: command -v ${toolMatch[1]}`,
-            source: 'platform_optimized',
-            estimatedRisk: 'read_only'
-          });
-        }
-      }
-
-      // Pitfall: 'killall <name>' vs 'pkill <name>'
-      if (/^\s*killall\s+(-9\s+)?([a-zA-Z0-9_-]+)/i.test(trimmed)) {
-        const m = trimmed.match(/^\s*killall\s+(-9\s+)?([a-zA-Z0-9_-]+)/i);
-        if (m) {
-          hypotheses.push({
-            id: 'branch_pkill_variation',
-            command: `pkill -i -f "${m[2]}"`,
-            explanation: `Case-insensitive full-match pkill for ${m[2]}`,
-            source: 'variation',
-            estimatedRisk: 'safe_mutation'
-          });
-        }
-      }
-
-      // Query/Search: find vs mdfind on macOS
-      if (/^\s*find\s+.*-name\s+["']?([^"']+)["']?/i.test(trimmed)) {
-        const m = trimmed.match(/-name\s+["']?([^"']+)["']?/i);
-        if (m) {
-          const query = m[1].replace(/^\*|\*$/g, '');
-          hypotheses.push({
-            id: 'branch_mdfind_variation',
-            command: `mdfind -name "${query}" | head -30`,
-            explanation: `Fast macOS Spotlight search for ${query}`,
-            source: 'platform_optimized',
-            estimatedRisk: 'read_only'
-          });
-        }
-      }
-    }
-
-    // 3. Goal-based heuristic variations if only 1 hypothesis exists
-    if (hypotheses.length === 1) {
-      // Port query goal
-      const portGoalMatch = goal.match(/port\s+(\d+)/i) || trimmed.match(/:(\d+)\b/);
-      if (portGoalMatch) {
-        const port = portGoalMatch[1];
-        if (!hypotheses.some(h => h.command.includes(`:${port}`))) {
-          hypotheses.push({
-            id: 'branch_lsof_port',
-            command: `lsof -i :${port}`,
-            explanation: `Inspect port ${port} using lsof`,
-            source: 'heuristic',
-            estimatedRisk: 'read_only'
-          });
-        }
-      }
-
-      // Process query goal
-      const procMatch = goal.match(/(?:check|status|running|find|inspect)\s+([a-zA-Z0-9_-]+)/i);
-      if (procMatch && !['the', 'my', 'a', 'an'].includes(procMatch[1].toLowerCase())) {
-        const proc = procMatch[1];
-        hypotheses.push({
-          id: 'branch_pgrep_proc',
-          command: `pgrep -fil "${proc}"`,
-          explanation: `Inspect running process ${proc}`,
-          source: 'heuristic',
-          estimatedRisk: 'read_only'
-        });
-      }
-    }
-
-    // 4. Ground-Truth Canonical TLDR Recipes Expansion
+    // 2. Ground-Truth Canonical TLDR Recipes Expansion
     try {
       const binaryMatch = trimmed.match(/^([a-zA-Z0-9_.-]+)/);
       if (binaryMatch) {

@@ -96,7 +96,7 @@ describe('several actions in one request (open folder + app, scaffold + editor +
     fs.rmSync(home, { recursive: true, force: true });
   });
 
-  const ctx = () => ({ os: 'linux', cwd: path.join(home, 'work') });
+  const ctx = () => ({ os: 'windows', cwd: path.join(home, 'work') });
   /** The terminal marks the whole prompt finished on "done": only the last event may be one */
   const finishedOnce = () => events.filter(e => e.type === 'done' || e.type === 'error').length === 1
     && ['done', 'error'].includes(events[events.length - 1].type);
@@ -125,7 +125,7 @@ describe('several actions in one request (open folder + app, scaffold + editor +
   });
 
   it('Next.js project, then VS Code on that project, then Zen: no question is left to a closed stdin', async () => {
-    answers.push([/\[ -d 'cero-test' \]/, { success: true, data: { stdout: 'yes\n', code: 0 } }]);
+    answers.push([/Test-Path -PathType Container -LiteralPath 'cero-test'/, { success: true, data: { stdout: 'yes\n', code: 0 } }]);
     const r = await loop.run("Please create a NextJS project for me in the root folder named 'cero-test' and open it in vscode and also open zen browser", ctx());
     expect(r.success).toBe(true);
     const cmds = commands();
@@ -140,7 +140,7 @@ describe('several actions in one request (open folder + app, scaffold + editor +
   });
 
   it('a scaffolder that exits 0 without creating the project stops the chain instead of opening nothing', async () => {
-    answers.push([/\[ -d 'cero-test' \]/, { success: true, data: { stdout: 'no\n', code: 0 } }]);
+    answers.push([/Test-Path -PathType Container -LiteralPath 'cero-test'/, { success: true, data: { stdout: 'no\n', code: 0 } }]);
     const r = await loop.run("create a NextJS project named 'cero-test' and open it in vscode", ctx());
     expect(r.success).toBe(false);
     expect(r.summary).toMatch(/without creating "cero-test"/);

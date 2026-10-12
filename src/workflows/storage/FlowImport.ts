@@ -2,7 +2,7 @@
  * FlowImport.ts — read ".flow" workflow files (action lists) as Cero workflows.
  *
  * A .flow file lists actions ("open these URLs in Chrome", "install nodejs", "run npm install")
- * instead of shell commands. FlowPlan turns each into a macOS, Linux and Windows command, so the
+ * instead of shell commands. FlowPlan turns each into a PowerShell command, so the
  * Workflow Manager lists these files and they replay like any saved workflow (through the same
  * confirmation). Unknown action types are skipped rather than guessed.
  */
@@ -24,17 +24,9 @@ export function flowToWorkflow(raw: unknown, fallbackName: string, os: FlowOs): 
     const isCommand = rawAction?.type === 'command' && typeof rawAction.command === 'string';
     const command = isCommand ? rawAction.command : withCwd(step, os);
     const cwd = rawAction?.cwd || step.cwd;
-    const platformCommands = isCommand && (rawAction.macos || rawAction.linux || rawAction.windows)
-      ? {
-          macos: rawAction.macos || rawAction.command,
-          linux: rawAction.linux || rawAction.command,
-          windows: rawAction.windows || rawAction.command,
-        }
-      : {
-          macos: withCwd({ ...step, command: step.platformCommands.macos }, 'macos'),
-          linux: withCwd({ ...step, command: step.platformCommands.linux }, 'linux'),
-          windows: withCwd({ ...step, command: step.platformCommands.windows }, 'windows'),
-        };
+    const platformCommands = isCommand
+      ? { windows: rawAction.windows || rawAction.command }
+      : { windows: withCwd({ ...step, command: step.platformCommands.windows }, 'windows') };
     return {
       id: `step-${i + 1}`,
       name: step.name,

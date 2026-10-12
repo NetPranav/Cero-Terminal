@@ -2,12 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { portInterpreters, isNoMatchExit, failureHints, hiddenFailure, restoreGoalPaths } from './CommandPortability';
 
 describe('portInterpreters', () => {
-  it('uses python3 on macOS and Linux, python on Windows, only in command position', () => {
-    expect(portInterpreters('python -c "print(1)"', 'macos')).toBe('python3 -c "print(1)"');
-    expect(portInterpreters('cd src && python main.py; pip install x', 'linux')).toBe('cd src && python3 main.py; pip3 install x');
-    expect(portInterpreters('python3 app.py', 'macos')).toBe('python3 app.py');
-    expect(portInterpreters('grep python requirements.txt', 'macos')).toBe('grep python requirements.txt');
+  it('uses python, not python3 (the Microsoft Store alias), only in command position', () => {
     expect(portInterpreters('python3 app.py', 'windows')).toBe('python app.py');
+    expect(portInterpreters('cd src; python3 main.py; pip3 install x', 'windows')).toBe('cd src; python main.py; pip install x');
+    expect(portInterpreters('python -c "print(1)"', 'windows')).toBe('python -c "print(1)"');
+    expect(portInterpreters('Select-String python3 requirements.txt', 'windows')).toBe('Select-String python3 requirements.txt');
   });
 });
 
@@ -23,11 +22,11 @@ describe('isNoMatchExit', () => {
 });
 
 describe('failureHints', () => {
-  it('explains zsh substitutions, python3, git folders and cd into files', () => {
-    expect(failureHints('zsh:1: bad substitution', 'mv "$f" "${f,,}"', 'macos')[0]).toMatch(/tr '\[:upper:\]'/);
-    expect(failureHints('zsh:1: command not found: python', 'python x.py', 'macos')[0]).toMatch(/python3/);
-    expect(failureHints('fatal: not a git repository', 'git log', 'linux')[0]).toMatch(/Do not run `git init`/);
-    expect(failureHints('zsh:cd:1: not a directory: buggy.py', 'cd buggy.py && python3 buggy.py', 'macos').join(' ')).toMatch(/Run the file directly/);
+  it('explains bash substitutions, python, git folders and cd into files', () => {
+    expect(failureHints('bad substitution', 'mv "$f" "${f,,}"', 'windows')[0]).toMatch(/ToLower\(\)/);
+    expect(failureHints("python : The term 'python' is not recognized", 'python x.py', 'windows')[0]).toMatch(/py -3/);
+    expect(failureHints('fatal: not a git repository', 'git log', 'windows')[0]).toMatch(/Do not run `git init`/);
+    expect(failureHints('cd: not a directory: buggy.py', 'cd buggy.py; python buggy.py', 'windows').join(' ')).toMatch(/Run the file directly/);
   });
 });
 

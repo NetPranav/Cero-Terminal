@@ -63,24 +63,24 @@ describe('scaffolders are not long-running servers', () => {
 
 describe('planChain for the reported prompts', () => {
   it('Next.js + VS Code on the new project + Zen', () => {
-    const plan = planChain("Please create a NextJS project for me in the root folder named 'cero-test' and open it in vscode and also open zen browser", 'linux')!;
+    const plan = planChain("Please create a NextJS project for me in the root folder named 'cero-test' and open it in vscode and also open zen browser", 'windows')!;
     expect(plan.steps.map(s => s.command ?? (s.app ? `app:${s.app.app}` : s.open ? `open:${s.open.name}` : ''))).toEqual([
       'npx --yes create-next-app@latest cero-test --yes', 'code cero-test', 'app:zen browser',
     ]);
     expect(plan.steps[0].expectFolder).toBe('cero-test');
   });
   it('gitBrains folder in VS Code + Zen: the folder keeps its own place, Zen is its own step', () => {
-    const plan = planChain('Please open a folder named gitBrains in VS Code. This folder is inside /padhai_in_linux/Projects/ and also open zen browser', 'linux')!;
+    const plan = planChain('Please open a folder named gitBrains in VS Code. This folder is inside /padhai_in_linux/Projects/ and also open zen browser', 'windows')!;
     expect(plan.steps).toHaveLength(2);
     expect(plan.steps[0].open).toMatchObject({ kind: 'folder', name: 'gitBrains', locationHint: '/padhai_in_linux/Projects/', withApp: 'VS Code' });
     expect(plan.steps[1].app?.app).toBe('zen browser');
   });
   it('one open request stays one ("open vs code and open gitBrains in it")', () => {
-    expect(planChain('open vs code and open gitBrains in it', 'linux')).toBeNull();
-    expect(planChain('Please open a folder named gitBrains in VS Code. This folder is inside /padhai_in_linux/Projects/', 'linux')).toBeNull();
+    expect(planChain('open vs code and open gitBrains in it', 'windows')).toBeNull();
+    expect(planChain('Please open a folder named gitBrains in VS Code. This folder is inside /padhai_in_linux/Projects/', 'windows')).toBeNull();
   });
   it('after entering the project, "open it" is the current folder again', () => {
-    const plan = planChain("create a nextjs app named site, go into it and open it in vscode", 'linux')!;
+    const plan = planChain("create a nextjs app named site, go into it and open it in vscode", 'windows')!;
     expect(plan.steps[2].command).toBe('code .');
   });
 });

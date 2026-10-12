@@ -55,10 +55,10 @@ describe('draftFlow', () => {
     expect(d.actions[3]).toMatchObject({ type: 'browser', url: 'http://localhost:3000' });
   });
 
-  it('uses the tested recipes for folders, git and npm, per OS', () => {
+  it('uses the tested recipes for folders, git and npm', () => {
     const d = draft('create a workflow that makes a folder called demo-app, goes into it, initializes git and creates a package.json with npm init -y');
     expect(d.unrecognised).toEqual([]);
-    expect(d.actions[0]).toMatchObject({ type: 'command', command: 'mkdir -p demo-app', windows: expect.stringContaining('New-Item') });
+    expect(d.actions[0]).toMatchObject({ type: 'command', command: expect.stringContaining('New-Item -ItemType Directory') });
     expect(d.actions[1]).toMatchObject({ command: 'git init', cwd: 'demo-app' });
     expect(d.actions[2]).toMatchObject({ command: 'npm init -y', cwd: 'demo-app' });
   });
@@ -76,7 +76,7 @@ describe('draftFlow', () => {
     const d = draftFlow(req.steps);
     expect(d.unrecognised).toEqual([]);
     expect(d.actions.map(a => a.name)).toEqual(['Make a folder called demo-project', 'Initialize git', 'Create a package.json with npm init -y', 'List the files', 'Open Textedit']);
-    expect(d.actions[3]).toMatchObject({ command: 'ls -la', windows: 'Get-ChildItem -Force', cwd: 'demo-project' });
+    expect(d.actions[3]).toMatchObject({ command: 'Get-ChildItem -Force', cwd: 'demo-project' });
   });
 
   it('opens a folder by path, and never mistakes a folder phrase for an app', () => {
@@ -105,21 +105,16 @@ describe('the file', () => {
     expect(flowFileName('???')).toBe('workflow.flow');
   });
 
-  it('round-trips: a written file plans the same steps on macOS, Windows and Linux', () => {
+  it('round-trips: a written file plans the same steps', () => {
     const d = draftFlow(parseFlowCreateRequest('make a workflow called demo that installs node, opens youtube in chrome, makes a folder called app, goes into it and runs npm init -y')!.steps, { name: 'demo' });
     const text = serializeFlow(d);
     expect(JSON.parse(text)).toMatchObject({ schemaVersion: '1.0', metadata: { id: 'demo', name: 'demo' } });
-    for (const os of ['macos', 'windows', 'linux'] as const) {
-      const plan = planFlowFile(text, 'demo.flow', os)!;
-      expect(plan, os).not.toBeNull();
-      expect(plan.steps.length).toBe(d.actions.length);
-      expect(plan.skipped).toEqual([]);
-    }
-    const mac = planFlowFile(text, 'demo.flow', 'macos')!;
     const win = planFlowFile(text, 'demo.flow', 'windows')!;
-    expect(mac.steps[0].command).toContain('brew install node');
+    expect(win).not.toBeNull();
+    expect(win.steps.length).toBe(d.actions.length);
+    expect(win.skipped).toEqual([]);
     expect(win.steps[0].command).toContain('winget install -e --id OpenJS.NodeJS.LTS');
-    expect(mac.steps[1]).toMatchObject({ kind: 'desktop', command: "open -a 'Google Chrome' 'https://www.youtube.com'" });
+    expect(win.steps[1].kind).toBe('desktop');
     expect(win.steps[1].command).toBe("Start-Process chrome -ArgumentList 'https://www.youtube.com'");
     expect(win.steps[3].command).toContain('npm.cmd init -y');
   });

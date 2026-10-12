@@ -1,7 +1,7 @@
 /**
  * TldrKnowledgeEngine.test.ts — Comprehensive Test Suite for TLDR Knowledge Engine
  * 
- * Verifies Phase 5.1: Offline tldr-pages Ground-Truth CLI Knowledge Base & Fast-Path Retrieval.
+ * Verifies Phase 5.1: Offline tldr-pages Ground-Truth CLI Knowledge Base & Fast-Path Retrieval (Windows catalog).
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -16,116 +16,62 @@ describe('TldrKnowledgeEngine (Phase 5.1)', () => {
   });
 
   describe('1. Catalog Integrity & Stats', () => {
-    it('initializes embedded ground-truth catalog with rich macOS & Unix coverage', () => {
+    it('ships only recipes that run on Windows', () => {
       const stats = engine.getStats();
-      expect(stats.totalPages).toBeGreaterThanOrEqual(15);
-      expect(stats.totalExamples).toBeGreaterThanOrEqual(40);
-      expect(stats.platforms.osx).toBeGreaterThan(0);
+      expect(stats.totalPages).toBeGreaterThanOrEqual(4);
+      expect(stats.totalExamples).toBeGreaterThanOrEqual(12);
       expect(stats.platforms.common).toBeGreaterThan(0);
       expect(stats.source).toBe('embedded');
 
-      expect(engine.hasCommand('dscacheutil')).toBe(true);
-      expect(engine.hasCommand('lsof')).toBe(true);
-      expect(engine.hasCommand('networksetup')).toBe(true);
-      expect(engine.hasCommand('pmset')).toBe(true);
-      expect(engine.hasCommand('defaults')).toBe(true);
-      expect(engine.hasCommand('tar')).toBe(true);
-      expect(engine.hasCommand('rsync')).toBe(true);
-      expect(engine.hasCommand('mdfind')).toBe(true);
+      for (const cmd of ['tar', 'curl', 'git', 'docker']) expect(engine.hasCommand(cmd)).toBe(true);
+      for (const cmd of ['dscacheutil', 'networksetup', 'pmset', 'defaults', 'mdfind', 'lsof', 'rsync', 'ifconfig', 'brew']) {
+        expect(engine.hasCommand(cmd)).toBe(false);
+      }
+      // Windows PowerShell aliases curl to Invoke-WebRequest, so the recipes name the real program
+      expect(engine.getExamplesForCommand('curl').every(e => e.command.startsWith('curl.exe '))).toBe(true);
     });
   });
 
   describe('2. Canonical Recipe Goal Matching', () => {
-    it('matches macOS DNS flush intent to canonical dscacheutil recipe with high confidence', () => {
-      const match = engine.matchGoal('flush dns cache', 'osx');
-      expect(match).not.toBeNull();
-      expect(match?.page.name).toBe('dscacheutil');
-      expect(match?.interpolatedCommand).toBe('sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder');
-      expect(match?.confidence).toBeGreaterThanOrEqual(0.95);
+    it('returns no match until there are Windows recipes, so the request goes on to the other routes', () => {
+      expect(engine.matchGoal('flush dns cache', 'windows')).toBeNull();
+      expect(engine.matchGoal('list listening ports', 'windows')).toBeNull();
+      expect(engine.matchGoal('extract project_backup.tar.gz', 'windows')).toBeNull();
+      expect(engine.matchGoal('', 'windows')).toBeNull();
     });
 
-    it('matches open/listening ports intent to canonical lsof recipe on macOS', () => {
-      const match = engine.matchGoal('list listening ports', 'osx');
-      expect(match).not.toBeNull();
-      expect(match?.page.name).toBe('lsof');
-      expect(match?.interpolatedCommand).toBe('lsof -iTCP -sTCP:LISTEN -P -n');
-      expect(match?.confidence).toBeGreaterThanOrEqual(0.95);
-    });
-
-    it('interpolates specific port number into port inspection recipe', () => {
-      const match = engine.matchGoal('check port 8080', 'osx');
-      expect(match).not.toBeNull();
-      expect(match?.page.name).toBe('lsof');
-      expect(match?.interpolatedCommand).toBe('lsof -i :8080');
-      expect(match?.confidence).toBeGreaterThanOrEqual(0.90);
-    });
-
-    it('matches battery and power status queries to pmset on macOS', () => {
-      const match = engine.matchGoal('check battery status', 'osx');
-      expect(match).not.toBeNull();
-      expect(match?.page.name).toBe('pmset');
-      expect(match?.interpolatedCommand).toBe('pmset -g batt');
-      expect(match?.confidence).toBeGreaterThanOrEqual(0.95);
-    });
-
-    it('matches Finder show hidden files request to defaults write command', () => {
-      const match = engine.matchGoal('show hidden files', 'osx');
-      expect(match).not.toBeNull();
-      expect(match?.page.name).toBe('defaults');
-      expect(match?.interpolatedCommand).toContain('AppleShowAllFiles -bool true');
-      expect(match?.interpolatedCommand).toContain('killall Finder');
-    });
-
-    it('matches Finder hide hidden files request to defaults write command', () => {
-      const match = engine.matchGoal('hide hidden files', 'osx');
-      expect(match).not.toBeNull();
-      expect(match?.page.name).toBe('defaults');
-      expect(match?.interpolatedCommand).toContain('AppleShowAllFiles -bool false');
-      expect(match?.interpolatedCommand).toContain('killall Finder');
-    });
-
-    it('interpolates filename into Spotlight mdfind search', () => {
-      const match = engine.matchGoal('spotlight search config.json', 'osx');
-      expect(match).not.toBeNull();
-      expect(match?.page.name).toBe('mdfind');
-      expect(match?.interpolatedCommand).toBe('mdfind -name config.json');
-    });
-
-    it('interpolates archive filename into tar extraction command', () => {
-      const match = engine.matchGoal('extract project_backup.tar.gz', 'osx');
-      expect(match).not.toBeNull();
-      expect(match?.page.name).toBe('tar');
-      expect(match?.interpolatedCommand).toBe('tar -xzvf project_backup.tar.gz');
-    });
-
-    it('matches physical network hardware ports request to networksetup', () => {
-      const match = engine.matchGoal('list network hardware ports', 'osx');
-      expect(match).not.toBeNull();
-      expect(match?.page.name).toBe('networksetup');
-      expect(match?.interpolatedCommand).toBe('networksetup -listallhardwareports');
+    it('matches a registered Windows recipe', () => {
+      engine.registerPage({
+        name: 'ipconfig',
+        description: 'Show and renew the IP configuration.',
+        platforms: ['windows'],
+        tags: ['dns', 'network'],
+        examples: [{ description: 'Flush the DNS resolver cache:', command: 'ipconfig /flushdns', platform: 'windows', tags: ['flush', 'dns', 'cache'] }],
+      });
+      const match = engine.matchGoal('flush dns cache', 'windows');
+      expect(match?.page.name).toBe('ipconfig');
+      expect(match?.interpolatedCommand).toBe('ipconfig /flushdns');
+      expect(match?.confidence).toBeGreaterThanOrEqual(0.7);
     });
   });
 
   describe('3. Command Examples & Platform Filtering', () => {
-    it('retrieves platform-tailored recipes for a command', () => {
-      const osxExamples = engine.getExamplesForCommand('lsof', 'osx');
-      expect(osxExamples.length).toBeGreaterThanOrEqual(3);
-      expect(osxExamples.some(e => e.command.includes('lsof -iTCP -sTCP:LISTEN -P -n'))).toBe(true);
-
-      const linuxExamples = engine.getExamplesForCommand('lsof', 'linux');
-      expect(linuxExamples.length).toBeGreaterThanOrEqual(2);
-      expect(linuxExamples.every(e => e.platform !== 'osx')).toBe(true);
+    it('retrieves the recipes for a command', () => {
+      const examples = engine.getExamplesForCommand('git', 'windows');
+      expect(examples.length).toBeGreaterThanOrEqual(3);
+      expect(examples.some(e => e.command === 'git status --short --branch')).toBe(true);
+      expect(engine.getExamplesForCommand('lsof', 'windows')).toEqual([]);
     });
 
     it('formats few-shot prompt exemplars with descriptions and commands', () => {
-      const exemplar = engine.formatFewShotExemplar('tar', 'osx');
+      const exemplar = engine.formatFewShotExemplar('tar', 'windows');
       expect(exemplar).toContain('Ground-Truth CLI Recipes for "tar":');
       expect(exemplar).toContain('$ tar -czvf');
       expect(exemplar).toContain('$ tar -xzvf');
     });
 
     it('returns empty string for non-existent commands in formatFewShotExemplar', () => {
-      const exemplar = engine.formatFewShotExemplar('nonexistent_tool_xyz', 'osx');
+      const exemplar = engine.formatFewShotExemplar('nonexistent_tool_xyz', 'windows');
       expect(exemplar).toBe('');
     });
   });
@@ -158,13 +104,13 @@ describe('TldrKnowledgeEngine (Phase 5.1)', () => {
     it('expands candidate hypotheses with canonical TLDR recipes', () => {
       const simulator = new ShadowPtySimulator();
       const hypotheses = simulator.generateHypotheses(
-        'inspect files and sockets',
-        'lsof',
-        { os: 'mac', cwd: '/' }
+        'show repository status',
+        'git',
+        { os: 'windows', cwd: 'C:\\' }
       );
 
       expect(hypotheses.length).toBeGreaterThan(1);
-      const tldrBranches = hypotheses.filter(h => h.id.startsWith('branch_tldr_lsof'));
+      const tldrBranches = hypotheses.filter(h => h.id.startsWith('branch_tldr_git'));
       expect(tldrBranches.length).toBeGreaterThanOrEqual(1);
       expect(tldrBranches[0].explanation).toContain('Canonical recipe:');
     });

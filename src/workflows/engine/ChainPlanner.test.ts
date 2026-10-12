@@ -20,34 +20,34 @@ describe('splitChainClauses', () => {
 
 describe('planChain', () => {
   it('turns the classic project set-up chain into commands with the folder carried along', () => {
-    const plan = planChain('create a folder called chain-demo here, go into it, initialize a git repository, create a package.json with npm init -y and then list the files', 'macos')!;
+    const plan = planChain('create a folder called chain-demo here, go into it, initialize a git repository, create a package.json with npm init -y and then list the files', 'windows')!;
     expect(plan.steps.map(s => s.command ?? `(enter ${s.enter})`)).toEqual([
-      'mkdir -p chain-demo',
+      'New-Item -ItemType Directory -Force -Path chain-demo | Out-Null',
       '(enter chain-demo)',
       'git init',
       'npm init -y',
-      'ls -la',
+      'Get-ChildItem -Force',
     ]);
     expect(plan.steps.every(s => !s.longRunning)).toBe(true);
   });
 
   it('clones, enters the clone, installs dependencies and opens it in VS Code', () => {
-    const plan = planChain('clone https://github.com/sindresorhus/is into lib-is, go into it, install the dependencies and open it in vs code', 'macos')!;
+    const plan = planChain('clone https://github.com/sindresorhus/is into lib-is, go into it, install the dependencies and open it in vs code', 'windows')!;
     expect(plan.steps[0].command).toBe('git clone --depth 1 https://github.com/sindresorhus/is lib-is');
     expect(plan.steps[1].enter).toBe('lib-is');
     expect(plan.steps[2].command).toContain('npm install');
-    expect(plan.steps[3].command).toBe('code . 2>/dev/null || open -a "Visual Studio Code" .');
+    expect(plan.steps[3].command).toBe('code .');
   });
 
   it('marks servers and log followers as long-running (they get a pane)', () => {
-    const plan = planChain('go to site, then run `python3 -m http.server 8000`, then follow access.log', 'linux')!;
+    const plan = planChain('go to site, then run `python -m http.server 8000`, then follow access.log', 'windows')!;
     expect(plan.steps[0].enter).toBe('site');
-    expect(plan.steps[1]).toMatchObject({ command: 'python3 -m http.server 8000', longRunning: true });
-    expect(plan.steps[2]).toMatchObject({ command: 'tail -f access.log', longRunning: true });
+    expect(plan.steps[1]).toMatchObject({ command: 'python -m http.server 8000', longRunning: true });
+    expect(plan.steps[2]).toMatchObject({ command: 'Get-Content -Wait -Tail 20 access.log', longRunning: true });
   });
 
   it('leaves unknown clauses to the model instead of running English', () => {
-    const plan = planChain('create a folder called api, go into it, then scaffold an express server with a health route', 'linux')!;
+    const plan = planChain('create a folder called api, go into it, then scaffold an express server with a health route', 'windows')!;
     expect(plan.steps[2].command).toBeUndefined();
     expect(plan.steps[2].clause).toBe('scaffold an express server with a health route');
     for (const step of plan.steps) {
@@ -55,21 +55,20 @@ describe('planChain', () => {
     }
   });
 
-  it('opens folders and URLs per platform', () => {
-    expect(planChain('make a folder named out, then open it in finder', 'macos')!.steps[1].command).toBe('open .');
-    expect(planChain('make a folder named out, then open it in the file manager', 'linux')!.steps[1].command).toBe('xdg-open .');
-    expect(planChain('create a readme, then open https://example.com', 'linux')!.steps[1].command).toBe('xdg-open https://example.com');
+  it('opens folders in Explorer and URLs in the default browser', () => {
+    expect(planChain('make a folder named out, then open it in the file manager', 'windows')!.steps[1].command).toBe('explorer .');
+    expect(planChain('create a readme, then open https://example.com', 'windows')!.steps[1].command).toBe('Start-Process https://example.com');
   });
 
   it('returns null for single actions and for chains it understands nothing of', () => {
-    expect(planChain('list the files', 'linux')).toBeNull();
-    expect(planChain('summarize the logs and then email my boss', 'linux')).toBeNull();
+    expect(planChain('list the files', 'windows')).toBeNull();
+    expect(planChain('summarize the logs and then email my boss', 'windows')).toBeNull();
   });
 });
 
 describe('planChain: folders, git and virtual environments', () => {
-  const cmds = (goal: string, os: 'macos' | 'linux' | 'windows' = 'macos') =>
-    planChain(goal, os)!.steps.map(s => s.command ?? `(enter ${s.enter})`);
+  const cmds = (goal: string) =>
+    planChain(goal, 'windows')!.steps.map(s => s.command ?? `(enter ${s.enter})`);
 
   it('runs every step inside the folder named first', () => {
     expect(cmds("in demo-repo create a branch called feature/login, switch to it, make an empty commit with the message 'start login' and show the last 3 commits")).toEqual([
@@ -83,10 +82,6 @@ describe('planChain: folders, git and virtual environments', () => {
 
   it('uses the virtual environment it just created', () => {
     expect(cmds('create a python virtual environment called venv-test and show the python version inside it')).toEqual([
-      'python3 -m venv venv-test',
-      'venv-test/bin/python --version',
-    ]);
-    expect(cmds('create a python virtual environment called venv-test and show the python version inside it', 'windows')).toEqual([
       'python -m venv venv-test',
       "& venv-test\\Scripts\\python.exe --version",
     ]);
@@ -94,14 +89,14 @@ describe('planChain: folders, git and virtual environments', () => {
 
   it('handles quoted names with spaces, several files and counting them', () => {
     expect(cmds("make a folder named 'meeting notes', create three files called a.txt, b.txt and c.txt inside it, then tell me how many files it has")).toEqual([
-      "mkdir -p 'meeting notes'",
-      "touch -- 'meeting notes/a.txt' 'meeting notes/b.txt' 'meeting notes/c.txt'",
-      "find 'meeting notes' -maxdepth 1 -type f | wc -l | tr -d ' '",
+      "New-Item -ItemType Directory -Force -Path 'meeting notes' | Out-Null",
+      "New-Item -ItemType File -Force -Path 'meeting notes/a.txt','meeting notes/b.txt','meeting notes/c.txt' | Out-Null",
+      "(Get-ChildItem -File -LiteralPath 'meeting notes').Count",
     ]);
   });
 
   it('writes PowerShell steps on Windows', () => {
-    expect(cmds('create a folder called api, go into it, create a readme and then list the files', 'windows')).toEqual([
+    expect(cmds('create a folder called api, go into it, create a readme and then list the files')).toEqual([
       'New-Item -ItemType Directory -Force -Path api | Out-Null',
       '(enter api)',
       "if (-not (Test-Path README.md)) { '# ' + (Split-Path -Leaf $PWD) | Out-File -Encoding utf8 README.md }",
@@ -124,12 +119,12 @@ describe('resolveFolder', () => {
 
 describe('"run <command>" clauses', () => {
   it('plans a known program with its arguments, so the one approval lists it', () => {
-    const plan = planChain('create a folder demo-app, go into it, run git init, then npm init -y, then list the files', 'macos')!;
-    expect(plan.steps.map(s => s.command ?? (s.enter ? `enter ${s.enter}` : null))).toEqual(['mkdir -p demo-app', 'enter demo-app', 'git init', 'npm init -y', 'ls -la']);
+    const plan = planChain('create a folder demo-app, go into it, run git init, then npm init -y, then list the files', 'windows')!;
+    expect(plan.steps.map(s => s.command ?? (s.enter ? `enter ${s.enter}` : null))).toEqual(['New-Item -ItemType Directory -Force -Path demo-app | Out-Null', 'enter demo-app', 'git init', 'npm init -y', 'Get-ChildItem -Force']);
   });
 
   it('leaves unknown programs and shell syntax to the model', () => {
-    const plan = planChain('create a folder x, go into it, run the tests, then run npm test; rm -rf ~', 'linux')!;
+    const plan = planChain('create a folder x, go into it, run the tests, then run npm test; rm -rf ~', 'windows')!;
     expect(plan.steps[2].command).toBeUndefined();
     expect(plan.steps.some(s => s.command?.includes('rm -rf'))).toBe(false);
   });

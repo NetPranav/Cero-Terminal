@@ -6,52 +6,48 @@ describe('SystemPrompt — Shell-Native Autonomous Copilot Prompt', () => {
     { id: 'shell.execute', name: 'Execute Shell Command', description: 'Run shell command', parameters: [{ name: 'command', type: 'string', required: true, description: '' }] }
   ];
 
-  it('builds shell-native system prompt for macOS with zero-refusal rules and JSON contract', () => {
-    const prompt = buildSystemPrompt(mockTools, { os: 'mac', cwd: '/Users/test/projects' });
-    expect(prompt).toContain('You are Cero, an autonomous mac terminal AI copilot.');
-    expect(prompt).toContain('Working Directory: /Users/test/projects');
-    expect(prompt).toContain('Shell: /bin/zsh');
+  it('builds a PowerShell system prompt with zero-refusal rules and the JSON contract', () => {
+    const prompt = buildSystemPrompt(mockTools, { os: 'windows', cwd: 'C:\\Users\\test' });
+    expect(prompt).toContain('You are Cero, an autonomous windows terminal AI copilot.');
+    expect(prompt).toContain('Shell: powershell');
+    expect(prompt).toContain('Working Directory: C:\\Users\\test');
     expect(prompt).toContain('CRITICAL RULES:');
     expect(prompt).toContain('YOU MUST NEVER REFUSE ACTIONABLE SYSTEM REQUESTS');
     expect(prompt).toContain('JSON CONTRACT:');
     expect(prompt).toContain('{"action": "execute", "command": "<terminal_command>", "explanation": "<1-line plain English explanation of what this command will do>"}');
   });
 
-  it('builds shell-native system prompt for Windows with PowerShell', () => {
-    const prompt = buildSystemPrompt(mockTools, { os: 'windows', cwd: 'C:\\Users\\test' });
-    expect(prompt).toContain('Shell: powershell');
-    expect(prompt).toContain('Working Directory: C:\\Users\\test');
-  });
-
-  it('includes key terminal command examples for fast Spotlight, network, and port queries', () => {
-    const prompt = buildSystemPrompt(mockTools, { os: 'mac', cwd: '/workspace' });
-    expect(prompt).toContain('mdfind');
-    expect(prompt).toContain('networksetup');
-    expect(prompt).toContain('lsof');
-    expect(prompt).toContain('pmset');
+  it('gives PowerShell examples and Windows tools, never macOS or Linux ones', () => {
+    const prompt = buildStaticPromptPrefix('windows');
+    for (const expected of ['Get-ChildItem', 'Get-NetTCPConnection', 'Get-Process', 'winget install']) {
+      expect(prompt).toContain(expected);
+    }
+    for (const unwanted of ['mdfind', 'networksetup', 'pmset', 'pacman', 'hyprctl', '/bin/zsh', 'zen-browser']) {
+      expect(prompt).not.toContain(unwanted);
+    }
   });
 
   it('keeps a byte-identical static prefix across requests so the KV/prompt cache is reused', () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date('2026-09-28T10:00:00Z'));
-      const a = buildSystemPrompt([], { os: 'linux', cwd: '/home/u/a' }, 'check disk');
+      const a = buildSystemPrompt([], { os: 'windows', cwd: 'C:\\Users\\u\\a' }, 'check disk');
       vi.setSystemTime(new Date('2026-09-28T17:31:45Z'));
-      const b = buildSystemPrompt([], { os: 'linux', cwd: '/home/u/b' }, 'list ports');
-      const prefix = buildStaticPromptPrefix('linux');
+      const b = buildSystemPrompt([], { os: 'windows', cwd: 'C:\\Users\\u\\b' }, 'list ports');
+      const prefix = buildStaticPromptPrefix('windows');
       expect(a.startsWith(prefix)).toBe(true);
       expect(b.startsWith(prefix)).toBe(true);
       // Nothing request-specific may leak into the cached prefix
-      expect(prefix).not.toContain('/home/u/');
+      expect(prefix).not.toContain('C:\\Users\\u');
       expect(prefix).not.toContain('2026');
-      expect(a.slice(prefix.length)).toContain('Working Directory: /home/u/a');
+      expect(a.slice(prefix.length)).toContain('Working Directory: C:\\Users\\u\\a');
     } finally {
       vi.useRealTimers();
     }
   });
 
   it('asks for concrete, grounded, emoji-free summaries', () => {
-    const prefix = buildStaticPromptPrefix('linux');
+    const prefix = buildStaticPromptPrefix('windows');
     expect(prefix).toContain('ANSWER QUALITY');
     expect(prefix).toContain('Only report facts present in <TOOL_OUTPUT>');
   });

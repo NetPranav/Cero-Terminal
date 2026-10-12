@@ -6,6 +6,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
+const LISTEN_BY_PROCESS = "Get-NetTCPConnection -State Listen | Where-Object { (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).ProcessName -like '*antigravity*' } | Select-Object LocalAddress,LocalPort,OwningProcess";
+
 describe('ReflexionEngine — Autonomous Background Reflexion & Counterfactual Synthesis', () => {
   const testDir = path.join(os.tmpdir(), `cero_test_reflexion_${Date.now()}`);
   const testFile = path.join(testDir, 'knowledge_deficits.jsonl');
@@ -26,20 +28,20 @@ describe('ReflexionEngine — Autonomous Background Reflexion & Counterfactual S
     const logger = new KnowledgeDeficitLogger(testFile);
     const engine = new ReflexionEngine({ deficitLogger: logger });
 
-    it('should synthesize lsof TCP socket search for the Antigravity ports deficit', async () => {
+    it('should synthesize a listening-port search by process for the Antigravity ports deficit', async () => {
       const deficit = logger.logDeficit({
         goal: 'give me the list of the ports that is being used by antigravity',
         category: 'conversational_refusal',
         modelOutput: "I can't detect how many ports are being used by antigravity.",
-        context: { os: 'mac', cwd: '/Users/test' }
+        context: { os: 'windows', cwd: 'C:\\Users\\test' }
       });
 
       const candidates = await engine.synthesizeCounterfactualCandidates(deficit);
       expect(candidates.length).toBeGreaterThanOrEqual(2);
 
-      const lsofListen = candidates.find(c => c.command.includes('lsof -iTCP -sTCP:LISTEN -n -P | grep -i "antigravity"'));
-      expect(lsofListen).toBeDefined();
-      expect(lsofListen?.strategy).toBe('lsof_listen_grep');
+      const listen = candidates.find(c => c.command === LISTEN_BY_PROCESS);
+      expect(listen).toBeDefined();
+      expect(listen?.strategy).toBe('tcp_listen_by_process');
     });
 
     it('should synthesize exact port queries for port 3000 deficit', async () => {
@@ -48,36 +50,36 @@ describe('ReflexionEngine — Autonomous Background Reflexion & Counterfactual S
         category: 'execution_failure',
         attemptedCommand: 'fuser 3000/tcp',
         exitCode: 127,
-        context: { os: 'mac', cwd: '/Users/test' }
+        context: { os: 'windows', cwd: 'C:\\Users\\test' }
       });
 
       const candidates = await engine.synthesizeCounterfactualCandidates(deficit);
-      const lsofPort = candidates.find(c => c.command === 'lsof -i :3000');
-      expect(lsofPort).toBeDefined();
+      const byPort = candidates.find(c => c.command.startsWith('Get-NetTCPConnection -LocalPort 3000 '));
+      expect(byPort).toBeDefined();
     });
 
     it('should synthesize port termination pipeline for kill port deficit', async () => {
       const deficit = logger.logDeficit({
         goal: 'kill whatever is on port 8080',
         category: 'execution_failure',
-        context: { os: 'mac', cwd: '/Users/test' }
+        context: { os: 'windows', cwd: 'C:\\Users\\test' }
       });
 
       const candidates = await engine.synthesizeCounterfactualCandidates(deficit);
-      const killPipeline = candidates.find(c => c.command.includes('lsof -ti:8080 | xargs kill -9'));
-      expect(killPipeline).toBeDefined();
+      const stop = candidates.find(c => c.command.includes('-LocalPort 8080 -State Listen') && c.command.includes('Stop-Process -Id $_.OwningProcess -Force'));
+      expect(stop).toBeDefined();
     });
 
-    it('should synthesize pgrep for process inspection deficit', async () => {
+    it('should synthesize Get-Process for process inspection deficit', async () => {
       const deficit = logger.logDeficit({
         goal: 'inspect process postgres',
         category: 'execution_failure',
-        context: { os: 'mac', cwd: '/Users/test' }
+        context: { os: 'windows', cwd: 'C:\\Users\\test' }
       });
 
       const candidates = await engine.synthesizeCounterfactualCandidates(deficit);
-      const pgrepCandidate = candidates.find(c => c.command === 'pgrep -fil "postgres"');
-      expect(pgrepCandidate).toBeDefined();
+      const getProcess = candidates.find(c => c.command === "Get-Process -Name '*postgres*' -ErrorAction SilentlyContinue");
+      expect(getProcess).toBeDefined();
     });
   });
 
@@ -90,15 +92,16 @@ describe('ReflexionEngine — Autonomous Background Reflexion & Counterfactual S
         goal: 'give me the list of the ports that is being used by antigravity',
         category: 'conversational_refusal',
         modelOutput: "I can't detect how many ports are being used by antigravity.",
-        context: { os: 'mac', cwd: '/Users/test' }
+        context: { os: 'windows', cwd: 'C:\\Users\\test' }
       });
 
-      // Mock executor where lsof grep succeeds with simulated Antigravity socket output
+      // Mock executor where the listening-port search finds the Antigravity socket
       const mockExecutor = vi.fn().mockImplementation(async (_cmd: string, args: string[]) => {
         const full = args.join(' ');
-        if (full.includes('lsof -iTCP -sTCP:LISTEN -n -P | grep -i "antigravity"')) {
+        // The command arrives wrapped in the sandbox's syntax check, so match its parts
+        if (full.includes('Get-NetTCPConnection -State Listen') && full.includes('antigravity')) {
           return {
-            stdout: 'antigravity 55432 pranav 12u IPv4 0xdeadbeef 0t0 TCP *:8847 (LISTEN)',
+            stdout: '127.0.0.1    8847    55432',
             stderr: '',
             code: 0
           };
@@ -115,12 +118,12 @@ describe('ReflexionEngine — Autonomous Background Reflexion & Counterfactual S
       const reflexionResult = await engine.reflectOnDeficit(deficit);
 
       expect(reflexionResult.success).toBe(true);
-      expect(reflexionResult.verifiedCommand).toBe('lsof -iTCP -sTCP:LISTEN -n -P | grep -i "antigravity"');
+      expect(reflexionResult.verifiedCommand).toBe(LISTEN_BY_PROCESS);
 
       // Verify KnowledgeDeficitLogger has been updated to resolved
       const updatedDeficit = logger.getDeficitById(deficit.id);
       expect(updatedDeficit?.status).toBe('resolved');
-      expect(updatedDeficit?.resolutionCounterfactual?.verifiedCommand).toBe('lsof -iTCP -sTCP:LISTEN -n -P | grep -i "antigravity"');
+      expect(updatedDeficit?.resolutionCounterfactual?.verifiedCommand).toBe(LISTEN_BY_PROCESS);
       expect(updatedDeficit?.resolutionCounterfactual?.source).toBe('reflexion');
 
       // Pending queue should now be empty
@@ -133,7 +136,7 @@ describe('ReflexionEngine — Autonomous Background Reflexion & Counterfactual S
       logger.logDeficit({
         goal: 'inspect process node',
         category: 'execution_failure',
-        context: { os: 'mac', cwd: '/Users/test' }
+        context: { os: 'windows', cwd: 'C:\\Users\\test' }
       });
 
       const mockExecutor = vi.fn().mockResolvedValue({

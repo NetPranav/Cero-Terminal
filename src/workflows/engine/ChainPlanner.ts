@@ -2,7 +2,7 @@
  * ChainPlanner.ts — "do this, then that" requests turned into concrete steps.
  *
  * "create a folder called demo here, go into it, initialize git, create a package.json and
- * open it in VS Code" becomes mkdir / (enter demo) / git init / npm init -y / code . with the
+ * open it in VS Code" becomes New-Item / (enter demo) / git init / npm init -y / code . with the
  * working folder carried from step to step. Clauses it does not recognise are left for the
  * model one at a time (`command: undefined`); English is never passed to the shell.
  */
@@ -12,7 +12,7 @@ import { planScaffold } from '../../domain/terminal/InteractiveCli';
 import { parseOpenRequest, type OpenRequest } from '../../domain/system/OpenRequest';
 import { parseAppLaunch, type AppLaunchRequest } from '../../domain/app/AppLaunchParser';
 
-export type ChainOs = 'linux' | 'macos' | 'windows';
+export type ChainOs = 'windows';
 
 export interface ChainStep {
   /** The clause as the user wrote it */
@@ -38,12 +38,8 @@ export interface ChainPlan {
 const VERB = String.raw`(?:create|make|mkdir|go|cd|enter|move|switch|open|initiali[sz]e|init|set\s+up|setup|install|add|write|clone|download|fetch|pull|run|start|launch|build|test|list|show|display|print|delete|remove|copy|rename|touch|check|commit|push|activate|serve|watch|follow|tail|echo|subscribe)`;
 const ACTION_START = new RegExp(`^(?:please\\s+|then\\s+|and\\s+|also\\s+|now\\s+|after\\s+that\\s+|finally\\s+|next\\s+)*${VERB}\\b`, 'i');
 
-const quote = (value: string) => (/^[\w@%+=:,./~-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`);
 /** PowerShell single-quoted string ('' escapes a quote) */
 const psQuote = (value: string) => (/^[\w@%+=:,./\\~-]+$/.test(value) ? value : `'${value.replace(/'/g, "''")}'`);
-
-/** The same step on each OS: POSIX shell on macOS/Linux, PowerShell on Windows */
-const forOs = (os: ChainOs, posix: string, windows: string) => (os === 'windows' ? windows : posix);
 
 /** Split a request into ordered clauses; null when it is a single action. */
 export function splitChainClauses(goal: string): string[] | null {
@@ -89,7 +85,7 @@ interface ClauseContext {
 
 function planClause(clause: string, os: ChainOs, ctx: ClauseContext): { step: ChainStep; folder?: string; branch?: string; venv?: string; unentered?: string } {
   const lastFolder = ctx.folder;
-  const q = os === 'windows' ? psQuote : quote;
+  const q = psQuote;
   const c = clause.trim();
   const lower = c.toLowerCase();
   const step = (command?: string, extra: Partial<ChainStep> = {}): ChainStep => ({
@@ -111,7 +107,7 @@ function planClause(clause: string, os: ChainOs, ctx: ClauseContext): { step: Ch
   // Folders with a quoted name that has spaces: make a folder named 'meeting notes'
   let m = c.match(/^(?:create|make)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+)?(?:empty\s+)?(?:project\s+)?(?:folder|directory|dir)\s+(?:called\s+|named\s+)?["'`]([^"'`]+)["'`](?:\s+(?:here|in\s+here))?$/i);
   if (m) {
-    return { step: step(forOs(os, `mkdir -p ${quote(m[1])}`, `New-Item -ItemType Directory -Force -Path ${psQuote(m[1])} | Out-Null`)), folder: m[1] };
+    return { step: step(`New-Item -ItemType Directory -Force -Path ${psQuote(m[1])} | Out-Null`), folder: m[1] };
   }
 
   // Several files at once, optionally inside the folder just made
@@ -122,18 +118,18 @@ function planClause(clause: string, os: ChainOs, ctx: ClauseContext): { step: Ch
     if (names.length) {
       const base = m[2] && lastFolder ? `${lastFolder}/` : '';
       const paths = names.map(n => `${base}${n}`);
-      return { step: step(forOs(os, `touch -- ${paths.map(quote).join(' ')}`, `New-Item -ItemType File -Force -Path ${paths.map(psQuote).join(',')} | Out-Null`)) };
+      return { step: step(`New-Item -ItemType File -Force -Path ${paths.map(psQuote).join(',')} | Out-Null`) };
     }
   }
 
   // How many files the folder just made has
   if (lastFolder && /^(?:and\s+)?(?:tell\s+me\s+|show\s+(?:me\s+)?|count\s+)?how\s+many\s+files\s+(?:it|that\s+folder|there|the\s+folder)\s+(?:has|contains|have|holds)$|^count\s+(?:the\s+)?files\s+(?:in\s+)?(?:it|there|that\s+folder)$/i.test(c)) {
-    return { step: step(forOs(os, `find ${quote(lastFolder)} -maxdepth 1 -type f | wc -l | tr -d ' '`, `(Get-ChildItem -File -LiteralPath ${psQuote(lastFolder)}).Count`)) };
+    return { step: step(`(Get-ChildItem -File -LiteralPath ${psQuote(lastFolder)}).Count`) };
   }
 
   // Folders
   m = c.match(new RegExp(`^(?:create|make)\\s+(?:a\\s+|an\\s+|the\\s+)?(?:new\\s+)?(?:empty\\s+)?(?:project\\s+)?(?:folder|directory|dir)\\s+(?:called\\s+|named\\s+)?${NAME}(?:\\s+(?:here|in\\s+here|in\\s+the\\s+current\\s+(?:folder|directory)))?$`, 'i'));
-  const mkdir = (name: string) => forOs(os, `mkdir -p ${quote(name)}`, `New-Item -ItemType Directory -Force -Path ${psQuote(name)} | Out-Null`);
+  const mkdir = (name: string) => `New-Item -ItemType Directory -Force -Path ${psQuote(name)} | Out-Null`;
   if (m) return { step: step(mkdir(m[1])), folder: m[1] };
   m = c.match(/^mkdir\s+(?:-p\s+)?(\S+)$/i);
   if (m) return { step: step(mkdir(m[1])), folder: m[1] };
@@ -171,9 +167,9 @@ function planClause(clause: string, os: ChainOs, ctx: ClauseContext): { step: Ch
     const url = m[1];
     const target = m[2] || url.replace(/\.git$/, '').split(/[/:]/).pop() || 'project';
     if (/github\.com|gitlab\.com|bitbucket\.org|\.git$|^git@/i.test(url)) {
-      return { step: step(`git clone --depth 1 ${quote(url)} ${quote(target)}`), folder: target };
+      return { step: step(`git clone --depth 1 ${psQuote(url)} ${psQuote(target)}`), folder: target };
     }
-    return { step: step(forOs(os, `curl -fLO ${quote(url)}`, `curl.exe -fLO ${psQuote(url)}`)) };
+    return { step: step(`curl.exe -fLO ${psQuote(url)}`) };
   }
 
   // "create a NextJS project named cero-test": the scaffolder with its defaults, never its questions
@@ -189,53 +185,49 @@ function planClause(clause: string, os: ChainOs, ctx: ClauseContext): { step: Ch
   m = c.match(/(?:python\s+)?(?:virtual\s*env(?:ironment)?|venv)(?:\s+(?:called|named)\s+(\S+))?/i);
   if (m && /^(?:create|make|set\s*up|setup|add|initiali[sz]e)\b/i.test(c)) {
     const venv = m[1] || '.venv';
-    return { step: step(forOs(os, `python3 -m venv ${quote(venv)}`, `python -m venv ${psQuote(venv)}`)), venv };
+    return { step: step(`python -m venv ${psQuote(venv)}`), venv };
   }
   if (ctx.venv && /\bpython\b.*\bversion\b|\bversion\b.*\bpython\b/i.test(c) && /\b(?:inside|in|of|from)\s+(?:it|the\s+(?:venv|virtual\s*env(?:ironment)?))\b/i.test(c)) {
-    return { step: step(forOs(os, `${quote(`${ctx.venv}/bin/python`)} --version`, `& ${psQuote(`${ctx.venv}\\Scripts\\python.exe`)} --version`)) };
+    return { step: step(`& ${psQuote(`${ctx.venv}\\Scripts\\python.exe`)} --version`) };
   }
   if (/^install\s+(?:the\s+|all\s+)?(?:project\s+)?(?:dependencies|deps|packages|requirements)$/i.test(c)) {
-    return { step: step(forOs(os,
-      'if [ -f package.json ]; then npm install; elif [ -f requirements.txt ]; then python3 -m pip install -r requirements.txt; elif [ -f Cargo.toml ]; then cargo build; else echo "No package.json, requirements.txt or Cargo.toml here"; fi',
-      "if (Test-Path package.json) { npm install } elseif (Test-Path requirements.txt) { python -m pip install -r requirements.txt } elseif (Test-Path Cargo.toml) { cargo build } else { 'No package.json, requirements.txt or Cargo.toml here' }")) };
+    return { step: step("if (Test-Path package.json) { npm install } elseif (Test-Path requirements.txt) { python -m pip install -r requirements.txt } elseif (Test-Path Cargo.toml) { cargo build } else { 'No package.json, requirements.txt or Cargo.toml here' }") };
   }
 
   // Files
   m = c.match(new RegExp(`^(?:create|make|add|touch)\\s+(?:a\\s+|an\\s+)?(?:new\\s+|empty\\s+)*(?:file\\s+)?(?:called\\s+|named\\s+)?${NAME}$`, 'i'));
-  if (m && /\.[A-Za-z0-9]{1,8}$/.test(m[1])) return { step: step(forOs(os, `touch ${quote(m[1])}`, `New-Item -ItemType File -Force -Path ${psQuote(m[1])} | Out-Null`)) };
+  if (m && /\.[A-Za-z0-9]{1,8}$/.test(m[1])) return { step: step(`New-Item -ItemType File -Force -Path ${psQuote(m[1])} | Out-Null`) };
   if (/^(?:create|add|write)\s+(?:a\s+)?readme(?:\.md)?$/i.test(c)) {
-    return { step: step(forOs(os,
-      `[ -e README.md ] || printf '# %s\\n' "$(basename "$PWD")" > README.md`,
-      "if (-not (Test-Path README.md)) { '# ' + (Split-Path -Leaf $PWD) | Out-File -Encoding utf8 README.md }")) };
+    return { step: step("if (-not (Test-Path README.md)) { '# ' + (Split-Path -Leaf $PWD) | Out-File -Encoding utf8 README.md }") };
   }
 
   // Looking around
   if (/^(?:list|show|display|print)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?(?:files|contents|everything)(?:\s+(?:in\s+(?:it|here|there|the\s+folder)))?$|^ls$/i.test(c)) {
-    return { step: step(forOs(os, 'ls -la', 'Get-ChildItem -Force')) };
+    return { step: step('Get-ChildItem -Force') };
   }
 
   // Opening things
   if (/^open\s+(?:it|this|that|the\s+(?:folder|project)|the\s+current\s+folder|here)?\s*(?:in|with)\s+(?:vs\s*code|vscode|visual\s+studio\s+code|code)$/i.test(c)) {
     // Right after creating a project the chain has not entered, "it" is that project
     const target = ctx.unentered && !/\b(?:current\s+folder|here)\b/i.test(c) ? q(ctx.unentered) : '.';
-    return { step: step(os === 'macos' ? `code ${target} 2>/dev/null || open -a "Visual Studio Code" ${target}` : `code ${target}`) };
+    return { step: step(`code ${target}`) };
   }
   if (/^open\s+(?:it|this|that|the\s+(?:folder|project)|here)?\s*(?:in|with)\s+(?:finder|(?:the\s+)?file\s+(?:manager|browser)|files)$/i.test(c)) {
-    return { step: step(os === 'macos' ? 'open .' : os === 'windows' ? 'explorer .' : 'xdg-open .') };
+    return { step: step('explorer .') };
   }
   m = c.match(/^open\s+(https?:\/\/\S+)(?:\s+in\s+(?:the\s+)?(?:browser|safari|chrome|firefox))?$/i);
-  if (m) return { step: step(os === 'windows' ? `Start-Process ${psQuote(m[1])}` : `${os === 'macos' ? 'open' : 'xdg-open'} ${quote(m[1])}`) };
+  if (m) return { step: step(`Start-Process ${psQuote(m[1])}`) };
 
   // Dev servers and watchers
   if (/^(?:start|run|launch)\s+(?:the\s+)?(?:dev(?:elopment)?\s+server|app\s+in\s+dev\s+mode)$/i.test(c)) {
     return { step: step('npm run dev') };
   }
   m = c.match(/^(?:follow|tail|watch)\s+(?:the\s+)?(?:log\s+(?:file\s+)?)?(\S+\.(?:log|txt|out))$/i);
-  if (m) return { step: step(forOs(os, `tail -f ${quote(m[1])}`, `Get-Content -Wait -Tail 20 ${psQuote(m[1])}`)) };
+  if (m) return { step: step(`Get-Content -Wait -Tail 20 ${psQuote(m[1])}`) };
 
   // "run git init", "run npm test": a known program with its arguments is already the command, so it
   // is part of the one approval (it used to go to the model, which asked a second time)
-  m = c.match(/^(?:run|execute)\s+((?:git|npm|npx|pnpm|yarn|bun|node|deno|python3?|pip3?|uv|cargo|go|make|cmake|docker|kubectl|ls|pwd|cat|echo|tree|code|brew)\b[^;&|`$<>\\]*)$/i);
+  m = c.match(/^(?:run|execute)\s+((?:git|npm|npx|pnpm|yarn|bun|node|deno|python3?|pip3?|uv|cargo|go|make|cmake|docker|kubectl|ls|pwd|cat|echo|tree|code|winget)\b[^;&|`$<>\\]*)$/i);
   if (m) return { step: step(m[1].trim()) };
 
   // "open the folder gitBrains in VS Code", "open zen browser": the same lookups as when asked alone
@@ -294,7 +286,7 @@ function openRequestSwallowsAction(req: OpenRequest): boolean {
   return [req.name, req.locationHint, req.withApp].some(v => typeof v === 'string' && /\s(?:and|then|also)\s/i.test(` ${v} `) && action.test(v));
 }
 
-/** Resolve a folder the chain enters against the current one (absolute, ~ or relative). */
+/** Resolve a folder the chain enters against the current one (absolute, ~ or relative). TODO(3.6): drive letters and backslashes */
 export function resolveFolder(current: string, target: string): string {
   if (target.startsWith('/') || target.startsWith('~')) return target.replace(/\/+$/, '') || '/';
   const base = current.replace(/\/+$/, '');

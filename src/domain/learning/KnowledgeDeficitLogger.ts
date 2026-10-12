@@ -168,7 +168,7 @@ export class KnowledgeDeficitLogger {
     const cleanGoal = params.goal.trim();
     const { targetEntity, intent } = this.extractEntityAndIntent(cleanGoal, params.attemptedCommand);
 
-    const osName = params.context.os || (typeof process !== 'undefined' ? process.platform : 'darwin');
+    const osName = params.context.os || 'windows';
     const cwdPath = params.context.cwd || (typeof process !== 'undefined' ? process.cwd() : '/');
 
     // Deduplication check: check if an identical goal/entity deficit is already logged

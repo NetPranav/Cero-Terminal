@@ -48,9 +48,7 @@ describe('Saving a workflow from inside a prompt', () => {
     expect(doc.actions).toEqual([{ type: 'app', app: expect.stringMatching(/spotify/i) }]);
     expect(r.summary).toContain('Saved workflow "my music" (1 step) to ');
     expect(r.summary).toContain(file);
-    for (const target of ['macos', 'windows', 'linux'] as const) {
-      expect(planFlowFile(files.get(file)!, file, target)?.steps.length).toBe(1);
-    }
+    expect(planFlowFile(files.get(file)!, file, 'windows')?.steps.length).toBe(1);
   });
 
   it('without a name, asks for one and uses the answer', async () => {

@@ -8,25 +8,17 @@
  * line so the next attempt is a different, working command.
  */
 
-const isWindows = (os: string) => /^win/i.test(os);
-
 /** Command-word position: start of line, after ; && || | ( or a shell keyword */
 const WORD_START = String.raw`(^|[;&|(]\s*|\b(?:then|do|else|exec|time|sudo|env)\s+)`;
 
 /**
- * `python`/`pip` -> `python3`/`pip3` on macOS and Linux (where plain `python` is usually
- * missing); the reverse on Windows, where `python3` can open the Microsoft Store instead.
+ * `python3`/`pip3` -> `python`/`pip`: on Windows `python3` can open the Microsoft Store instead.
  */
-export function portInterpreters(command: string, os: string): string {
+export function portInterpreters(command: string, _os: string): string {
   if (!command) return command;
-  if (isWindows(os)) {
-    return command
-      .replace(new RegExp(`${WORD_START}python3(?=\\s|$)`, 'g'), '$1python')
-      .replace(new RegExp(`${WORD_START}pip3(?=\\s|$)`, 'g'), '$1pip');
-  }
   return command
-    .replace(new RegExp(`${WORD_START}python(?=\\s|$)`, 'g'), '$1python3')
-    .replace(new RegExp(`${WORD_START}pip(?=\\s|$)`, 'g'), '$1pip3');
+    .replace(new RegExp(`${WORD_START}python3(?=\\s|$)`, 'g'), '$1python')
+    .replace(new RegExp(`${WORD_START}pip3(?=\\s|$)`, 'g'), '$1pip');
 }
 
 /** Programs whose exit status 1 with no output means "nothing matched", not an error */
@@ -41,14 +33,14 @@ export function isNoMatchExit(command: string, code: number | undefined, stdout:
 }
 
 /** One-line causes for failures the model misreads, added to the repair prompt */
-export function failureHints(errorText: string, command: string, os: string): string[] {
+export function failureHints(errorText: string, command: string, _os: string): string[] {
   const e = errorText || '';
   const hints: string[] = [];
   if (/bad substitution/i.test(e) || /\$\{\w+(?:,,|\^\^)\}/.test(command)) {
-    hints.push(`Commands run in ${isWindows(os) ? 'PowerShell' : os === 'macos' ? 'zsh' : 'sh/bash'}: bash-only expansions such as \${var,,} or \${var^^} are not available. For lower/upper case use: $(printf '%s' "$var" | tr '[:upper:]' '[:lower:]').`);
+    hints.push('Commands run in PowerShell: bash-only expansions such as ${var,,} or ${var^^} are not available. For lower/upper case use $var.ToLower() or $var.ToUpper().');
   }
   if (/command not found:?\s*python\b|python: command not found|'python' is not recognized/i.test(e)) {
-    hints.push(isWindows(os) ? 'Use `python` (or `py -3`).' : 'Python is installed as `python3`; use `python3` (and `pip3`), not `python`.');
+    hints.push('Use `python` (or `py -3`).');
   }
   if (/not a git repository/i.test(e)) {
     hints.push('This folder is not inside a git repository. Run git in the repository folder (`cd <folder> && git ...` or `git -C <folder> ...`). Do not run `git init`.');
@@ -58,11 +50,6 @@ export function failureHints(errorText: string, command: string, os: string): st
   }
   if (/can't open file|No such file or directory/i.test(e)) {
     hints.push('A path does not exist from the current folder. Check it with `ls` first instead of guessing another folder.');
-  }
-  if (/invalid option|illegal option|unrecognized option/i.test(e) && !isWindows(os)) {
-    hints.push(os === 'macos'
-      ? 'macOS ships BSD tools: GNU-only flags (sed -i without a suffix, grep -P, date -d, readlink -f) differ. Use portable forms (sed -i.bak, grep -E).'
-      : 'Check the flag with `--help`; BSD and GNU tools differ.');
   }
   if (/syntax error/i.test(e) && /python3? -c/.test(command)) {
     hints.push('`python3 -c` cannot contain a `with`/`for` block after `;`. Write the program with a heredoc: python3 - <<\'EOF\' ... EOF');
@@ -98,12 +85,10 @@ export function restoreGoalPaths(command: string, goal: string): string {
 }
 
 /** `python3 -c "import x; with open(...) as f: ..."` is a SyntaxError: blocks cannot follow `;` */
-export function inlinePythonProblem(command: string, os: string): string | null {
+export function inlinePythonProblem(command: string, _os: string): string | null {
   const m = command.match(/\bpython3?\s+-c\s+(["'])([\s\S]*?)\1/);
   if (!m || !/;\s*(?:with|for|while|if|def|class|try)\b[^;]*:/.test(m[2])) return null;
-  return /^win/i.test(os)
-    ? '`python -c` cannot contain a `with`/`for`/`if` block after `;`. Use a comprehension on one line, or write a .py file and run it.'
-    : "`python3 -c` cannot contain a `with`/`for`/`if` block after `;`. Use a one-line expression (for example json.dump(list(csv.DictReader(open('in.csv'))), open('out.json','w'))), or a heredoc: python3 - <<'EOF' ... EOF";
+  return '`python -c` cannot contain a `with`/`for`/`if` block after `;`. Use a comprehension on one line, or write a .py file and run it.';
 }
 
 /** gzip, xz and bzip2 remove the input file; add -k when the request says to keep the originals */

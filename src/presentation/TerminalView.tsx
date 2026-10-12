@@ -1027,11 +1027,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
             // Relative folders in a flow mean "from where the terminal is now" (see absolutizeCwd)
             const startFolder = await invoke<string | null>('get_pty_cwd', { sessionId: currentSessionId }).catch(() => null);
             plan = absolutizeCwd(originalPlan, startFolder || undefined, os);
-            let shell: ShellFamily = 'powershell';
-            if (os !== 'windows') {
-              const probe = await invoke<{ stdout: string }>('execute_command', { command: '/bin/sh', args: ['-c', 'printf %s "$SHELL"'], timeoutMs: 5000 }).catch(() => ({ stdout: '' }));
-              shell = /fish$/.test((probe.stdout || '').trim()) ? 'fish' : 'posix';
-            }
+            // TODO(3.2): the pane's own shell (cmd, Git Bash) once shell profiles exist
+            const shell: ShellFamily = 'powershell';
             // A pane opened for this flow may still be starting its shell
             for (let waited = 0; waited < 15000 && !ptyTrackerRef.current.isIdleAtPrompt(); waited += 250) {
               if (run.signal.aborted) break;

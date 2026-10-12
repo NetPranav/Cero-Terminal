@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { isExplicitFilesystemSearch, findFastPath, AgentLoop, isConversationalRefusal, isActionableGoal, isReferentialFollowup, cleanseConversationalRefusal, isSingleShotInspection } from './AgentLoop';
 import { DemonstrationLearningEngine } from '../../domain/learning/DemonstrationLearningEngine';
 
@@ -199,15 +199,13 @@ describe('AgentLoop fast-path routing', () => {
     expect(parsed.params.command).toBe('lsof -iTCP -sTCP:LISTEN -n -P');
   });
 
-  it('routes search query fallback to shell-native Spotlight mdfind on macOS', () => {
+  it('routes a search fallback to Get-ChildItem in the user folder', () => {
     const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any);
-    const fallback = (loop as any).tryHeuristicFallback('find all frontend folders in my system', { os: 'mac', cwd: '/workspace' });
+    const fallback = (loop as any).tryHeuristicFallback('find all frontend folders in my system', { os: 'windows', cwd: 'C:\\workspace' });
 
     expect(fallback).not.toBeNull();
     expect(fallback.tool).toBe('shell.execute');
-    expect(fallback.params.command).toContain('mdfind');
-    expect(fallback.params.command).toContain('*frontend*');
-    expect(fallback.params.command).toContain('public.folder');
+    expect(fallback.params.command).toBe("Get-ChildItem -Path $HOME -Recurse -Force -Directory -Filter '*frontend*' -ErrorAction SilentlyContinue | Select-Object -First 30 -ExpandProperty FullName");
   });
 
   describe('Tier 2: Refusal Interception & Autonomous Self-Healing', () => {
@@ -261,28 +259,28 @@ describe('AgentLoop fast-path routing', () => {
       expect(effective).toContain('still somehow that you can try right now');
     });
 
-    it('routes IP address check and DHCP renewal to macOS terminal commands', () => {
+    it('routes IP address check and DHCP renewal to ipconfig', () => {
       const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any);
       const renewFallback = (loop as any).tryHeuristicFallback(
         'change the ip adress without vpn or without changeing network (still somehow that you can try right now)',
-        { os: 'mac', cwd: '/workspace' }
+        { os: 'windows', cwd: 'C:\\workspace' }
       );
       expect(renewFallback).not.toBeNull();
       expect(renewFallback.tool).toBe('shell.execute');
-      expect(renewFallback.params.command).toContain('sudo ipconfig set en0 DHCP');
+      expect(renewFallback.params.command).toBe('ipconfig /release; ipconfig /renew');
 
-      const checkFallback = (loop as any).tryHeuristicFallback('check my ip address', { os: 'mac', cwd: '/workspace' });
+      const checkFallback = (loop as any).tryHeuristicFallback('check my ip address', { os: 'windows', cwd: 'C:\\workspace' });
       expect(checkFallback).not.toBeNull();
       expect(checkFallback.tool).toBe('shell.execute');
-      expect(checkFallback.params.command).toContain('ipconfig getifaddr en0');
+      expect(checkFallback.params.command).toBe('ipconfig | findstr /i "ipv4"');
     });
 
-    it('cleanses robotic AI refusals into actionable macOS network advice', () => {
+    it('cleanses robotic AI refusals into a statement of what Cero can do', () => {
       const refusal = "I'm sorry, but as an AI language model, I don't have the ability to directly manipulate or change your device's IP address without using a VPN or changing your network configuration.";
-      const cleansed = cleanseConversationalRefusal(refusal, 'change the ip adress without vpn', { os: 'mac', cwd: '/workspace' });
+      const cleansed = cleanseConversationalRefusal(refusal, 'change the ip adress without vpn', { os: 'windows', cwd: 'C:\\workspace' });
       expect(cleansed).not.toContain('AI language model');
-      expect(cleansed).toContain('sudo ipconfig set en0 DHCP');
-      expect(cleansed).toContain('networksetup -setmanual');
+      expect(cleansed).toContain('As Cero on windows, I have full terminal execution capabilities.');
+      expect(cleansed).toContain('change the ip adress without vpn');
     });
 
     it('intercepts canned refusal and re-prompts model with terminal execution authority', async () => {
@@ -600,12 +598,12 @@ describe('AgentLoop fast-path routing', () => {
 
 
   describe('Phase 4.1 — Speculative Shadow-PTY Simulation Integration', () => {
-    it('should speculatively evaluate candidates and swap unviable model syntax for verified winner', async () => {
+    it('runs the model command as is on Windows, where no platform rewrite exists to speculate on', async () => {
       const mockProvider = {
         isAvailable: vi.fn().mockResolvedValue(true),
         generate: vi.fn()
           .mockResolvedValueOnce({
-            content: JSON.stringify({ action: 'execute', command: 'fuser 3000/tcp', explanation: 'Check port with fuser' })
+            content: JSON.stringify({ action: 'execute', command: 'Get-NetTCPConnection -LocalPort 3000', explanation: 'Check port 3000' })
           })
           .mockResolvedValueOnce({
             content: JSON.stringify({ action: 'done', summary: 'Port 3000 inspected successfully' })
@@ -622,21 +620,11 @@ describe('AgentLoop fast-path routing', () => {
         hasDriver: vi.fn().mockReturnValue(true),
         execute: vi.fn().mockResolvedValue({
           success: true,
-          data: { stdout: 'node 4190 user 22u IPv4 0x123 TCP *:3000 (LISTEN)', stderr: '', code: 0 }
+          data: { stdout: '0.0.0.0  3000  Listen  4190', stderr: '', code: 0 }
         })
       };
 
-      // Mock shadow simulator executor where fuser fails but lsof succeeds
-      const mockShadowExecutor = vi.fn().mockImplementation(async (_cmd: string, args: string[]) => {
-        const full = args.join(' ');
-        if (full.includes('fuser')) {
-          return { stdout: '', stderr: 'zsh: command not found: fuser', code: 127 };
-        }
-        if (full.includes('lsof')) {
-          return { stdout: 'node 4190 TCP *:3000 (LISTEN)', stderr: '', code: 0 };
-        }
-        return { stdout: '', stderr: '', code: 0 };
-      });
+      const mockShadowExecutor = vi.fn().mockResolvedValue({ stdout: '', stderr: '', code: 0 });
 
       const { ShadowPtySimulator } = await import('./ShadowPtySimulator');
       const customSimulator = new ShadowPtySimulator({ executor: mockShadowExecutor });
@@ -651,22 +639,18 @@ describe('AgentLoop fast-path routing', () => {
       const events: any[] = [];
       loop.onEvent((ev) => events.push(ev));
 
-      const result = await loop.run('check port 3000', { os: 'mac', cwd: '/test' });
+      const result = await loop.run('check port 3000', { os: 'windows', cwd: 'C:\\test' });
 
       expect(result.success).toBe(true);
-      // ToolExecutor should have been called with the verified 'lsof' candidate, NOT 'fuser'!
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'shell.execute',
-        expect.objectContaining({
-          command: expect.stringContaining('lsof')
-        }),
-        '/test',
+        expect.objectContaining({ command: 'Get-NetTCPConnection -LocalPort 3000' }),
+        'C:\\test',
         undefined
       );
-
-      // Event stream should show speculative optimization
-      const specEvent = events.find(e => e.type === 'thinking' && e.message.includes('Speculative Shadow-PTY: Optimized candidate'));
-      expect(specEvent).toBeDefined();
+      // Nothing was trial-run and nothing replaced the model's command
+      expect(mockShadowExecutor).not.toHaveBeenCalled();
+      expect(events.some(e => e.type === 'thinking' && e.message.includes('Speculative Shadow-PTY: Optimized candidate'))).toBe(false);
     });
 
     it('executes verified canonical recipe directly via TLDR knowledge base when AI model is offline', async () => {
@@ -690,6 +674,18 @@ describe('AgentLoop fast-path routing', () => {
         })
       };
 
+      // The built-in catalog has no Windows recipes yet (TODO 4.5); register one for this test
+      const { TldrKnowledgeEngine } = await import('../../domain/knowledge/TldrKnowledgeEngine');
+      const tldr = TldrKnowledgeEngine.getInstance();
+      tldr.registerPage({
+        name: 'ipconfig',
+        description: 'Show and renew the IP configuration.',
+        platforms: ['windows'],
+        tags: ['dns', 'network'],
+        examples: [{ description: 'Flush the DNS resolver cache:', command: 'ipconfig /flushdns', platform: 'windows', tags: ['flush', 'dns', 'cache'] }],
+      });
+      onTestFinished(() => { (tldr as any).pages.delete('ipconfig'); });
+
       const loop = new AgentLoop(
         { toolIndex: { has: () => false, getAll: () => [] } } as any,
         mockModelManager
@@ -699,13 +695,13 @@ describe('AgentLoop fast-path routing', () => {
       const events: any[] = [];
       loop.onEvent((ev) => events.push(ev));
 
-      const result = await loop.run('flush dns cache', { os: 'mac', cwd: '/test' });
+      const result = await loop.run('flush dns cache', { os: 'windows', cwd: '/test' });
 
       expect(result.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'shell.execute',
         expect.objectContaining({
-          command: 'sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder'
+          command: 'ipconfig /flushdns'
         }),
         '/test',
         undefined
@@ -1211,15 +1207,16 @@ describe('Long-running commands open their own terminal pane', () => {
     TerminalWorkspace.resetForTests();
     const spawner = vi.fn().mockReturnValueOnce('pane-a').mockReturnValueOnce('pane-b');
     TerminalWorkspace.getInstance().setSpawner(spawner);
+    // The chain planner writes the log follower itself; the model is asked only how to serve the folder
     const { loop, execute } = makeLoop([
-      { command: 'tail -f app.log', explanation: 'Follow the log' },
-      { command: 'python3 -m http.server 8000', explanation: 'Serve the folder' },
+      { command: 'python -m http.server 8000', explanation: 'Serve the folder' },
     ]);
     loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
-    const result = await loop.run('follow app.log and serve this folder on port 8000', { os: 'macos', cwd: '/tmp/site', paneId: 'main' });
+    const result = await loop.run('follow app.log and serve this folder on port 8000', { os: 'windows', cwd: 'C:\\site', paneId: 'main' });
     expect(result.success).toBe(true);
     expect(spawner).toHaveBeenCalledTimes(2);
-    expect(spawner.mock.calls[0][0]).toMatchObject({ command: 'tail -f app.log', cwd: '/tmp/site', requesterPaneId: 'main' });
+    expect(spawner.mock.calls[0][0]).toMatchObject({ command: 'Get-Content -Wait -Tail 20 app.log', cwd: 'C:\\site', requesterPaneId: 'main' });
+    expect(spawner.mock.calls[1][0]).toMatchObject({ command: 'python -m http.server 8000' });
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -1262,7 +1259,7 @@ describe('Multi-step chains', () => {
       initialize: vi.fn()
     } as any);
     const execute = vi.fn(async (_tool: string, params: any, cwd: string) => {
-      if (params.command.startsWith('cd ')) return { success: true, data: { stdout: `${cwd}/chain-demo\n`, code: 0 } };
+      if (params.command.startsWith('Set-Location ')) return { success: true, data: { stdout: `${cwd}/chain-demo\n`, code: 0 } };
       return { success: true, data: { stdout: '', code: 0 } };
     });
     (loop as any).toolExecutor = { hasDriver: () => true, execute };
@@ -1273,20 +1270,20 @@ describe('Multi-step chains', () => {
     const { loop, execute, generate } = setup();
     const handler = vi.fn().mockResolvedValue(true);
     loop.setAuthorizationHandler(handler);
-    const result = await loop.run('create a folder called chain-demo here, go into it, initialize a git repository, create a package.json with npm init -y and then list the files', { os: 'macos', cwd: '/tmp/wf' });
+    const result = await loop.run('create a folder called chain-demo here, go into it, initialize a git repository, create a package.json with npm init -y and then list the files', { os: 'windows', cwd: '/tmp/wf' });
 
     expect(result.success).toBe(true);
     expect(generate).not.toHaveBeenCalled();
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler.mock.calls[0][0]).toMatchObject({ capabilityId: 'workflow.batch' });
-    expect(handler.mock.calls[0][0].parameters.command).toContain('1. mkdir -p chain-demo');
+    expect(handler.mock.calls[0][0].parameters.command).toContain('1. New-Item -ItemType Directory -Force -Path chain-demo | Out-Null');
     const calls = execute.mock.calls.map(c => [c[1].command, c[2]]);
     expect(calls).toEqual([
-      ['mkdir -p chain-demo', '/tmp/wf'],
-      ["cd '/tmp/wf/chain-demo' && pwd", '/tmp/wf'],
+      ['New-Item -ItemType Directory -Force -Path chain-demo | Out-Null', '/tmp/wf'],
+      ["Set-Location -LiteralPath '/tmp/wf/chain-demo' -ErrorAction Stop; (Get-Location).Path", '/tmp/wf'],
       ['git init', '/tmp/wf/chain-demo'],
       ['npm init -y', '/tmp/wf/chain-demo'],
-      ['ls -la', '/tmp/wf/chain-demo'],
+      ['Get-ChildItem -Force', '/tmp/wf/chain-demo'],
     ]);
     expect(result.cdPath).toBe('/tmp/wf/chain-demo');
   });
@@ -1537,9 +1534,7 @@ describe('Making a workflow from plain steps', () => {
       expect(path).toMatch(/[\\/]Desktop[\\/]demo-setup\.flow$/);
       expect(r.summary).toContain('Saved ');
       expect(r.summary).toContain('(3 steps)');
-      for (const os of ['macos', 'windows', 'linux'] as const) {
-        expect(planFlowFile(files.get(path)!, path, os)?.steps.length).toBe(3);
-      }
+      expect(planFlowFile(files.get(path)!, path, 'windows')?.steps.length).toBe(3);
     } finally { setChoiceHandlerForTests(null); }
     expect(home).toBeTruthy();
   });

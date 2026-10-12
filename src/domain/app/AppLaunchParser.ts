@@ -11,35 +11,34 @@ export interface AppLaunchRequest {
   background: boolean;
 }
 
-// Known common application aliases and their executable binaries
-const APP_BINARIES: Record<string, { macos: string; linux: string; windows: string }> = {
-  'firefox': { macos: 'Firefox', linux: 'firefox', windows: 'firefox' },
-  'chrome': { macos: 'Google Chrome', linux: 'google-chrome-stable || google-chrome || chromium', windows: 'chrome' },
-  'google chrome': { macos: 'Google Chrome', linux: 'google-chrome-stable || google-chrome || chromium', windows: 'chrome' },
-  'chromium': { macos: 'Chromium', linux: 'chromium', windows: 'chromium' },
-  'brave': { macos: 'Brave Browser', linux: 'brave-browser', windows: 'brave' },
-  'edge': { macos: 'Microsoft Edge', linux: 'microsoft-edge-stable', windows: 'msedge' },
-  'safari': { macos: 'Safari', linux: '', windows: '' },
-  'spotify': { macos: 'Spotify', linux: 'spotify', windows: 'spotify' },
-  'discord': { macos: 'Discord', linux: 'discord', windows: 'Discord' },
-  'slack': { macos: 'Slack', linux: 'slack', windows: 'slack' },
-  'vlc': { macos: 'VLC', linux: 'vlc', windows: 'vlc' },
-  'terminal': { macos: 'Terminal', linux: 'x-terminal-emulator || gnome-terminal || kitty || alacritty', windows: 'wt || powershell' },
-  'calculator': { macos: 'Calculator', linux: 'gnome-calculator || kcalc || galculator', windows: 'calc' },
-  'code': { macos: 'Visual Studio Code', linux: 'code || codium', windows: 'code' },
-  'vscode': { macos: 'Visual Studio Code', linux: 'code || codium', windows: 'code' },
-  'vs code': { macos: 'Visual Studio Code', linux: 'code || codium', windows: 'code' },
-  'visual studio code': { macos: 'Visual Studio Code', linux: 'code || codium', windows: 'code' },
-  'cursor': { macos: 'Cursor', linux: 'cursor', windows: 'cursor' },
-  'sublime text': { macos: 'Sublime Text', linux: 'subl', windows: 'subl' },
-  'sublime': { macos: 'Sublime Text', linux: 'subl', windows: 'subl' },
-  'postman': { macos: 'Postman', linux: 'postman', windows: 'postman' },
-  'obs': { macos: 'OBS', linux: 'obs', windows: 'obs64' }
+// Known common application aliases and their Windows executables
+const APP_BINARIES: Record<string, string> = {
+  'firefox': 'firefox',
+  'chrome': 'chrome',
+  'google chrome': 'chrome',
+  'chromium': 'chromium',
+  'brave': 'brave',
+  'edge': 'msedge',
+  'spotify': 'spotify',
+  'discord': 'Discord',
+  'slack': 'slack',
+  'vlc': 'vlc',
+  'terminal': 'wt',
+  'calculator': 'calc',
+  'code': 'code',
+  'vscode': 'code',
+  'vs code': 'code',
+  'visual studio code': 'code',
+  'cursor': 'cursor',
+  'sublime text': 'subl',
+  'sublime': 'subl',
+  'postman': 'postman',
+  'obs': 'obs64'
 };
 
 const LAUNCH_VERBS = '(launch|open|start|run)';
 
-export function parseAppLaunch(goal: string, os: string = 'linux'): AppLaunchRequest | null {
+export function parseAppLaunch(goal: string, _os: string = 'windows'): AppLaunchRequest | null {
   const text = goal.trim().replace(/\s+/g, ' ').replace(/[.!?]+$/, '');
   const cleaned = text.replace(/^(?:please\s+|can\s+you\s+|could\s+you\s+|hey\s+|kindly\s+|just\s+)+/i, '');
 
@@ -74,16 +73,9 @@ export function parseAppLaunch(goal: string, os: string = 'linux'): AppLaunchReq
     return null;
   }
 
-  const binaryInfo = APP_BINARIES[rawName];
+  const executable = APP_BINARIES[rawName];
   // "run echo hello" and "run sleep 30" are commands, not apps: "run" only means an app for a known one
-  if (verb === 'run' && !binaryInfo) return null;
-  const targetOs = os.toLowerCase().includes('darwin') || os.toLowerCase().includes('mac')
-    ? 'macos'
-    : os.toLowerCase().includes('win')
-      ? 'windows'
-      : 'linux';
-
-  const executable = binaryInfo ? binaryInfo[targetOs] : rawName;
+  if (verb === 'run' && !executable) return null;
 
   return {
     app: rawName,

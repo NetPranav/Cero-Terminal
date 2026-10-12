@@ -256,14 +256,14 @@ describe('showing a file and listing a named folder', () => {
 
   it('"what is in data.csv" reads the file, without the model', async () => {
     const r = await loop.run('what is in data.csv', ctx);
-    expect(execute.mock.calls[0][1].command).toBe("head -n 60 -- 'data.csv'");
+    expect(execute.mock.calls[0][1].command).toBe("Get-Content -LiteralPath 'data.csv' -TotalCount 60");
     expect(r.summary).toContain('ana,red');
   });
 
   it('"list the files in my notes folder" finds "my notes" and lists that real path', async () => {
     loop.setPathProbe(fakeProbe(['/home/me/work/my notes']));
     await loop.run('list the files in my notes folder', ctx);
-    expect(execute.mock.calls[0][1].command).toBe("ls -la -- '/home/me/work/my notes'");
+    expect(execute.mock.calls[0][1].command).toBe("Get-ChildItem -Force -LiteralPath '/home/me/work/my notes'");
   });
 
   it('a folder that cannot be found falls through instead of listing a guessed path', async () => {
@@ -281,19 +281,20 @@ describe('find by file type, and a workflow request with no steps', () => {
       getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate: vi.fn() }),
       getActiveModel: () => ({ modelId: 'mock' }), initialize: vi.fn(),
     } as any);
-    execute = vi.fn().mockResolvedValue({ success: true, data: { stdout: '/var/log/a.log' } });
+    execute = vi.fn().mockResolvedValue({ success: true, data: { stdout: 'C:\\logs\\a.log' } });
     (loop as any).toolExecutor = { hasDriver: () => true, execute };
   });
 
-  it('"locate all log files in /var/log" is a plain find: no sudo, no updatedb', async () => {
-    await loop.run('locate all log files in /var/log', { os: 'linux', cwd: '/tmp' });
+  it('"locate all log files in C:\\logs" is a plain search: no elevation, no index', async () => {
+    await loop.run('locate all log files in C:\\logs', { os: 'windows', cwd: 'C:\\tmp' });
     const cmd = execute.mock.calls[0][1].command as string;
-    expect(cmd).toContain("find '/var/log' -type f -name '*.log'");
-    expect(cmd).not.toMatch(/sudo|updatedb|locate /);
+    expect(cmd).toContain("Get-ChildItem -LiteralPath 'C:\\logs' -Recurse -File -Filter '*.log'");
+    expect(cmd).toContain('(node_modules|\\.git)');
+    expect(cmd).not.toMatch(/sudo|updatedb|locate |RunAs/);
   });
   it('"find all python files in this directory" searches here', async () => {
-    await loop.run('find all python files in this directory', { os: 'linux', cwd: '/tmp' });
-    expect(execute.mock.calls[0][1].command).toContain("find '.' -type f -name '*.py'");
+    await loop.run('find all python files in this directory', { os: 'windows', cwd: 'C:\\tmp' });
+    expect(execute.mock.calls[0][1].command).toContain("Get-ChildItem -LiteralPath '.' -Recurse -File -Filter '*.py'");
   });
   it('"create a new workflow called backup-db" asks for the steps and runs nothing', async () => {
     const r = await loop.run('create a new workflow called backup-db', { os: 'linux', cwd: '/tmp' });

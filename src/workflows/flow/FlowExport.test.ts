@@ -57,12 +57,13 @@ describe('FlowExport', () => {
     expect(flowDoc.metadata.name).toBe('Deploy Service');
     expect(flowDoc.actions).toHaveLength(2);
     expect(flowDoc.actions[0].command).toBe('npm run build');
-    expect(flowDoc.actions[0].macos).toBe('npm run build:mac');
+    expect(flowDoc.actions[0].windows).toBe('npm.cmd run build:win');
+    expect(flowDoc.actions[0].macos).toBeUndefined();
     expect(flowDoc.actions[0].x?.precondition_check).toBe('test -f package.json');
     expect(flowDoc.actions[1].x?.dependsOn).toEqual(['step-1']);
     expect(flowDoc.actions[1].x?.isDestructive).toBe(true);
 
-    const reconstructed = flowToWorkflow(flowDoc, 'deploy-service', 'linux');
+    const reconstructed = flowToWorkflow(flowDoc, 'deploy-service', 'windows');
     expect(reconstructed).not.toBeNull();
     expect(reconstructed!.name).toBe(original.name);
     expect(reconstructed!.description).toBe(original.description);

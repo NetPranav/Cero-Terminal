@@ -194,8 +194,11 @@ describe('EmbeddedEngineManager (In-App Local AI Integration)', () => {
 
     it('contains pinned manifest entries for recommended model and server binaries', () => {
       expect(PINNED_MANIFEST['qwen2.5-coder-3b-instruct-q4_k_m.gguf']).toBeDefined();
-      expect(PINNED_MANIFEST['llama-b11227-bin-ubuntu-x64.tar.gz']).toBeDefined();
-      expect(PINNED_MANIFEST['llama-b11227-bin-macos-arm64.tar.gz']).toBeDefined();
+      expect(PINNED_MANIFEST['llama-b11227-bin-win-cpu-x64.zip']).toBeDefined();
+      expect(PINNED_MANIFEST['llama-b11227-bin-win-vulkan-x64.zip']).toBeDefined();
+      expect(PINNED_MANIFEST['llama-b11227-bin-win-cpu-arm64.zip']).toBeDefined();
+      // Only Windows builds are downloaded
+      expect(Object.keys(PINNED_MANIFEST).filter(name => /ubuntu|macos|\.tar\.gz$/.test(name))).toEqual([]);
 
       // Every pin must be a real SHA-256 (the old Linux pin was the hash of an empty file)
       for (const entry of Object.values(PINNED_MANIFEST)) {
@@ -298,14 +301,13 @@ describe('EmbeddedEngineManager (In-App Local AI Integration)', () => {
 });
 
 describe('Engine asset selection and model tiers', () => {
-  it('selects the pinned build for each platform', () => {
-    expect(selectEngineAsset('Linux', 'x86_64', false)?.key).toBe('linux-x64-cpu');
-    expect(selectEngineAsset('Linux', 'x86_64', true)?.key).toBe('linux-x64-vulkan');
-    expect(selectEngineAsset('Linux', 'aarch64', false)?.key).toBe('linux-arm64-cpu');
-    expect(selectEngineAsset('Darwin', 'arm64', false)?.key).toBe('macos-arm64');
-    expect(selectEngineAsset('Linux', 'riscv64', false)).toBeNull();
-    expect(selectEngineAsset('Linux', 'x86_64', false)?.url)
-      .toBe('https://github.com/ggml-org/llama.cpp/releases/download/b11227/llama-b11227-bin-ubuntu-x64.tar.gz');
+  it('selects the pinned Windows build for each architecture', () => {
+    expect(selectEngineAsset('windows', 'x86_64', false)?.key).toBe('windows-x64-cpu');
+    expect(selectEngineAsset('windows', 'AMD64', true)?.key).toBe('windows-x64-vulkan');
+    expect(selectEngineAsset('windows', 'aarch64', false)?.key).toBe('windows-arm64-cpu');
+    expect(selectEngineAsset('windows', 'riscv64', false)).toBeNull();
+    expect(selectEngineAsset('windows', 'x86_64', false)?.url)
+      .toBe('https://github.com/ggml-org/llama.cpp/releases/download/b11227/llama-b11227-bin-win-cpu-x64.zip');
   });
 
   it('follows the selected tier and recommends one from RAM', () => {
@@ -325,6 +327,5 @@ describe('selectEngineAsset on Windows', () => {
     expect(selectEngineAsset('windows', 'x86_64', true)?.fileName).toBe('llama-b11227-bin-win-vulkan-x64.zip');
     expect(selectEngineAsset('windows', 'x86_64', false)?.fileName).toBe('llama-b11227-bin-win-cpu-x64.zip');
     expect(selectEngineAsset('windows', 'aarch64', true)?.fileName).toBe('llama-b11227-bin-win-cpu-arm64.zip');
-    expect(selectEngineAsset('Darwin', 'arm64', false)?.fileName).toBe('llama-b11227-bin-macos-arm64.tar.gz');
   });
 });

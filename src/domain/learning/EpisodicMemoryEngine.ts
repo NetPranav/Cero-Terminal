@@ -94,7 +94,7 @@ export class EpisodicMemoryEngine {
       command: cleanCmd,
       explanation: cleanExplanation || `Execute command: ${cleanCmd}`,
       cwd: options?.cwd,
-      os: options?.os || (typeof process !== 'undefined' ? process.platform : 'darwin'),
+      os: options?.os || 'windows',
       timestamp: Date.now(),
       source: options?.source || 'demonstration',
       confidence: 1.0,

@@ -9,6 +9,7 @@ describe('isLongRunningCommand', () => {
     'ros2 bag record -a',
     'rviz2',
     'tail -f logs/app.log',
+    'Get-Content -Wait -Tail 20 logs\\app.log',
     'tail -n 50 -f app.log',
     'journalctl -u nginx -f',
     'npm run dev',

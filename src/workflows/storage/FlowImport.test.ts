@@ -13,27 +13,10 @@ const MORNING = {
 };
 
 describe('flowToWorkflow', () => {
-  it('maps browser and app actions to macOS commands', () => {
-    const wf = flowToWorkflow(MORNING, 'x', 'macos')!;
-    expect(wf.name).toBe('Morning AI Workspace');
-    expect(wf.steps.map(s => s.command)).toEqual([
-      "open -a 'Safari' 'https://claude.ai' 'https://chatgpt.com'",
-      "open -a 'Google Chrome' 'https://www.youtube.com'",
-      "open -a 'Antigravity'",
-    ]);
-    expect(wf.tags).toContain('flow');
-  });
-
-  it('maps the same actions to Linux commands', () => {
-    const wf = flowToWorkflow(MORNING, 'x', 'linux')!;
-    expect(wf.steps[0].command).toBe("xdg-open 'https://claude.ai' && xdg-open 'https://chatgpt.com'");
-    // Chrome when installed, otherwise the default browser
-    expect(wf.steps[1].command).toBe("(command -v google-chrome >/dev/null 2>&1 && setsid -f google-chrome 'https://www.youtube.com' >/dev/null 2>&1) || xdg-open 'https://www.youtube.com'");
-    expect(wf.steps[2].command).toBe("setsid -f 'antigravity' >/dev/null 2>&1");
-  });
-
-  it('maps the same actions to Windows commands', () => {
+  it('maps browser and app actions to Windows commands', () => {
     const wf = flowToWorkflow(MORNING, 'x', 'windows')!;
+    expect(wf.name).toBe('Morning AI Workspace');
+    expect(wf.tags).toContain('flow');
     expect(wf.steps.map(s => s.command)).toEqual([
       "Start-Process 'https://claude.ai'; Start-Process 'https://chatgpt.com'",
       "Start-Process chrome -ArgumentList 'https://www.youtube.com'",
@@ -45,19 +28,19 @@ describe('flowToWorkflow', () => {
     const wf = flowToWorkflow({ actions: [
       { type: 'browser', urls: ['javascript:alert(1)', 'file:///etc/passwd'] },
       { type: 'app', app: "Evil'; rm -rf ~; '" },
-    ] }, 'x', 'macos')!;
+    ] }, 'x', 'windows')!;
     expect(wf.steps).toHaveLength(1);
-    expect(wf.steps[0].command).toBe("open -a 'Evil'\\''; rm -rf ~; '\\'''");
+    expect(wf.steps[0].command).toBe("Start-Process 'Evil''; rm -rf ~; '''");
   });
 });
 
 describe('parseWorkflowFile', () => {
   it('reads both formats and rejects anything else', () => {
-    expect(parseWorkflowFile(JSON.stringify(MORNING), '/x/morning.flow', 'macos')?.steps).toHaveLength(3);
-    const steps = parseWorkflowFile(JSON.stringify({ name: 'deploy', steps: [{ command: 'npm run build' }] }), '/x/deploy.workflow.json', 'linux')!;
+    expect(parseWorkflowFile(JSON.stringify(MORNING), '/x/morning.flow', 'windows')?.steps).toHaveLength(3);
+    const steps = parseWorkflowFile(JSON.stringify({ name: 'deploy', steps: [{ command: 'npm run build' }] }), '/x/deploy.workflow.json', 'windows')!;
     expect(steps.steps[0]).toMatchObject({ id: 'step-1', name: 'Step 1', command: 'npm run build' });
-    expect(parseWorkflowFile('{"steps":[{"cmd":1}]}', 'a.json', 'linux')).toBeNull();
-    expect(parseWorkflowFile('not json', 'a.flow', 'linux')).toBeNull();
+    expect(parseWorkflowFile('{"steps":[{"cmd":1}]}', 'a.json', 'windows')).toBeNull();
+    expect(parseWorkflowFile('not json', 'a.flow', 'windows')).toBeNull();
   });
 
   it('recognises workflow file paths', () => {

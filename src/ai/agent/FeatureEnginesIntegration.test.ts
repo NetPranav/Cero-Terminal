@@ -33,28 +33,12 @@ describe('Core Feature Engines Integration Suite', () => {
   // 1. TldrKnowledgeEngine Ground-Truth CLI Integration
   // =========================================================================
   describe('1. TldrKnowledgeEngine Ground-Truth Integration', () => {
-    it('matches high-confidence port inspection queries with verified CLI recipes', () => {
+    it('has no Windows recipe for port or listening-socket goals yet, so they go on to the model', () => {
+      // TODO(4.5): Windows recipes (Get-NetTCPConnection) for these goals
       const engine = TldrKnowledgeEngine.getInstance();
-      // "who is using port 3000" is a known high-confidence match
-      const match = engine.matchGoal('who is using port 3000', 'linux');
-      expect(match).toBeDefined();
-      expect(match?.confidence).toBeGreaterThanOrEqual(0.85);
-      expect(match?.interpolatedCommand).toContain('3000');
-    });
-
-    it('interpolates extracted parameters dynamically into recipe commands', () => {
-      const engine = TldrKnowledgeEngine.getInstance();
-      const match = engine.matchGoal('who is using port 8080', 'linux');
-      expect(match).toBeDefined();
-      expect(match?.interpolatedCommand).toMatch(/8080/);
-    });
-
-    it('matches disk-space related goals via the df recipe', () => {
-      const engine = TldrKnowledgeEngine.getInstance();
-      // "list listening ports" is a known match in the lsof page
-      const match = engine.matchGoal('list listening ports', 'linux');
-      expect(match).toBeDefined();
-      expect(match?.interpolatedCommand).toBeDefined();
+      expect(engine.matchGoal('who is using port 3000', 'windows')).toBeNull();
+      expect(engine.matchGoal('list listening ports', 'windows')).toBeNull();
+      expect(engine.hasCommand('git')).toBe(true);
     });
   });
 

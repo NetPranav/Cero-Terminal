@@ -1,8 +1,7 @@
 /**
  * PowerState.ts — is the machine on AC power, and how full is the battery?
  *
- * Background learning work must not drain a laptop battery. The previous check used macOS
- * `pmset`, which does not exist on Linux, so Linux laptops always looked like they were on AC.
+ * Background learning work must not drain a laptop battery.
  */
 
 export interface PowerState {
@@ -10,24 +9,17 @@ export interface PowerState {
   batteryLevelPercent: number;
 }
 
-/** Reads /sys/class/power_supply on Linux; falls back to pmset on macOS. One shell call. */
-export const POWER_STATE_SCRIPT = `for s in /sys/class/power_supply/*; do [ -r "$s/type" ] || continue; case "$(cat "$s/type")" in Mains|USB) echo "AC=$(cat "$s/online" 2>/dev/null)";; Battery) echo "BAT=$(cat "$s/capacity" 2>/dev/null)";; esac; done; command -v pmset >/dev/null 2>&1 && pmset -g batt`;
+/** One PowerShell call: AC=<0|1> and BAT=<percent> per battery (BatteryStatus 2 means on AC power). No battery prints nothing. */
+export const POWER_STATE_SCRIPT = `Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | ForEach-Object { 'AC=' + $(if ($_.BatteryStatus -eq 2) { 1 } else { 0 }); 'BAT=' + $_.EstimatedChargeRemaining }`;
 
 export function parsePowerState(output: string): PowerState {
   const acValues = [...output.matchAll(/^AC=(\d)/gm)].map(m => m[1]);
   const batteries = [...output.matchAll(/^BAT=(\d+)/gm)].map(m => parseInt(m[1], 10));
-  const pmsetPercent = output.match(/(\d+)%/);
 
   if (batteries.length > 0 || acValues.length > 0) {
     // No battery at all means a desktop: treat as AC
     const onAcPower = acValues.includes('1') || batteries.length === 0;
     return { onAcPower, batteryLevelPercent: batteries.length ? Math.min(...batteries) : 100 };
-  }
-  if (/Battery Power|AC Power/.test(output)) {
-    return {
-      onAcPower: output.includes('AC Power'),
-      batteryLevelPercent: pmsetPercent ? parseInt(pmsetPercent[1], 10) : 100
-    };
   }
   return { onAcPower: true, batteryLevelPercent: 100 };
 }

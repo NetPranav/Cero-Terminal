@@ -57,6 +57,11 @@ export interface ReflexionEngineOptions {
   executor?: (cmd: string, args: string[], cwd?: string) => Promise<{ stdout: string; stderr: string; code: number }>;
 }
 
+/** Text safe inside a PowerShell single-quoted string */
+function psLiteral(text: string): string {
+  return text.replace(/'/g, "''");
+}
+
 export class ReflexionEngine {
   private static instance: ReflexionEngine;
   private deficitLogger: KnowledgeDeficitLogger;
@@ -185,6 +190,9 @@ export class ReflexionEngine {
   }
 
   /**
+   * TODO(4.6): the templates below are PowerShell, but the Shadow-PTY sandbox that checks them
+   * still runs POSIX sh; it needs a PowerShell sandbox before this helps on Windows.
+   *
    * Synthesizes counterfactual candidate command pipelines tailored to the deficit's
    * target entity and intent.
    */
@@ -192,7 +200,6 @@ export class ReflexionEngine {
     const candidates: ReflexionCandidate[] = [];
     const entity = (deficit.context.targetEntity || '').trim();
     const intent = deficit.context.intent || 'general_execution';
-    const isMac = !deficit.context.os || deficit.context.os.toLowerCase().includes('mac') || deficit.context.os.toLowerCase().includes('darwin');
 
     // 0A. Instant Deterministic Rule Oracle Check (thefuck architecture)
     if (deficit.attemptedCommand && deficit.stderr) {
@@ -200,7 +207,7 @@ export class ReflexionEngine {
         command: deficit.attemptedCommand,
         output: deficit.stderr,
         cwd: deficit.context.cwd,
-        os: isMac ? 'mac' : 'linux'
+        os: 'windows'
       });
       if (rem && rem.fixedCommand) {
         candidates.push({
@@ -237,40 +244,17 @@ export class ReflexionEngine {
 
     // 1. App Port Inspection (The Antigravity Ports benchmark)
     if (intent === 'port_inspection' && entity && !entity.startsWith('port ')) {
-      if (isMac) {
-        // Strategy A: Directly grep open listening sockets via lsof
-        candidates.push({
-          command: `lsof -iTCP -sTCP:LISTEN -n -P | grep -i "${entity}"`,
-          explanation: `List active listening TCP sockets matching ${entity}`,
-          strategy: 'lsof_listen_grep'
-        });
-
-        // Strategy B: Cross-reference PID with lsof
-        candidates.push({
-          command: `pgrep -if "${entity}" | xargs -I {} lsof -Pan -p {} -i 2>/dev/null || lsof -i | grep -i "${entity}"`,
-          explanation: `Discover PID for ${entity} and inspect associated network sockets`,
-          strategy: 'pid_socket_lookup'
-        });
-
-        // Strategy C: General lsof port filter
-        candidates.push({
-          command: `lsof -i | grep -i "${entity}"`,
-          explanation: `Inspect all open network sockets for ${entity}`,
-          strategy: 'lsof_general_grep'
-        });
-      } else {
-        // Linux / POSIX fallback
-        candidates.push({
-          command: `ss -tulpn | grep -i "${entity}"`,
-          explanation: `Inspect listening ports for ${entity} via ss`,
-          strategy: 'ss_listen_grep'
-        });
-        candidates.push({
-          command: `netstat -tulpn 2>/dev/null | grep -i "${entity}"`,
-          explanation: `Inspect open sockets for ${entity} via netstat`,
-          strategy: 'netstat_grep'
-        });
-      }
+      const e = psLiteral(entity);
+      candidates.push({
+        command: `Get-NetTCPConnection -State Listen | Where-Object { (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).ProcessName -like '*${e}*' } | Select-Object LocalAddress,LocalPort,OwningProcess`,
+        explanation: `List listening TCP ports owned by ${entity}`,
+        strategy: 'tcp_listen_by_process'
+      });
+      candidates.push({
+        command: `Get-Process -Name '*${e}*' -ErrorAction SilentlyContinue | ForEach-Object { Get-NetTCPConnection -OwningProcess $_.Id -ErrorAction SilentlyContinue }`,
+        explanation: `Find the ${entity} processes and list their TCP connections`,
+        strategy: 'process_tcp_lookup'
+      });
     }
 
     // 2. Specific Port Inspection (e.g. port 3000)
@@ -278,121 +262,70 @@ export class ReflexionEngine {
       const portMatch = entity.match(/(\d+)/) || deficit.goal.match(/(\d+)/);
       const port = portMatch ? portMatch[1] : '3000';
 
-      if (isMac) {
-        candidates.push({
-          command: `lsof -i :${port}`,
-          explanation: `Inspect socket activity on port ${port} using lsof`,
-          strategy: 'lsof_port_exact'
-        });
-        candidates.push({
-          command: `lsof -iTCP:${port} -sTCP:LISTEN -P -n`,
-          explanation: `Inspect listening TCP socket on port ${port}`,
-          strategy: 'lsof_listen_exact'
-        });
-        candidates.push({
-          command: `netstat -anv | grep ${port}`,
-          explanation: `Grep socket table for port ${port}`,
-          strategy: 'netstat_port_grep'
-        });
-      } else {
-        candidates.push({
-          command: `ss -tulpn | grep ":${port}"`,
-          explanation: `Inspect socket on port ${port} via ss`,
-          strategy: 'ss_port_exact'
-        });
-      }
+      candidates.push({
+        command: `Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object LocalAddress,LocalPort,State,OwningProcess`,
+        explanation: `Inspect TCP connections on port ${port}`,
+        strategy: 'tcp_port_exact'
+      });
+      candidates.push({
+        command: `netstat -ano | Select-String -Pattern ':${port}\s'`,
+        explanation: `Search the socket table for port ${port}`,
+        strategy: 'netstat_port_grep'
+      });
     }
 
     // 3. Port Termination (e.g. kill port 3000)
     else if (intent === 'port_termination') {
       const portMatch = entity.match(/(\d+)/) || deficit.goal.match(/(\d+)/);
       const port = portMatch ? portMatch[1] : '3000';
-
-      if (isMac) {
-        candidates.push({
-          command: `lsof -ti:${port} | xargs kill -9`,
-          explanation: `Find PID for port ${port} and terminate with kill -9`,
-          strategy: 'lsof_xargs_kill'
-        });
-        candidates.push({
-          command: `fuser -k ${port}/tcp 2>/dev/null || lsof -ti:${port} | xargs kill -9`,
-          explanation: `Terminate process blocking port ${port}`,
-          strategy: 'port_kill_fallback'
-        });
-      }
+      candidates.push({
+        command: `Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }`,
+        explanation: `Stop the process listening on port ${port}`,
+        strategy: 'tcp_port_stop_process'
+      });
     }
 
     // 4. Process Inspection
     else if (intent === 'process_inspection') {
-      const procName = entity || 'node';
+      const procName = psLiteral(entity || 'node');
       candidates.push({
-        command: `pgrep -fil "${procName}"`,
-        explanation: `Inspect running process matching ${procName}`,
-        strategy: 'pgrep_fil'
+        command: `Get-Process -Name '*${procName}*' -ErrorAction SilentlyContinue`,
+        explanation: `Inspect running processes matching ${entity || 'node'}`,
+        strategy: 'get_process_name'
       });
       candidates.push({
-        command: `ps -eo pid,ppid,command | grep -v grep | grep -i "${procName}"`,
-        explanation: `List detailed process hierarchy for ${procName}`,
-        strategy: 'ps_hierarchy_grep'
+        command: `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*${procName}*' } | Select-Object ProcessId,ParentProcessId,CommandLine`,
+        explanation: `List process ids, parents and command lines for ${entity || 'node'}`,
+        strategy: 'cim_process_commandline'
       });
     }
 
     // 5. Process Termination
     else if (intent === 'process_termination') {
-      const procName = entity || 'node';
+      const procName = psLiteral(entity || 'node');
       candidates.push({
-        command: `pkill -i -f "${procName}"`,
-        explanation: `Terminate all processes matching ${procName}`,
-        strategy: 'pkill_case_insensitive'
+        command: `Stop-Process -Name '${procName}' -ErrorAction SilentlyContinue`,
+        explanation: `Stop all processes named ${entity || 'node'}`,
+        strategy: 'stop_process_name'
       });
       candidates.push({
-        command: `killall -9 "${procName}" 2>/dev/null || pkill -9 -f "${procName}"`,
-        explanation: `Force terminate ${procName}`,
-        strategy: 'killall_or_pkill'
+        command: `Get-Process -Name '*${procName}*' -ErrorAction SilentlyContinue | Stop-Process -Force`,
+        explanation: `Force stop processes matching ${entity || 'node'}`,
+        strategy: 'stop_process_force'
       });
     }
 
     // 6. File Search
     else if (intent === 'file_search') {
-      const query = entity || 'config';
-      if (isMac) {
-        candidates.push({
-          command: `mdfind -name "${query}" | head -30`,
-          explanation: `Fast macOS Spotlight search for ${query}`,
-          strategy: 'mdfind_spotlight'
-        });
-        candidates.push({
-          command: `find . -iname "*${query}*" 2>/dev/null | head -30`,
-          explanation: `Find files in current workspace matching ${query}`,
-          strategy: 'find_workspace'
-        });
-      } else {
-        candidates.push({
-          command: `find . -iname "*${query}*" 2>/dev/null | head -30`,
-          explanation: `Find files matching ${query}`,
-          strategy: 'find_posix'
-        });
-      }
+      const query = psLiteral(entity || 'config');
+      candidates.push({
+        command: `Get-ChildItem -Recurse -Force -Filter '*${query}*' -ErrorAction SilentlyContinue | Select-Object -First 30 -ExpandProperty FullName`,
+        explanation: `Find files matching ${entity || 'config'}`,
+        strategy: 'get_childitem_search'
+      });
     }
 
-    // 7. Hardware & Network Management
-    else if (intent === 'hardware_management') {
-      if (entity.includes('wifi') || entity.includes('network')) {
-        candidates.push({
-          command: 'networksetup -getairportnetwork en0',
-          explanation: 'Check current Wi-Fi SSID connection',
-          strategy: 'networksetup_ssid'
-        });
-      } else if (entity.includes('bluetooth')) {
-        candidates.push({
-          command: 'system_profiler SPBluetoothDataType | grep -E "Connected:|State:|Address:"',
-          explanation: 'Check macOS Bluetooth adapter status',
-          strategy: 'system_profiler_bt'
-        });
-      }
-    }
-
-    // 8. If LLM provider is available, query model for reflection candidates
+    // 7. If LLM provider is available, query model for reflection candidates
     if (this.modelProvider && candidates.length < 3) {
       try {
         const prompt = `You are Cero's autonomous Reflexion Agent on ${deficit.context.os}.
@@ -401,7 +334,7 @@ Goal: "${deficit.goal}"
 Model Output / Excuse: "${deficit.modelOutput || 'None'}"
 Stderr: "${deficit.stderr || 'None'}"
 
-Synthesize a single, working, one-line shell command pipeline to accomplish the goal.
+Synthesize a single, working, one-line PowerShell command to accomplish the goal.
 Respond in JSON: {"command": "<command>", "explanation": "<explanation>"}`;
 
         const res = await this.modelProvider.generate(prompt, this.modelId, { format: 'json' });

@@ -66,29 +66,25 @@ describe('Phase 4.7 — The "Dream-State" Nightly Autonomous Self-Play Engine', 
   describe('1. System Environment Probe', () => {
     it('scans and parses installed tools, services, ports, and repositories', async () => {
       const mockExecutor = vi.fn().mockImplementation(async (cmd: string) => {
-        if (cmd.includes('command -v')) {
-          const tool = cmd.split(' ').pop();
-          if (['git', 'docker', 'node', 'brew'].includes(tool || '')) {
-            return { stdout: `/opt/homebrew/bin/${tool}`, stderr: '', code: 0 };
-          }
-          return { stdout: '', stderr: '', code: 1 };
+        const tool = cmd.match(/^\(Get-Command (\S+) /)?.[1];
+        if (tool) {
+          return ['git', 'docker', 'node', 'winget'].includes(tool)
+            ? { stdout: `C:\\Program Files\\${tool}\\${tool}.exe`, stderr: '', code: 0 }
+            : { stdout: '', stderr: '', code: 0 };
         }
-        if (cmd.includes('brew list --formula')) {
-          return { stdout: 'postgresql@14\nredis\nnginx\nhtop\n', stderr: '', code: 0 };
+        if (cmd.startsWith('Get-Service')) {
+          return { stdout: 'postgresql-x64-16\r\nRedis\r\n', stderr: '', code: 0 };
         }
-        if (cmd.includes('brew services list')) {
-          return { stdout: 'postgresql@14\nredis\n', stderr: '', code: 0 };
-        }
-        if (cmd.includes('lsof -iTCP -sTCP:LISTEN')) {
+        if (cmd.startsWith('Get-NetTCPConnection -State Listen')) {
           return {
-            stdout: 'antigravity 55432 *:8847\nnode 12345 *:3000\npostgres 8899 *:5432\n',
+            stdout: 'antigravity 55432 0.0.0.0:8847\r\nnode 12345 :::3000\r\npostgres 8899 127.0.0.1:5432\r\n',
             stderr: '',
             code: 0,
           };
         }
-        if (cmd.includes('find') && cmd.includes('.git')) {
+        if (cmd.includes('-Filter .git')) {
           return {
-            stdout: '/Users/test/Projects/Cero/.git\n/Users/test/Projects/AI-Terminal/.git\n',
+            stdout: 'C:\\Users\\test\\Projects\\Cero\\.git\r\nC:\\Users\\test\\Projects\\AI-Terminal\\.git\r\n',
             stderr: '',
             code: 0,
           };
@@ -105,23 +101,16 @@ describe('Phase 4.7 — The "Dream-State" Nightly Autonomous Self-Play Engine', 
 
       const profile = await scheduler.scanEnvironment();
 
-      expect(profile.devToolchains).toContain('git');
-      expect(profile.devToolchains).toContain('docker');
-      expect(profile.devToolchains).toContain('node');
-      expect(profile.devToolchains).toContain('brew');
+      expect(profile.devToolchains).toEqual(['git', 'docker', 'node', 'winget']);
+      expect(profile.installedTools).toContain('git');
 
-      expect(profile.installedTools).toContain('postgresql@14');
-      expect(profile.installedTools).toContain('redis');
-
-      expect(profile.runningServices).toContain('postgresql@14');
-      expect(profile.runningServices).toContain('redis');
+      expect(profile.runningServices).toEqual(['postgresql-x64-16', 'Redis']);
 
       expect(profile.activePorts.some(p => p.port === 8847 && p.process === 'antigravity')).toBe(true);
       expect(profile.activePorts.some(p => p.port === 3000 && p.process === 'node')).toBe(true);
-      expect(profile.activePorts.some(p => p.port === 5432 && p.process === 'postgres')).toBe(true);
+      expect(profile.activePorts.some(p => p.port === 5432 && p.process === 'postgres' && p.pid === 8899)).toBe(true);
 
-      expect(profile.repositories).toContain('/Users/test/Projects/Cero');
-      expect(profile.repositories).toContain('/Users/test/Projects/AI-Terminal');
+      expect(profile.repositories).toEqual(['C:\\Users\\test\\Projects\\Cero', 'C:\\Users\\test\\Projects\\AI-Terminal']);
     });
   });
 

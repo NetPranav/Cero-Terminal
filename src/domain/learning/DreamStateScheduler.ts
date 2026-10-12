@@ -2,12 +2,16 @@
  * DreamStateScheduler.ts — The "Dream-State" Nightly Autonomous Self-Play Engine
  * 
  * Part of Cero-SERL (Self-Evolving Reflexion Loop):
- * Breakthrough 4: Nightly Autonomous Self-Play on Apple Silicon.
- * 
- * When the Mac is connected to power and idle (e.g. at 2:00 AM or idle >20 minutes),
+ * Breakthrough 4: Nightly Autonomous Self-Play.
+ *
+ * When the computer is on AC power and idle (e.g. at 2:00 AM or idle >20 minutes),
  * Cero probes the local system environment, synthesizes personalized system puzzles,
  * solves them in the Shadow-PTY sandbox, and creates high-reward DPO training pairs
  * for on-device fine-tuning before morning.
+ *
+ * TODO(4.6): the puzzle templates in generateCurriculum are still macOS commands (lsof, brew,
+ * diskutil, ifconfig) and the Shadow-PTY sandbox is POSIX; decide whether self-play runs on
+ * Windows, and give it PowerShell templates if it does.
  */
 
 import * as fs from 'fs';
@@ -17,6 +21,7 @@ import { ShadowPtySimulator, CandidateHypothesis } from '../../ai/agent/ShadowPt
 import { DpoDatasetEngine, DpoPair } from './DpoDatasetEngine';
 import { KnowledgeDeficitLogger } from './KnowledgeDeficitLogger';
 import { TldrKnowledgeEngine } from '../knowledge/TldrKnowledgeEngine';
+import { readPowerState } from './PowerState';
 import { ShellAstParser } from '../security/ShellAstParser';
 
 export interface ActivePortEntry {
@@ -147,8 +152,8 @@ export class DreamStateScheduler {
       }
       try {
         const res = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', {
-          command: 'zsh',
-          args: ['-lc', cmd],
+          command: 'powershell.exe',
+          args: ['-NoProfile', '-NonInteractive', '-Command', cmd],
         });
         return { stdout: res.stdout || '', stderr: res.stderr || '', code: res.code ?? 0 };
       } catch (err: any) {
@@ -156,36 +161,21 @@ export class DreamStateScheduler {
       }
     });
 
-    // Pluggable power checker with macOS pmset fallback
+    // Pluggable power checker (Win32_Battery)
     this.powerChecker = options?.powerChecker || (async () => {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
         return { onAcPower: true, batteryLevelPercent: 100 };
       }
-      try {
-        const res = await this.commandExecutor('pmset -g batt');
-        const onAcPower = res.stdout.includes('AC Power') || !res.stdout.includes('Battery Power');
-        const match = res.stdout.match(/(\d+)%/);
-        const batteryLevelPercent = match ? parseInt(match[1], 10) : 100;
-        return { onAcPower, batteryLevelPercent };
-      } catch {
-        return { onAcPower: true, batteryLevelPercent: 100 };
-      }
+      return readPowerState(this.commandExecutor);
     });
 
-    // Pluggable idle checker with macOS IOHIDSystem fallback
+    // Pluggable idle checker. TODO(3.7): system idle time (GetLastInputInfo); until then never idle
+    // unless the caller passes one (CeroSerlCoordinator does: time since the last Cero activity)
     this.idleChecker = options?.idleChecker || (async () => {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
         return 1800; // 30 minutes idle
       }
-      try {
-        const res = await this.commandExecutor(
-          `ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print int($NF/1000000000); exit}'`
-        );
-        const idle = parseInt(res.stdout.trim(), 10);
-        return isNaN(idle) ? 0 : idle;
-      } catch {
-        return 0;
-      }
+      return 0;
     });
   }
 
@@ -211,38 +201,29 @@ export class DreamStateScheduler {
       activePorts: [],
       devToolchains: [],
       repositories: [],
-      osVersion: process.platform === 'darwin' ? 'macOS Darwin' : process.platform,
+      osVersion: 'Windows',
       scannedAt: Date.now(),
     };
 
     try {
       // 1. Check common dev toolchains
-      const toolchainCandidates = ['git', 'docker', 'node', 'npm', 'python3', 'cargo', 'rustc', 'go', 'brew', 'launchctl'];
+      const toolchainCandidates = ['git', 'docker', 'node', 'npm', 'python', 'cargo', 'rustc', 'go', 'winget'];
       for (const tool of toolchainCandidates) {
-        const res = await this.commandExecutor(`command -v ${tool}`);
+        const res = await this.commandExecutor(`(Get-Command ${tool} -ErrorAction SilentlyContinue).Source`);
         if (res.code === 0 && res.stdout.trim()) {
           profile.devToolchains.push(tool);
           profile.installedTools.push(tool);
         }
       }
 
-      // 2. Scan Homebrew formula & services if brew is present
-      if (profile.installedTools.includes('brew')) {
-        const brewListRes = await this.commandExecutor('brew list --formula -1 2>/dev/null | head -n 30');
-        if (brewListRes.code === 0 && brewListRes.stdout.trim()) {
-          const formulas = brewListRes.stdout.split('\n').map(s => s.trim()).filter(Boolean);
-          profile.installedTools.push(...formulas);
-        }
-
-        const brewServicesRes = await this.commandExecutor('brew services list 2>/dev/null | awk \'$2=="started"{print $1}\'');
-        if (brewServicesRes.code === 0 && brewServicesRes.stdout.trim()) {
-          const services = brewServicesRes.stdout.split('\n').map(s => s.trim()).filter(Boolean);
-          profile.runningServices.push(...services);
-        }
+      // 2. Running Windows services
+      const servicesRes = await this.commandExecutor("Get-Service -ErrorAction SilentlyContinue | Where-Object Status -eq 'Running' | Select-Object -First 20 -ExpandProperty Name");
+      if (servicesRes.code === 0 && servicesRes.stdout.trim()) {
+        profile.runningServices.push(...servicesRes.stdout.split('\n').map(s => s.trim()).filter(Boolean));
       }
 
-      // 3. Scan listening TCP ports using lsof
-      const lsofRes = await this.commandExecutor('lsof -iTCP -sTCP:LISTEN -P -n 2>/dev/null | awk \'NR>1 {print $1, $2, $9}\' | head -n 20');
+      // 3. Listening TCP ports: "<process> <pid> <address>:<port>"
+      const lsofRes = await this.commandExecutor('Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; "$($p.ProcessName) $($_.OwningProcess) $($_.LocalAddress):$($_.LocalPort)" }');
       if (lsofRes.code === 0 && lsofRes.stdout.trim()) {
         const lines = lsofRes.stdout.split('\n').filter(Boolean);
         for (const line of lines) {
@@ -261,16 +242,17 @@ export class DreamStateScheduler {
         }
       }
 
-      // 4. Discover local Git repositories in user directory
-      const home = process.env.HOME || '/Users/user';
+      // 4. Discover local Git repositories in the user folder
+      const home = process.env.USERPROFILE || process.env.HOME || '';
       const gitReposRes = await this.commandExecutor(
-        `find "${home}" -maxdepth 3 -type d -name ".git" 2>/dev/null | head -n 10`
+        `Get-ChildItem -LiteralPath '${home.replace(/'/g, "''")}' -Directory -Recurse -Depth 2 -Force -Filter .git -ErrorAction SilentlyContinue | Select-Object -First 10 -ExpandProperty FullName`
       );
       if (gitReposRes.code === 0 && gitReposRes.stdout.trim()) {
         const repos = gitReposRes.stdout
           .split('\n')
-          .map(r => path.dirname(r.trim()))
-          .filter(Boolean);
+          .map(r => r.trim())
+          .filter(Boolean)
+          .map(r => r.replace(/[\\/]\.git$/, ''));
         profile.repositories.push(...repos);
       }
     } catch (err) {
@@ -285,7 +267,7 @@ export class DreamStateScheduler {
   // =========================================================================
 
   /**
-   * Synthesizes personalized system puzzles tailored to the user's specific Mac environment.
+   * Synthesizes personalized system puzzles tailored to the user's environment.
    */
   public generateCurriculum(profile: EnvironmentProfile, count: number = this.batchSize): SystemPuzzle[] {
     const puzzles: SystemPuzzle[] = [];
@@ -452,7 +434,7 @@ export class DreamStateScheduler {
     const tldrEngine = TldrKnowledgeEngine.getInstance();
     for (const tool of profile.installedTools) {
       if (tldrEngine.hasCommand(tool)) {
-        const examples = tldrEngine.getExamplesForCommand(tool, 'macos');
+        const examples = tldrEngine.getExamplesForCommand(tool);
         for (let i = 0; i < Math.min(examples.length, 2); i++) {
           const ex = examples[i];
           if (ShellAstParser.validateSyntax(ex.command).valid) {

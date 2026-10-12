@@ -15,12 +15,12 @@ import { withCwd } from './FlowPlan';
 import { SecurityEngine } from '../../domain/security/SecurityEngine';
 import type { ExecutionPreviewPlan } from '../../domain/security/ExecutionEngine';
 
-export type ShellFamily = 'posix' | 'fish' | 'powershell';
+/** The shell the steps are typed into; posix covers Git Bash. TODO(3.2): cmd */
+export type ShellFamily = 'posix' | 'powershell';
 
 /** How to run one command outside the terminal, for execute_command */
-export function shellInvocation(command: string, os: FlowOs): { command: string; args: string[] } {
-  if (os === 'windows') return { command: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', command] };
-  return { command: '/bin/sh', args: ['-c', command] };
+export function shellInvocation(command: string, _os: FlowOs): { command: string; args: string[] } {
+  return { command: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', command] };
 }
 
 export type ExecuteFn = (command: string, args: string[]) => Promise<{ code: number; stdout?: string; stderr?: string }>;
@@ -45,8 +45,6 @@ export function markerDefinition(shell: ShellFamily): string {
   switch (shell) {
     case 'powershell':
       return 'function __cero_step($c) { Write-Host -NoNewline "$([char]27)]777;cero-step;$c$([char]7)" }';
-    case 'fish':
-      return "function __cero_step; printf '\\e]777;cero-step;%s\\a' $argv[1]; end";
     default:
       return "__cero_step() { printf '\\033]777;cero-step;%s\\007' \"$1\"; }";
   }
@@ -58,8 +56,6 @@ export function typedStep(step: FlowStep, os: FlowOs, shell: ShellFamily): strin
   switch (shell) {
     case 'powershell':
       return `${command}; __cero_step $(if ($?) { 0 } elseif ($LASTEXITCODE) { $LASTEXITCODE } else { 1 })`;
-    case 'fish':
-      return `${command}; __cero_step $status`;
     default:
       return `${command}; __cero_step $?`;
   }

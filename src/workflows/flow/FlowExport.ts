@@ -89,8 +89,6 @@ export function workflowToFlow(def: SavedWorkflowDefinition): FlowActionDocument
       name: step.name,
       command: step.command,
       cwd: step.cwd,
-      macos: step.platformCommands?.macos,
-      linux: step.platformCommands?.linux,
       windows: step.platformCommands?.windows,
       x: Object.keys(x).length > 0 ? x : undefined
     });

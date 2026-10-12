@@ -5,7 +5,7 @@
  * understands (install, open a site or app, clone, download, run a command, folders). Nothing is
  * invented: a step that cannot be understood is reported and left out of the file, never guessed.
  * Every generated action is checked with the same code that later runs the file (stepForAction),
- * so a file written here always plans on macOS, Windows and Linux.
+ * so a file written here always plans.
  */
 
 import { splitChainClauses, commandForSingleClause } from '../engine/ChainPlanner';
@@ -24,8 +24,6 @@ export interface FlowDraft {
   /** Steps that could not be turned into an action, as written */
   unrecognised: string[];
 }
-
-const OSES: FlowOs[] = ['macos', 'linux', 'windows'];
 
 // ---- understanding the request ---------------------------------------------------------------
 
@@ -168,7 +166,7 @@ function actionsForClause(raw: string, st: DraftState): Recognised {
   if (m && !/\b(?:dependencies|deps|packages|requirements)\b/i.test(m[1])) {
     const pkgs = m[1].split(/\s*,\s*|\s+and\s+/i).map(p => p.trim().replace(/^(?:the|a|an)\s+/i, '')).filter(Boolean);
     const actions = pkgs.map(p => ({ type: 'install', name: `Install ${p}`, package: p.toLowerCase() }));
-    return actions.length && actions.every(a => stepForAction(a, 'macos', 0)) ? { actions } : null;
+    return actions.length && actions.every(a => stepForAction(a, 'windows', 0)) ? { actions } : null;
   }
 
   // Clone / download
@@ -176,14 +174,14 @@ function actionsForClause(raw: string, st: DraftState): Recognised {
   if (m) {
     const repo = /^(?:https:\/\/|git@)/.test(m[1]) ? m[1] : `https://github.com/${m[1]}`;
     const action: any = { type: 'clone', name: `Clone ${m[1].split('/').pop()}`, repo, ...(m[2] ? { into: m[2] } : {}) };
-    if (!stepForAction(action, 'macos', 0)) return null;
+    if (!stepForAction(action, 'windows', 0)) return null;
     if (m[2]) st.cwd = joinFolder(undefined, m[2]);
     return { actions: [action] };
   }
   m = c.match(/^download\s+(https?:\/\/\S+)(?:\s+(?:to|as|into)\s+(\S+))?$/i);
   if (m) {
     const action: any = { type: 'download', name: `Download ${m[2] || m[1].split('/').pop()}`, url: m[1], ...(m[2] ? { to: m[2] } : {}), ...cwd };
-    return stepForAction(action, 'macos', 0) ? { actions: [action] } : null;
+    return stepForAction(action, 'windows', 0) ? { actions: [action] } : null;
   }
 
   // Open a site, an app or a folder
@@ -196,36 +194,33 @@ function actionsForClause(raw: string, st: DraftState): Recognised {
     const site = webTarget(target);
     if (site && (!via || BROWSER_NAMES.has(via))) {
       const action: any = { type: 'browser', name: `Open ${site.label}${via ? ` in ${BROWSER_LABELS[via] ?? cap(via)}` : ''}`, url: site.url, ...(via ? { app: via } : {}) };
-      return stepForAction(action, 'macos', 0) ? { actions: [action] } : null;
+      return stepForAction(action, 'windows', 0) ? { actions: [action] } : null;
     }
     if (via && (isFolderPhrase(target) || target === '')) {
       const action: any = { type: 'app', name: `Open ${APP_LABELS[via] ?? cap(via)}`, app: via, ...(st.cwd && !/^(?:~|\/|[A-Za-z]:[\\/])/.test(target) ? { path: st.cwd } : /^(?:~|\/|[A-Za-z]:[\\/])/.test(target) ? { path: target } : {}) };
-      return stepForAction(action, 'macos', 0) ? { actions: [action] } : null;
+      return stepForAction(action, 'windows', 0) ? { actions: [action] } : null;
     }
     if (!via && isFolderPhrase(target) && /^(?:~|\/|[A-Za-z]:[\\/])|\b(?:downloads|documents|desktop)\b/i.test(target)) {
       const path = /^(?:~|\/|[A-Za-z]:[\\/])/.test(target) ? target : `~/${cap(target.replace(/^(?:the\s+)?/i, '').replace(/\s*(?:folder|directory)$/i, ''))}`;
       const action = { type: 'folder', name: `Open ${path}`, path };
-      return stepForAction(action, 'macos', 0) ? { actions: [action] } : null;
+      return stepForAction(action, 'windows', 0) ? { actions: [action] } : null;
     }
     if (!via) {
       const app = target.toLowerCase().replace(/^the\s+/, '').replace(/\s+(?:app|application)$/, '');
       // "open the demo folder" is a folder, not an app called "demo folder": never guess
       if (KNOWN_APP_NAMES.includes(app) || /^[A-Za-z][A-Za-z0-9 .+-]{1,30}$/.test(app) && !/\b(?:the|a|an|it|this|that|my|of|for|and|folder|directory|file|project)\b/.test(app)) {
         const action: any = { type: 'app', name: `Open ${APP_LABELS[app] ?? cap(app)}`, app };
-        return stepForAction(action, 'macos', 0) ? { actions: [action] } : null;
+        return stepForAction(action, 'windows', 0) ? { actions: [action] } : null;
       }
     }
     return null;
   }
 
   // Tested recipes for common commands ("create a folder x", "git init", "npm init")
-  const per: Partial<Record<FlowOs, string>> = {};
-  for (const os of OSES) per[os] = commandForSingleClause(c, os);
-  if (per.windows) per.windows = winCmd(per.windows);
-  if (per.macos || per.linux || per.windows) {
-    const command = per.linux ?? per.macos ?? per.windows!;
-    const action: any = { type: 'command', name: cap(c), command, ...cwd };
-    for (const os of OSES) if (per[os] && per[os] !== command) action[os] = per[os];
+  const recipe = commandForSingleClause(c, 'windows');
+  if (recipe) {
+    const action: any = { type: 'command', name: cap(c), command: recipe, ...cwd };
+    if (winCmd(recipe) !== recipe) action.windows = winCmd(recipe);
     const folder = c.match(/^(?:create|make)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+)?(?:empty\s+)?(?:project\s+)?(?:folder|directory|dir)\s+(?:called\s+|named\s+)?["'`]?([\w@.+~/-]+)["'`]?/i)
       || c.match(/^mkdir\s+(?:-p\s+)?(\S+)$/i);
     if (folder) st.lastFolder = folder[1];
