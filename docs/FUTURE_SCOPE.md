@@ -43,11 +43,10 @@ Last checked against the code: 2026-10-04 (branch `linux-v2-update`).
 
 | Idea | Was described in | What exists today |
 |---|---|---|
-| Windows ConPTY file `pty_windows.rs` | CROSS_PLATFORM_SHARING | Not in `src-tauri/src`. The Windows branch carries its own PTY work. |
+| Windows ConPTY file `pty_windows.rs` | an old branch note | Not in `src-tauri/src`; the PTY moves to ConPTY in roadmap 2.1. |
 | `cero --split` and `cero --new-tab` act on the running window | integrations/cli | Both are accepted by the launcher; whether the running window honours them has not been checked on Linux. |
-| Flatpak package | LINUX_TEST_REPORT, releases | `packaging/flatpak/build-flatpak.sh` exists and the test matrix lists it, but the CI workflows build no Flatpak and none is released. |
 
 ## Quality targets (carried over from ROADMAP)
 
 - Raise the built-in model `pass@1` from 83.1% toward 95% (see MODEL_RELIABILITY.md).
-- Check the Linux packages, AppImage registration, Windows installer registration and macOS Finder icon on real systems (LINUX_TEST_REPORT.md).
+- Check the Windows installer, its `.flow` registration and icon on a real PC (roadmap phase 8).

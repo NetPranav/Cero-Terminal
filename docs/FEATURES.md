@@ -24,7 +24,7 @@ What the 2.2.3 app does. Things described elsewhere that are not built yet are i
 - Measured reliability: [MODEL_RELIABILITY.md](MODEL_RELIABILITY.md).
 
 ## `.flow` files and workflows
-- A `.flow` file lists what to install, run and open; double-click it to run on macOS, Windows or Linux.
+- A `.flow` file lists what to install, run and open; double-click it to run it.
   See [FLOW_FILES.md](FLOW_FILES.md).
 - Make one by asking, or save what a request really did. Run later with `run the workflow <name>`.
 - The Workflow Manager (`Ctrl+Shift+W`) lists saved workflows. Files live in `~/.cero/workflows/`.

@@ -40,4 +40,4 @@ When executing complex tasks or refactoring, delegate to the adapted workspace s
 - Tauri IPC & Architecture: Use `architect` to design clean communication boundaries between Rust PTY and React.
 - Terminal & Tool Security: Use `security-reviewer` for command injection audits, PTY isolation, and filesystem capability safety.
 - TDD & Vitest Testing: Use `tdd-guide` to write failing Vitest specs first and maintain the 980+ passing test suites.
-- Pre-Delivery Verification: Always run `npm run check:triple` (`npm test && npm run build && cargo check --manifest-path src-tauri/Cargo.toml`) before completion.
+- Pre-Delivery Verification: Always run `npm run check:triple` (`npm test`, `npm run build`, then `cargo check` on Windows or `cargo xwin check --target x86_64-pc-windows-msvc` on Linux) before completion. On Windows, `scripts\windows\check-triple.ps1` runs the same checks.

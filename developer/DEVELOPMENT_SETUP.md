@@ -9,7 +9,7 @@ This manual instructs engineering contributors on configuring a reproducible loc
 To successfully compile both the web frontend presentation layer and the native Rust backend systems, ensure your development computer is equipped with the following toolchain:
 
 ### 1. Node.js & TypeScript Build Tools
-- **Node.js (v20+ Recommended)**: Used for running the Vite bundling pipeline and executing automated Vitest test frameworks.
+- **Node.js (v22 Recommended, the version CI uses)**: Used for running the Vite bundling pipeline and executing automated Vitest test frameworks.
 - **Package Manager (`npm` or `pnpm`)**: Manages our React 19, `@tauri-apps/api`, `@xterm/xterm`, and TypeScript compilation dependencies.
   ```bash
   # Verify installation:
@@ -19,17 +19,20 @@ To successfully compile both the web frontend presentation layer and the native 
 
 ### 2. Rust & Cargo Backend Compilers
 - **Rust Toolchain**: Required to build our native Tauri v2 desktop application bundle and execute portable-pty system wrappers (`src-tauri/`).
-- Install via standard official Rustup installations:
-  ```bash
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+- Install Rust with rustup (the MSVC toolchain, the default on Windows):
+  ```powershell
+  winget install -e --id Rustlang.Rustup
   # Verify installation:
-  cargo -v
-  rustc -v
+  cargo -V
+  rustc -V
   ```
-- **macOS Requirements**: Ensure Apple Xcode Command Line Tools are present:
-  ```bash
-  xcode-select --install
+- **Windows Requirements**: the Visual Studio Build Tools with the "Desktop development with C++" workload, and
+  WebView2 (part of Windows 11; see the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)):
+  ```powershell
+  winget install -e --id Microsoft.VisualStudio.2022.BuildTools
   ```
+- **Working from Linux**: install `cargo-xwin`, the `x86_64-pc-windows-msvc` target and LLVM; then `npm run check:rust`
+  runs `cargo xwin check` for the Windows target (see COMPLETION.md, 0.3).
 
 ### 3. Local Offline AI Engine (Ollama)
 To test conversational navigation and automated workflow execution without network access, install **[Ollama](https://ollama.ai)** locally on your workstation:

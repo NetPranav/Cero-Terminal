@@ -1,6 +1,6 @@
 # Cero — Troubleshooting & Diagnostics Guide
 
-Encountering an unexpected behavior in Cero? Follow these step-by-step diagnostic and resolution procedures for the embedded AI engine, terminal PTY, and Linux desktop integration.
+Encountering an unexpected behavior in Cero? Follow these step-by-step diagnostic and resolution procedures for the embedded AI engine, the terminal and the installed app on Windows.
 
 ---
 
@@ -11,12 +11,12 @@ Encountering an unexpected behavior in Cero? Follow these step-by-step diagnosti
 1. Click the status pill or open Settings (`Ctrl+,`), AI tab, and choose **Start Engine**. If the model is not
    downloaded yet the status says "Download Required"; start the download there.
 2. The engine listens on port `8847` (fixed). Check it with:
-   ```bash
-   curl http://localhost:8847/health
+   ```powershell
+   curl.exe http://localhost:8847/health
    ```
 3. Cero removes a `llama-server` left on that port by a crash when it starts. To do it by hand:
-   ```bash
-   pkill -f llama-server
+   ```powershell
+   Stop-Process -Name llama-server
    ```
 4. If the chosen provider cannot be reached, Cero shows the reason and retries; it does not fall back to the built-in model by itself.
 
@@ -40,40 +40,17 @@ Encountering an unexpected behavior in Cero? Follow these step-by-step diagnosti
 
 ### B. `Ctrl+R` History Search Interception
 - Cero intercepts `Ctrl+R` in the terminal to display an interactive, visual fuzzy history search modal.
-- If raw bash reverse-search (`(reverse-i-search)`) appears instead, update Cero: `Ctrl+R` is captured before it reaches the shell in every current version.
+- If the shell's own reverse search (PSReadLine's `bck-i-search`) appears instead, update Cero: `Ctrl+R` is captured before it reaches the shell in every current version.
 
-### C. History (`Ctrl+R`) is missing recent commands
-Fixed in 2.2.3: newer systemd versions add invisible markers around each prompt, which hid the prompt from Cero, so only the first commands of a session were saved. Update to 2.2.3 or later.
-
-### D. Fullscreen Interactive Programs (`vim`, `nano`, `htop`, `tmux`)
+### C. Fullscreen Interactive Programs (`vim`, `nano`, `htop`, `tmux`)
 - Cero's PTY state tracker detects the alternate screen buffer (`\x1b[?1049h`) and automatically suspends ghost-text autocompletions and output observers, preventing cursor jumping or display glitches during interactive editing.
 
 ---
 
-## 3. Linux Desktop & Wayland Integration
-
-### A. Virtual Keyboard & Mouse Automation (`ydotoold`)
-- For desktop application automation under Wayland / Hyprland, Cero can use `ydotoold` (`InputDaemonProbe.ts` checks for it).
-- If automation commands fail with `cannot open /dev/uinput`:
-  1. Add your user to the `input` group:
-     ```bash
-     sudo usermod -aG input $USER
-     ```
-  2. Ensure the `ydotool` systemd user daemon is active:
-     ```bash
-     systemctl --user enable --now ydotool
-     ```
-
-### B. Missing Binaries in Standalone App
-- Cero automatically incorporates standard paths into session environments (`/usr/local/bin`, `~/.cargo/bin`, `~/.local/bin`, `/opt/homebrew/bin`).
-- If custom toolchains (e.g. `nvm`, `pyenv`, `asdf`) are not found, ensure their exports are present in `~/.bashrc` or `~/.zshrc`.
-
----
-
-## 4. Webview, Packaging & Live Diagnostic Logging System
+## 3. Webview, Packaging & Live Diagnostic Logging System
 
 ### A. White Screen: "Could not connect to localhost: Connection refused"
-- **Symptom**: When opening Cero after installing a release package (e.g. `.pkg.tar.zst` or `.deb`), the window displays a blank white screen with the text:
+- **Symptom**: When opening Cero after installing it (`.msi` or setup `.exe`), the window displays a blank white screen with the text:
   ```
   Could not connect to localhost: Connection refused
   ```
@@ -88,8 +65,8 @@ Fixed in 2.2.3: newer systemd versions add invisible markers around each prompt,
   Tauri defaults to development mode (`cargo:dev=true`), which hardcodes the webview initial URL to `devUrl` (`http://localhost:1420`). When installed as a standalone release package without an active Vite dev server running in the background, the webview attempts to connect to `127.0.0.1:1420`, resulting in a fatal connection refused error.
 - **Permanent Resolution**:
   1. `src-tauri/Cargo.toml` defines `default = ["custom-protocol"]` and `custom-protocol = ["tauri/custom-protocol"]`.
-  2. The packaging build pipeline (`packaging/arch/build-pacman.sh`) automatically runs `npm run build` and compiles with `--features tauri/custom-protocol`.
-  3. The build pipeline performs an automated pre-packaging sanity verification asserting that the compiled binary contains `tauri://localhost` before allowing `makepkg` to produce release archives.
+  2. `npm run bundle:windows` (`tauri build`) runs `npm run build` first and compiles with the default features, so the
+     installers always embed the assets.
 
 ### B. Live Terminal Diagnostic Logging System
 Cero includes an end-to-end live diagnostic logging system spanning the native Rust backend, Webview runtime, and frontend React engine.
@@ -97,29 +74,27 @@ Cero includes an end-to-end live diagnostic logging system spanning the native R
 #### Launching with Live Logs
 To diagnose runtime issues, window loading failures, IPC errors, or background crashes, launch Cero from any terminal using diagnostic flags or environment variables:
 
-```bash
-# Using CLI launcher
+```powershell
+# Using the CLI launcher
 cero --debug
 cero -d
 cero --verbose
 cero -v
 
-# Or using environment variable
-CERO_DEBUG=1 cero
+# Or using the environment variable
+$env:CERO_DEBUG = '1'; cero
 
-# Or launching binary directly
-cero-terminal --debug
+# Or starting the installed program with the flag (the `cero` launcher looks for it in
+# %LOCALAPPDATA%\Cero and %ProgramFiles%\Cero)
+& "$env:LOCALAPPDATA\Cero\Cero.exe" --debug
 ```
-
-#### Foreground Attached Execution
-When launched with any debug flag, the launcher wrapper automatically bypasses background disowning (`>/dev/null 2>&1 &`) and attaches directly to your terminal (`exec "$APP_BIN" "$@"`).
 
 #### Log Output Format
 All log output adheres strictly to zero-emoji, grayscale terminal standards with ISO-8601 UTC timestamps:
 ```text
 ================================================================================
 [YYYY-MM-DDTHH:MM:SSZ] [SYSTEM] Cero Diagnostic Logging ACTIVE (PID: <pid>)
-[YYYY-MM-DDTHH:MM:SSZ] [SYSTEM] OS: linux | Arch: x86_64 | Release: 2.2.3
+[YYYY-MM-DDTHH:MM:SSZ] [SYSTEM] OS: windows | Arch: x86_64 | Release: 2.2.3
 ================================================================================
 [YYYY-MM-DDTHH:MM:SSZ] [INFO ] [BOOT] Initializing Cero runtime
 [YYYY-MM-DDTHH:MM:SSZ] [INFO ] [SETUP] Initializing core application services
@@ -127,7 +102,7 @@ All log output adheres strictly to zero-emoji, grayscale terminal standards with
 [YYYY-MM-DDTHH:MM:SSZ] [INFO ] [WEBVIEW] Embedded production assets active via custom-protocol (tauri://localhost)
 [YYYY-MM-DDTHH:MM:SSZ] [INFO ] [APP] Cero application runtime READY
 [YYYY-MM-DDTHH:MM:SSZ] [INFO ] [FRONTEND] DiagnosticLogger initialized in webview context
-[YYYY-MM-DDTHH:MM:SSZ] [INFO ] [PTY] Spawned PTY session <uuid> (rows: 45, cols: 109, shell: /bin/bash)
+[YYYY-MM-DDTHH:MM:SSZ] [INFO ] [PTY] Spawned PTY session <uuid> (rows: 45, cols: 109, shell: powershell.exe)
 [YYYY-MM-DDTHH:MM:SSZ] [INFO ] [LLM] Spawned llama-server (pid: <pid>) on port 8847
 ```
 
@@ -138,6 +113,6 @@ All log output adheres strictly to zero-emoji, grayscale terminal standards with
 - **`[WEBVIEW]`**: Real-time validation of loaded URL (`tauri://localhost` vs `http://localhost:1420`).
 - **`[APP]`**: Application lifecycle events (`READY`, `EXIT`, `ExitRequested`).
 - **`[FRONTEND]`**: Uncaught JavaScript errors (`window.onerror`), unhandled promise rejections (`unhandledrejection`), and initialization status.
-- **`[CONSOLE]`**: Real-time capture of `console.error` and `console.warn` forwarded from WebKit GTK.
+- **`[CONSOLE]`**: Real-time capture of `console.error` and `console.warn` forwarded from WebView2.
 - **`[PTY]`**: Terminal session allocation, rows/cols geometry, shell binary resolution, and teardown.
 - **`[LLM]`**: Embedded `llama-server` process spawn, port binding, and termination signals.

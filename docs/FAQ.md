@@ -5,8 +5,7 @@
 ### Does Cero send my commands or files to the cloud?
 Not with the built-in model or Ollama: the request and the command output stay on your computer. If you choose an API
 provider (OpenAI, Anthropic, Groq, DeepSeek, OpenRouter or a custom endpoint), your request and the output Cero needs
-to answer it are sent to that provider. API keys are kept in the macOS Keychain, the Windows Credential Manager, or a
-private `0600` file on Linux.
+to answer it are sent to that provider. API keys are kept in the Windows Credential Manager.
 
 ### Do I need to install Ollama?
 No. Cero runs its own `llama-server` and uses a Qwen model it downloads on first use. The default is
@@ -19,8 +18,8 @@ After the model is downloaded, yes, with the built-in model or Ollama. API provi
 ## Using it
 
 ### How does Cero tell a request from a shell command?
-A line starting with `>` is a request. Everything else goes to your shell (zsh or bash on Linux and macOS,
-PowerShell on Windows), so `vim`, `tmux`, `git`, `docker` and `ssh` behave as in any terminal.
+A line starting with `>` is a request. Everything else goes to your shell (PowerShell), so `git`, `docker`,
+`ssh` and other programs behave as in any terminal.
 See [COMMANDS.md](COMMANDS.md).
 
 ### What does the status bar show?

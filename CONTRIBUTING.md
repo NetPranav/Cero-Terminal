@@ -112,7 +112,7 @@ import { invoke } from '@tauri-apps/api/core';
 export class MediaCapability extends BaseCapabilityDriver<any, any> {
   readonly capabilityId = 'media.audio.volume_set';
   readonly name = 'System Audio Volume Driver';
-  readonly supportedPlatforms: Platform[] = ['macos', 'windows', 'linux'];
+  readonly supportedPlatforms: Platform[] = ['windows'];
 
   protected async executeImpl(input: any): Promise<CapabilityExecutionResult<any>> {
     const level = Math.max(0, Math.min(100, input.level ?? 50));

@@ -1,6 +1,6 @@
 # Keyboard shortcuts
 
-On macOS use `Cmd` where this page says `Ctrl`. Checked against `App.tsx` and `TerminalView.tsx`.
+Checked against `App.tsx` and `TerminalView.tsx`.
 Keys listed under "Not built yet" are in [FUTURE_SCOPE.md](FUTURE_SCOPE.md).
 
 ## Windows and panels
