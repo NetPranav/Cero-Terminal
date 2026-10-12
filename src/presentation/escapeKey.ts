@@ -55,6 +55,8 @@ export function installSettingsEscape(
     ke.stopPropagation();
     deps.close();
   };
-  target.addEventListener('keydown', onKey, true);
-  return () => target.removeEventListener('keydown', onKey, true);
+  // Options object, not the bare `true`: Node 22's EventTarget ignores the boolean form on
+  // removal, so the listener would survive remove(). Browsers treat both forms the same.
+  target.addEventListener('keydown', onKey, { capture: true });
+  return () => target.removeEventListener('keydown', onKey, { capture: true });
 }

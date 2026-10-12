@@ -59,13 +59,13 @@ describe('installSettingsEscape (real listener wiring)', () => {
   it('closes on Escape and consumes the event so xterm underneath never sees it', () => {
     const win = new EventTarget();
     const close = vi.fn();
-    const added: Array<[string, boolean | undefined]> = [];
+    const added: Array<[string, boolean | AddEventListenerOptions | undefined]> = [];
     const spyTarget = {
       addEventListener: (t: string, l: any, o?: any) => { added.push([t, o]); win.addEventListener(t, l, o); },
       removeEventListener: win.removeEventListener.bind(win),
     };
     installSettingsEscape(spyTarget, { hasEscOwnerOpen: () => false, close });
-    expect(added).toEqual([['keydown', true]]); // capture phase, so it runs before xterm
+    expect(added).toEqual([['keydown', { capture: true }]]); // capture phase, so it runs before xterm
 
     const ev = new Event('keydown', { cancelable: true }) as Event & { key: string };
     ev.key = 'Escape';
