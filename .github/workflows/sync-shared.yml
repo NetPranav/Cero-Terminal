@@ -21,7 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target_branch: [windows, linux]
+        # windows is not synced: it ports Linux changes by hand (ROADMAP 1.5)
+        target_branch: [linux]
 
     steps:
       - name: Checkout repository

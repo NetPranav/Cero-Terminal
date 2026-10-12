@@ -1,20 +1,17 @@
 name: Cero CI
 
+# The windows branch builds Cero for Windows only. Windows runs the full checks; a Linux job runs the
+# tests and the cross check developers use on Linux (cargo xwin), so both paths stay working.
 on:
   push:
-    branches: [ main, windows, linux, linux-v2-update, shared-core ]
+    branches: [ windows ]
   pull_request:
-    branches: [ main, windows, linux, linux-v2-update ]
+    branches: [ windows ]
 
 jobs:
   frontend:
-    name: Tests and production build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # The agent writes different commands per OS (PowerShell on Windows): run the suite everywhere
-        os: [ubuntu-latest, macos-latest, windows-latest]
+    name: Tests and production build (Windows)
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -30,25 +27,13 @@ jobs:
         run: npm test
 
       - name: Type check and bundle
-        if: runner.os == 'Linux'
         run: npm run build
 
   backend:
-    name: Rust check and tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+    name: Rust check and tests (Windows)
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Tauri system libraries
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev \
-            libssl-dev libayatana-appindicator3-dev librsvg2-dev
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -64,6 +49,49 @@ jobs:
       - name: cargo check
         run: cargo check --manifest-path src-tauri/Cargo.toml
 
-      # Unix-only tests are compiled out on Windows (cfg(unix))
       - name: cargo test
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+  linux-cross:
+    name: Tests and cargo xwin check (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit and integration tests
+        run: npm test
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-xwin
+
+      # clang-cl, lld-link and the llvm tools (llvm-lib, llvm-rc, llvm-mt) that cargo-xwin and the
+      # Windows resource compiler call
+      - name: LLVM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld llvm
+          echo "$(ls -d /usr/lib/llvm-* | sort -V | tail -1)/bin" >> "$GITHUB_PATH"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: xwin
+
+      - name: Placeholder frontend bundle
+        run: mkdir -p dist && echo '<!doctype html><title>ci</title>' > dist/index.html
+
+      - name: cargo xwin check
+        run: cargo xwin check --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml
