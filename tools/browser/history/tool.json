@@ -19,9 +19,7 @@
     "search web history"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ShellExecution"

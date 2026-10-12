@@ -2,18 +2,16 @@
   "id": "system.service",
   "version": "1.0.0",
   "displayName": "Manage System Service",
-  "description": "Starts, stops, restarts, enables, disables, or inspects status of background system services (systemd, launchctl, Windows Services).",
+  "description": "Starts, stops, restarts, enables, disables, or inspects status of Windows services.",
   "domain": "system",
   "category": "System",
   "tags": [
     "system",
     "service",
     "daemon",
-    "systemctl",
-    "launchctl",
-    "systemd",
     "startup",
-    "background"
+    "background",
+    "windows-service"
   ],
   "aliases": [
     "start service",
@@ -23,13 +21,11 @@
     "disable service",
     "service status",
     "check service",
-    "systemctl",
-    "launchctl"
+    "Get-Service",
+    "sc query"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "SystemServices"
@@ -49,13 +45,7 @@
       "required": true
     }
   ],
-  "optionalParameters": [
-    {
-      "name": "userScope",
-      "type": "boolean",
-      "description": "Whether to run in user scope (e.g. systemctl --user)"
-    }
-  ],
+  "optionalParameters": [],
   "estimatedExecutionTime": "2s",
   "confirmationRequired": false,
   "undoable": true

@@ -28,9 +28,7 @@
     "show all the bluetooth devices"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ShellExecution"

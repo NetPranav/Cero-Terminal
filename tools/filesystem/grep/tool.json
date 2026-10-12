@@ -21,9 +21,7 @@
     "find text in files"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ReadFiles"

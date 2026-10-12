@@ -1,11 +1,11 @@
 {
   "toolId": "filesystem.trash",
   "version": "1.0.0",
-  "description": "Executes native driver for Move to System Trash.",
+  "description": "Executes native driver for Move to Recycle Bin.",
   "steps": [
     {
       "id": "step_exec_main",
-      "name": "Execute Move to System Trash",
+      "name": "Execute Move to Recycle Bin",
       "type": "ExecuteCapability",
       "capabilityId": "filesystem.trash",
       "parameters": {

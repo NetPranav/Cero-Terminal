@@ -15,14 +15,12 @@
   "aliases": [
     "lock laptop",
     "lock screen",
-    "lock mac",
+    "lock pc",
     "lock computer",
     "sleep display"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "SystemSettings",

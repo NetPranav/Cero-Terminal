@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "description": "Cero AI Tool Calling Evaluation and Verification Suite",
-  "totalToolsCovered": 101,
-  "totalTestCases": 211,
+  "totalToolsCovered": 100,
+  "totalTestCases": 209,
   "domains": [
     "application",
     "browser",
@@ -151,10 +151,10 @@
       "params": {
         "package": "htop"
       },
-      "description": "Installs package via system package manager (Homebrew).",
+      "description": "Installs a package with winget.",
       "domain": "application",
       "displayName": "Install Desktop Package or App",
-      "toolDescription": "Installs software application via native OS package managers (Homebrew, apt, winget).",
+      "toolDescription": "Installs a software application with winget.",
       "requiredParameters": [
         {
           "name": "package",
@@ -175,7 +175,7 @@
       "description": "Installs command-line package.",
       "domain": "application",
       "displayName": "Install Desktop Package or App",
-      "toolDescription": "Installs software application via native OS package managers (Homebrew, apt, winget).",
+      "toolDescription": "Installs a software application with winget.",
       "requiredParameters": [
         {
           "name": "package",
@@ -204,7 +204,7 @@
       "prompt": "what apps are open right now?",
       "expectedTool": "application.list_running",
       "params": {},
-      "description": "Inspects macOS WindowServer / LaunchServices running apps.",
+      "description": "Lists the running desktop applications.",
       "domain": "application",
       "displayName": "List Running Applications",
       "toolDescription": "Lists all actively running desktop graphical applications and their PIDs.",
@@ -214,10 +214,10 @@
     {
       "id": "TC-APP-MAX-01",
       "scenario": "Maximize application window",
-      "prompt": "maximize Safari window",
+      "prompt": "maximize Edge window",
       "expectedTool": "application.maximize",
       "params": {
-        "app": "Safari"
+        "app": "Microsoft Edge"
       },
       "description": "Maximizes or full-screens application window.",
       "domain": "application",
@@ -298,15 +298,15 @@
     {
       "id": "TC-APP-OPEN-01",
       "scenario": "Open desktop web browser",
-      "prompt": "open Safari",
+      "prompt": "open Microsoft Edge",
       "expectedTool": "application.open",
       "params": {
-        "app": "Safari"
+        "app": "Microsoft Edge"
       },
-      "description": "Launches native Safari browser application.",
+      "description": "Launches the Microsoft Edge browser.",
       "domain": "application",
       "displayName": "Open Desktop Application",
-      "toolDescription": "Opens a system desktop application using native launchers (Launch Services) with optional URL, file, or target arguments.",
+      "toolDescription": "Opens a system desktop application with Start-Process with optional URL, file, or target arguments.",
       "requiredParameters": [
         {
           "name": "app",
@@ -343,7 +343,7 @@
       "description": "Launches VS Code editor.",
       "domain": "application",
       "displayName": "Open Desktop Application",
-      "toolDescription": "Opens a system desktop application using native launchers (Launch Services) with optional URL, file, or target arguments.",
+      "toolDescription": "Opens a system desktop application with Start-Process with optional URL, file, or target arguments.",
       "requiredParameters": [
         {
           "name": "app",
@@ -380,7 +380,7 @@
       "description": "Opens Slack application.",
       "domain": "application",
       "displayName": "Open Desktop Application",
-      "toolDescription": "Opens a system desktop application using native launchers (Launch Services) with optional URL, file, or target arguments.",
+      "toolDescription": "Opens a system desktop application with Start-Process with optional URL, file, or target arguments.",
       "requiredParameters": [
         {
           "name": "app",
@@ -459,7 +459,7 @@
       "description": "Checks and updates application to latest version.",
       "domain": "application",
       "displayName": "Update Application",
-      "toolDescription": "Checks for updates and upgrades an application using the system package manager (e.g., Homebrew). Cannot update system apps like Safari or Finder.",
+      "toolDescription": "Checks for updates and upgrades an application with winget. Apps that ship with Windows (File Explorer, Settings) are updated through Windows Update.",
       "requiredParameters": [
         {
           "name": "app",
@@ -480,7 +480,7 @@
       "description": "Triggers update check and upgrade workflow.",
       "domain": "application",
       "displayName": "Update Application",
-      "toolDescription": "Checks for updates and upgrades an application using the system package manager (e.g., Homebrew). Cannot update system apps like Safari or Finder.",
+      "toolDescription": "Checks for updates and upgrades an application with winget. Apps that ship with Windows (File Explorer, Settings) are updated through Windows Update.",
       "requiredParameters": [
         {
           "name": "app",
@@ -645,7 +645,7 @@
     {
       "id": "TC-BRW-NAV-01",
       "scenario": "Navigate browser to web URL",
-      "prompt": "open youtube.com in safari",
+      "prompt": "open youtube.com in edge",
       "expectedTool": "browser.navigate",
       "params": {
         "url": "youtube.com"
@@ -1061,7 +1061,7 @@
       "description": "Spawns new native GUI Terminal emulator window.",
       "domain": "developer",
       "displayName": "Launch Standalone Terminal",
-      "toolDescription": "Spawns a new native GUI Terminal emulator window (Terminal.app, iTerm2, Alacritty) at path.",
+      "toolDescription": "Opens a new terminal window (Windows Terminal or PowerShell) at path.",
       "requiredParameters": [],
       "optionalParameters": [
         {
@@ -1077,10 +1077,10 @@
       "prompt": "open native terminal app",
       "expectedTool": "developer.terminal",
       "params": {},
-      "description": "Launches macOS Terminal.app.",
+      "description": "Opens a new Windows Terminal window.",
       "domain": "developer",
       "displayName": "Launch Standalone Terminal",
-      "toolDescription": "Spawns a new native GUI Terminal emulator window (Terminal.app, iTerm2, Alacritty) at path.",
+      "toolDescription": "Opens a new terminal window (Windows Terminal or PowerShell) at path.",
       "requiredParameters": [],
       "optionalParameters": [
         {
@@ -1125,44 +1125,6 @@
           "name": "path",
           "type": "string",
           "desc": "Project directory or file path to open in VS Code"
-        }
-      ]
-    },
-    {
-      "id": "TC-DEV-XC-01",
-      "scenario": "Open project in Apple Xcode IDE",
-      "prompt": "open in Apple Xcode IDE",
-      "expectedTool": "developer.xcode",
-      "params": {},
-      "description": "Opens Xcode workspace or project bundle.",
-      "domain": "developer",
-      "displayName": "Open in Apple Xcode IDE",
-      "toolDescription": "Opens Xcode workspace, project bundle, or Apple developer development suite (`xed`).",
-      "requiredParameters": [],
-      "optionalParameters": [
-        {
-          "name": "path",
-          "type": "string",
-          "desc": "Path to .xcodeproj, .xcworkspace, or swift folder"
-        }
-      ]
-    },
-    {
-      "id": "TC-DEV-XC-02",
-      "scenario": "Launch Xcode for iOS app",
-      "prompt": "launch xcode",
-      "expectedTool": "developer.xcode",
-      "params": {},
-      "description": "Spawns Apple Xcode developer environment.",
-      "domain": "developer",
-      "displayName": "Open in Apple Xcode IDE",
-      "toolDescription": "Opens Xcode workspace, project bundle, or Apple developer development suite (`xed`).",
-      "requiredParameters": [],
-      "optionalParameters": [
-        {
-          "name": "path",
-          "type": "string",
-          "desc": "Path to .xcodeproj, .xcworkspace, or swift folder"
         }
       ]
     },
@@ -2414,8 +2376,8 @@
       },
       "description": "Restores file from Trash back to its original directory location.",
       "domain": "filesystem",
-      "displayName": "Restore File from Trash",
-      "toolDescription": "Restores a recently deleted file from system Trash back to its original path.",
+      "displayName": "Restore File from Recycle Bin",
+      "toolDescription": "Restores a recently deleted file from the Recycle Bin back to its original path.",
       "requiredParameters": [
         {
           "name": "name",
@@ -2435,8 +2397,8 @@
       },
       "description": "Recovers deleted presentation from Trash.",
       "domain": "filesystem",
-      "displayName": "Restore File from Trash",
-      "toolDescription": "Restores a recently deleted file from system Trash back to its original path.",
+      "displayName": "Restore File from Recycle Bin",
+      "toolDescription": "Restores a recently deleted file from the Recycle Bin back to its original path.",
       "requiredParameters": [
         {
           "name": "name",
@@ -2535,10 +2497,10 @@
       "params": {
         "path": "obsolete_report.pdf"
       },
-      "description": "Safely moves target file into macOS system Trash.",
+      "description": "Safely moves the target file to the Recycle Bin.",
       "domain": "filesystem",
-      "displayName": "Move to System Trash",
-      "toolDescription": "Safely moves a file or directory to the macOS/OS system Trash or Recycle Bin.",
+      "displayName": "Move to Recycle Bin",
+      "toolDescription": "Safely moves a file or directory to the Recycle Bin.",
       "requiredParameters": [
         {
           "name": "path",
@@ -2558,8 +2520,8 @@
       },
       "description": "Recycles folder into system trash.",
       "domain": "filesystem",
-      "displayName": "Move to System Trash",
-      "toolDescription": "Safely moves a file or directory to the macOS/OS system Trash or Recycle Bin.",
+      "displayName": "Move to Recycle Bin",
+      "toolDescription": "Safely moves a file or directory to the Recycle Bin.",
       "requiredParameters": [
         {
           "name": "path",
@@ -3258,7 +3220,7 @@
       "prompt": "show all network interfaces",
       "expectedTool": "network.interfaces",
       "params": {},
-      "description": "Displays status, MAC address, and IP configuration of en0, lo0, etc.",
+      "description": "Displays status, MAC address, and IP configuration of each network adapter.",
       "domain": "network",
       "displayName": "Inspect Network Interfaces",
       "toolDescription": "Queries system physical and virtual network adapters, status, and MAC addresses.",
@@ -3369,7 +3331,7 @@
       "description": "Inspects if port 3000 has an active listening process.",
       "domain": "network",
       "displayName": "Inspect Open Network Ports",
-      "toolDescription": "Lists open listening TCP/UDP network ports and binding process IDs (lsof/netstat).",
+      "toolDescription": "Lists open listening TCP/UDP network ports and binding process IDs (Get-NetTCPConnection).",
       "requiredParameters": [],
       "optionalParameters": [
         {
@@ -3388,7 +3350,7 @@
       "description": "Lists all open TCP/UDP sockets and binding process IDs.",
       "domain": "network",
       "displayName": "Inspect Open Network Ports",
-      "toolDescription": "Lists open listening TCP/UDP network ports and binding process IDs (lsof/netstat).",
+      "toolDescription": "Lists open listening TCP/UDP network ports and binding process IDs (Get-NetTCPConnection).",
       "requiredParameters": [],
       "optionalParameters": [
         {
@@ -3409,7 +3371,7 @@
       "description": "Queries socket table for port 8080 occupancy.",
       "domain": "network",
       "displayName": "Inspect Open Network Ports",
-      "toolDescription": "Lists open listening TCP/UDP network ports and binding process IDs (lsof/netstat).",
+      "toolDescription": "Lists open listening TCP/UDP network ports and binding process IDs (Get-NetTCPConnection).",
       "requiredParameters": [],
       "optionalParameters": [
         {
@@ -4016,12 +3978,12 @@
       "description": "Executes compound shell command pipeline.",
       "domain": "shell",
       "displayName": "Execute Terminal Shell Command",
-      "toolDescription": "Executes a complete macOS zsh command line, including installed CLI tools, pipes, redirects, and shell built-ins.",
+      "toolDescription": "Executes a complete PowerShell command line, including installed CLI tools, pipes, redirects, and cmdlets.",
       "requiredParameters": [
         {
           "name": "command",
           "type": "string",
-          "desc": "Complete zsh command line to run, for example: git status --short"
+          "desc": "Complete PowerShell command line to run, for example: git status --short"
         }
       ],
       "optionalParameters": [
@@ -4043,12 +4005,12 @@
       "description": "Runs disk analysis pipeline via native shell.",
       "domain": "shell",
       "displayName": "Execute Terminal Shell Command",
-      "toolDescription": "Executes a complete macOS zsh command line, including installed CLI tools, pipes, redirects, and shell built-ins.",
+      "toolDescription": "Executes a complete PowerShell command line, including installed CLI tools, pipes, redirects, and cmdlets.",
       "requiredParameters": [
         {
           "name": "command",
           "type": "string",
-          "desc": "Complete zsh command line to run, for example: git status --short"
+          "desc": "Complete PowerShell command line to run, for example: git status --short"
         }
       ],
       "optionalParameters": [
@@ -4067,15 +4029,15 @@
       "params": {
         "command": "uptime && whoami"
       },
-      "description": "Executes chained command in zsh.",
+      "description": "Executes a chained command in PowerShell.",
       "domain": "shell",
       "displayName": "Execute Terminal Shell Command",
-      "toolDescription": "Executes a complete macOS zsh command line, including installed CLI tools, pipes, redirects, and shell built-ins.",
+      "toolDescription": "Executes a complete PowerShell command line, including installed CLI tools, pipes, redirects, and cmdlets.",
       "requiredParameters": [
         {
           "name": "command",
           "type": "string",
-          "desc": "Complete zsh command line to run, for example: git status --short"
+          "desc": "Complete PowerShell command line to run, for example: git status --short"
         }
       ],
       "optionalParameters": [
@@ -4180,7 +4142,7 @@
     {
       "id": "TC-SYS-INFO-02",
       "scenario": "Hardware specifications overview",
-      "prompt": "what are my hardware specs and macOS version?",
+      "prompt": "what are my hardware specs and Windows version?",
       "expectedTool": "system.info",
       "params": {},
       "description": "Outputs complete system architecture report.",

@@ -18,9 +18,7 @@
     "close current tab"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ShellExecution"

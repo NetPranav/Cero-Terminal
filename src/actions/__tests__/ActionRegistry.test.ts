@@ -47,7 +47,7 @@ describe('ActionRegistry', () => {
         category: 'Filesystem',
         tags: ['filesystem', 'copy', 'file'],
         aliases: ['copy file', 'duplicate file'],
-        supportedPlatforms: ['macos', 'linux'],
+        supportedPlatforms: ['windows'],
         requiredEntities: ['file'],
         constraints: [{ id: 'requires_existing_file', description: 'Source must exist', mandatory: true }],
       }));
@@ -56,7 +56,7 @@ describe('ActionRegistry', () => {
         category: 'Filesystem',
         tags: ['filesystem', 'move', 'file'],
         aliases: ['move file', 'rename file'],
-        supportedPlatforms: ['macos', 'linux', 'windows'],
+        supportedPlatforms: ['windows'],
         requiredEntities: ['file'],
       }));
       registry.register(createMockAction({
@@ -64,7 +64,7 @@ describe('ActionRegistry', () => {
         category: 'Network',
         tags: ['bluetooth', 'connect', 'device'],
         aliases: ['connect device', 'pair device'],
-        supportedPlatforms: ['macos'],
+        supportedPlatforms: ['windows'],
         requiredEntities: ['bluetooth_device'],
       }));
     });
@@ -97,12 +97,8 @@ describe('ActionRegistry', () => {
     });
 
     it('should lookup by platform', () => {
-      const macosResults = registry.getByPlatform('macos');
-      expect(macosResults).toHaveLength(3);
-
       const windowsResults = registry.getByPlatform('windows');
-      expect(windowsResults).toHaveLength(1);
-      expect(windowsResults[0].id).toBe('filesystem.move');
+      expect(windowsResults.map(r => r.id).sort()).toEqual(['bluetooth.connect', 'filesystem.copy', 'filesystem.move']);
     });
 
     it('should lookup by constraint', () => {

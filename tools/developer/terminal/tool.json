@@ -2,7 +2,7 @@
   "id": "developer.terminal",
   "version": "1.0.0",
   "displayName": "Launch Standalone Terminal",
-  "description": "Spawns a new native GUI Terminal emulator window (Terminal.app, iTerm2, Alacritty) at path.",
+  "description": "Opens a new terminal window (Windows Terminal or PowerShell) at path.",
   "domain": "developer",
   "category": "Developer",
   "tags": [
@@ -20,9 +20,7 @@
     "launch terminal at folder"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ShellExecution"

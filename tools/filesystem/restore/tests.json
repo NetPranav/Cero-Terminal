@@ -12,7 +12,7 @@
       "expectedEntities": {
         "name": "sample_val"
       },
-      "description": "Automated test case for Restore File from Trash"
+      "description": "Automated test case for Restore File from Recycle Bin"
     }
   ]
 }

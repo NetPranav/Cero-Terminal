@@ -21,9 +21,7 @@
     "relocate folder"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "WriteFiles"

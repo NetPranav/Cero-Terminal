@@ -12,20 +12,18 @@
     "inspect",
     "list",
     "show",
-    "ifconfig",
+    "ipconfig",
     "ip"
   ],
   "aliases": [
     "list network interfaces",
     "show adapters",
-    "ifconfig status",
+    "ipconfig status",
     "ip link show",
     "network interfaces"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ShellExecution"

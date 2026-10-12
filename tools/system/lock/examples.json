@@ -2,13 +2,13 @@
   "toolId": "system.lock",
   "examples": [
     {
-      "input": "lock my mac",
+      "input": "lock my pc",
       "expectedIntent": {
         "domain": "system",
         "action": "lock"
       },
       "expectedEntities": {},
-      "description": "Immediately lock the macOS session display"
+      "description": "Immediately lock the Windows session"
     },
     {
       "input": "lock screen",

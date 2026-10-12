@@ -20,9 +20,7 @@
     "force close"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ProcessManagement"

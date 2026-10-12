@@ -11,19 +11,17 @@
     "application.uninstall",
     "desktop",
     "remove",
-    "brew",
+    "winget",
     "delete"
   ],
   "aliases": [
     "uninstall app",
     "remove package",
-    "brew uninstall",
+    "winget uninstall",
     "delete app program"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ShellExecution"

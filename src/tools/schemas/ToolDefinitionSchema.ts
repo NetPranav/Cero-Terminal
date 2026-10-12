@@ -12,7 +12,7 @@ import { z } from 'zod';
 // Shared enums and primitives
 // ──────────────────────────────────────────────
 
-export const PlatformSchema = z.enum(['macos', 'windows', 'linux']);
+export const PlatformSchema = z.enum(['windows']);
 export type Platform = z.infer<typeof PlatformSchema>;
 
 export const RiskLevelSchema = z.enum(['SAFE', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);

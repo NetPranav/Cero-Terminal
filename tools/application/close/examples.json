@@ -2,7 +2,7 @@
   "toolId": "application.close",
   "examples": [
     {
-      "input": "close Safari",
+      "input": "close Notepad",
       "expectedIntent": {
         "domain": "application",
         "action": "close"

@@ -2,13 +2,13 @@
   "toolId": "application.install",
   "aliases": [
     "install app",
-    "brew install",
+    "winget install",
     "install package",
     "setup software"
   ],
   "synonyms": [
     "please install app",
-    "please brew install",
+    "please winget install",
     "please install package",
     "please setup software"
   ],
@@ -16,7 +16,7 @@
     "install app ffmpeg",
     "could you install app ffmpeg",
     "install app",
-    "brew install",
+    "winget install",
     "install package",
     "setup software"
   ],
@@ -31,7 +31,7 @@
   "languageVariations": [
     "install app ffmpeg",
     "install app",
-    "brew install",
+    "winget install",
     "install package",
     "setup software"
   ],

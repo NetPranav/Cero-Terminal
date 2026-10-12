@@ -21,9 +21,7 @@
     "where is file"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ReadFiles"

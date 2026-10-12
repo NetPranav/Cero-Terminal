@@ -17,7 +17,7 @@ export class ProcessCapability implements Capability<ProcessInput, any> {
     name: 'Process Management',
     description: 'List, start, or kill system processes.',
     category: 'Process' as const,
-    supportedPlatforms: ['macos', 'windows', 'linux'] as ('macos' | 'windows' | 'linux')[],
+    supportedPlatforms: ['windows'] as 'windows'[],
     requiredPermissions: ['ProcessManagement'],
     version: '1.0.0'
   };

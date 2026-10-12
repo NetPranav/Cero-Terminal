@@ -2,15 +2,14 @@
   "id": "application.update",
   "version": "1.0.0",
   "displayName": "Update Application",
-  "description": "Checks for updates and upgrades an application using the system package manager (e.g., Homebrew). Cannot update system apps like Safari or Finder.",
+  "description": "Checks for updates and upgrades an application with winget. Apps that ship with Windows (File Explorer, Settings) are updated through Windows Update.",
   "domain": "application",
   "category": "Application",
   "tags": [
     "application",
     "update",
     "upgrade",
-    "mac",
-    "brew"
+    "winget"
   ],
   "aliases": [
     "update app",
@@ -18,8 +17,7 @@
     "update application"
   ],
   "supportedPlatforms": [
-    "macos",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ShellExecution"

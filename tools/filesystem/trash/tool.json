@@ -1,8 +1,8 @@
 {
   "id": "filesystem.trash",
   "version": "1.0.0",
-  "displayName": "Move to System Trash",
-  "description": "Safely moves a file or directory to the macOS/OS system Trash or Recycle Bin.",
+  "displayName": "Move to Recycle Bin",
+  "description": "Safely moves a file or directory to the Recycle Bin.",
   "domain": "filesystem",
   "category": "Filesystem",
   "tags": [
@@ -22,9 +22,7 @@
     "delete to recycle bin"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "DeleteFiles"
@@ -34,7 +32,7 @@
     {
       "name": "path",
       "type": "string",
-      "description": "File or directory path to move to trash",
+      "description": "File or directory path to move to the Recycle Bin",
       "required": true
     }
   ],

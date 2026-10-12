@@ -13,8 +13,8 @@
     "please terminate app"
   ],
   "commonUserWording": [
-    "close Safari",
-    "could you close Safari",
+    "close Notepad",
+    "could you close Notepad",
     "close app",
     "quit application",
     "exit program",
@@ -29,7 +29,7 @@
   "deviceNamingPatterns": [],
   "commonAbbreviations": {},
   "languageVariations": [
-    "close Safari",
+    "close Notepad",
     "close app",
     "quit application",
     "exit program",

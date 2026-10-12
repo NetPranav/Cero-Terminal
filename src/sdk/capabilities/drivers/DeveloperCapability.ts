@@ -1,15 +1,15 @@
 /**
  * DeveloperCapability.ts — Concrete Execution Driver for Developer Workspace Tooling
  * 
- * Implements native IDE launches (VS Code, Cursor AI, Xcode, Android Studio), terminal spawns, SSH connectivity, and GitHub CLI workflows.
- * Mapped from Tool Registry: "developer.*" (vscode, cursor, xcode, android_studio, terminal, ssh, github)
+ * Implements native IDE launches (VS Code, Cursor AI, Android Studio), terminal spawns, SSH connectivity, and GitHub CLI workflows.
+ * Mapped from Tool Registry: "developer.*" (vscode, cursor, android_studio, terminal, ssh, github)
  */
 
 import { BaseCapabilityDriver, CapabilityExecutionResult, ExecutionContext, Platform } from '../CapabilitySDK';
 import { invoke } from '@tauri-apps/api/core';
 import { homeDirectory } from '../../../utils/homeDir';
 
-export type DevOperation = 'vscode' | 'cursor' | 'xcode' | 'android_studio' | 'terminal' | 'ssh' | 'github' | 'scaffold';
+export type DevOperation = 'vscode' | 'cursor' | 'android_studio' | 'terminal' | 'ssh' | 'github' | 'scaffold';
 
 export interface DevDriverInput {
   operation?: DevOperation;
@@ -75,7 +75,6 @@ export class DeveloperCapability extends BaseCapabilityDriver<DevDriverInput, an
       switch (op) {
         case 'vscode': return { success: true, data: { ide: 'Visual Studio Code', opened: targetPath }, commandExecuted };
         case 'cursor': return { success: true, data: { ide: 'Cursor AI IDE', opened: targetPath }, commandExecuted };
-        case 'xcode': return { success: true, data: { ide: 'Apple Xcode', opened: targetPath }, commandExecuted };
         case 'android_studio': return { success: true, data: { ide: 'Android Studio', opened: targetPath }, commandExecuted };
         case 'terminal': return { success: true, data: { terminal: 'Spawned GUI Terminal', cwd: targetPath }, commandExecuted };
         case 'ssh': return { success: true, data: { sshSession: `connected to ${input.target || 'host'} on port ${input.port || 22}` }, commandExecuted };
@@ -156,9 +155,6 @@ export class DeveloperCapability extends BaseCapabilityDriver<DevDriverInput, an
           cmd = 'cursor';
           args = [targetPath];
           break;
-
-        case 'xcode':
-          return notYet('Xcode');
 
         // TODO(3.7): Android Studio (studio64.exe) and a terminal window (wt.exe / powershell.exe) on Windows
         case 'android_studio':

@@ -7,8 +7,8 @@
     "enable service",
     "disable service",
     "service status",
-    "systemctl",
-    "launchctl"
+    "Get-Service",
+    "sc query"
   ],
   "synonyms": [
     "please start service",

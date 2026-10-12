@@ -10,7 +10,7 @@
       "expectedEntities": {
         "app": "Brave Browser"
       },
-      "description": "Upgrade desktop application Brave Browser via Homebrew cask"
+      "description": "Upgrade desktop application Brave Browser with winget"
     },
     {
       "input": "upgrade discord",

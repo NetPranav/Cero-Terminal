@@ -41,9 +41,7 @@
     "set up a directory"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "WriteFiles"

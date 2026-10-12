@@ -21,9 +21,7 @@
     "make copy of"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "WriteFiles"

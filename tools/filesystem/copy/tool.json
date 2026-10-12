@@ -21,9 +21,7 @@
     "cp file"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "WriteFiles"

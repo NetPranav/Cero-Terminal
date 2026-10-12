@@ -24,9 +24,7 @@
     "file permissions"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "WriteFiles"

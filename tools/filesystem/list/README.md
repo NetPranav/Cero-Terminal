@@ -4,8 +4,7 @@
 Lists files and directories in a given path.
 
 ## Workflow
-- macOS/Linux: `ls -la {{path}}`
-- Windows: `dir {{path}}`
+- Windows: `Get-ChildItem -Force -LiteralPath {{path}}`
 
 ## Permissions
 - `ShellExecution`

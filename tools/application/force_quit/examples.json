@@ -2,7 +2,7 @@
   "toolId": "application.force_quit",
   "examples": [
     {
-      "input": "force quit Xcode",
+      "input": "force quit Visual Studio",
       "expectedIntent": {
         "domain": "application",
         "action": "force_quit"

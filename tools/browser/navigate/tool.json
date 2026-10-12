@@ -22,9 +22,7 @@
     "visit url"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ShellExecution"
@@ -42,13 +40,13 @@
     {
       "name": "appName",
       "type": "string",
-      "description": "Optional target web browser application (e.g., Safari, Chrome, Firefox, Brave)",
+      "description": "Optional target web browser application (e.g., Edge, Chrome, Firefox, Brave)",
       "required": false
     },
     {
       "name": "browser",
       "type": "string",
-      "description": "Alias for appName (e.g., Safari, Chrome, Firefox)",
+      "description": "Alias for appName (e.g., Edge, Chrome, Firefox)",
       "required": false
     }
   ],

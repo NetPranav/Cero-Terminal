@@ -1,6 +1,6 @@
 export type ToolCategory = 'Filesystem' | 'Process' | 'Shell' | 'System' | 'Clipboard' | 'Network' | 'Git' | 'Browser' | 'Other';
 export type ToolRisk = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-export type Platform = 'macos' | 'windows' | 'linux';
+export type Platform = 'windows';
 
 export interface ToolMetadata {
   id: string;

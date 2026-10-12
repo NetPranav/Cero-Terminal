@@ -3,8 +3,8 @@
 Disables Bluetooth power on the local operating system.
 
 ## Platform Implementation
-- **macOS**: Utilizes `blueutil -p 0`. Requires homebrew package `blueutil` installed.
-- **Linux**: Utilizes `bluetoothctl power off`.
+- **Windows**: not implemented yet (roadmap 3.7: the radio through WinRT `Windows.Devices.Radios`;
+  turning it off may need administrator rights).
 
 ## Security Risk
 - **Level**: LOW

@@ -12,7 +12,7 @@
       "expectedEntities": {
         "path": "/test/path.txt"
       },
-      "description": "Automated test case for Move to System Trash"
+      "description": "Automated test case for Move to Recycle Bin"
     }
   ]
 }

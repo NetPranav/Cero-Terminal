@@ -4,9 +4,8 @@
     "update app",
     "upgrade app",
     "update application",
-    "brew upgrade",
-    "upgrade cask",
-    "update software"
+    "update software",
+    "winget upgrade"
   ],
   "synonyms": [
     "please update app",
@@ -23,8 +22,8 @@
     "update spotify"
   ],
   "commonMistakes": [
-    "update Safari",
-    "update Finder"
+    "update File Explorer",
+    "update Settings"
   ],
   "entityHints": {
     "app": [
@@ -38,9 +37,9 @@
   },
   "deviceNamingPatterns": [],
   "commonAbbreviations": {
-    "vscode": "visual-studio-code",
-    "chrome": "google-chrome",
-    "brave": "brave-browser"
+    "vscode": "Microsoft.VisualStudioCode",
+    "chrome": "Google.Chrome",
+    "brave": "Brave.Brave"
   },
   "languageVariations": [
     "update app Brave Browser",

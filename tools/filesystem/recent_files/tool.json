@@ -22,9 +22,7 @@
     "recently opened files"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ReadFiles"

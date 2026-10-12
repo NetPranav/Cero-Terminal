@@ -22,8 +22,6 @@
     "make project"
   ],
   "supportedPlatforms": [
-    "macos",
-    "linux",
     "windows"
   ],
   "requiredPermissions": [

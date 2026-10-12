@@ -15,7 +15,7 @@ export class ShellCapability implements Capability<ShellInput, any> {
     name: 'Shell Execution',
     description: 'Execute arbitrary shell commands and capture output.',
     category: 'Shell' as const,
-    supportedPlatforms: ['macos', 'windows', 'linux'] as ('macos' | 'windows' | 'linux')[],
+    supportedPlatforms: ['windows'] as 'windows'[],
     requiredPermissions: ['ShellExecution'],
     version: '1.0.0'
   };

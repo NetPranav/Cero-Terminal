@@ -36,9 +36,7 @@
     "tell me how many"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ReadFiles"

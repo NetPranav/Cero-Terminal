@@ -18,7 +18,7 @@ export class FilesystemCapability implements Capability<FsInput, any> {
     name: 'Filesystem Operations',
     description: 'Read, write, list, delete, rename, and create directories.',
     category: 'Filesystem' as const,
-    supportedPlatforms: ['macos', 'windows', 'linux'] as ('macos' | 'windows' | 'linux')[],
+    supportedPlatforms: ['windows'] as 'windows'[],
     requiredPermissions: ['ReadFiles', 'WriteFiles', 'DeleteFiles', 'RenameFiles'],
     version: '1.0.0'
   };

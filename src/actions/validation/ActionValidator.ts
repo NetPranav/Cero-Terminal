@@ -23,7 +23,7 @@ export class ActionValidator {
   /**
    * Validates an ActionNode before it enters the ActionGraph.
    */
-  public validate(node: ActionNode, currentPlatform: SupportedPlatform = 'macos'): ValidationResult {
+  public validate(node: ActionNode, currentPlatform: SupportedPlatform = 'windows'): ValidationResult {
     const errors: ValidationError[] = [];
 
     this.validatePlatform(node.action, currentPlatform, errors);

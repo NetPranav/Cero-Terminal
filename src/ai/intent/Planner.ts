@@ -274,7 +274,6 @@ export class Planner {
       }
       if (/\bcursor\b/i.test(clauseLower)) return 'developer.cursor';
       if (/\bantigravity\b/i.test(clauseLower)) return 'application.open';
-      if (/\bxcode\b/i.test(clauseLower)) return 'developer.xcode';
       if (/\bandroid\s+studio\b/i.test(clauseLower)) return 'developer.android_studio';
     }
 
@@ -438,7 +437,7 @@ export class Planner {
     }
 
     // --- Developer tool path enrichment ---
-    if (['developer.vscode', 'developer.cursor', 'developer.xcode', 'developer.android_studio'].includes(toolId)) {
+    if (['developer.vscode', 'developer.cursor', 'developer.android_studio'].includes(toolId)) {
       entities.path = this.resolveFolderPath(clause, entities, activeContextPath);
     }
 

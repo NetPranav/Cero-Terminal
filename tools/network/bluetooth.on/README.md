@@ -3,8 +3,8 @@
 Enables Bluetooth power on the local operating system.
 
 ## Platform Implementation
-- **macOS**: Utilizes `blueutil -p 1`. Requires homebrew package `blueutil` installed.
-- **Linux**: Utilizes `bluetoothctl power on`.
+- **Windows**: not implemented yet (roadmap 3.7: the radio through WinRT `Windows.Devices.Radios`;
+  turning it on may need administrator rights).
 
 ## Security Risk
 - **Level**: LOW

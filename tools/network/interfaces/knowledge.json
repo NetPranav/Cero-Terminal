@@ -3,14 +3,14 @@
   "aliases": [
     "list network interfaces",
     "show adapters",
-    "ifconfig status",
+    "ipconfig status",
     "ip link show",
     "network interfaces"
   ],
   "synonyms": [
     "please list network interfaces",
     "please show adapters",
-    "please ifconfig status",
+    "please ipconfig status",
     "please ip link show",
     "please network interfaces"
   ],
@@ -19,7 +19,7 @@
     "could you show network interfaces",
     "list network interfaces",
     "show adapters",
-    "ifconfig status",
+    "ipconfig status",
     "ip link show",
     "network interfaces"
   ],
@@ -31,7 +31,7 @@
     "show network interfaces",
     "list network interfaces",
     "show adapters",
-    "ifconfig status",
+    "ipconfig status",
     "ip link show",
     "network interfaces"
   ],

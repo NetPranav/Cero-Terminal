@@ -9,7 +9,7 @@ export interface CapabilityMetadata {
   name: string;
   description: string;
   category: CapabilityCategory;
-  supportedPlatforms: ('macos' | 'windows' | 'linux')[];
+  supportedPlatforms: 'windows'[];
   requiredPermissions: string[];
   version: string;
 }

@@ -2,7 +2,7 @@
   "id": "application.install",
   "version": "1.0.0",
   "displayName": "Install Desktop Package or App",
-  "description": "Installs software application via native OS package managers (Homebrew, apt, winget).",
+  "description": "Installs a software application with winget.",
   "domain": "application",
   "category": "Desktop",
   "tags": [
@@ -13,19 +13,17 @@
     "package",
     "or",
     "app",
-    "brew",
+    "winget",
     "setup"
   ],
   "aliases": [
     "install app",
-    "brew install",
+    "winget install",
     "install package",
     "setup software"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ShellExecution"

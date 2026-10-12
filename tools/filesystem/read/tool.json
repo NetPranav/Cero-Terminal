@@ -22,9 +22,7 @@
     "show file contents"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ReadFiles"

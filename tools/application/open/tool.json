@@ -2,7 +2,7 @@
   "id": "application.open",
   "version": "1.0.0",
   "displayName": "Open Desktop Application",
-  "description": "Opens a system desktop application using native launchers (Launch Services) with optional URL, file, or target arguments.",
+  "description": "Opens a system desktop application with Start-Process with optional URL, file, or target arguments.",
   "domain": "application",
   "category": "Desktop",
   "tags": [
@@ -23,9 +23,7 @@
     "open website in app"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ShellExecution"

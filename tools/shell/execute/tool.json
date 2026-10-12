@@ -2,7 +2,7 @@
   "id": "shell.execute",
   "version": "1.0.0",
   "displayName": "Execute Terminal Shell Command",
-  "description": "Executes a complete macOS zsh command line, including installed CLI tools, pipes, redirects, and shell built-ins.",
+  "description": "Executes a complete PowerShell command line, including installed CLI tools, pipes, redirects, and cmdlets.",
   "domain": "shell",
   "category": "Shell",
   "tags": [
@@ -12,18 +12,16 @@
     "terminal",
     "command",
     "run",
-    "bash"
+    "powershell"
   ],
   "aliases": [
     "run command",
     "execute shell",
     "terminal exec",
-    "bash command"
+    "powershell command"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ShellExecution"
@@ -33,7 +31,7 @@
     {
       "name": "command",
       "type": "string",
-      "description": "Complete zsh command line to run, for example: git status --short",
+      "description": "Complete PowerShell command line to run, for example: git status --short",
       "required": true
     }
   ],

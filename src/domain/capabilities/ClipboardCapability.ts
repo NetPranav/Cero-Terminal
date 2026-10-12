@@ -15,7 +15,7 @@ export class ClipboardCapability implements Capability<ClipboardInput, any> {
     name: 'Clipboard Management',
     description: 'Read from and write to the system clipboard.',
     category: 'Clipboard' as const,
-    supportedPlatforms: ['macos', 'windows', 'linux'] as ('macos' | 'windows' | 'linux')[],
+    supportedPlatforms: ['windows'] as 'windows'[],
     requiredPermissions: ['Clipboard'],
     version: '1.0.0'
   };

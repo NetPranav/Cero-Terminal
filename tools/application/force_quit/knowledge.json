@@ -13,8 +13,8 @@
     "please force close"
   ],
   "commonUserWording": [
-    "force quit Xcode",
-    "could you force quit Xcode",
+    "force quit Visual Studio",
+    "could you force quit Visual Studio",
     "force quit app",
     "kill application",
     "kill process app",
@@ -29,7 +29,7 @@
   "deviceNamingPatterns": [],
   "commonAbbreviations": {},
   "languageVariations": [
-    "force quit Xcode",
+    "force quit Visual Studio",
     "force quit app",
     "kill application",
     "kill process app",

@@ -15,7 +15,7 @@ import { GoalNode } from '../../ai/planner/PlannerTypes';
 // Enums & Primitives
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type SupportedPlatform = 'macos' | 'windows' | 'linux';
+export type SupportedPlatform = 'windows';
 
 export type RiskLevel = 'safe' | 'low' | 'medium' | 'high' | 'critical';
 
@@ -410,7 +410,7 @@ export const ActionDefinitionSchema = z.object({
   category: z.string().min(1),
   tags: z.array(z.string()),
   aliases: z.array(z.string()),
-  supportedPlatforms: z.array(z.enum(['macos', 'windows', 'linux'])).min(1),
+  supportedPlatforms: z.array(z.enum(['windows'])).min(1),
   requiredPermissions: z.array(z.string()),
   inputs: z.array(ActionInputSchema),
   outputs: z.array(ActionOutputSchema),

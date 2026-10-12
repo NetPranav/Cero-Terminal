@@ -9,9 +9,12 @@
       "type": "ExecuteCapability",
       "capabilityId": "shell.core",
       "parameters": {
-        "command": "system_profiler",
+        "command": "powershell.exe",
         "args": [
-          "SPBluetoothDataType"
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "Get-PnpDevice -Class Bluetooth | Select-Object FriendlyName,Status"
         ]
       },
       "dependencies": [],

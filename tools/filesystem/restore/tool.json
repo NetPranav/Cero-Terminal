@@ -1,8 +1,8 @@
 {
   "id": "filesystem.restore",
   "version": "1.0.0",
-  "displayName": "Restore File from Trash",
-  "description": "Restores a recently deleted file from system Trash back to its original path.",
+  "displayName": "Restore File from Recycle Bin",
+  "description": "Restores a recently deleted file from the Recycle Bin back to its original path.",
   "domain": "filesystem",
   "category": "Filesystem",
   "tags": [
@@ -23,9 +23,7 @@
     "recover from bin"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "WriteFiles"

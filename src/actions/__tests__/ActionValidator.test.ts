@@ -77,11 +77,12 @@ describe('ActionValidator', () => {
     it('should fail if platform is unsupported', () => {
       const action = createMockAction({
         id: 'unknown.test' as any,
-        supportedPlatforms: ['linux'],
+        // An action file written for another OS
+        supportedPlatforms: ['linux' as any],
       });
       const node = createActionNode(action);
 
-      const result = validator.validate(node, 'macos');
+      const result = validator.validate(node, 'windows');
       expect(result.valid).toBe(false);
       expect(result.errors.some(e => e.field === 'platform')).toBe(true);
     });

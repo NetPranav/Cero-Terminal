@@ -21,7 +21,7 @@ export function createMockAction(overrides: Partial<ActionDefinition> = {}): Act
     category: 'test',
     tags: ['test'],
     aliases: ['test action'],
-    supportedPlatforms: ['macos', 'linux', 'windows'],
+    supportedPlatforms: ['windows'],
     requiredPermissions: [],
     inputs: [],
     outputs: [],

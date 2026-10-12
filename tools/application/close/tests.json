@@ -3,7 +3,7 @@
   "tests": [
     {
       "id": "application-close-test-1",
-      "userRequest": "close Safari",
+      "userRequest": "close Notepad",
       "expectedIntent": {
         "domain": "application",
         "action": "close"

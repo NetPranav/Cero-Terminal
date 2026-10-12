@@ -7,7 +7,7 @@
   "category": "Git",
   "tags": ["git", "status", "branch", "working-tree", "vcs", "diff"],
   "aliases": ["git status", "show git status", "check git status", "branch status"],
-  "supportedPlatforms": ["macos", "windows", "linux"],
+  "supportedPlatforms": ["windows"],
   "requiredPermissions": ["ShellExecution"],
   "securityRisk": "SAFE",
   "parameters": [],

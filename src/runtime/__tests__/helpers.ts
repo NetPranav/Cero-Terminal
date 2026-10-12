@@ -17,7 +17,7 @@ export function createMockActionDefinition(id = 'test.action', overrides: Partia
     category: 'test',
     tags: ['test'],
     aliases: ['test action'],
-    supportedPlatforms: ['macos', 'linux', 'windows'],
+    supportedPlatforms: ['windows'],
     requiredPermissions: [],
     inputs: [],
     outputs: [],

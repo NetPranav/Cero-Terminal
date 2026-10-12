@@ -118,20 +118,21 @@ describe('AI Operating Knowledge Base - Tool Registry', () => {
   });
 
   describe('4. Workflow Compiler & Parameter Injection', () => {
-    it('should compile macOS workflow cleanly for bluetooth list', () => {
+    it('should compile the Windows workflow cleanly for bluetooth list', () => {
       const tool = loader.getState().toolIndex.get('network.bluetooth.list')!;
-      const res = compiler.compile(tool, { platform: 'macos', parameters: {} });
+      const res = compiler.compile(tool, { platform: 'windows', parameters: {} });
       
       expect(res.success).toBe(true);
       expect(res.workflow).toBeDefined();
       expect(res.workflow?.steps[0].capabilityId).toBe('shell.core');
-      expect(res.workflow?.steps[0].parameters?.command).toBe('system_profiler');
+      expect(res.workflow?.steps[0].parameters?.command).toBe('powershell.exe');
+      expect(res.workflow?.steps[0].parameters?.args).toContain('Get-PnpDevice -Class Bluetooth | Select-Object FriendlyName,Status');
     });
 
     it('should inject parameters correctly into filesystem list tool', () => {
       const tool = loader.getState().toolIndex.get('filesystem.list')!;
       const res = compiler.compile(tool, {
-        platform: 'macos',
+        platform: 'windows',
         parameters: { path: '~/Documents' }
       });
 

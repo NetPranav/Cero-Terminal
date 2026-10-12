@@ -2,7 +2,7 @@
   "id": "network.ports",
   "version": "1.0.0",
   "displayName": "Inspect Open Network Ports",
-  "description": "Lists open listening TCP/UDP network ports and binding process IDs (lsof/netstat).",
+  "description": "Lists open listening TCP/UDP network ports and binding process IDs (Get-NetTCPConnection).",
   "domain": "network",
   "category": "Networking",
   "tags": [
@@ -23,9 +23,7 @@
     "network ports"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ShellExecution"

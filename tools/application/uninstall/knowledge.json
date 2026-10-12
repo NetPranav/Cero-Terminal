@@ -3,13 +3,13 @@
   "aliases": [
     "uninstall app",
     "remove package",
-    "brew uninstall",
+    "winget uninstall",
     "delete app program"
   ],
   "synonyms": [
     "please uninstall app",
     "please remove package",
-    "please brew uninstall",
+    "please winget uninstall",
     "please delete app program"
   ],
   "commonUserWording": [
@@ -17,7 +17,7 @@
     "could you uninstall package wget",
     "uninstall app",
     "remove package",
-    "brew uninstall",
+    "winget uninstall",
     "delete app program"
   ],
   "commonMistakes": [],
@@ -32,7 +32,7 @@
     "uninstall package wget",
     "uninstall app",
     "remove package",
-    "brew uninstall",
+    "winget uninstall",
     "delete app program"
   ],
   "relatedTools": []

@@ -10,7 +10,7 @@
       "expectedEntities": {
         "path": "/test/path.txt"
       },
-      "description": "Example execution of Move to System Trash"
+      "description": "Example execution of Move to Recycle Bin"
     }
   ]
 }

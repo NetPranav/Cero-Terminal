@@ -3,7 +3,7 @@
   "tests": [
     {
       "id": "system-lock-test-1",
-      "userRequest": "lock my mac",
+      "userRequest": "lock my pc",
       "expectedIntent": {
         "domain": "system",
         "action": "lock"

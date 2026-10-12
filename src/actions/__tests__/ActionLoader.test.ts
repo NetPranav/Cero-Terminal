@@ -18,7 +18,7 @@ describe('ActionLoader', () => {
         category: 'Filesystem',
         tags: ['filesystem', 'create', 'file'],
         aliases: ['create file', 'new file'],
-        supportedPlatforms: ['macos', 'linux', 'windows'],
+        supportedPlatforms: ['windows'],
         requiredPermissions: ['WriteFiles'],
         securityRisk: 'SAFE',
         parameters: [
@@ -70,7 +70,7 @@ describe('ActionLoader', () => {
         category: 'Filesystem',
         tags: ['copy'],
         aliases: ['copy file'],
-        supportedPlatforms: ['macos'],
+        supportedPlatforms: ['windows'],
         requiredPermissions: [],
         securityRisk: 'SAFE',
         parameters: [],
@@ -97,7 +97,7 @@ describe('ActionLoader', () => {
         category: 'test',
         tags: [],
         aliases: [],
-        supportedPlatforms: ['macos'],
+        supportedPlatforms: ['windows'],
         requiredPermissions: [],
         parameters: [],
       });

@@ -4,16 +4,16 @@
     "run command",
     "execute shell",
     "terminal exec",
-    "bash command",
+    "powershell command",
     "run this in terminal",
-    "use zsh",
-    "run a mac command"
+    "use powershell",
+    "run a windows command"
   ],
   "synonyms": [
     "please run command",
     "please execute shell",
     "please terminal exec",
-    "please bash command"
+    "please powershell command"
   ],
   "commonUserWording": [
     "run shell command ls -l",
@@ -23,7 +23,7 @@
     "run command",
     "execute shell",
     "terminal exec",
-    "bash command"
+    "powershell command"
   ],
   "commonMistakes": [],
   "entityHints": {
@@ -41,7 +41,7 @@
     "run command",
     "execute shell",
     "terminal exec",
-    "bash command"
+    "powershell command"
   ],
   "relatedTools": []
 }

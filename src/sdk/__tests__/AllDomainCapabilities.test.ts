@@ -105,7 +105,7 @@ describe('All Domain Capabilities — Comprehensive 13-Domain Verification', () 
     expect(res.verification?.verifiedOutputs.activeShell).toBe('/bin/zsh');
   });
 
-  it('13. DeveloperCapability: should trigger engineering toolchains and open IDEs (Cursor, VS Code, Xcode)', async () => {
+  it('13. DeveloperCapability: should trigger engineering toolchains and open IDEs (Cursor, VS Code)', async () => {
     const res = await executor.execute(createTestNode('dev-1', 'developer.open', { ide: 'Cursor', path: '/home/user/project' }), context);
     expect(res.success).toBe(true);
     expect(res.outputs.ide).toBe('Cursor');

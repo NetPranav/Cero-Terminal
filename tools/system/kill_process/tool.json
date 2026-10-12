@@ -39,9 +39,7 @@
     "stop port"
   ],
   "supportedPlatforms": [
-    "macos",
-    "windows",
-    "linux"
+    "windows"
   ],
   "requiredPermissions": [
     "ProcessManagement"

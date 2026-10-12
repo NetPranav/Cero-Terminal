@@ -18,7 +18,7 @@ export class SystemCapability implements Capability<void, SystemInfoOutput> {
     name: 'System Information',
     description: 'Retrieves information about the operating system and hardware.',
     category: 'System' as const,
-    supportedPlatforms: ['macos', 'windows', 'linux'] as ('macos' | 'windows' | 'linux')[],
+    supportedPlatforms: ['windows'] as 'windows'[],
     requiredPermissions: [],
     version: '1.0.0'
   };

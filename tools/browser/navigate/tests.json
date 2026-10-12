@@ -16,7 +16,7 @@
     },
     {
       "id": "browser-navigate-test-2",
-      "userRequest": "open youtube.com in safari",
+      "userRequest": "open youtube.com in edge",
       "expectedIntent": {
         "domain": "browser",
         "action": "navigate"
@@ -24,9 +24,9 @@
       "expectedToolId": "browser.navigate",
       "expectedEntities": {
         "url": "youtube.com",
-        "appName": "Safari"
+        "appName": "Microsoft Edge"
       },
-      "description": "Test case for Navigate Browser to URL in target application Safari"
+      "description": "Test case for Navigate Browser to URL in target application Microsoft Edge"
     }
   ]
 }

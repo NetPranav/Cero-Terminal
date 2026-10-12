@@ -10,7 +10,7 @@
       "expectedEntities": {
         "name": "sample_val"
       },
-      "description": "Example execution of Restore File from Trash"
+      "description": "Example execution of Restore File from Recycle Bin"
     }
   ]
 }

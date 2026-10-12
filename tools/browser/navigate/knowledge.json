@@ -15,7 +15,7 @@
   "commonUserWording": [
     "go to youtube.com",
     "could you go to youtube.com",
-    "navigate to youtube.com in safari",
+    "navigate to youtube.com in edge",
     "launch github.com using chrome",
     "open url in browser",
     "go to website",
@@ -31,7 +31,7 @@
       "https://google.com"
     ],
     "appName": [
-      "Safari",
+      "Microsoft Edge",
       "Chrome",
       "Firefox",
       "Brave",
@@ -42,7 +42,7 @@
   "commonAbbreviations": {},
   "languageVariations": [
     "go to youtube.com",
-    "visit youtube.com in safari",
+    "visit youtube.com in edge",
     "navigate to https://github.com using chrome",
     "go to website",
     "open url",

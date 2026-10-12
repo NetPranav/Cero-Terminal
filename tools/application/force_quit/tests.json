@@ -3,7 +3,7 @@
   "tests": [
     {
       "id": "application-force_quit-test-1",
-      "userRequest": "force quit Xcode",
+      "userRequest": "force quit Visual Studio",
       "expectedIntent": {
         "domain": "application",
         "action": "force_quit"

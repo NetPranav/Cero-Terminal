@@ -18,7 +18,7 @@ export class NetworkCapability implements Capability<NetworkInput, any> {
     name: 'Network Requests',
     description: 'Perform HTTP network requests.',
     category: 'Network' as const,
-    supportedPlatforms: ['macos', 'windows', 'linux'] as ('macos' | 'windows' | 'linux')[],
+    supportedPlatforms: ['windows'] as 'windows'[],
     requiredPermissions: ['Network'],
     version: '1.0.0'
   };

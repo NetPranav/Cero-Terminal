@@ -3,7 +3,7 @@
   "aliases": [
     "lock laptop",
     "lock screen",
-    "lock mac",
+    "lock pc",
     "lock computer",
     "sleep display",
     "lock workstation"
@@ -11,11 +11,11 @@
   "synonyms": [
     "please lock screen",
     "please lock laptop",
-    "please lock mac",
+    "please lock pc",
     "secure workstation"
   ],
   "commonUserWording": [
-    "lock my mac",
+    "lock my pc",
     "lock the screen",
     "lock computer",
     "sleep display now",
