@@ -9,9 +9,8 @@
  * solves them in the Shadow-PTY sandbox, and creates high-reward DPO training pairs
  * for on-device fine-tuning before morning.
  *
- * TODO(4.6): the puzzle templates in generateCurriculum are still macOS commands (lsof, brew,
- * diskutil, ifconfig) and the Shadow-PTY sandbox is POSIX; decide whether self-play runs on
- * Windows, and give it PowerShell templates if it does.
+ * TODO(4.6): the puzzle templates are PowerShell, but the Shadow-PTY sandbox that tries them is
+ * still POSIX; self-play needs a PowerShell sandbox before it does anything on Windows.
  */
 
 import * as fs from 'fs';
@@ -274,6 +273,7 @@ export class DreamStateScheduler {
     let idCounter = 1;
 
     const makeId = () => `puzzle_${Date.now()}_${idCounter++}`;
+    const q = (text: string) => `'${text.replace(/'/g, "''")}'`;
 
     // Category 1: Process & Port Inspection / Management
     for (const portEntry of profile.activePorts) {
@@ -284,9 +284,9 @@ export class DreamStateScheduler {
         targetEntity: `port ${portEntry.port}`,
         difficulty: 'basic',
         candidateTemplates: [
-          `lsof -iTCP:${portEntry.port} -sTCP:LISTEN -P -n`,
-          `lsof -i :${portEntry.port} | grep LISTEN`,
-          `pgrep -fl ${portEntry.process}`,
+          `Get-NetTCPConnection -LocalPort ${portEntry.port} -State Listen | Select-Object LocalPort,OwningProcess`,
+          `Get-Process -Id (Get-NetTCPConnection -LocalPort ${portEntry.port} -State Listen).OwningProcess | Select-Object Id,ProcessName`,
+          `netstat -ano | Select-String -Pattern ':${portEntry.port}\s'`,
         ],
         expectedVerificationCriteria: {
           exitCode: 0,
@@ -297,12 +297,12 @@ export class DreamStateScheduler {
       puzzles.push({
         id: makeId(),
         category: 'process_port',
-        prompt: `Safely verify if process '${portEntry.process}' is actively running on this Mac.`,
+        prompt: `Safely verify if process '${portEntry.process}' is actively running on this PC.`,
         targetEntity: portEntry.process,
         difficulty: 'intermediate',
         candidateTemplates: [
-          `pgrep -if "${portEntry.process}"`,
-          `ps aux | grep -i "${portEntry.process}" | grep -v grep`,
+          `Get-Process -Name ${q(portEntry.process)} -ErrorAction Stop`,
+          `Get-CimInstance Win32_Process -Filter "Name LIKE '%${portEntry.process.replace(/['"%_]/g, '')}%'" | Select-Object ProcessId,Name`,
         ],
         expectedVerificationCriteria: {
           exitCode: 0,
@@ -316,12 +316,12 @@ export class DreamStateScheduler {
       puzzles.push({
         id: makeId(),
         category: 'package_service',
-        prompt: `Check the runtime service status of Homebrew service '${service}'.`,
+        prompt: `Check the runtime status of the Windows service '${service}'.`,
         targetEntity: service,
         difficulty: 'basic',
         candidateTemplates: [
-          `brew services info ${service} --json 2>/dev/null || brew services list | grep ${service}`,
-          `brew services list | grep "${service}"`,
+          `Get-Service -Name ${q(service)} | Select-Object Name,Status,StartType`,
+          `sc.exe query ${q(service)}`,
         ],
         expectedVerificationCriteria: {
           exitCode: 0,
@@ -340,8 +340,8 @@ export class DreamStateScheduler {
         targetEntity: repoName,
         difficulty: 'intermediate',
         candidateTemplates: [
-          `git -C "${repo}" status --porcelain`,
-          `git -C "${repo}" diff --stat`,
+          `git -C ${q(repo)} status --porcelain`,
+          `git -C ${q(repo)} diff --stat`,
         ],
         expectedVerificationCriteria: {
           exitCode: 0,
@@ -355,8 +355,8 @@ export class DreamStateScheduler {
         targetEntity: repoName,
         difficulty: 'basic',
         candidateTemplates: [
-          `git -C "${repo}" log -n 3 --oneline`,
-          `git -C "${repo}" log -3 --format="%h - %an: %s"`,
+          `git -C ${q(repo)} log -n 3 --oneline`,
+          `git -C ${q(repo)} log -3 --format='%h - %an: %s'`,
         ],
         expectedVerificationCriteria: {
           exitCode: 0,
@@ -373,8 +373,8 @@ export class DreamStateScheduler {
       targetEntity: 'large_caches',
       difficulty: 'expert',
       candidateTemplates: [
-        'du -sh "$HOME"/Library/Caches/* 2>/dev/null | sort -hr | head -n 5',
-        'find "$HOME/Library/Caches" -type d -depth 1 -exec du -sh {} + 2>/dev/null | sort -hr | head -n 5',
+        "Get-ChildItem -Directory -Force $env:LOCALAPPDATA -ErrorAction SilentlyContinue | ForEach-Object { [pscustomobject]@{ Folder = $_.Name; MB = [math]::Round((Get-ChildItem $_.FullName -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1MB) } } | Sort-Object MB -Descending | Select-Object -First 5",
+        "Get-ChildItem -Directory -Force $env:TEMP -ErrorAction SilentlyContinue | Select-Object -First 5 FullName",
       ],
       expectedVerificationCriteria: {
         exitCode: 0,
@@ -384,12 +384,12 @@ export class DreamStateScheduler {
     puzzles.push({
       id: makeId(),
       category: 'filesystem_cleanup',
-      prompt: 'Check free disk space and volume utilization for the macOS root APFS container.',
-      targetEntity: 'apfs_root',
+      prompt: 'Check free disk space and utilization of the system drive.',
+      targetEntity: 'system_drive',
       difficulty: 'basic',
       candidateTemplates: [
-        'df -h /',
-        'diskutil info / | grep -E "Container Total Space|Volume Free Space"',
+        'Get-PSDrive -Name C | Select-Object Used,Free',
+        "Get-CimInstance Win32_LogicalDisk -Filter \"DeviceID='C:'\" | Select-Object Size,FreeSpace",
       ],
       expectedVerificationCriteria: {
         exitCode: 0,
@@ -401,12 +401,12 @@ export class DreamStateScheduler {
     puzzles.push({
       id: makeId(),
       category: 'network_diagnostics',
-      prompt: 'List the active network interface and local IPv4 address on this Mac.',
+      prompt: 'List the active network interface and local IPv4 address on this PC.',
       targetEntity: 'network_ipv4',
       difficulty: 'basic',
       candidateTemplates: [
-        'ipconfig getifaddr $(route -n get default 2>/dev/null | awk \'/interface:/{print $2}\') || ifconfig en0 | awk \'/inet / {print $2}\'',
-        'ifconfig | grep "inet " | grep -v 127.0.0.1 | awk \'{print $2}\'',
+        "Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -ne '127.0.0.1' } | Select-Object InterfaceAlias,IPAddress",
+        'ipconfig | Select-String -Pattern IPv4',
       ],
       expectedVerificationCriteria: {
         exitCode: 0,
@@ -421,8 +421,8 @@ export class DreamStateScheduler {
       targetEntity: 'dns_github',
       difficulty: 'intermediate',
       candidateTemplates: [
-        'dscacheutil -q host -a name github.com 2>/dev/null || host github.com',
-        'nslookup github.com | grep "Address:" | tail -n +2',
+        'Resolve-DnsName github.com -Type A | Select-Object Name,IPAddress',
+        'Test-Connection github.com -Count 1',
       ],
       expectedVerificationCriteria: {
         exitCode: 0,
@@ -459,12 +459,12 @@ export class DreamStateScheduler {
       puzzles.push({
         id: makeId(),
         category: 'process_port',
-        prompt: 'Display top 5 processes consuming the highest CPU on macOS.',
+        prompt: 'Display top 5 processes consuming the highest CPU on this PC.',
         targetEntity: 'top_cpu',
         difficulty: 'basic',
         candidateTemplates: [
-          'ps -A -o %cpu,%mem,comm | sort -nr | head -n 6',
-          'top -l 1 -n 5 -o cpu -stats pid,command,cpu',
+          'Get-Process | Sort-Object CPU -Descending | Select-Object -First 5 Id,ProcessName,CPU',
+          "Get-Counter '\\Process(*)\\% Processor Time' | Select-Object -ExpandProperty CounterSamples | Sort-Object CookedValue -Descending | Select-Object -First 6 InstanceName,CookedValue",
         ],
         expectedVerificationCriteria: { exitCode: 0, minOutputLength: 20 },
       });
@@ -472,11 +472,11 @@ export class DreamStateScheduler {
       puzzles.push({
         id: makeId(),
         category: 'package_service',
-        prompt: 'Check if Homebrew has any outdated packages ready to be upgraded.',
-        targetEntity: 'brew_outdated',
+        prompt: 'Check if winget has any outdated packages ready to be upgraded.',
+        targetEntity: 'winget_outdated',
         difficulty: 'intermediate',
         candidateTemplates: [
-          'brew outdated --formula 2>/dev/null || true',
+          'winget upgrade --accept-source-agreements',
         ],
         expectedVerificationCriteria: { exitCode: 0 },
       });

@@ -12,7 +12,6 @@
  */
 
 import { PlanningRequest, PlanningResponse } from './types';
-import { isWindowsName } from '../../shared/platform';
 import { ToolSearcher } from '../../tools/search/ToolSearcher';
 import { WorkflowCompiler, CompilationContext } from '../../tools/compiler/WorkflowCompiler';
 import { ToolRegistryState } from '../../tools/loader/ToolLoader';
@@ -40,8 +39,7 @@ export class Planner {
     try {
       this.emitEvent('PlanningStarted', { goal: request.goal });
 
-      const os = (request.context?.os || 'macos') as string;
-      const platform = this.osToPlatform(os);
+      const platform: Platform = 'windows';
 
       // 1. Invoke Phase X Intent Engine to reason over natural language and generate structured execution plan
       const intentOutput = await this.intentEngine.parseIntent(request.goal);
@@ -311,13 +309,6 @@ export class Planner {
     }
 
     return params;
-  }
-
-  private osToPlatform(os: string): Platform {
-    const normalized = os.toLowerCase();
-    if (normalized.includes('mac') || normalized.includes('darwin')) return 'macos';
-    if (isWindowsName(normalized)) return 'windows';
-    return 'linux';
   }
 
   private riskToScore(risk: string): number {

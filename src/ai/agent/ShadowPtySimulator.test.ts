@@ -186,24 +186,22 @@ describe('ShadowPtySimulator — Speculative Shadow-PTY Simulation Engine', () =
     });
   });
 
-  // Runs real POSIX commands (sw_vers, kill -0) in a subshell
+  // The sandbox is still POSIX sh (TODO(4.3)), so these run only on a POSIX test host (the Linux CI job)
   describe.skipIf(process.platform === 'win32')('Live Subshell Ephemeral Execution (Integration)', () => {
     const simulator = new ShadowPtySimulator();
 
     it('should execute read-only probe in ephemeral subshell in <50ms', async () => {
-      const isMac = process.platform === 'darwin';
-      const cmd = isMac ? 'sw_vers' : 'echo macOS version 14.5';
       const startTime = performance.now();
       const report = await simulator.speculate(
-        'check macOS version',
-        cmd,
+        'print a version line',
+        'echo version 14.5',
         { os: 'windows', cwd: process.cwd() }
       );
       const elapsed = performance.now() - startTime;
 
       expect(report.winner).toBeDefined();
       expect(report.winner?.exitCode).toBe(0);
-      expect(report.winner?.stdout).toContain('macOS');
+      expect(report.winner?.stdout).toContain('version 14.5');
       expect(report.winner?.empiricalScore).toBeGreaterThan(2.0);
       expect(elapsed).toBeLessThan(1500); // fast local execution
     });

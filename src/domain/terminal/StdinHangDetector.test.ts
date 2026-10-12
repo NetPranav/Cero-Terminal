@@ -20,24 +20,25 @@ describe('StdinHangDetector', () => {
     expect(StdinHangDetector.isPromptingForInput(normal)).toBe(false);
   });
 
-  it('suggests non-interactive fix for apt install without -y', () => {
-    const fix = StdinHangDetector.suggestNonInteractiveFix('apt install nginx');
-    expect(fix).not.toBeNull();
-    expect(fix?.flag).toBe('-y');
-    expect(fix?.rewrittenCommand).toContain('DEBIAN_FRONTEND=noninteractive');
-    expect(fix?.rewrittenCommand).toContain('apt -y install nginx');
+  it('accepts the winget agreements so install and upgrade never wait for an answer', () => {
+    expect(StdinHangDetector.suggestNonInteractiveFix('winget install -e --id Git.Git')).toEqual({
+      flag: '--accept-source-agreements --accept-package-agreements',
+      rewrittenCommand: 'winget install -e --id Git.Git --accept-source-agreements --accept-package-agreements',
+    });
+    expect(StdinHangDetector.suggestNonInteractiveFix('winget uninstall Git.Git')?.rewrittenCommand).toBe('winget uninstall Git.Git --accept-source-agreements');
+    expect(StdinHangDetector.isPromptingForInput('Do you agree to all the source agreements terms?\n[Y] Yes  [N] No:')).toBe(true);
   });
 
-  it('does not rewrite apt install when -y is already present', () => {
-    expect(StdinHangDetector.suggestNonInteractiveFix('apt install -y nginx')).toBeNull();
-    expect(StdinHangDetector.suggestNonInteractiveFix('apt-get install --yes nginx')).toBeNull();
+  it('does not rewrite a command that is already non-interactive', () => {
+    expect(StdinHangDetector.suggestNonInteractiveFix('winget install Git.Git --accept-source-agreements --accept-package-agreements')).toBeNull();
+    expect(StdinHangDetector.suggestNonInteractiveFix('choco install git -y')).toBeNull();
+    expect(StdinHangDetector.suggestNonInteractiveFix('npm init --yes')).toBeNull();
   });
 
-  it('suggests non-interactive fix for dnf, pacman, apk, brew, npm', () => {
-    expect(StdinHangDetector.suggestNonInteractiveFix('dnf install gcc')?.rewrittenCommand).toBe('dnf -y install gcc');
-    expect(StdinHangDetector.suggestNonInteractiveFix('pacman -S ripgrep')?.rewrittenCommand).toBe('pacman -S ripgrep --noconfirm');
-    expect(StdinHangDetector.suggestNonInteractiveFix('apk add curl')?.rewrittenCommand).toBe('apk add -q curl');
-    expect(StdinHangDetector.suggestNonInteractiveFix('brew install node')?.rewrittenCommand).toBe('NONINTERACTIVE=1 brew install node');
+  it('suggests non-interactive fixes for choco, npm and pip', () => {
+    expect(StdinHangDetector.suggestNonInteractiveFix('choco install git')?.rewrittenCommand).toBe('choco install git -y');
     expect(StdinHangDetector.suggestNonInteractiveFix('npm init')?.rewrittenCommand).toBe('npm init -y');
+    expect(StdinHangDetector.suggestNonInteractiveFix('pip install requests')?.rewrittenCommand).toBe('pip install requests --no-input');
+    expect(StdinHangDetector.suggestNonInteractiveFix('apt-get install nginx')).toBeNull();
   });
 });

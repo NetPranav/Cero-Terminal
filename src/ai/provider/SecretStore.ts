@@ -1,8 +1,8 @@
 /**
  * SecretStore.ts: API keys in the operating system keychain, not in browser storage.
  *
- * The Tauri commands do the real work (Keychain on macOS, Credential Manager on Windows, a private
- * file on Linux). Every method reports failure instead of guessing, so a caller never deletes the old
+ * The Tauri commands do the real work (Windows Credential Manager). Every method reports failure
+ * instead of guessing, so a caller never deletes the old
  * copy of a key before the new one has been read back.
  */
 

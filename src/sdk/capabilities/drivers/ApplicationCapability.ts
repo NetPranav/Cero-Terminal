@@ -8,6 +8,7 @@
 import { BaseCapabilityDriver, CapabilityExecutionResult, ExecutionContext, Platform } from '../CapabilitySDK';
 import { invoke } from '@tauri-apps/api/core';
 import { AppAliasRegistry } from '../../../domain/capabilities/AppAliasRegistry';
+import { homeDirectory } from '../../../utils/homeDir';
 
 export type AppOperation = 'open' | 'close' | 'force_quit' | 'focus' | 'minimize' | 'maximize' | 'list_running' | 'install' | 'uninstall' | 'update';
 
@@ -90,7 +91,7 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
         case 'maximize':
           return { success: true, data: { maximized: true }, commandExecuted };
         case 'list_running': {
-          const mockApps = ['Cero', 'Antigravity IDE', 'Google Chrome', 'Safari', 'Preview', 'Music'];
+          const mockApps = ['Cero', 'Antigravity IDE', 'Google Chrome', 'Microsoft Edge', 'Notepad', 'Spotify'];
           if (rawTarget) {
             const filterLower = rawTarget.toLowerCase();
             const matchedApp = mockApps.find(a => a.toLowerCase() === filterLower || a.toLowerCase().includes(filterLower));
@@ -105,7 +106,7 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
           return { success: true, data: { apps: mockApps, stdout: `Currently Running Desktop Applications (${mockApps.length}):\r\n  • ` + mockApps.join('\r\n  • ') }, commandExecuted };
         }
         case 'install': {
-          const pkgInfo = AppAliasRegistry.getInstance().resolvePackage(target);
+          const pkg = AppAliasRegistry.getInstance().resolvePackage(target);
           const isReinstall = Boolean(
             input.reinstall || 
             input.force || 
@@ -114,41 +115,38 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
           if (input.mockAlreadyInstalled && !isReinstall) {
             return {
               success: true,
-              data: { installed: true, alreadyInstalled: true, package: pkgInfo.name, isCask: pkgInfo.isCask, stdout: `${target} is already installed.` },
-              commandExecuted: `which ${target}`
+              data: { installed: true, alreadyInstalled: true, package: pkg.id, stdout: `${target} is already installed.` },
+              commandExecuted: `winget list -e --id ${pkg.id}`
             };
           }
           return { 
             success: true, 
-            data: { installed: true, package: pkgInfo.name, isCask: pkgInfo.isCask, reinstalled: isReinstall }, 
-            commandExecuted: isReinstall ? `brew reinstall ${pkgInfo.name}` : `brew install ${pkgInfo.isCask ? '--cask ' : ''}${pkgInfo.name}`, 
-            rollbackPayload: { action: 'uninstall', package: pkgInfo.name } 
+            data: { installed: true, package: pkg.id, reinstalled: isReinstall }, 
+            commandExecuted: `winget install -e --id ${pkg.id}${isReinstall ? ' --force' : ''}`, 
+            rollbackPayload: { action: 'uninstall', package: pkg.id } 
           };
         }
         case 'uninstall': {
-          const pkgInfo = AppAliasRegistry.getInstance().resolvePackage(target);
-          return { success: true, data: { uninstalled: true, package: pkgInfo.name, isCask: pkgInfo.isCask }, commandExecuted: `brew uninstall ${pkgInfo.isCask ? '--cask ' : ''}${pkgInfo.name}` };
+          const pkg = AppAliasRegistry.getInstance().resolvePackage(target);
+          return { success: true, data: { uninstalled: true, package: pkg.id }, commandExecuted: `winget uninstall -e --id ${pkg.id}` };
         }
         case 'update': {
-          if (target.toLowerCase() === 'safari' || target.toLowerCase() === 'finder' || target.toLowerCase() === 'system settings') {
+          if (/^(?:file explorer|explorer|settings|notepad|calculator|task manager)$/i.test(target)) {
             return {
               success: true,
-              data: { updated: false, reason: 'System application', stdout: `${target} is a macOS system application and can only be updated via System Settings -> Software Update.` },
+              data: { updated: false, reason: 'System application', stdout: `${target} is part of Windows and is updated through Windows Update.` },
               commandExecuted: 'echo'
             };
           }
-          const pkgInfo = AppAliasRegistry.getInstance().resolvePackage(target);
-          const pkgName = pkgInfo.name;
-          const isCask = pkgInfo.isCask;
-          const mockCmd = `brew upgrade ${isCask ? '--cask ' : ''}${pkgName}`;
+          const pkg = AppAliasRegistry.getInstance().resolvePackage(target);
+          const mockCmd = `winget upgrade -e --id ${pkg.id}`;
           return {
             success: true,
             data: {
               updated: true,
               app: target,
-              package: pkgName,
-              isCask,
-              stdout: `Successfully upgraded ${target} (${pkgName}) via Homebrew.`
+              package: pkg.id,
+              stdout: `Successfully upgraded ${target} (${pkg.id}) with winget.`
             },
             commandExecuted: mockCmd
           };
@@ -196,11 +194,8 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
               arg = arg === '.' ? baseCwd : `${baseCwd.replace(/\/+$/, '')}/${arg.replace(/^\.\//, '')}`;
             }
             if (arg.startsWith('~/') || arg === '~') {
-              try {
-                const hRes = await invoke<{ stdout: string }>('execute_command', { command: 'sh', args: ['-c', 'echo $HOME'] });
-                const hd = (hRes?.stdout || '').trim();
-                if (hd) arg = arg === '~' ? hd : arg.replace(/^~/, hd);
-              } catch { /* ignore */ }
+              const hd = await homeDirectory();
+              if (hd) arg = arg === '~' ? hd : arg.replace(/^~/, hd);
             }
             extraArgs[i] = arg;
           }

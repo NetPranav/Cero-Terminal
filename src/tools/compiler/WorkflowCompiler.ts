@@ -5,7 +5,7 @@
  * 
  * Responsibilities:
  * - Load the workflow definition from a matched tool
- * - Select platform-specific steps (macOS vs Linux vs Windows)
+ * - Select the Windows steps when the tool has platform-specific ones
  * - Inject runtime parameters (entities) into {{placeholder}} slots
  * - Validate parameter schema against tool.json
  * - Build a fully typed Workflow compatible with WorkflowEngine

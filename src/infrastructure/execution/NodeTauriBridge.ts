@@ -1,8 +1,9 @@
 /**
  * NodeTauriBridge.ts — Seamless Tauri IPC Polyfill for Node.js / CLI Environments
  * 
- * Enables all Cero Capability SDK drivers to execute real native macOS commands
- * directly in Node.js / CLI / test harnesses without requiring a Tauri GUI window.
+ * Enables all Cero Capability SDK drivers to execute real commands directly in Node.js / CLI /
+ * test harnesses without requiring a Tauri GUI window. It runs on the test host (Windows, or the
+ * Linux CI job that runs npm test), so its process.platform checks describe the host, not the app.
  * 
  * Features:
  * - Emulates @tauri-apps/api/core `invoke` using Node.js `child_process`

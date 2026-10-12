@@ -99,7 +99,7 @@ describe('CeroSerlCoordinator — End-to-End Orchestrator', () => {
       const deficit = await coordinator.onModelRefusal(
         'turn off Wi-Fi interface',
         refusalText,
-        { cwd: '/tmp', os: 'macos' }
+        { cwd: '/tmp', os: 'windows' }
       );
 
       expect(deficit).not.toBeNull();
@@ -122,7 +122,7 @@ describe('CeroSerlCoordinator — End-to-End Orchestrator', () => {
         'smartctl -a /dev/disk0',
         127,
         'smartctl: command not found',
-        { cwd: '/tmp', os: 'macos' }
+        { cwd: '/tmp', os: 'windows' }
       );
 
       expect(deficit).not.toBeNull();
@@ -168,7 +168,7 @@ describe('CeroSerlCoordinator — End-to-End Orchestrator', () => {
         goal: 'print working directory',
         category: 'conversational_refusal',
         modelOutput: 'I do not have access to print directory',
-        context: { os: 'macos', cwd: '/tmp' },
+        context: { os: 'windows', cwd: '/tmp' },
       });
 
       // Mock reflexion engine to simulate solving
@@ -296,7 +296,7 @@ describe('CeroSerlCoordinator — End-to-End Orchestrator', () => {
 
     it('resolves previous command failures via Deterministic Rule Oracle without LLM', async () => {
       const res = await coordinator.executeUnifiedResolution('push current branch', {
-        os: 'macos',
+        os: 'windows',
         cwd: '/tmp',
         previousFailedCmd: 'git push',
         previousStderr: 'fatal: The current branch feature-1 has no upstream branch.'
@@ -307,7 +307,7 @@ describe('CeroSerlCoordinator — End-to-End Orchestrator', () => {
     });
 
     it('falls back to hardware-constrained GBNF and steering when fast paths do not match', async () => {
-      const res = await coordinator.executeUnifiedResolution('build complex custom deep neural network in rust', { os: 'macos', cwd: '/tmp' });
+      const res = await coordinator.executeUnifiedResolution('build complex custom deep neural network in rust', { os: 'windows', cwd: '/tmp' });
       expect(res.resolved).toBe(false);
       expect(res.source).toBe('needs_llm_inference');
       expect(res.grammar).toBeDefined();
@@ -323,14 +323,14 @@ describe('CeroSerlCoordinator — End-to-End Orchestrator', () => {
     });
 
     it('does not reflect on battery power', async () => {
-      deficitLogger.logDeficit({ goal: 'check battery', category: 'EXECUTION_ERROR' as any, attemptedCommand: 'acpi', stderr: 'acpi: command not found', context: { os: 'linux', cwd: '/tmp' } });
+      deficitLogger.logDeficit({ goal: 'check battery', category: 'EXECUTION_ERROR' as any, attemptedCommand: 'acpi', stderr: 'acpi: command not found', context: { os: 'windows', cwd: '/tmp' } });
       const spy = vi.spyOn(reflexionEngine, 'reflectOnDeficit');
       await buildCoordinator(false).onTerminalIdle(300);
       expect(spy).not.toHaveBeenCalled();
     });
 
     it('reflects at most once per window', async () => {
-      deficitLogger.logDeficit({ goal: 'check battery', category: 'EXECUTION_ERROR' as any, attemptedCommand: 'acpi', stderr: 'acpi: command not found', context: { os: 'linux', cwd: '/tmp' } });
+      deficitLogger.logDeficit({ goal: 'check battery', category: 'EXECUTION_ERROR' as any, attemptedCommand: 'acpi', stderr: 'acpi: command not found', context: { os: 'windows', cwd: '/tmp' } });
       const spy = vi.spyOn(reflexionEngine, 'reflectOnDeficit').mockResolvedValue({ deficitId: 'x', success: false, originalGoal: '', candidateAttempts: [], durationMs: 1 } as any);
       const coordinatorOnAc = buildCoordinator(true);
       await coordinatorOnAc.onTerminalIdle(300);

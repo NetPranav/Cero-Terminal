@@ -14,7 +14,7 @@ function loopWith(execute: (tool: string, params: any) => Promise<any>, generate
   (loop as any).toolExecutor = { hasDriver: () => true, execute: fn };
   return { loop, fn, generate };
 }
-const mac = { os: 'macos', cwd: '/Users/me' };
+const mac = { os: 'windows', cwd: '/Users/me' };
 const win = { os: 'windows', cwd: 'C:\\Users\\me' };
 
 describe('"is the obsidain application running or not"', () => {

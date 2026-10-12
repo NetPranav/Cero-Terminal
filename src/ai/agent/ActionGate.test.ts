@@ -14,7 +14,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 describe('ActionGate', () => {
-  const context = { cwd: '/workspace', os: 'linux' };
+  const context = { cwd: '/workspace', os: 'windows' };
 
   describe('Dangerous command detection', () => {
     it('rejects rm -rf / and root deletion variations', async () => {

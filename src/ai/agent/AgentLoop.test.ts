@@ -158,7 +158,7 @@ describe('AgentLoop fast-path routing', () => {
     );
     (loop as any).toolExecutor = mockToolExecutor;
 
-    const res = await loop.run('compress backups into archive', { os: 'mac', cwd: '/test' });
+    const res = await loop.run('compress backups into archive', { os: 'windows', cwd: '/test' });
     expect(res.success).toBe(true);
     expect(mockToolExecutor.execute).toHaveBeenCalledWith(
       'shell.execute',
@@ -329,7 +329,7 @@ describe('AgentLoop fast-path routing', () => {
       const events: any[] = [];
       loop.onEvent((ev) => events.push(ev));
 
-      const result = await loop.run('find all frontend folders in my system', { os: 'mac', cwd: '/test' });
+      const result = await loop.run('find all frontend folders in my system', { os: 'windows', cwd: '/test' });
 
       expect(result.success).toBe(true);
       expect(mockProvider.generate).toHaveBeenCalledTimes(2);
@@ -412,7 +412,7 @@ describe('AgentLoop fast-path routing', () => {
       const events: any[] = [];
       loop.onEvent((ev) => events.push(ev));
 
-      const result = await loop.run('still somehow that you can try right now', { os: 'mac', cwd: '/workspace' });
+      const result = await loop.run('still somehow that you can try right now', { os: 'windows', cwd: '/workspace' });
 
       expect(result.success).toBe(true);
       expect(result.summary).not.toContain('AI language model');
@@ -485,7 +485,7 @@ describe('AgentLoop fast-path routing', () => {
       const events: any[] = [];
       loop.onEvent((ev) => events.push(ev));
 
-      const result = await loop.run('tell me all running ports', { os: 'mac', cwd: '/test' });
+      const result = await loop.run('tell me all running ports', { os: 'windows', cwd: '/test' });
 
       expect(result.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledTimes(2);
@@ -543,7 +543,7 @@ describe('AgentLoop fast-path routing', () => {
       const events: any[] = [];
       loop.onEvent((ev) => events.push(ev));
 
-      const result = await loop.run('find all frontend folders in my system', { os: 'mac', cwd: '/test' });
+      const result = await loop.run('find all frontend folders in my system', { os: 'windows', cwd: '/test' });
 
       // Deterministic fallback was triggered after 3 strikes
       expect(mockToolExecutor.execute).toHaveBeenCalledTimes(4);
@@ -585,7 +585,7 @@ describe('AgentLoop fast-path routing', () => {
       const events: any[] = [];
       loop.onEvent((ev) => events.push(ev));
 
-      const result = await loop.run('find all frontend folders in my system', { os: 'mac', cwd: '/test' });
+      const result = await loop.run('find all frontend folders in my system', { os: 'windows', cwd: '/test' });
 
       // Skips retry 2 and retry 3: called only 2 times (attempt 1 + fallback)!
       expect(mockToolExecutor.execute).toHaveBeenCalledTimes(2);
@@ -761,7 +761,7 @@ To push the current branch and set the remote as upstream, use
       const events: any[] = [];
       loop.onEvent((ev) => events.push(ev));
 
-      const result = await loop.run('push my commit to github', { os: 'mac', cwd: '/test' });
+      const result = await loop.run('push my commit to github', { os: 'windows', cwd: '/test' });
 
       expect(result.success).toBe(true);
       const remediationEvent = events.find(
@@ -839,7 +839,7 @@ describe('Single-call answers for read-only inspection', () => {
     );
     const events: any[] = [];
     loop.onEvent(e => events.push(e));
-    const result = await loop.run('how big is my downloads folder', { os: 'linux', cwd: '/home/u' });
+    const result = await loop.run('how big is my downloads folder', { os: 'windows', cwd: '/home/u' });
 
     expect(generate).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(true);
@@ -858,7 +858,7 @@ describe('Single-call answers for read-only inspection', () => {
       ],
       '1.1G a.zip\n2.0G b.tar\n4.2G big.iso'
     );
-    const result = await loop.run('find my largest downloads and tell me which to delete', { os: 'linux', cwd: '/home/u' });
+    const result = await loop.run('find my largest downloads and tell me which to delete', { os: 'windows', cwd: '/home/u' });
     expect(generate).toHaveBeenCalledTimes(2);
     expect(result.summary).toContain('big.iso');
   });
@@ -899,7 +899,7 @@ describe('Auto-heal context', () => {
     } as any);
 
     await loop.run('fix the error from `npm run dev`: port already in use', {
-      os: 'linux',
+      os: 'windows',
       cwd: '/home/u/app',
       attachedContext: 'Error: listen EADDRINUSE: address already in use :::3000'
     });
@@ -912,7 +912,7 @@ describe('Auto-heal context', () => {
 
 describe('Heuristic fallback word matching', () => {
   const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any);
-  const fallback = (goal: string) => (loop as any).tryHeuristicFallback(goal, { os: 'linux', cwd: '/home/u' });
+  const fallback = (goal: string) => (loop as any).tryHeuristicFallback(goal, { os: 'windows', cwd: '/home/u' });
 
   it('does not toggle radios for questions about connections', () => {
     expect(fallback('show wifi connections')?.tool).toBe('network.wifi.scan');
@@ -942,7 +942,7 @@ describe('Provider resolution', () => {
         initialize: vi.fn().mockResolvedValue(undefined)
       } as any);
       const started = Date.now();
-      const result = await (loop as any).runLLMLoop('summarise the kernel log', { os: 'linux', cwd: '/home/u' });
+      const result = await (loop as any).runLLMLoop('summarise the kernel log', { os: 'windows', cwd: '/home/u' });
       expect(result.success).toBe(false);
       expect(result.summary).toContain('No AI model or API configured');
       expect(provider.generate).not.toHaveBeenCalled();
@@ -979,8 +979,10 @@ describe('Instant answers run before any model call', () => {
   it('finishes an app launch without a summary call', async () => {
     const { isAppLaunchRequest } = await import('./AgentLoop');
     expect(isAppLaunchRequest('open vs code here', 'code . &')).toBe(true);
-    expect(isAppLaunchRequest('launch firefox', 'setsid -f firefox >/dev/null 2>&1')).toBe(true);
-    expect(isAppLaunchRequest('open the logs and find errors', 'less /var/log/syslog')).toBe(false);
+    expect(isAppLaunchRequest('launch firefox', "Start-Process 'firefox'")).toBe(true);
+    expect(isAppLaunchRequest('open notes.txt', "Invoke-Item 'notes.txt'")).toBe(true);
+    expect(isAppLaunchRequest('launch firefox', 'setsid -f firefox >/dev/null 2>&1')).toBe(false);
+    expect(isAppLaunchRequest('open the logs and find errors', 'Get-Content C:\\logs\\app.log')).toBe(false);
     expect(isAppLaunchRequest('open vs code', 'code --version')).toBe(false);
   });
 });
@@ -1003,11 +1005,11 @@ describe('Watch commands', () => {
     const serviceSpy = vi.spyOn(watcher, 'watchService').mockResolvedValue({ id: 8, kind: 'service', target: 'nginx.service' });
     const { loop, generate } = makeLoop();
 
-    const fileResult = await loop.run('watch build.log', { os: 'linux', cwd: '/home/u/app' });
+    const fileResult = await loop.run('watch build.log', { os: 'windows', cwd: '/home/u/app' });
     expect(fileSpy).toHaveBeenCalledWith('/home/u/app/build.log', loop.ownerId);
     expect(fileResult.summary).toContain('watch #7');
 
-    await loop.run('watch service nginx.service', { os: 'linux', cwd: '/home/u' });
+    await loop.run('watch service nginx.service', { os: 'windows', cwd: '/home/u' });
     expect(serviceSpy).toHaveBeenCalledWith('nginx.service', false, loop.ownerId);
     expect(generate).not.toHaveBeenCalled();
   });
@@ -1015,7 +1017,7 @@ describe('Watch commands', () => {
   it('sets the remediation mode', async () => {
     const { AutoRemediationPolicy } = await import('../../domain/remediation/AutoRemediationPolicy');
     const { loop } = makeLoop();
-    const res = await loop.run('watch mode auto', { os: 'linux', cwd: '/home/u' });
+    const res = await loop.run('watch mode auto', { os: 'windows', cwd: '/home/u' });
     expect(res.summary).toContain('auto-safe');
     expect(AutoRemediationPolicy.getMode()).toBe('auto-safe');
     AutoRemediationPolicy.setMode('suggest');
@@ -1048,7 +1050,7 @@ describe('Explaining and exporting what happened', () => {
       at: Date.now(),
       result: { success: true, summary: 'GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789', steps: [{ tool: 'shell.execute', params: { command: 'echo $GITHUB_TOKEN' }, result: { success: true } }] }
     });
-    const res = await loop.run('export session', { os: 'linux', cwd: '/home/u' });
+    const res = await loop.run('export session', { os: 'windows', cwd: '/home/u' });
     const file = `${process.env.HOME}/.cero/transcripts/${res.summary.match(/session-[\d-]+\.md/)![0]}`;
     const text = fs.readFileSync(file, 'utf8');
     expect(text).toContain('## ');
@@ -1076,7 +1078,7 @@ describe('Declined commands and read-only questions', () => {
   it('stops when the user declines a command and does not ask the model to recover', async () => {
     const execute = vi.fn().mockResolvedValue({ success: false, error: 'Declined in the confirmation dialog.', errorCode: 'USER_CANCELLED' });
     const { loop, generate } = makeLoop([{ command: 'rm -rf build', explanation: 'Remove the build folder' }], execute);
-    const result = await loop.run('remove the build folder', { os: 'linux', cwd: '/home/u/app' });
+    const result = await loop.run('remove the build folder', { os: 'windows', cwd: '/home/u/app' });
     expect(result.success).toBe(false);
     expect(result.summary).toContain('you declined `rm -rf build`');
     expect(generate).toHaveBeenCalledTimes(1);
@@ -1088,7 +1090,7 @@ describe('Declined commands and read-only questions', () => {
       { command: 'git log -1 --stat', explanation: 'Show the last commit' },
       { command: 'git init && git log -1', explanation: 'Initialize a repository' },
     ], execute);
-    const result = await loop.run('what changed in the last commit here', { os: 'linux', cwd: '/home/u' });
+    const result = await loop.run('what changed in the last commit here', { os: 'windows', cwd: '/home/u' });
     expect(result.success).toBe(false);
     expect(result.summary).toContain('not a git repository');
     expect(result.summary).toContain('did not run `git init && git log -1`');
@@ -1125,10 +1127,10 @@ describe('Questions about a file are answered from the file', () => {
     const execute = vi.fn().mockResolvedValue({ success: true, data: { stdout: 'function add(a, b) {\n  return a + b;\n}\nmodule.exports = { add };\n', code: 0 } });
     (loop as any).toolExecutor = { hasDriver: () => true, execute };
 
-    const result = await loop.run('explain what math.js does', { os: 'macos', cwd: '/tmp/repo' });
+    const result = await loop.run('explain what math.js does', { os: 'windows', cwd: '/tmp/repo' });
 
     // Internal, read-only, quoted path: approved without a dialog
-    expect(execute).toHaveBeenCalledWith('shell.execute', expect.objectContaining({ command: "head -c 6000 -- 'math.js'" }), '/tmp/repo', expect.any(Function));
+    expect(execute).toHaveBeenCalledWith('shell.execute', expect.objectContaining({ command: "Get-Content -LiteralPath 'math.js' -TotalCount 200 -ErrorAction Stop | Out-String -Width 400" }), '/tmp/repo', expect.any(Function));
     const prompt = generate.mock.calls[0][0] + generate.mock.calls[0][1];
     expect(prompt).toContain('return a + b;');
     expect(result.summary).toContain('add');
@@ -1171,7 +1173,7 @@ describe('Answers must be grounded in command output', () => {
       .mockResolvedValueOnce({ success: true, data: { stdout: '       5\n', code: 0 } });
     (loop as any).toolExecutor = { hasDriver: () => true, execute };
 
-    const result = await loop.run('how many javascript files are in this folder and how many lines do they have in total', { os: 'macos', cwd: '/tmp/r' });
+    const result = await loop.run('how many javascript files are in this folder and how many lines do they have in total', { os: 'windows', cwd: '/tmp/r' });
     expect(result.summary).toBe('There are 2 JavaScript files with 5 lines in total.');
     expect(execute).toHaveBeenCalledTimes(2);
   });
@@ -1228,7 +1230,7 @@ describe('Long-running commands open their own terminal pane', () => {
     const { loop } = makeLoop([{ command: 'npm run dev', explanation: 'Start the dev server' }]);
     const handler = vi.fn().mockResolvedValue(false);
     loop.setAuthorizationHandler(handler);
-    const result = await loop.run('start the dev server', { os: 'macos', cwd: '/tmp/app', paneId: 'main' });
+    const result = await loop.run('start the dev server', { os: 'windows', cwd: '/tmp/app', paneId: 'main' });
     expect(handler).toHaveBeenCalledWith(expect.objectContaining({ capabilityId: 'terminal.spawn' }));
     expect(result.declined).toBe(true);
     expect(spawner).not.toHaveBeenCalled();
@@ -1241,7 +1243,7 @@ describe('Long-running commands open their own terminal pane', () => {
     ws.register('main', { cwd: '/ws' });
     ws.register('other', { title: 'talker', busy: true, runningCommand: 'ros2 run demo_nodes_cpp talker' });
     const { loop, generate } = makeLoop([]);
-    await loop.run('is the talker still publishing', { os: 'linux', cwd: '/ws', paneId: 'main' });
+    await loop.run('is the talker still publishing', { os: 'windows', cwd: '/ws', paneId: 'main' });
     const prompt = generate.mock.calls[0][0] + generate.mock.calls[0][1];
     expect(prompt).toContain('OTHER TERMINALS');
     expect(prompt).toContain('running: ros2 run demo_nodes_cpp talker');
@@ -1291,7 +1293,7 @@ describe('Multi-step chains', () => {
   it('asks the model only for the clause it could not plan, and never runs English', async () => {
     const { loop, execute, generate } = setup([JSON.stringify({ action: 'execute', command: 'npx express-generator --no-view api', explanation: 'Scaffold' })]);
     loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
-    const result = await loop.run('create a folder called chain-demo, go into it, then scaffold an express app called api', { os: 'linux', cwd: '/tmp/wf' });
+    const result = await loop.run('create a folder called chain-demo, go into it, then scaffold an express app called api', { os: 'windows', cwd: '/tmp/wf' });
     expect(result.success).toBe(true);
     expect(generate).toHaveBeenCalledTimes(1);
     expect(execute.mock.calls.map(c => c[1].command)).toContain('npx express-generator --no-view api');
@@ -1304,7 +1306,7 @@ describe('Multi-step chains', () => {
       ? { success: false, error: 'git: command not found', data: { code: 127 } }
       : { success: true, data: { stdout: '/tmp/wf/x\n', code: 0 } });
     loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
-    const result = await loop.run('make a folder named x, go into it, initialize git, then list the files', { os: 'linux', cwd: '/tmp/wf' });
+    const result = await loop.run('make a folder named x, go into it, initialize git, then list the files', { os: 'windows', cwd: '/tmp/wf' });
     expect(result.success).toBe(false);
     expect(result.summary).toContain('Stopped at step 3');
     expect(execute.mock.calls.map(c => c[1].command)).not.toContain('ls -la');
@@ -1313,7 +1315,7 @@ describe('Multi-step chains', () => {
   it('runs nothing when the plan is declined', async () => {
     const { loop, execute } = setup();
     loop.setAuthorizationHandler(vi.fn().mockResolvedValue(false));
-    const result = await loop.run('create a folder called chain-demo, go into it and initialize git', { os: 'linux', cwd: '/tmp/wf' });
+    const result = await loop.run('create a folder called chain-demo, go into it and initialize git', { os: 'windows', cwd: '/tmp/wf' });
     expect(result.declined).toBe(true);
     expect(execute).not.toHaveBeenCalled();
   });
@@ -1354,7 +1356,7 @@ describe('Talking to other terminals', () => {
 
   it("answers what's running in every terminal without calling the model", async () => {
     const { loop, generate } = await setup();
-    const r = await loop.run("what's running in my terminals", { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    const r = await loop.run("what's running in my terminals", { os: 'windows', cwd: '/home/u/app', paneId: 'me' });
     expect(generate).not.toHaveBeenCalled();
     expect(r.summary).toContain('terminal 1 (tab 1, app) (this one)');
     expect(r.summary).toContain('terminal 3 (tab 2, dev server) in /home/u/web: running `npm run dev`');
@@ -1363,7 +1365,7 @@ describe('Talking to other terminals', () => {
   it('shows the last line with text for a busy terminal, never an empty one', async () => {
     const { ws, loop } = await setup();
     ws.register('srv', { sessionId: 's-srv', cwd: '/home/u/web', busy: true, runningCommand: 'python3 -m http.server', outputTail: ['\x1b[32mGET / HTTP/1.1 200\x1b[0m', '', '   ', '\x1b[?2004l\r'] });
-    const r = await loop.run("what's running in my terminals", { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    const r = await loop.run("what's running in my terminals", { os: 'windows', cwd: '/home/u/app', paneId: 'me' });
     expect(r.summary).toContain('last line: GET / HTTP/1.1 200');
     expect(r.summary).not.toMatch(/last line:\s*$/m);
   });
@@ -1377,7 +1379,7 @@ describe('Talking to other terminals', () => {
       ws.appendOutput('idle', 'git pull\nAlready up to date.\nu@h api % \n');
       ws.update('idle', { busy: false });
     }, 300);
-    const r = await loop.run('run git pull in terminal 2', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    const r = await loop.run('run git pull in terminal 2', { os: 'windows', cwd: '/home/u/app', paneId: 'me' });
     expect(writes).toEqual([['s-idle', 'git pull\r']]);
     expect(r.summary).toContain('Ran `git pull` in terminal 2');
     expect(r.summary).toContain('Already up to date.');
@@ -1386,9 +1388,9 @@ describe('Talking to other terminals', () => {
   it('refuses to type into a busy terminal and asks when the target is ambiguous', async () => {
     const { loop, writes } = await setup();
     loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
-    const busy = await loop.run('run ls in tab 2', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    const busy = await loop.run('run ls in tab 2', { os: 'windows', cwd: '/home/u/app', paneId: 'me' });
     expect(busy.summary).toContain('busy running `npm run dev`');
-    const other = await loop.run('run ls in the other terminal', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    const other = await loop.run('run ls in the other terminal', { os: 'windows', cwd: '/home/u/app', paneId: 'me' });
     expect(other.summary).toContain('could mean terminal 2');
     expect(writes).toEqual([]);
   });
@@ -1397,7 +1399,7 @@ describe('Talking to other terminals', () => {
     const { loop, writes } = await setup();
     const handler = vi.fn().mockResolvedValue(true);
     loop.setAuthorizationHandler(handler);
-    const r = await loop.run('stop the server', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    const r = await loop.run('stop the server', { os: 'windows', cwd: '/home/u/app', paneId: 'me' });
     expect(handler).toHaveBeenCalledWith(expect.objectContaining({ capabilityId: 'terminal.interrupt' }));
     expect(writes).toEqual([['s-srv', '\x03']]);
     expect(r.summary).toContain('Stopped `npm run dev` in terminal 3');
@@ -1406,7 +1408,7 @@ describe('Talking to other terminals', () => {
   it('opens a focused tab in a folder, running a command after approval', async () => {
     const { loop, spawner } = await setup();
     loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
-    const r = await loop.run('open a new tab in ../api and run npm run dev', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    const r = await loop.run('open a new tab in ../api and run npm run dev', { os: 'windows', cwd: '/home/u/app', paneId: 'me' });
     expect(spawner).toHaveBeenCalledWith(expect.objectContaining({ placement: 'tab', cwd: '/home/u/api', command: 'npm run dev', focus: true }));
     expect(r.success).toBe(true);
   });
@@ -1414,15 +1416,15 @@ describe('Talking to other terminals', () => {
   it('gives the model new terminal output, and only the last line of terminals with nothing new', async () => {
     const { ws, loop, generate } = await setup();
     ws.appendOutput('srv', 'compiling\nGET / 200\n');
-    await loop.run('summarize the project', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
-    await loop.run('anything new?', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    await loop.run('summarize the project', { os: 'windows', cwd: '/home/u/app', paneId: 'me' });
+    await loop.run('anything new?', { os: 'windows', cwd: '/home/u/app', paneId: 'me' });
     const second = generate.mock.calls[generate.mock.calls.length - 1];
     const prompt = String(second[0]) + JSON.stringify(second[2]?.messages ?? '');
     expect(prompt).toContain('(no new output since the last request)');
     expect(prompt).toContain('GET / 200');
     expect(prompt).not.toContain('compiling');
     ws.appendOutput('srv', 'GET /api 500\n');
-    await loop.run('and now?', { os: 'macos', cwd: '/home/u/app', paneId: 'me' });
+    await loop.run('and now?', { os: 'windows', cwd: '/home/u/app', paneId: 'me' });
     const third = generate.mock.calls[generate.mock.calls.length - 1];
     expect(String(third[0]) + JSON.stringify(third[2]?.messages ?? '')).toContain('GET /api 500');
   });
@@ -1435,7 +1437,7 @@ describe('App actions win over folder navigation', () => {
       getActiveModel: () => ({ modelId: 'mock' }),
       initialize: vi.fn()
     } as any);
-    const r = await loop.run('go to tab 2', { os: 'macos', cwd: '/tmp' });
+    const r = await loop.run('go to tab 2', { os: 'windows', cwd: '/tmp' });
     expect(r.steps[0]).toMatchObject({ tool: '__app__', params: { id: 'focus_tab', tab: 2 } });
     expect(r.summary).not.toMatch(/mkdir|does not exist/);
   });
@@ -1522,7 +1524,7 @@ describe('Making a workflow from plain steps', () => {
     const asked: any[] = [];
     setChoiceHandlerForTests(async (req) => { asked.push(req); return { index: 0 }; });
     try {
-      const r = await loop.run(GOAL, { os: 'macos', cwd: '/tmp/work' });
+      const r = await loop.run(GOAL, { os: 'windows', cwd: '/tmp/work' });
       expect(r.success).toBe(true);
       expect(generate).not.toHaveBeenCalled();
       expect(asked).toHaveLength(1);
@@ -1545,12 +1547,12 @@ describe('Making a workflow from plain steps', () => {
     files.set('/tmp/work/demo-setup.flow', 'existing');
     setChoiceHandlerForTests(async () => ({ index: 1 }));
     try {
-      const r = await loop.run(GOAL, { os: 'macos', cwd: '/tmp/work' });
+      const r = await loop.run(GOAL, { os: 'windows', cwd: '/tmp/work' });
       expect(r.success).toBe(true);
       expect(files.get('/tmp/work/demo-setup.flow')).toBe('existing');
       expect(files.has('/tmp/work/demo-setup-2.flow')).toBe(true);
       setChoiceHandlerForTests(async () => ({ custom: '/tmp/elsewhere/mine.flow' }));
-      const r2 = await loop.run(GOAL, { os: 'macos', cwd: '/tmp/work' });
+      const r2 = await loop.run(GOAL, { os: 'windows', cwd: '/tmp/work' });
       expect(r2.success).toBe(true);
       expect(files.has('/tmp/elsewhere/mine.flow')).toBe(true);
     } finally { setChoiceHandlerForTests(null); }
@@ -1561,10 +1563,10 @@ describe('Making a workflow from plain steps', () => {
     const { loop, files } = setup();
     setChoiceHandlerForTests(async () => null);
     try {
-      const r = await loop.run(GOAL, { os: 'macos', cwd: '/tmp/work' });
+      const r = await loop.run(GOAL, { os: 'windows', cwd: '/tmp/work' });
       expect(r).toMatchObject({ success: false, declined: true });
     } finally { setChoiceHandlerForTests(null); }
-    const headless = await loop.run(GOAL, { os: 'macos', cwd: '/tmp/work' });
+    const headless = await loop.run(GOAL, { os: 'windows', cwd: '/tmp/work' });
     expect(headless.success).toBe(false);
     expect(headless.summary).toContain('no screen to ask where to save');
     expect(files.size).toBe(0);
@@ -1576,12 +1578,12 @@ describe('Making a workflow from plain steps', () => {
     let lines: string[] = [];
     setChoiceHandlerForTests(async (req) => { lines = req.lines ?? []; return { index: 1 }; });
     try {
-      const r = await loop.run('create a workflow that installs node, makes everything faster and opens youtube', { os: 'linux', cwd: '/tmp/work' });
+      const r = await loop.run('create a workflow that installs node, makes everything faster and opens youtube', { os: 'windows', cwd: '/tmp/work' });
       expect(r.summary).toContain('1 step was left out');
       expect(lines.join('\n')).toContain('Left out (not understood): make everything faster');
       expect(JSON.parse([...files.values()][0]).actions).toHaveLength(2);
       setChoiceHandlerForTests(async () => { throw new Error('should not ask'); });
-      const none = await loop.run('make a workflow that flibbers the wobble', { os: 'linux', cwd: '/tmp/work' });
+      const none = await loop.run('make a workflow that flibbers the wobble', { os: 'windows', cwd: '/tmp/work' });
       expect(none.success).toBe(false);
       expect(none.summary).toContain('Not understood: "flibbers the wobble"');
     } finally { setChoiceHandlerForTests(null); }

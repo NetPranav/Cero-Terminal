@@ -123,7 +123,7 @@ describe('Phase 4.7 — The "Dream-State" Nightly Autonomous Self-Play Engine', 
       });
 
       const mockProfile: EnvironmentProfile = {
-        installedTools: ['brew', 'git', 'docker'],
+        installedTools: ['winget', 'git', 'docker'],
         runningServices: ['postgresql@14'],
         activePorts: [{ port: 8847, process: 'antigravity', pid: 55432 }],
         devToolchains: ['git', 'docker', 'node'],
@@ -170,7 +170,7 @@ describe('Phase 4.7 — The "Dream-State" Nightly Autonomous Self-Play Engine', 
         prompt: 'Check which process is listening on port 8847',
         targetEntity: 'port 8847',
         difficulty: 'basic',
-        candidateTemplates: ['lsof -iTCP:8847 -sTCP:LISTEN -P -n'],
+        candidateTemplates: ['Get-NetTCPConnection -LocalPort 8847 -State Listen'],
         expectedVerificationCriteria: {
           exitCode: 0,
           minOutputLength: 5,
@@ -182,13 +182,13 @@ describe('Phase 4.7 — The "Dream-State" Nightly Autonomous Self-Play Engine', 
       expect(result.isVerified).toBe(true);
       expect(result.exitCode).toBe(0);
       expect(result.score).toBe(2.5);
-      expect(result.attemptedCommand).toBe('lsof -iTCP:8847 -sTCP:LISTEN -P -n');
+      expect(result.attemptedCommand).toBe('Get-NetTCPConnection -LocalPort 8847 -State Listen');
 
       // Verify DPO pair was added to DpoDatasetEngine
       const pairs = dpoEngine.getAllPairs();
       expect(pairs.length).toBe(1);
       expect(pairs[0].prompt).toBe(puzzle.prompt);
-      expect(pairs[0].chosen).toBe('lsof -iTCP:8847 -sTCP:LISTEN -P -n');
+      expect(pairs[0].chosen).toBe('Get-NetTCPConnection -LocalPort 8847 -State Listen');
       expect(pairs[0].rejected).toContain('I apologize, but as an AI assistant');
       expect(pairs[0].metadata?.category).toBe('process_port');
       expect(pairs[0].metadata?.source).toBe('self_play');
@@ -208,7 +208,7 @@ describe('Phase 4.7 — The "Dream-State" Nightly Autonomous Self-Play Engine', 
       expect(status.reason).toContain('On battery power');
     });
 
-    it('blocks dreaming when user is actively interacting with the Mac (short idle time)', async () => {
+    it('blocks dreaming when user is actively interacting with the PC (short idle time)', async () => {
       scheduler = new DreamStateScheduler({
         storageDir: testTrainingDir,
         powerChecker: async () => ({ onAcPower: true, batteryLevelPercent: 100 }),
@@ -328,7 +328,7 @@ describe('Phase 4.7 — The "Dream-State" Nightly Autonomous Self-Play Engine', 
       const puzzles = scheduler.generateCurriculum(emptyProfile, 10);
       expect(puzzles.length).toBe(6); // 4 default categories + 2 fallback puzzles
       expect(puzzles.some(p => p.targetEntity === 'top_cpu')).toBe(true);
-      expect(puzzles.some(p => p.targetEntity === 'brew_outdated')).toBe(true);
+      expect(puzzles.some(p => p.targetEntity === 'winget_outdated')).toBe(true);
     });
 
     it('falls back to second candidate if first candidate fails verification', async () => {
@@ -373,13 +373,13 @@ describe('Phase 4.7 — The "Dream-State" Nightly Autonomous Self-Play Engine', 
         prompt: 'Inspect port 8847',
         targetEntity: 'port 8847',
         difficulty: 'basic',
-        candidateTemplates: ['bad_cmd_syntax', 'lsof -i:8847'],
+        candidateTemplates: ['bad_cmd_syntax', 'Get-NetTCPConnection -LocalPort 8847'],
         expectedVerificationCriteria: { exitCode: 0, minOutputLength: 5 },
       };
 
       const res = await scheduler.solvePuzzle(puzzle);
       expect(res.isVerified).toBe(true);
-      expect(res.attemptedCommand).toBe('lsof -i:8847');
+      expect(res.attemptedCommand).toBe('Get-NetTCPConnection -LocalPort 8847');
       expect(candidateAttempt).toBe(2);
     });
 

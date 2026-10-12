@@ -21,14 +21,14 @@ describe('A question answered with echo', () => {
 
   it('is shown as the answer, and nothing is run', async () => {
     const { loop, execute } = loopReplying(reply);
-    const r = await loop.run('how does binary search work?', { os: 'linux', cwd: '/tmp' });
+    const r = await loop.run('how does binary search work?', { os: 'windows', cwd: '/tmp' });
     expect(r.summary).toBe(ANSWER);
     expect(execute).not.toHaveBeenCalled();
   });
 
   it('a request that is not a question still runs its command', async () => {
     const { loop, execute } = loopReplying(JSON.stringify({ action: 'execute', command: `echo 'this prints a long enough sentence'`, explanation: 'Print text' }));
-    await loop.run('print a sentence for me please', { os: 'linux', cwd: '/tmp' });
+    await loop.run('print a sentence for me please', { os: 'windows', cwd: '/tmp' });
     expect(execute.mock.calls.some(c => String(c[1]?.command).startsWith('echo '))).toBe(true);
   });
 });

@@ -40,7 +40,7 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
     agent.onEvent(e => events.push(e));
 
     const result = await agent.run('save workflow my-ci-pipeline', {
-      os: 'linux',
+      os: 'windows',
       cwd: '/home/test',
       sessionId
     });
@@ -85,7 +85,7 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
     agent.onEvent(e => events.push(e));
 
     const result = await agent.run('run workflow deploy-service --port=9090', {
-      os: 'linux',
+      os: 'windows',
       cwd: '/home/test'
     });
 
@@ -112,7 +112,7 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
     const agent = new AgentLoop(mockRegistry);
 
     const result = await agent.run('save workflow scoped-pipeline last 2 commands', {
-      os: 'linux',
+      os: 'windows',
       cwd: '/home/test',
       sessionId
     });
@@ -136,7 +136,7 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
 
     // We use a prompt that fast-paths or runs a command: e.g. "date :: save as workflow get-date"
     const result = await agent.run('date :: save as workflow get-date', {
-      os: 'linux',
+      os: 'windows',
       cwd: '/home/test',
       sessionId
     });
@@ -164,7 +164,7 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
     const agent = new AgentLoop(mockRegistry);
 
     const result = await agent.run('save as workflow my-scoped-pipeline last 3 steps', {
-      os: 'linux',
+      os: 'windows',
       cwd: '/home/test',
       sessionId
     });
@@ -205,7 +205,7 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
     const sessionId = 'test-session-multistage-save';
 
     const result = await agent.run('first clean build, then build backend with cargo :: save as workflow cargo-build-flow', {
-      os: 'linux',
+      os: 'windows',
       cwd: '/home/test',
       sessionId
     });
@@ -252,15 +252,15 @@ describe('AgentLoop Workflow Generic Fast-Path', () => {
     (agent as any).toolExecutor = mockToolExecutor;
 
     const result = await agent.run('first install neovim, then build frontend, after that free port 3000', {
-      os: 'linux',
+      os: 'windows',
       cwd: '/home/test'
     });
 
     expect(result.success).toBe(true);
     // Precondition check was executed
     expect(executedCommands.some(cmd => typeof cmd === 'string' && cmd.includes('neovim'))).toBe(true);
-    // Because which nvim succeeded and if_precondition_true === 'skip', pacman/brew install was skipped
-    expect(executedCommands.some(cmd => typeof cmd === 'string' && (cmd.includes('pacman -S') || cmd.includes('brew install')))).toBe(false);
+    // Because which nvim succeeded and if_precondition_true === 'skip', the winget install was skipped
+    expect(executedCommands.some(cmd => typeof cmd === 'string' && cmd.includes('winget install'))).toBe(false);
     // Subsequent stages were executed
     expect(executedCommands.some(cmd => typeof cmd === 'string' && cmd.includes('npm run build'))).toBe(true);
     expect(executedCommands.some(cmd => typeof cmd === 'string' && cmd.includes('3000'))).toBe(true);

@@ -17,7 +17,7 @@ describe('AgentLoop Cancellation Signal (Task 2.1)', () => {
     controller.abort();
 
     const result = await loop.run('sleep 30', {
-      os: 'linux',
+      os: 'windows',
       cwd: '/test',
       signal: controller.signal
     });
@@ -49,7 +49,7 @@ describe('AgentLoop Cancellation Signal (Task 2.1)', () => {
     const loop = new AgentLoop(mockRegistry as any, mockModelManager as any);
 
     const result = await loop.run('explain quantum physics in detail', {
-      os: 'linux',
+      os: 'windows',
       cwd: '/test',
       signal: controller.signal
     });
@@ -99,7 +99,7 @@ describe('AgentLoop Cancellation Signal (Task 2.1)', () => {
     (loop as any).toolExecutor = mockToolExecutor;
 
     const result = await (loop as any).runChain('my goal', chainPlan, {
-      os: 'linux',
+      os: 'windows',
       cwd: '/test',
       signal: controller.signal
     });

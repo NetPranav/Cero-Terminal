@@ -18,7 +18,7 @@ describe('AgentLoop Queue Management Routes (Task 2.3)', () => {
     };
     loop.setQueueIO(mockQueueIO);
 
-    const result = await loop.run('show the queue', { os: 'linux', cwd: '/workspace' });
+    const result = await loop.run('show the queue', { os: 'windows', cwd: '/workspace' });
 
     expect(result.success).toBe(true);
     expect(result.summary).toBe('The queue is empty.');
@@ -40,7 +40,7 @@ describe('AgentLoop Queue Management Routes (Task 2.3)', () => {
     };
     loop.setQueueIO(mockQueueIO);
 
-    const result = await loop.run('show the queue', { os: 'linux', cwd: '/workspace' });
+    const result = await loop.run('show the queue', { os: 'windows', cwd: '/workspace' });
 
     expect(result.success).toBe(true);
     expect(result.summary).toContain('Queue (2):');
@@ -59,7 +59,7 @@ describe('AgentLoop Queue Management Routes (Task 2.3)', () => {
     };
     loop.setQueueIO(mockQueueIO);
 
-    const result = await loop.run('cancel the second queued request', { os: 'linux', cwd: '/workspace' });
+    const result = await loop.run('cancel the second queued request', { os: 'windows', cwd: '/workspace' });
 
     expect(result.success).toBe(true);
     expect(mockQueueIO.remove).toHaveBeenCalledWith(2);
@@ -77,7 +77,7 @@ describe('AgentLoop Queue Management Routes (Task 2.3)', () => {
     };
     loop.setQueueIO(mockQueueIO);
 
-    const result = await loop.run('cancel the 5th queued request', { os: 'linux', cwd: '/workspace' });
+    const result = await loop.run('cancel the 5th queued request', { os: 'windows', cwd: '/workspace' });
 
     expect(result.success).toBe(false);
     expect(mockQueueIO.remove).toHaveBeenCalledWith(5);
@@ -95,7 +95,7 @@ describe('AgentLoop Queue Management Routes (Task 2.3)', () => {
     };
     loop.setQueueIO(mockQueueIO);
 
-    const result = await loop.run('clear the queue', { os: 'linux', cwd: '/workspace' });
+    const result = await loop.run('clear the queue', { os: 'windows', cwd: '/workspace' });
 
     expect(result.success).toBe(true);
     expect(mockQueueIO.clear).toHaveBeenCalled();
@@ -114,11 +114,11 @@ describe('AgentLoop Queue Management Routes (Task 2.3)', () => {
     };
     loop.setQueueIO(mockQueueIO);
 
-    const pauseResult = await loop.run('pause the queue', { os: 'linux', cwd: '/workspace' });
+    const pauseResult = await loop.run('pause the queue', { os: 'windows', cwd: '/workspace' });
     expect(pauseResult.success).toBe(true);
     expect(mockQueueIO.setPaused).toHaveBeenCalledWith(true);
 
-    const resumeResult = await loop.run('resume the queue', { os: 'linux', cwd: '/workspace' });
+    const resumeResult = await loop.run('resume the queue', { os: 'windows', cwd: '/workspace' });
     expect(resumeResult.success).toBe(true);
     expect(mockQueueIO.setPaused).toHaveBeenCalledWith(false);
   });

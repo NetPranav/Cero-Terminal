@@ -34,7 +34,7 @@ describe('AgentLoop Directory Navigation Integration', () => {
     const events: any[] = [];
     agentLoop.onEvent((e) => events.push(e));
 
-    const res = await agentLoop.run('switch to backend', { os: 'linux', cwd: '/workspace' });
+    const res = await agentLoop.run('switch to backend', { os: 'windows', cwd: '/workspace' });
 
     expect(res.success).toBe(true);
     expect(res.cdPath).toBe('/workspace/backend');
@@ -56,14 +56,14 @@ describe('AgentLoop Directory Navigation Integration', () => {
     agentLoop.onEvent((e) => events.push(e));
 
     // Turn 1: User says "switch to sentinal"
-    const turn1 = await agentLoop.run('switch to sentinal', { os: 'linux', cwd: '/workspace' });
+    const turn1 = await agentLoop.run('switch to sentinal', { os: 'windows', cwd: '/workspace' });
     expect(turn1.awaitingInput).toBe(true);
     expect(turn1.summary).toContain("Did you mean 'cero'");
     expect(agentLoop.hasPendingQuestion()).toBe(true);
     expect(events.some(e => e.type === 'question' && e.message.includes("Did you mean 'cero'"))).toBe(true);
 
     // Turn 2: User responds "yes"
-    const turn2 = await agentLoop.run('yes', { os: 'linux', cwd: '/workspace' });
+    const turn2 = await agentLoop.run('yes', { os: 'windows', cwd: '/workspace' });
     expect(turn2.success).toBe(true);
     expect(turn2.cdPath).toBe('/workspace/cero');
     expect(agentLoop.hasPendingQuestion()).toBe(false);
@@ -85,13 +85,13 @@ describe('AgentLoop Directory Navigation Integration', () => {
     agentLoop.onEvent((e) => events.push(e));
 
     // Turn 1: User says "cd into my_new_app"
-    const turn1 = await agentLoop.run('cd into my_new_app', { os: 'linux', cwd: '/workspace' });
+    const turn1 = await agentLoop.run('cd into my_new_app', { os: 'windows', cwd: '/workspace' });
     expect(turn1.awaitingInput).toBe(true);
     expect(turn1.summary).toContain("does not exist. Would you like me to create it");
     expect(agentLoop.hasPendingQuestion()).toBe(true);
 
     // Turn 2: User responds "create it"
-    const turn2 = await agentLoop.run('create it', { os: 'linux', cwd: '/workspace' });
+    const turn2 = await agentLoop.run('create it', { os: 'windows', cwd: '/workspace' });
     expect(turn2.success).toBe(true);
     expect(turn2.cdPath).toBe('/workspace/my_new_app');
     expect(events.some(e => e.type === 'tool_done' && e.message.includes('Created directory'))).toBe(true);
@@ -111,10 +111,10 @@ describe('AgentLoop Directory Navigation Integration', () => {
     const events: any[] = [];
     agentLoop.onEvent((e) => events.push(e));
 
-    await agentLoop.run('switch to ghost_dir', { os: 'linux', cwd: '/workspace' });
+    await agentLoop.run('switch to ghost_dir', { os: 'windows', cwd: '/workspace' });
     expect(agentLoop.hasPendingQuestion()).toBe(true);
 
-    const turn2 = await agentLoop.run('cancel', { os: 'linux', cwd: '/workspace' });
+    const turn2 = await agentLoop.run('cancel', { os: 'windows', cwd: '/workspace' });
     expect(turn2.success).toBe(true);
     expect(turn2.summary).toMatch(/cancelled/i);
     expect(agentLoop.hasPendingQuestion()).toBe(false);

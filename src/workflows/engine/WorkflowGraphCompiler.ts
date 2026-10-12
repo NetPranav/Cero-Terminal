@@ -24,7 +24,7 @@ function stubActionDefinition(actionId: string, description: string): ActionDefi
     category: actionId.split('.')[0] || 'workflow',
     tags: ['workflow'],
     aliases: [],
-    supportedPlatforms: ['macos'],
+    supportedPlatforms: ['windows'],
     requiredPermissions: [],
     inputs: [],
     outputs: [],

@@ -43,7 +43,7 @@ export class StateQueries {
   }
 
   /**
-   * Check if an application is installed on macOS in known application folders.
+   * Check if an application is in the installed-apps list of the state model.
    */
   public async isInstalled(appName: string): Promise<StateMetadata<boolean>> {
     const cacheKey = `isInstalled:${appName.toLowerCase()}`;

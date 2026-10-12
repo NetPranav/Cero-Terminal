@@ -31,7 +31,7 @@ const HOME = '\x1b[H';
 const END = '\x1b[F';
 const WORD_LEFT = '\x1b[1;5D';
 const WORD_RIGHT = '\x1b[1;5C';
-// Alt + arrow variants (macOS word movement)
+// Alt + arrow variants (word movement)
 const ALT_LEFT = '\x1bb';
 const ALT_RIGHT = '\x1bf';
 

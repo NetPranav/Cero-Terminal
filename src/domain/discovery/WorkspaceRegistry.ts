@@ -6,6 +6,7 @@
  */
 
 import { DiscoveredProject, ProjectDiscoveryEngine } from './ProjectDiscoveryEngine';
+import { homeDirectory } from '../../utils/homeDir';
 
 function joinPath(...parts: string[]): string {
   return parts.map((p, i) => i === 0 ? p.replace(/\/+$/, '') : p.replace(/^\/+|\/+$/g, '')).filter(Boolean).join('/');
@@ -101,14 +102,7 @@ export class WorkspaceRegistry {
    * Fast native Tauri discovery scanning the actual current directory
    */
   private async scanTauriNative(invoke: any, currentCwd?: string): Promise<DiscoveredProject[]> {
-    let home = '';
-    try {
-      const out = await invoke('execute_command', {
-        command: 'sh',
-        args: ['-c', 'echo $HOME']
-      });
-      home = (out?.stdout || '').trim();
-    } catch { /* ignore */ }
+    const home = await homeDirectory();
 
     // Resolve target directory: prioritize current open directory
     let target = currentCwd || '.';
@@ -116,6 +110,7 @@ export class WorkspaceRegistry {
       target = home ? (target === '~' ? home : target.replace(/^~/, home)) : '.';
     }
 
+    // TODO(3.7): this scanner and the fallback below run through sh; use PowerShell (Get-ChildItem) on Windows
     // High performance Python scanner targeting actual current directory
     const pyScanner = `python3 -c "
 import os, sys, json

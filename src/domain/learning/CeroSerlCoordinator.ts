@@ -3,7 +3,7 @@
  * 
  * Part of Cero-SERL (Self-Evolving Reflexion Loop & Frontier On-Device Intelligence):
  * Unifies and synchronizes all 8 Tier 4 subsystems into a harmonious, closed-loop,
- * self-evolving intelligence architecture on Apple Silicon macOS:
+ * self-evolving intelligence architecture:
  * 
  * 1. ShadowPtySimulator (Phase 4.1): Speculative RAM candidate rollouts
  * 2. KnowledgeDeficitLogger (Phase 4.2): Intercepts failures, refusals, and excuses

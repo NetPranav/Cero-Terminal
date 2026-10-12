@@ -174,7 +174,7 @@ export const EmbeddedModelManagerModal: React.FC<EmbeddedModelManagerModalProps>
         setDownloadMsg('Download complete. Checking the llama.cpp engine...');
         const engineReady = await EmbeddedEngineManager.getInstance().ensureEngineInstalled();
         if (!engineReady) {
-          setDownloadMsg('Model ready, but the llama.cpp engine could not be installed. Install llama-server from your package manager (e.g. `pacman -S llama.cpp`) and reopen this panel.');
+          setDownloadMsg('Model ready, but the llama.cpp engine could not be installed. Download the Windows llama.cpp build from github.com/ggml-org/llama.cpp/releases, put llama-server.exe on your PATH and reopen this panel.');
           await refreshStatus();
           return;
         }

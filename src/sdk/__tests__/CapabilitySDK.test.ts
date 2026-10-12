@@ -39,7 +39,7 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
       expect(rolledBack).toBe(true);
     });
 
-    it('should automatically resolve macOS application aliases like "chrome" to "Google Chrome" and custom user registrations', async () => {
+    it('should automatically resolve application aliases like "chrome" to "Google Chrome" and custom user registrations', async () => {
       const appDriver = new ApplicationCapability();
       const chromeRes = await appDriver.open('chrome', ['https://youtube.com']);
       expect(chromeRes.success).toBe(true);
@@ -47,8 +47,8 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
 
       // Test runtime custom registration
       const appRegistry = AppAliasRegistry.getInstance();
-      appRegistry.setAlias('myedit', 'TextEdit');
-      expect(appRegistry.resolve('myedit')).toBe('TextEdit');
+      appRegistry.setAlias('myedit', 'Notepad++');
+      expect(appRegistry.resolve('myedit')).toBe('Notepad++');
       expect(appRegistry.resolve('chrome')).toBe('Google Chrome');
       expect(appRegistry.resolve('vscode')).toBe('Visual Studio Code');
     });
@@ -60,41 +60,28 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
       expect((res.data as any).dryRun).toBe(true);
     });
 
-    it('should resolve Homebrew package identifiers and properly target casks on macOS', async () => {
+    it('resolves winget package ids for known apps and passes other names on', async () => {
       const appRegistry = AppAliasRegistry.getInstance();
-      
-      const bravePkg = appRegistry.resolvePackage('Brave Browser');
-      expect(bravePkg.name).toBe('brave-browser');
-      expect(bravePkg.isCask).toBe(true);
-
-      const chromePkg = appRegistry.resolvePackage('Google Chrome');
-      expect(chromePkg.name).toBe('google-chrome');
-      expect(chromePkg.isCask).toBe(true);
-
-      const vscodePkg = appRegistry.resolvePackage('VS Code');
-      expect(vscodePkg.name).toBe('visual-studio-code');
-      expect(vscodePkg.isCask).toBe(true);
-
-      const gitPkg = appRegistry.resolvePackage('git');
-      expect(gitPkg.name).toBe('git');
-      expect(gitPkg.isCask).toBe(false);
+      expect(appRegistry.resolvePackage('Brave Browser')).toEqual({ id: 'Brave.Brave', known: true });
+      expect(appRegistry.resolvePackage('Google Chrome')).toEqual({ id: 'Google.Chrome', known: true });
+      expect(appRegistry.resolvePackage('VS Code')).toEqual({ id: 'Microsoft.VisualStudioCode', known: true });
+      expect(appRegistry.resolvePackage('git')).toEqual({ id: 'Git.Git', known: true });
+      expect(appRegistry.resolvePackage('some-tool')).toEqual({ id: 'some-tool', known: false });
     });
 
-    it('should execute application update with normalized cask arguments', async () => {
+    it('updates an application with winget, and leaves apps that ship with Windows to Windows Update', async () => {
       const appDriver = new ApplicationCapability();
-      
-      // GUI Application update test
+
       const braveRes = await appDriver.update('Brave Browser');
       expect(braveRes.success).toBe(true);
       expect(braveRes.data?.updated).toBe(true);
-      expect(braveRes.data?.package).toBe('brave-browser');
-      expect(braveRes.commandExecuted).toBe('brew upgrade --cask brave-browser');
+      expect(braveRes.data?.package).toBe('Brave.Brave');
+      expect(braveRes.commandExecuted).toBe('winget upgrade -e --id Brave.Brave');
 
-      // System app update exclusion test
-      const safariRes = await appDriver.update('Safari');
-      expect(safariRes.success).toBe(true);
-      expect(safariRes.data?.updated).toBe(false);
-      expect((safariRes.data as any)?.reason).toBe('System application');
+      const explorerRes = await appDriver.update('explorer');
+      expect(explorerRes.success).toBe(true);
+      expect(explorerRes.data?.updated).toBe(false);
+      expect((explorerRes.data as any)?.reason).toBe('System application');
     });
 
     it('should handle cancellation cleanly', async () => {

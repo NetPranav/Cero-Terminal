@@ -8,6 +8,7 @@
 import { BaseCapabilityDriver, CapabilityExecutionResult, ExecutionContext, Platform } from '../CapabilitySDK';
 import { readTextFile, readDir, copyFile, remove, exists, type DirEntry, rename, mkdir, writeTextFile } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
+import { homeDirectory } from '../../../utils/homeDir';
 
 export type FsOperation =
   | 'list' | 'read' | 'search' | 'copy'
@@ -80,18 +81,10 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
       return FilesystemSDKCapability.cachedHomeDir;
     }
 
-    try {
-      const hRes = await invoke<{ stdout: string }>('execute_command', {
-        command: 'sh',
-        args: ['-c', 'echo $HOME']
-      });
-      const hd = (hRes?.stdout || '').trim();
-      if (hd) {
-        FilesystemSDKCapability.cachedHomeDir = hd;
-        return hd;
-      }
-    } catch {
-      // fallback
+    const hd = await homeDirectory();
+    if (hd) {
+      FilesystemSDKCapability.cachedHomeDir = hd;
+      return hd;
     }
 
     return '';
@@ -225,13 +218,14 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
           try {
             await writeTextFile(resolvedPath, content);
           } catch {
-            const res = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', { command: 'sh', args: ['-c', 'mkdir -p -- "$(dirname -- "$1")" && touch -- "$1"', 'sh', resolvedPath] });
+            const quoted = `'${resolvedPath.replace(/'/g, "''")}'`;
+            const res = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', { command: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', `New-Item -ItemType File -Force -Path ${quoted} | Out-Null`] });
             if (res.code !== 0) {
               return { success: false, error: { code: 'CREATE_FILE_FAILED', message: res.stderr || `Failed to create file at ${resolvedPath}` } };
             }
           }
           const stdout = `File created successfully at: ${targetPath}`;
-          return { success: true, data: { path: resolvedPath, created: true, stdout }, commandExecuted: `touch "${resolvedPath}"`, rollbackPayload: { action: 'remove', target: resolvedPath } };
+          return { success: true, data: { path: resolvedPath, created: true, stdout }, commandExecuted: `New-Item -ItemType File -Force -Path '${resolvedPath}'`, rollbackPayload: { action: 'remove', target: resolvedPath } };
         }
 
         case 'navigate':
@@ -277,12 +271,15 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
 
         case 'trash': {
           if (!resolvedPath) return { success: false, error: { code: 'MISSING_PATH', message: 'Path required' } };
-          const trashCmd = await invoke<{ code: number; stderr: string }>('execute_command', { command: 'sh', args: ['-c', 'mv -- "$1" "$HOME/.Trash/"', 'sh', resolvedPath] });
+          // The Recycle Bin, through the same call File Explorer uses
+          const quoted = `'${resolvedPath.replace(/'/g, "''")}'`;
+          const recycle = `Add-Type -AssemblyName Microsoft.VisualBasic; if (Test-Path -LiteralPath ${quoted} -PathType Container) { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory(${quoted}, 'OnlyErrorDialogs', 'SendToRecycleBin') } else { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile(${quoted}, 'OnlyErrorDialogs', 'SendToRecycleBin') }`;
+          const trashCmd = await invoke<{ code: number; stderr: string }>('execute_command', { command: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', recycle] });
           if (trashCmd.code !== 0) {
-            return { success: false, error: { code: 'TRASH_FAILED', message: trashCmd.stderr || `Failed to move ${resolvedPath} to Trash` } };
+            return { success: false, error: { code: 'TRASH_FAILED', message: trashCmd.stderr || `Failed to move ${resolvedPath} to the Recycle Bin` } };
           }
-          const stdout = `[Security Engine Authorized] Moved to System Trash: ${targetPath}`;
-          return { success: true, data: { trashed: targetPath, stdout }, commandExecuted: `mv "${resolvedPath}" ~/.Trash/`, rollbackPayload: { action: 'restore', target: targetPath } };
+          const stdout = `[Security Engine Authorized] Moved to the Recycle Bin: ${targetPath}`;
+          return { success: true, data: { trashed: targetPath, stdout }, commandExecuted: `Recycle Bin <- ${resolvedPath}`, rollbackPayload: { action: 'restore', target: targetPath } };
         }
 
         case 'search':

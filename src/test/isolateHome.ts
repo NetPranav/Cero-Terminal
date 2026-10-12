@@ -4,6 +4,9 @@
  * Many stores resolve `~/.cero/...` from process.env.HOME. Without this, `npm test` wrote
  * fixtures (fake adapter manifests, "prod-cluster" sessions, steering vectors) into the
  * developer's real ~/.cero and changed what the installed app loads.
+ *
+ * The app's platform is fixed to 'windows' (src/shared/platform.ts), so every test runs as Windows on
+ * any host; the ZDOTDIR and XDG variables only keep a Linux CI host's shell away from the real home.
  */
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';

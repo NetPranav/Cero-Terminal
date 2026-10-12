@@ -15,7 +15,7 @@ export interface RuleContext {
   output: string;       // Combined stdout and stderr
   exitCode?: number;    // Process exit code (e.g. 1, 127)
   cwd?: string;         // Working directory
-  os?: string;          // 'mac' | 'linux' | 'win'
+  os?: string;          // 'windows'
 }
 
 export interface RemediationSuggestion {
@@ -34,7 +34,6 @@ export interface RemediationRule {
   name: string;
   description: string;
   priority: number;     // Lower number = higher priority (e.g. 10 is higher priority than 50)
-  platforms?: ('mac' | 'linux' | 'win')[];
   match: (ctx: RuleContext) => boolean;
   getRemediation: (ctx: RuleContext) => RemediationSuggestion | null;
 }
@@ -86,23 +85,10 @@ export class DeterministicRuleOracle {
     const rawOut = (context.output || '').trim();
     if (!rawCmd && !rawOut) return [];
 
-    const currentOs = (context.os || 'windows').toLowerCase();
     const suggestions: RemediationSuggestion[] = [];
     const priorityOf = new Map<RemediationSuggestion, number>();
 
     for (const rule of this.rules) {
-      // Platform isolation check
-      if (rule.platforms && rule.platforms.length > 0) {
-        const matchesPlatform = rule.platforms.some(p => {
-          if (p === 'mac' && (currentOs.includes('mac') || currentOs.includes('darwin'))) return true;
-          if (p === 'linux' && currentOs.includes('linux')) return true;
-          // Whole-name match: "darwin" contains "win"
-          if (p === 'win' && /^(?:win|win32|windows)$/.test(currentOs)) return true;
-          return false;
-        });
-        if (!matchesPlatform) continue;
-      }
-
       try {
         if (rule.match(context)) {
           const suggestion = rule.getRemediation(context);
@@ -1195,28 +1181,6 @@ export class DeterministicRuleOracle {
         title: 'Run "grep" instead of "gerp"',
         explanation: 'Corrected typo: "gerp" -> "grep"',
         fixedCommand: ctx.command.replace(/^gerp\s+/, 'grep '),
-        confidence: 0.99,
-        autoExecutable: true
-      })
-    });
-
-    this.registerRule({
-      id: 'briw_to_brew',
-      name: 'Correct "briw" to "brew"',
-      description: 'Correct common typo briw to brew',
-      priority: 10,
-      match: (ctx) => {
-        return (
-          ctx.command.startsWith('briw ') &&
-          (/command not found/i.test(ctx.output) || ctx.exitCode === 127)
-        );
-      },
-      getRemediation: (ctx) => ({
-        ruleId: 'briw_to_brew',
-        ruleName: 'Correct briw to brew',
-        title: 'Run "brew" instead of "briw"',
-        explanation: 'Corrected typo: "briw" -> "brew"',
-        fixedCommand: ctx.command.replace(/^briw\s+/, 'brew '),
         confidence: 0.99,
         autoExecutable: true
       })

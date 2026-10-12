@@ -301,9 +301,9 @@ export class ShadowPtySimulator {
     }
 
     // 8. Package manager probes
-    const brewMatch = trimmed.match(/^\s*brew\s+install\s+([a-zA-Z0-9_-]+)/i);
-    if (brewMatch) {
-      return { predicate: `brew info ${brewMatch[1]}`, isTransformed: true };
+    const wingetMatch = trimmed.match(/^\s*winget\s+install\s+(?:-e\s+)?(?:--id\s+)?([a-zA-Z0-9_.-]+)/i);
+    if (wingetMatch) {
+      return { predicate: `winget show -e --id ${wingetMatch[1]}`, isTransformed: true };
     }
 
     // 9. Generic safe fallback for unmapped mutating commands:

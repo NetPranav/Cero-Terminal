@@ -1,8 +1,7 @@
 /**
  * clipboard.ts — Unified Native & Web Clipboard Management for Cero
  * 
- * Provides robust clipboard access across desktop Linux (Wayland wl-clipboard / X11),
- * macOS, and Windows via Tauri's native clipboard plugin, with fallback to Web API
+ * Provides clipboard access through Tauri's native clipboard plugin, with fallback to the Web API
  * navigator.clipboard for test and browser environments.
  */
 
@@ -22,10 +21,10 @@ async function getClipboardPlugin(): Promise<typeof import('@tauri-apps/plugin-c
 
 /**
  * Reads plain text from the system clipboard.
- * Prioritizes Tauri native clipboard plugin to bypass Linux WebKitGTK permission restrictions.
+ * Prioritizes the Tauri native clipboard plugin, which needs no WebView permission prompt.
  */
 export async function readClipboardText(): Promise<string> {
-  // 1. Try native desktop clipboard via Tauri plugin (wl-clipboard / X11)
+  // 1. Try the native clipboard via the Tauri plugin
   try {
     const plugin = await getClipboardPlugin();
     if (plugin && typeof plugin.readText === 'function') {

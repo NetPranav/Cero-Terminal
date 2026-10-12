@@ -18,7 +18,7 @@ export function createTestNode(id: string, actionId: string, inputs: Record<stri
       category: actionId.split('.')[0] || 'test',
       tags: [],
       aliases: [],
-      supportedPlatforms: ['macos'],
+      supportedPlatforms: ['windows'],
       requiredPermissions: [],
       inputs: [],
       outputs: [],

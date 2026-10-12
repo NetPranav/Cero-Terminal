@@ -37,7 +37,7 @@ After successfully completing all of these steps, save the verified execution as
 
   it('decomposes numbered procedural prompt into executable phases with non-empty shell commands', async () => {
     const engine = new AdaptivePlanEngine();
-    const plan = await engine.createPlan(complexPrompt, { os: 'linux', cwd: '/home/user' });
+    const plan = await engine.createPlan(complexPrompt, { os: 'windows', cwd: '/home/user' });
 
     expect(plan.phases.length).toBeGreaterThanOrEqual(6);
 
@@ -60,7 +60,7 @@ After successfully completing all of these steps, save the verified execution as
 
   it('executes the full multi-phase plan without throwing missing shell command errors', async () => {
     const engine = new AdaptivePlanEngine();
-    const plan = await engine.createPlan(complexPrompt, { os: 'linux', cwd: '/home/user' });
+    const plan = await engine.createPlan(complexPrompt, { os: 'windows', cwd: '/home/user' });
 
     const executedCommands: string[] = [];
     const mockToolExecutor = {
@@ -83,7 +83,7 @@ After successfully completing all of these steps, save the verified execution as
     const phaseStarted: string[] = [];
     const result = await engine.executePlan(complexPrompt, plan, {
       cwd: '/home/user',
-      os: 'linux',
+      os: 'windows',
       toolExecutor: mockToolExecutor,
       onPhaseStart: (p) => phaseStarted.push(p.id)
     });
@@ -122,7 +122,7 @@ After successfully completing all of these steps, save the verified execution as
     };
 
     const engine = new AdaptivePlanEngine(mockModelProvider, 'mock-model');
-    const plan = await engine.createPlan('create workspace', { os: 'linux', cwd: '/home/user' });
+    const plan = await engine.createPlan('create workspace', { os: 'windows', cwd: '/home/user' });
 
     expect(plan.phases.length).toBe(2);
     expect(plan.phases[0].params?.command).toBe('mkdir -p /tmp/cero-workflow-test/project');
@@ -135,7 +135,7 @@ After successfully completing all of these steps, save the verified execution as
     expect(directive.isSaveAsWorkflow).toBe(true);
 
     const engine = new AdaptivePlanEngine();
-    const plan = await engine.createPlan(directive.taskPrompt, { os: 'linux', cwd: '/home/user' });
+    const plan = await engine.createPlan(directive.taskPrompt, { os: 'windows', cwd: '/home/user' });
 
     const mockToolExecutor = {
       hasDriver: vi.fn().mockReturnValue(true),
@@ -147,7 +147,7 @@ After successfully completing all of these steps, save the verified execution as
 
     const executionResult = await engine.executePlan(directive.taskPrompt, plan, {
       cwd: '/home/user',
-      os: 'linux',
+      os: 'windows',
       toolExecutor: mockToolExecutor
     });
 

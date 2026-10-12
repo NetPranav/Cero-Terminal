@@ -37,7 +37,7 @@ describe('Offering the API model when the built-in model keeps failing the actio
     const { loop, cloud } = setup({ externalAvailable: true });
     const titles: string[] = [];
     setChoiceHandlerForTests(async q => { titles.push(q.title); return { index: 1 }; });
-    const r = await loop.run(GOAL, { os: 'linux', cwd: '/tmp' });
+    const r = await loop.run(GOAL, { os: 'windows', cwd: '/tmp' });
     expect(titles.some(t => /built-in model could not do this reliably\. Try it with Cloud API \(api-model\)\?/.test(t))).toBe(true);
     expect(cloud.generate).not.toHaveBeenCalled();
     expect(r.success).toBe(false);
@@ -50,7 +50,7 @@ describe('Offering the API model when the built-in model keeps failing the actio
     cloud.generate
       .mockResolvedValueOnce({ content: GOOD, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }, latencyMs: 1 })
       .mockResolvedValue({ content: JSON.stringify({ action: 'done', summary: 'Greeted.' }), usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }, latencyMs: 1 });
-    await loop.run(GOAL, { os: 'linux', cwd: '/tmp' });
+    await loop.run(GOAL, { os: 'windows', cwd: '/tmp' });
     // asked once for the whole request, however many steps it takes
     expect(asked.filter(t => /reliably/.test(t))).toHaveLength(1);
     expect(execute.mock.calls.some(c => String(c[1]?.command).includes('echo hello-from-api'))).toBe(true);
@@ -60,7 +60,7 @@ describe('Offering the API model when the built-in model keeps failing the actio
     const { loop, cloud } = setup({ externalAvailable: false });
     const titles: string[] = [];
     setChoiceHandlerForTests(async q => { titles.push(q.title); return null; });
-    await loop.run(GOAL, { os: 'linux', cwd: '/tmp' });
+    await loop.run(GOAL, { os: 'windows', cwd: '/tmp' });
     expect(titles.some(t => /reliably/.test(t))).toBe(false);
     expect(cloud.generate).not.toHaveBeenCalled();
   });

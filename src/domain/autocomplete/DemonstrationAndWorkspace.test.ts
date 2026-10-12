@@ -20,7 +20,7 @@ describe('DemonstrationProvider & WorkspaceContextProvider (Issue 5.2)', () => {
       currentInput: '> comp',
       cursorPosition: 6,
       cwd: '/test',
-      os: 'macos'
+      os: 'windows'
     });
 
     expect(suggestions.length).toBeGreaterThan(0);
@@ -39,7 +39,7 @@ describe('DemonstrationProvider & WorkspaceContextProvider (Issue 5.2)', () => {
       currentInput: 'kill -9',
       cursorPosition: 7,
       cwd: '/test',
-      os: 'macos'
+      os: 'windows'
     });
 
     expect(suggestions.length).toBeGreaterThan(0);
@@ -54,7 +54,7 @@ describe('DemonstrationProvider & WorkspaceContextProvider (Issue 5.2)', () => {
       currentInput: 'npm ',
       cursorPosition: 4,
       cwd,
-      os: 'macos'
+      os: 'windows'
     });
 
     expect(suggestions.length).toBeGreaterThan(0);

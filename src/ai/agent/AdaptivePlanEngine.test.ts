@@ -4,7 +4,7 @@ import { AdaptivePlanEngine, AgentPlan, PlanPhase } from './AdaptivePlanEngine';
 describe('AdaptivePlanEngine — Dynamic Multi-Phase Planning & Execution', () => {
   it('should generate a multi-phase plan for composite user requests', async () => {
     const engine = new AdaptivePlanEngine();
-    const plan = await engine.createPlan('connect bluetooth headphones Soundcore Space One', { os: 'mac', cwd: '/Users/test' });
+    const plan = await engine.createPlan('connect bluetooth headphones Soundcore Space One', { os: 'windows', cwd: '/Users/test' });
 
     expect(plan).toBeDefined();
     expect(plan.phases.length).toBeGreaterThanOrEqual(3);
@@ -47,7 +47,7 @@ describe('AdaptivePlanEngine — Dynamic Multi-Phase Planning & Execution', () =
 
     const result = await engine.executePlan('connect bluetooth headphone Soundcore Space One', plan, {
       cwd: '/Users/test',
-      os: 'mac',
+      os: 'windows',
       toolExecutor: mockToolExecutor,
       onPhaseStart: (p) => phaseStarted.push(p.id),
       onPhaseDone: (p) => phaseDone.push(p.id)
@@ -106,7 +106,7 @@ describe('AdaptivePlanEngine — Dynamic Multi-Phase Planning & Execution', () =
     const phaseStarted: string[] = [];
     const result = await engine.executePlan('connect bluetooth headphone Space One', plan, {
       cwd: '/Users/test',
-      os: 'mac',
+      os: 'windows',
       toolExecutor: mockToolExecutor,
       onPhaseStart: (p) => phaseStarted.push(p.id)
     });
@@ -149,7 +149,7 @@ describe('AdaptivePlanEngine — Dynamic Multi-Phase Planning & Execution', () =
     };
 
     const cloudEngine = new AdaptivePlanEngine(mockCloudAI, 'gpt-4o');
-    const plan = await cloudEngine.createPlan('build and deploy nextjs app', { os: 'mac', cwd: '/workspace' });
+    const plan = await cloudEngine.createPlan('build and deploy nextjs app', { os: 'windows', cwd: '/workspace' });
 
     expect(mockCloudAI.generate).toHaveBeenCalledOnce();
     expect(plan.phases.length).toBe(4);
@@ -197,7 +197,7 @@ describe('AdaptivePlanEngine — Dynamic Multi-Phase Planning & Execution', () =
     const outputLogs: string[] = [];
     const result = await engine.executePlan('start server', plan, {
       cwd: '/workspace',
-      os: 'mac',
+      os: 'windows',
       toolExecutor: mockToolExecutor,
       onStepOutput: (out) => outputLogs.push(out)
     });
@@ -262,7 +262,7 @@ describe('AdaptivePlanEngine — Dynamic Multi-Phase Planning & Execution', () =
 
     const result = await engine.executePlan('flash firmware', plan, {
       cwd: '/workspace',
-      os: 'mac',
+      os: 'windows',
       toolExecutor: mockToolExecutor,
       onPhysicalActionRequired: mockPhysicalActionHandler
     });
@@ -355,7 +355,7 @@ describe('AdaptivePlanEngine — Dynamic Multi-Phase Planning & Execution', () =
 
   it('should generate a 3-phase plan for system service orchestration', async () => {
     const engine = new AdaptivePlanEngine();
-    const plan = await engine.createPlan('restart postgresql service', { os: 'linux', cwd: '/home/user' });
+    const plan = await engine.createPlan('restart postgresql service', { os: 'windows', cwd: '/home/user' });
 
     expect(plan).toBeDefined();
     expect(plan.summary).toContain('RESTART system service "postgresql"');
@@ -371,7 +371,7 @@ describe('AdaptivePlanEngine — Dynamic Multi-Phase Planning & Execution', () =
     const engine = new AdaptivePlanEngine();
     const plan = await engine.createPlan(
       'inside the frontend folder inside desktop initialize the next project into it and also git initialize it after',
-      { os: 'mac', cwd: '/Users/test' }
+      { os: 'windows', cwd: '/Users/test' }
     );
 
     expect(plan).toBeDefined();
@@ -425,7 +425,7 @@ describe('AdaptivePlanEngine — Dynamic Multi-Phase Planning & Execution', () =
 
     const result = await engine.executePlan('scaffold and git init', plan, {
       cwd: '/tmp/test_scaffold',
-      os: 'mac',
+      os: 'windows',
       toolExecutor: mockToolExecutor
     });
 

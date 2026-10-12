@@ -16,7 +16,7 @@ describe('DecisionCall', () => {
   });
 
   it('builds structured decision call with system prompt, history, and GBNF options', () => {
-    const call = buildDecisionCall('check my ip', { os: 'linux', cwd: '/workspace' }, [
+    const call = buildDecisionCall('check my ip', { os: 'windows', cwd: '/workspace' }, [
       { role: 'user', content: 'prior request' }
     ]);
 
@@ -31,7 +31,7 @@ describe('DecisionCall', () => {
     expect(call.options.grammar).toBeDefined();
     expect(call.options.mode).toBe('decision');
 
-    const plannerCall = buildDecisionCall('make a plan', { os: 'linux', cwd: '/workspace' }, [], {
+    const plannerCall = buildDecisionCall('make a plan', { os: 'windows', cwd: '/workspace' }, [], {
       isPlanner: true
     });
     expect(plannerCall.options.maxTokens).toBe(1024);
@@ -40,7 +40,7 @@ describe('DecisionCall', () => {
   it('honors custom systemPrompt and messages passed in extra', () => {
     const customPrompt = 'Custom System Rules';
     const customMessages = [{ role: 'user', content: 'custom prompt' }];
-    const call = buildDecisionCall('ignored goal', { os: 'linux', cwd: '/test' }, [], {
+    const call = buildDecisionCall('ignored goal', { os: 'windows', cwd: '/test' }, [], {
       systemPrompt: customPrompt,
       messages: customMessages
     });

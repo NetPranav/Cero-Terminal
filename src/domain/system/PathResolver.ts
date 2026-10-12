@@ -31,7 +31,7 @@ export interface ResolveInput {
 }
 
 export const COMMON_PLACES = ['Projects', 'projects', 'Project Folder', 'code', 'dev', 'src', 'work', 'repos', 'git', 'github'];
-/** macOS asks permission the first time an app looks in these, so they are searched last and only when nothing else matched */
+/** Large folders (often synced by OneDrive), so they are searched last and only when nothing else matched */
 export const PROTECTED_PLACES = ['Documents', 'Desktop', 'Downloads'];
 const EXACT = 95;
 const GAP = 15;
@@ -105,7 +105,7 @@ export async function resolvePath(input: ResolveInput, ctx: { cwd: string }, pro
           const segs = h.path.split(/[\\/]/).filter(Boolean);
           if (tail.length === 2 ? segs.slice(-2).join('/').toLowerCase() === tail.join('/').toLowerCase() : base(h.path).toLowerCase() === tail[0].toLowerCase()) hintDirs.push(h.path);
         }
-        // not under the home folder proper: try the folders macOS asks permission for, since the person named a place
+        // not under the home folder proper: try the large folders searched last, since the person named a place
         if (hintDirs.length === 0) {
           for (const place of PROTECTED_PLACES) {
             const dir = join(home, place);

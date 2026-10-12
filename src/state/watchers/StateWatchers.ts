@@ -20,7 +20,7 @@ export class StateWatchers {
     if (this.active) return;
     this.active = true;
 
-    // In a bare macOS implementation, this binds directly to fseventsd, IOBluetoothNotifications, and CoreWLAN
+    // TODO(3.7): bind to Windows change notifications (power, Wi-Fi, Bluetooth) instead of simulated events
     if (mockPeriodicEmits && process.env.NODE_ENV !== 'test') {
       this.simulationTimer = setInterval(() => {
         this.notifyBatteryChanged(91, true);

@@ -41,7 +41,7 @@ describe('DecisionRequest', () => {
   });
 
   it('the agent decision call and the providers agree', () => {
-    const call = buildDecisionCall('list files', { os: 'linux', cwd: '/x' } as any, []);
+    const call = buildDecisionCall('list files', { os: 'windows', cwd: '/x' } as any, []);
     const fromCall = { temperature: call.options.temperature, seed: call.options.seed, maxTokens: call.options.maxTokens };
     const fromWire = wireSampling('embedded', call.options);
     expect(fromWire.temperature).toBe(fromCall.temperature);

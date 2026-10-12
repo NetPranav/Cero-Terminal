@@ -34,7 +34,7 @@ describe('Saving a workflow from inside a prompt', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  const ctx = { os: 'linux', cwd: '/tmp/work' };
+  const ctx = { os: 'windows', cwd: '/tmp/work' };
 
   it('open an app and save it: one app action, the summary names the path', async () => {
     const asked: string[] = [];

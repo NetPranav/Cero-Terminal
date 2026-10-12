@@ -201,12 +201,11 @@ describe('Core Feature Engines Integration Suite', () => {
       expect(StdinHangDetector.isPromptingForInput('Proceed with installation? [Y/n]')).toBe(true);
       expect(StdinHangDetector.isPromptingForInput('Installation completed successfully.')).toBe(false);
 
-      const fix1 = StdinHangDetector.suggestNonInteractiveFix('apt-get install nginx');
-      expect(fix1?.flag).toBe('-y');
-      expect(fix1?.rewrittenCommand).toContain('-y');
+      const fix1 = StdinHangDetector.suggestNonInteractiveFix('winget install Neovim.Neovim');
+      expect(fix1?.rewrittenCommand).toContain('--accept-package-agreements');
 
-      const fix2 = StdinHangDetector.suggestNonInteractiveFix('pacman -S neovim');
-      expect(fix2?.flag).toBe('--noconfirm');
+      const fix2 = StdinHangDetector.suggestNonInteractiveFix('choco install neovim');
+      expect(fix2?.flag).toBe('-y');
     });
   });
 });

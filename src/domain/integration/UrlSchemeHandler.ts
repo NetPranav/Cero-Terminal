@@ -43,7 +43,7 @@ export class UrlSchemeHandler {
       } catch {}
     }
 
-    // Handle raw filesystem paths passed via Finder Quick Actions, CLI, or open -a commands
+    // Handle raw filesystem paths passed from File Explorer, the command line, or another app
     if (cleanInput.startsWith('/') || cleanInput.startsWith('~/') || cleanInput.startsWith('./') || cleanInput.startsWith('../')
       || /^[A-Za-z]:[\\/]/.test(cleanInput) || cleanInput.startsWith('\\\\')) {
       return {

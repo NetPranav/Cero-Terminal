@@ -141,7 +141,7 @@ Output JSON only:
 }
 
 User prompt: "${prompt}"
-Context: os=${context?.os || 'linux'}, cwd=${context?.cwd || '~'}, lastExitCode=${context?.lastExitCode ?? 0}`;
+Context: os=${context?.os || 'windows'}, cwd=${context?.cwd || '~'}, lastExitCode=${context?.lastExitCode ?? 0}`;
   }
 
   /**

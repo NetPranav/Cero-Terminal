@@ -36,7 +36,7 @@ describe('Opening a folder by name', () => {
   let loop: AgentLoop;
   let execute: ReturnType<typeof vi.fn>;
   let generate: ReturnType<typeof vi.fn>;
-  const ctx = { os: 'linux', cwd: '/home/me/elsewhere' };
+  const ctx = { os: 'windows', cwd: '/home/me/elsewhere' };
 
   beforeEach(() => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-open-'));
@@ -195,7 +195,7 @@ describe('Opening an app by name', () => {
 describe('cd and remembered names', () => {
   let tmp: string;
   let loop: AgentLoop;
-  const ctx = { os: 'linux', cwd: '/home/me/elsewhere' };
+  const ctx = { os: 'windows', cwd: '/home/me/elsewhere' };
   beforeEach(() => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-cd-'));
     AliasStore.getInstance().setFile(path.join(tmp, 'aliases.json'));
@@ -242,7 +242,7 @@ describe('cd and remembered names', () => {
 describe('showing a file and listing a named folder', () => {
   let loop: AgentLoop;
   let execute: ReturnType<typeof vi.fn>;
-  const ctx = { os: 'linux', cwd: '/home/me/work' };
+  const ctx = { os: 'windows', cwd: '/home/me/work' };
   beforeEach(() => {
     loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
       getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate: vi.fn() }),
@@ -297,7 +297,7 @@ describe('find by file type, and a workflow request with no steps', () => {
     expect(execute.mock.calls[0][1].command).toContain("Get-ChildItem -LiteralPath '.' -Recurse -File -Filter '*.py'");
   });
   it('"create a new workflow called backup-db" asks for the steps and runs nothing', async () => {
-    const r = await loop.run('create a new workflow called backup-db', { os: 'linux', cwd: '/tmp' });
+    const r = await loop.run('create a new workflow called backup-db', { os: 'windows', cwd: '/tmp' });
     expect(r.summary).toContain('A workflow needs steps');
     expect(execute).not.toHaveBeenCalled();
   });

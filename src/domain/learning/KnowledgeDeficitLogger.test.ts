@@ -136,7 +136,7 @@ describe('KnowledgeDeficitLogger — Runtime Knowledge Deficit Logger', () => {
         goal: 'give me the list of the ports that is being used by antigravity',
         category: 'conversational_refusal',
         modelOutput: "I can't detect how many ports are being used by antigravity.",
-        context: { os: 'mac', cwd: '/Users/pranav' }
+        context: { os: 'windows', cwd: '/Users/pranav' }
       });
 
       expect(record.id).toBeDefined();
@@ -158,14 +158,14 @@ describe('KnowledgeDeficitLogger — Runtime Knowledge Deficit Logger', () => {
         goal: 'give me the list of the ports that is being used by antigravity',
         category: 'conversational_refusal',
         modelOutput: "I can't detect how many ports are being used by antigravity.",
-        context: { os: 'mac', cwd: '/Users/pranav' }
+        context: { os: 'windows', cwd: '/Users/pranav' }
       });
 
       const second = logger.logDeficit({
         goal: 'give me the list of the ports that is being used by antigravity',
         category: 'conversational_refusal',
         modelOutput: "I cannot inspect antigravity ports.",
-        context: { os: 'mac', cwd: '/Users/pranav' }
+        context: { os: 'windows', cwd: '/Users/pranav' }
       });
 
       expect(second.id).toBe(first.id);
@@ -181,7 +181,7 @@ describe('KnowledgeDeficitLogger — Runtime Knowledge Deficit Logger', () => {
         category: 'execution_failure',
         exitCode: 1,
         stderr: 'No such process',
-        context: { os: 'mac', cwd: '/Users/pranav' }
+        context: { os: 'windows', cwd: '/Users/pranav' }
       });
 
       // Second instance loads from disk
@@ -200,7 +200,7 @@ describe('KnowledgeDeficitLogger — Runtime Knowledge Deficit Logger', () => {
         goal: 'give me the list of the ports that is being used by antigravity',
         category: 'conversational_refusal',
         modelOutput: "I can't detect how many ports are being used by antigravity.",
-        context: { os: 'mac', cwd: '/Users/pranav' }
+        context: { os: 'windows', cwd: '/Users/pranav' }
       });
 
       // Query pending deficits

@@ -32,7 +32,7 @@ describe('DpoDatasetEngine — Direct Preference Optimization (DPO) Pair Generat
         goal: 'give me the list of the ports that is being used by antigravity',
         category: 'conversational_refusal',
         modelOutput: "I can't detect how many ports are being used by antigravity.",
-        context: { os: 'mac', cwd: '/Users/test' }
+        context: { os: 'windows', cwd: '/Users/test' }
       });
 
       // 2. Mark resolved by Reflexion Engine
@@ -67,7 +67,7 @@ describe('DpoDatasetEngine — Direct Preference Optimization (DPO) Pair Generat
       const deficit = logger.logDeficit({
         goal: 'check port 3000',
         category: 'execution_failure',
-        context: { os: 'mac', cwd: '/Users/test' }
+        context: { os: 'windows', cwd: '/Users/test' }
       });
 
       const pair = dpoEngine.createPairFromDeficit(deficit);
@@ -103,7 +103,7 @@ describe('DpoDatasetEngine — Direct Preference Optimization (DPO) Pair Generat
       const d1 = logger.logDeficit({
         goal: 'check port 3000',
         category: 'execution_failure',
-        context: { os: 'mac', cwd: '/Users/test' }
+        context: { os: 'windows', cwd: '/Users/test' }
       });
       logger.markResolved(d1.id, {
         verifiedCommand: 'lsof -i :3000',
@@ -114,7 +114,7 @@ describe('DpoDatasetEngine — Direct Preference Optimization (DPO) Pair Generat
       const d2 = logger.logDeficit({
         goal: 'inspect process postgres',
         category: 'execution_failure',
-        context: { os: 'mac', cwd: '/Users/test' }
+        context: { os: 'windows', cwd: '/Users/test' }
       });
       logger.markResolved(d2.id, {
         verifiedCommand: 'pgrep -fil "postgres"',

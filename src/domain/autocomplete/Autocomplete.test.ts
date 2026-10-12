@@ -49,7 +49,7 @@ describe('Autocomplete Engine', () => {
       currentInput: 'git ',
       cursorPosition: 4,
       cwd: here,
-      os: 'macos'
+      os: 'windows'
     });
 
     // Used in this folder beats used more often elsewhere; starters come after real history
@@ -58,7 +58,7 @@ describe('Autocomplete Engine', () => {
 
   it('starts with no history: starter completions are never listed as commands the user ran', async () => {
     expect(historyProvider.getHistory()).toEqual([]);
-    const suggestions = await historyProvider.getSuggestions({ currentInput: 'npm r', cursorPosition: 5, cwd: '/', os: 'macos' });
+    const suggestions = await historyProvider.getSuggestions({ currentInput: 'npm r', cursorPosition: 5, cwd: '/', os: 'windows' });
     expect(suggestions.map(s => s.value)).toEqual(['npm run dev', 'npm run build']);
   });
 
@@ -67,7 +67,7 @@ describe('Autocomplete Engine', () => {
       currentInput: 'disconnect',
       cursorPosition: 10,
       cwd: '/',
-      os: 'macos'
+      os: 'windows'
     });
 
     expect(suggestions.length).toBe(1);
@@ -89,7 +89,7 @@ describe('Autocomplete Engine', () => {
     
     const start = performance.now();
     // Engine timeout is set to 15ms by default
-    const suggestions = await engine.getSuggestions({ currentInput: 'git ', cursorPosition: 4, cwd: '', os: 'macos' }, 15);
+    const suggestions = await engine.getSuggestions({ currentInput: 'git ', cursorPosition: 4, cwd: '', os: 'windows' }, 15);
     const duration = performance.now() - start;
 
     // Returns long before the slow provider would have finished (generous bound so a busy

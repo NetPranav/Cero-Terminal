@@ -74,40 +74,41 @@ export class NetworkingCapability extends BaseCapabilityDriver<NetDriverInput, a
       let cmd = 'ping';
       let args: string[] = [];
 
+      // Windows programs; the PowerShell ones print one plain line per entry
+      const ps = (script: string) => { cmd = 'powershell.exe'; args = ['-NoProfile', '-NonInteractive', '-Command', script]; };
+      const safePort = Number.isInteger(Number(input.port)) ? Number(input.port) : undefined;
       switch (op) {
         case 'ping':
           if (!input.host) return { success: false, error: { code: 'MISSING_HOST', message: 'Host target required for ping' } };
-          args = ['-c', `${input.count || 4}`, input.host];
+          args = ['-n', `${Number(input.count) || 4}`, input.host];
           break;
 
         case 'traceroute':
-          cmd = 'traceroute';
+          cmd = 'tracert';
           if (!input.host) return { success: false, error: { code: 'MISSING_HOST', message: 'Host required for traceroute' } };
-          args = [input.host];
+          args = ['-d', input.host];
           break;
 
         case 'ports': {
-          cmd = 'sh';
-          const innerCmd = input.port
-            ? `(lsof -i :${input.port} -P -n 2>/dev/null || ss -tulpn 2>/dev/null | grep :${input.port}) || true`
-            : `(lsof -i -P -n -sTCP:LISTEN 2>/dev/null || ss -tulpn 2>/dev/null) || true`;
-          args = ['-c', innerCmd];
+          // "<process> <pid> <address>:<port>" per listening socket
+          const filter = safePort !== undefined ? ` -LocalPort ${safePort}` : '';
+          ps(`Get-NetTCPConnection -State Listen${filter} -ErrorAction SilentlyContinue | Sort-Object LocalPort -Unique | ForEach-Object { $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; "$($p.ProcessName) $($_.OwningProcess) $($_.LocalAddress):$($_.LocalPort)" }`);
           break;
         }
 
         case 'interfaces':
-          cmd = 'sh';
-          args = ['-c', 'ip -br addr show 2>/dev/null || ip link show 2>/dev/null || ifconfig -a 2>/dev/null || true'];
+          ps(`Get-NetIPAddress -ErrorAction SilentlyContinue | Where-Object { $_.AddressState -eq 'Preferred' } | ForEach-Object { "$($_.InterfaceAlias) $($_.AddressFamily) $($_.IPAddress)" }`);
           break;
 
-        case 'dns':
-          cmd = 'dig';
+        case 'dns': {
           if (!input.domain) return { success: false, error: { code: 'MISSING_DOMAIN', message: 'Domain name required for DNS lookup' } };
-          args = input.recordType && input.recordType !== 'ALL' ? [input.domain, input.recordType] : [input.domain, 'ANY'];
+          const type = input.recordType && input.recordType !== 'ALL' && /^[A-Za-z]+$/.test(input.recordType) ? ` -Type ${input.recordType}` : '';
+          ps(`Resolve-DnsName -Name '${String(input.domain).replace(/'/g, "''")}'${type} -ErrorAction Stop | Format-Table -AutoSize | Out-String -Width 200`);
           break;
+        }
 
         case 'ip':
-          cmd = 'curl';
+          cmd = 'curl.exe';
           args = ['-s', 'https://api.ipify.org'];
           break;
 
@@ -132,8 +133,8 @@ export class NetworkingCapability extends BaseCapabilityDriver<NetDriverInput, a
           } else {
             // Extract all occupied listening ports
             const occupied = new Set<number>();
-            for (const line of stdout.split('\n')) {
-              const m = line.match(/:(\d+)\s+\(LISTEN\)/) || line.match(/:(\d+)$/) || line.match(/:(\d+)\b/);
+            for (const line of stdout.split(/\r?\n/)) {
+              const m = line.trim().match(/:(\d+)$/);
               if (m) occupied.add(parseInt(m[1], 10));
             }
 

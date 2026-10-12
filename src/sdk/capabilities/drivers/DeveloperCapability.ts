@@ -7,6 +7,7 @@
 
 import { BaseCapabilityDriver, CapabilityExecutionResult, ExecutionContext, Platform } from '../CapabilitySDK';
 import { invoke } from '@tauri-apps/api/core';
+import { homeDirectory } from '../../../utils/homeDir';
 
 export type DevOperation = 'vscode' | 'cursor' | 'xcode' | 'android_studio' | 'terminal' | 'ssh' | 'github' | 'scaffold';
 
@@ -65,11 +66,8 @@ export class DeveloperCapability extends BaseCapabilityDriver<DevDriverInput, an
       targetPath = targetPath === '.' ? baseCwd : `${baseCwd.replace(/\/+$/, '')}/${targetPath.replace(/^\.\//, '')}`;
     }
     if (targetPath.startsWith('~/') || targetPath === '~') {
-      try {
-        const hRes = await invoke<{ stdout: string }>('execute_command', { command: 'sh', args: ['-c', 'echo $HOME'] });
-        const hd = (hRes?.stdout || '').trim();
-        if (hd) targetPath = targetPath === '~' ? hd : targetPath.replace(/^~/, hd);
-      } catch { /* ignore */ }
+      const hd = await homeDirectory();
+      if (hd) targetPath = targetPath === '~' ? hd : targetPath.replace(/^~/, hd);
     }
 
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {

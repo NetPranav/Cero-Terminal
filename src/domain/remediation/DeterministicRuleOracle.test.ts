@@ -313,18 +313,6 @@ To push the current branch and set the remote as upstream, use
       expect(suggestion?.ruleId).toBe('dcoker_to_docker');
       expect(suggestion?.fixedCommand).toBe('docker ps');
     });
-
-    it('corrects briw to brew', () => {
-      const ctx: RuleContext = {
-        command: 'briw update',
-        output: 'zsh: command not found: briw',
-        exitCode: 127
-      };
-
-      const suggestion = oracle.diagnose(ctx);
-      expect(suggestion?.ruleId).toBe('briw_to_brew');
-      expect(suggestion?.fixedCommand).toBe('brew update');
-    });
   });
 
   describe('Docker Rules', () => {

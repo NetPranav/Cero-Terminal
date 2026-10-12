@@ -90,7 +90,7 @@ describe('Opening existing folders on a real directory tree (issues 6 and 7)', (
     fs.rmSync(home, { recursive: true, force: true });
   });
 
-  const ctx = () => ({ os: 'linux', cwd: path.join(home, 'elsewhere') });
+  const ctx = () => ({ os: 'windows', cwd: path.join(home, 'elsewhere') });
   const prompt = (name: string) => `Please open a folder named ${name} in VS Code. This folder is inside /padhai_in_linux/Projects/`;
 
   it('exact name, place written with a leading slash but living under the home folder: opens it, creates nothing', async () => {

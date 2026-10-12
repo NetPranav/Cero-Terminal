@@ -82,23 +82,23 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
   // =========================================================================
   describe('Archetype 1: Informational & Single-Entity Queries', () => {
     it('handles instant date and time queries without external inference', async () => {
-      const res1 = await agent.run('what time is it', { os: 'linux', cwd: '/home/test' });
+      const res1 = await agent.run('what time is it', { os: 'windows', cwd: '/home/test' });
       expect(res1.success).toBe(true);
       expect(res1.summary).toMatch(/current date and time is/i);
 
-      const res2 = await agent.run('what is today date', { os: 'linux', cwd: '/home/test' });
+      const res2 = await agent.run('what is today date', { os: 'windows', cwd: '/home/test' });
       expect(res2.success).toBe(true);
       expect(res2.summary).toMatch(/current date and time is/i);
     });
 
     it('handles conversational greeting queries', async () => {
-      const res = await agent.run('hello there', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('hello there', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(res.summary).toContain('Cero AI');
     });
 
     it('handles agent capabilities & help queries', async () => {
-      const res = await agent.run('what can you do', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('what can you do', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(res.summary).toContain('Cero AI — an autonomous terminal agent');
       expect(res.summary).toContain('port 3000');
@@ -122,7 +122,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
     });
 
     it('routes memory/RAM queries to system.ram capability', async () => {
-      const res = await agent.run('check memory usage', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('check memory usage', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'system.ram',
@@ -133,7 +133,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
     });
 
     it('routes disk/storage queries to system.storage capability', async () => {
-      const res = await agent.run('check storage', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('check storage', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'system.storage',
@@ -149,7 +149,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
   // =========================================================================
   describe('Archetype 3: Process Management & Port Sockets', () => {
     it('routes port check queries to network.ports capability', async () => {
-      const res = await agent.run('check if port 3000 is in use', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('check if port 3000 is in use', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'network.ports',
@@ -160,7 +160,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
     });
 
     it('routes free port search to network.ports with findFree flag', async () => {
-      const res = await agent.run('find a free port', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('find a free port', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'network.ports',
@@ -171,7 +171,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
     });
 
     it('routes process listing to system.processes capability', async () => {
-      const res = await agent.run('show running processes', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('show running processes', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'system.processes',
@@ -182,7 +182,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
     });
 
     it('routes which process is using the most resources to fast-path ps command', async () => {
-      const res = await agent.run('which process is using the most resources', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('which process is using the most resources', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'shell.execute',
@@ -200,7 +200,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
   // =========================================================================
   describe('Archetype 4: Network Diagnostics & Connectivity', () => {
     it('routes open port listing to network.ports', async () => {
-      const res = await agent.run('check open ports', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('check open ports', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'network.ports',
@@ -211,7 +211,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
     });
 
     it('routes IP address queries to shell.execute', async () => {
-      const res = await agent.run('check my ip address', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('check my ip address', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'shell.execute',
@@ -227,7 +227,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
   // =========================================================================
   describe('Archetype 5: Filesystem & Search', () => {
     it('routes directory listing to filesystem.list capability', async () => {
-      const res = await agent.run('ls', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('ls', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'filesystem.list',
@@ -238,7 +238,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
     });
 
     it('routes file search by pattern via shell.execute fast-path', async () => {
-      const res = await agent.run('find all typescript files', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('find all typescript files', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'shell.execute',
@@ -254,7 +254,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
   // =========================================================================
   describe('Archetype 6: Git & Developer Lifecycle Workflows', () => {
     it('routes git status queries via shell.execute fast-path', async () => {
-      const res = await agent.run('check git status', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('check git status', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       // The git status recipe: read-only, so it runs without a dialog
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
@@ -266,7 +266,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
     });
 
     it('routes git log history queries via shell.execute fast-path', async () => {
-      const res = await agent.run('recent git commits', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('recent git commits', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'shell.execute',
@@ -295,7 +295,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
 
     it('executes decomposed multi-stage pipelines deterministically without LLM', async () => {
       const prompt = 'first clean build, then build backend with cargo';
-      const res = await agent.run(prompt, { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run(prompt, { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(res.steps.length).toBe(2);
       // Phase 0.75: Precondition check (test -f Cargo.toml) runs before cargo build stage
@@ -309,7 +309,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
   describe('Archetype 10: Workflow Creation Directives', () => {
     it('executes task and saves simultaneously: "<task> :: save as workflow <name>"', async () => {
       const prompt = 'make a folder called get-time-dir :: save as workflow get-time-wf';
-      const res = await agent.run(prompt, { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run(prompt, { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(res.summary).toContain('Saved workflow \"get-time-wf\"');
 
@@ -321,7 +321,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
 
     it('decomposes and executes multi-stage workflow with inline save directive', async () => {
       const prompt = 'first clean build, then build backend with cargo :: save as workflow cargo-build';
-      const res = await agent.run(prompt, { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run(prompt, { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(res.summary).toContain('Saved workflow \"cargo-build\"');
 
@@ -340,7 +340,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
       undoLog.recordAction({ sessionId, command: 'echo "3"', goal: 'Step 3', isDestructive: false });
 
       const res = await agent.run('save workflow my-scoped-pipeline last 2 commands', {
-        os: 'linux',
+        os: 'windows',
         cwd: '/home/test',
         sessionId
       });
@@ -367,7 +367,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
         updatedAt: Date.now()
       });
 
-      const res = await agent.run('run workflow test-port-replay --port=9090', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('run workflow test-port-replay --port=9090', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
         'shell.execute',
@@ -383,7 +383,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
   // =========================================================================
   describe('Archetype 11: Conversational & Multi-Turn Clarifications', () => {
     it('handles greeting and conversational patterns as fast-path responses', async () => {
-      const res = await agent.run('hello there', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('hello there', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       expect(res.summary).toContain('Cero AI');
       // Agent handles greetings without going to LLM
@@ -404,7 +404,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
         isDestructive: true
       });
 
-      const res = await agent.run('what did you just do', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('what did you just do', { os: 'windows', cwd: '/home/test' });
       expect(res.success).toBe(true);
       // Actual format is "### Recent Session Actions (N recorded):"
       expect(res.summary).toContain('Recent Session Actions');
@@ -420,7 +420,7 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
         rollbackCommand: 'rm -f test.txt'
       });
 
-      const res = await agent.run('undo last step', { os: 'linux', cwd: '/home/test' });
+      const res = await agent.run('undo last step', { os: 'windows', cwd: '/home/test' });
       // Undo execution succeeds if the rollback command is executed
       expect(res).toBeDefined();
       expect(res.summary).toMatch(/rolled back|undo|rollback|No recent destructive/i);

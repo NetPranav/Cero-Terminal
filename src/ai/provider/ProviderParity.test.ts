@@ -62,7 +62,7 @@ describe('what each provider is sent for the same decision call', () => {
 
   for (const goal of goals) {
     it(`same system prompt, history and sampling for: ${goal}`, async () => {
-      const call = buildDecisionCall(goal, { os: 'linux', cwd: '/home/me/work' });
+      const call = buildDecisionCall(goal, { os: 'windows', cwd: '/home/me/work' });
       const sent: Captured[] = [];
       for (const [, provider] of providers()) {
         const calls = installNetwork({ content: '{"action":"done","summary":"ok"}' });
@@ -89,7 +89,7 @@ describe('what each provider is sent for the same decision call', () => {
   }
 
   it('the grammar the built-in model is forced through can express every shape the prompt asks for', async () => {
-    const call = buildDecisionCall('open vscode', { os: 'linux', cwd: '/w' });
+    const call = buildDecisionCall('open vscode', { os: 'windows', cwd: '/w' });
     const grammar = String(call.options.grammar);
     // the system prompt's JSON CONTRACT: execute (command + explanation) and done (summary)
     expect(call.systemPrompt).toContain('{"action": "execute", "command":');
@@ -102,7 +102,7 @@ describe('what each provider is sent for the same decision call', () => {
   });
 
   it('the grammar cannot make the model emit unbounded whitespace until the token limit', () => {
-    const grammar = String(buildDecisionCall('x', { os: 'linux', cwd: '/w' }).options.grammar);
+    const grammar = String(buildDecisionCall('x', { os: 'windows', cwd: '/w' }).options.grammar);
     const wsRule = grammar.split('\n').find(l => l.startsWith('ws ::='))!;
     // `[ \t\n\r]*` lets a small model loop on newlines until n_predict, cutting the JSON off
     expect(wsRule).not.toMatch(/\]\s*\*/);
@@ -134,7 +134,7 @@ describe('what the agent makes of the same reply from each provider', () => {
         installNetwork(reply);
         const loop = loopFor(provider);
         (loop as any).toolExecutor = { hasDriver: () => true, execute: vi.fn().mockResolvedValue({ success: true, data: { stdout: '', code: 0 } }) };
-        const r = await loop.run('what is the answer to life, the universe and everything', { os: 'linux', cwd: '/w' });
+        const r = await loop.run('what is the answer to life, the universe and everything', { os: 'windows', cwd: '/w' });
         outcomes.push({ success: r.success, summary: r.summary });
       }
       expect(outcomes[0]).toEqual(outcomes[1]);
@@ -150,7 +150,7 @@ describe('what the agent makes of the same reply from each provider', () => {
       const loop = loopFor(provider);
       const execute = vi.fn().mockResolvedValue({ success: true, data: { stdout: 'Filesystem Size Used\n/dev/sda1 100G 40G', code: 0 } });
       (loop as any).toolExecutor = { hasDriver: () => true, execute };
-      await loop.run('how full is my root disk', { os: 'linux', cwd: '/w' });
+      await loop.run('how full is my root disk', { os: 'windows', cwd: '/w' });
       ran.push(execute.mock.calls.map(c => String(c[1]?.command)));
     }
     expect(ran[0]).toEqual(ran[1]);
@@ -163,7 +163,7 @@ describe('what the agent makes of the same reply from each provider', () => {
       installNetwork({ content: '', status: 500 });
       const loop = loopFor(provider);
       (loop as any).toolExecutor = { hasDriver: () => true, execute: vi.fn().mockResolvedValue({ success: true, data: { stdout: '', code: 0 } }) };
-      const r = await loop.run('what is the answer to life, the universe and everything', { os: 'linux', cwd: '/w' }).catch(() => ({ success: false }));
+      const r = await loop.run('what is the answer to life, the universe and everything', { os: 'windows', cwd: '/w' }).catch(() => ({ success: false }));
       outcomes.push(r.success);
     }
     expect(outcomes).toEqual([false, false]);

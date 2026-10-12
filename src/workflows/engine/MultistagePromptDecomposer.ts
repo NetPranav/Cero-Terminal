@@ -5,6 +5,9 @@
  * push to registry, run migration, and verify health check on port 8080" or
  * "first clean cache, then compile with cargo, after that run tests") into an ordered,
  * dependency-linked DAG with extracted parameters and environment prerequisites.
+ *
+ * TODO(4.7): step commands and precondition checks are written as POSIX and only the step command
+ * gets a Windows form (CrossPlatformCommandAdapter); write them as PowerShell.
  */
 
 import {
@@ -462,7 +465,7 @@ export class MultistagePromptDecomposer {
     } else if (/^(?:install|setup|add\s+package)\s+([a-zA-Z0-9_\-\.]+)/i.test(clause.trim())) {
       const pkgMatch = clause.trim().match(/^(?:install|setup|add\s+package)\s+([a-zA-Z0-9_\-\.]+)/i);
       const pkgName = pkgMatch ? pkgMatch[1].trim() : 'app';
-      command = `which pacman >/dev/null 2>&1 && sudo pacman -S --noconfirm "${pkgName}" || which apt-get >/dev/null 2>&1 && sudo apt-get install -y "${pkgName}" || brew install "${pkgName}"`;
+      command = `winget install -e --id ${pkgName} --accept-source-agreements --accept-package-agreements`;
       name = `Install ${pkgName}`;
       binaries.push(pkgName);
       precondition_check = `which "${pkgName.toLowerCase()}" >/dev/null 2>&1`;
