@@ -39,9 +39,21 @@ This file tracks progress on [ROADMAP.md](ROADMAP.md). The numbers match the roa
 |---|---|---|---|---|---|
 | [x] | 0.1 | Branch strategy (`windows` branch in worktree `../Cero-windows`) | 2026-10-12 | | Recorded in ROADMAP "Branches and folders" |
 | [x] | 0.2 | Audit of existing Windows work (`origin/windows`, `v2.2.0-windows`, `cfg(windows)` code, CI) | 2026-10-12 | | Findings are in the ROADMAP "Starting point" section |
-| [ ] | 0.3 | Windows development and test environment (VM or PC, toolchain, `cargo xwin`) | | | |
-| [ ] | 0.4 | Green baseline (fix `escapeKey.test.ts`, root `check:triple` green) | | | |
+| [ ] | 0.3 | Windows development and test environment (VM or PC, toolchain, `cargo xwin`) | | | Linux side done 2026-10-12: `cargo xwin check` passes. Still open: a Windows PC or VM where `npm run tauri dev` starts. Setup notes below the table |
+| [ ] | 0.4 | Green baseline (fix `escapeKey.test.ts`, root `check:triple` green) | | `1de1eb8` | Fix committed on `windows` only (Node 22 ignores a bare `true` capture flag on remove). Open: CI result after push, and the same fix on `linux-v2-update` |
 | [ ] | 0.5 | Definition of done and test matrix | | | |
+
+**Linux cross-check setup (0.3).** The machine has Arch's system Rust (no rustup), so a user-space toolchain was added
+without touching the system one:
+- `rustup` in `~/.rustup` and `~/.cargo/bin` (installed with `--no-modify-path`), target `x86_64-pc-windows-msvc`,
+  component `llvm-tools`; `cargo install cargo-xwin --locked` (0.23.1).
+- `~/.local/share/cero-win-tools/` holds `llvm-rc`, `llvm-ar`, `llvm-lib` (a link to `llvm-ar`), `llvm-cvtres` and
+  `llvm-mt`, extracted from the Arch `llvm` 23.1.1 package. `ring` needs `llvm-lib` and `tauri-winres` needs `llvm-rc`.
+  `sudo pacman -S llvm` would replace this folder.
+- Run the check with
+  `PATH="$HOME/.local/share/cero-win-tools:$HOME/.cargo/bin:$PATH" cargo xwin check --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml`.
+  The first run downloads the Windows SDK and CRT into the cargo-xwin cache.
+- CI runs Node 22; this machine has Node 26. For CI-only test failures, run Vitest with a Node 22 binary.
 
 ## Phase 1: Bring the windows branch up to date
 - [ ] **Phase 1 complete**
