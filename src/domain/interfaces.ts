@@ -1,4 +1,4 @@
-// Domain Layer Interfaces for Sentinel Terminal
+// Domain Layer Interfaces for Cero
 
 export type IntentType = 
   | 'ShellCommand'

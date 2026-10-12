@@ -75,8 +75,8 @@ export class ContextBuilder {
 
     const toolJsonStr = JSON.stringify(signatures, null, 2);
 
-    const systemPrompt = `You are Sentinel's Local Intent AI System.
-Your ONLY purpose is to understand natural language, determine user intent, extract entities, and generate a high-level sequential execution plan using available tools from Sentinel's Tool Registry.
+    const systemPrompt = `You are Cero's Local Intent AI System.
+Your ONLY purpose is to understand natural language, determine user intent, extract entities, and generate a high-level sequential execution plan using available tools from Cero's Tool Registry.
 
 IMPORTANT RULES:
 1. NEVER generate raw shell commands or scripts.

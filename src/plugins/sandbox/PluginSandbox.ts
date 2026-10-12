@@ -6,7 +6,7 @@
  */
 
 import * as vm from 'vm';
-import { SentinelSDKAPI } from '../sdk/SentinelSDK';
+import { CeroSDKAPI } from '../sdk/CeroSDK';
 import { PluginContext } from '../models/PluginTypes';
 
 export class PluginSandbox {
@@ -14,12 +14,12 @@ export class PluginSandbox {
 
   constructor(
     private pluginContext: PluginContext,
-    private sdk: SentinelSDKAPI
+    private sdk: CeroSDKAPI
   ) {
     // Only the SDK and basic JS primitives exist in the sandbox.
     // No `require`, `process`, or global `window`.
     this.vmContext = vm.createContext({
-      sentinel: this.sdk,
+      cero: this.sdk,
       console: {
         log: (...args: any[]) => console.log(`[Plugin:${this.pluginContext.manifest.id}]`, ...args),
         error: (...args: any[]) => console.error(`[Plugin:${this.pluginContext.manifest.id}]`, ...args),
@@ -40,7 +40,7 @@ export class PluginSandbox {
       
       return script.runInContext(this.vmContext, { timeout });
     } catch (e) {
-      // Re-throw safely wrapped so it never takes down Sentinel Core
+      // Re-throw safely wrapped so it never takes down Cero Core
       throw new Error(`Sandbox Execution Failed: ${(e as Error).message}`);
     }
   }

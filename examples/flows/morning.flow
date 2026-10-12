@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0",
+  "metadata": {
+    "id": "morning",
+    "name": "Morning setup",
+    "description": "Opens the browser tabs and apps for the day. Only desktop actions, so the terminal never opens."
+  },
+  "actions": [
+    { "type": "browser", "name": "Open mail and calendar", "app": "chrome", "urls": ["https://mail.google.com", "https://calendar.google.com"] },
+    { "type": "browser", "name": "Open YouTube", "url": "https://www.youtube.com" },
+    { "type": "app", "name": "Open VS Code", "app": "VS Code" }
+  ]
+}

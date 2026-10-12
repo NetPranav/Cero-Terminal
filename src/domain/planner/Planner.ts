@@ -1,7 +1,7 @@
 /**
  * Planner.ts — AI Operating Knowledge Base Orchestrator (Phase X Integrated)
  * 
- * The Planner orchestrates Sentinel's Local Intent AI System:
+ * The Planner orchestrates Cero's Local Intent AI System:
  * 1. IntentEngine classifies user intent, extracts entities, and creates structured execution plans
  * 2. For single or multi-step plans, WorkflowCompiler compiles corresponding tool workflows cleanly
  * 3. Returns compiled workflow with rich model telemetry and confidence score
@@ -12,6 +12,7 @@
  */
 
 import { PlanningRequest, PlanningResponse } from './types';
+import { isWindowsName } from '../../shared/platform';
 import { ToolSearcher } from '../../tools/search/ToolSearcher';
 import { WorkflowCompiler, CompilationContext } from '../../tools/compiler/WorkflowCompiler';
 import { ToolRegistryState } from '../../tools/loader/ToolLoader';
@@ -315,7 +316,7 @@ export class Planner {
   private osToPlatform(os: string): Platform {
     const normalized = os.toLowerCase();
     if (normalized.includes('mac') || normalized.includes('darwin')) return 'macos';
-    if (normalized.includes('win')) return 'windows';
+    if (isWindowsName(normalized)) return 'windows';
     return 'linux';
   }
 

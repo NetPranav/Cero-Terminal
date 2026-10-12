@@ -1,6 +1,6 @@
 # AI Foundation Module
 
-This module represents the AI foundation for Sentinel Terminal. It is strictly isolated from command execution and OS logic.
+This module represents the AI foundation for Cero. It is strictly isolated from command execution and OS logic.
 
 ## Responsibilities
 - **Intent Routing**: Analyzes user input and determines the core intent (e.g., clone repository, search file).

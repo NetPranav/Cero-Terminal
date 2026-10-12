@@ -28,17 +28,13 @@ export class WifiCapability extends BaseCapability {
   protected async executeNative(ctx: CapabilityContext): Promise<CapabilityResult> {
     const inputs = ctx.actionNode.inputs;
     const actionId = ctx.actionNode.action.id;
-    const isWin = process.platform === 'win32';
 
     if (actionId.includes('connect') || inputs.ssid) {
       const ssid = String(inputs.ssid || inputs.network || '').trim();
       const password = String(inputs.password || '').trim();
-      
-      const cmd = isWin
-        ? `netsh wlan connect name="${ssid}"`
-        : password
-          ? `networksetup -setairportnetwork en0 "${ssid}" "${password}"`
-          : `networksetup -setairportnetwork en0 "${ssid}"`;
+      const cmd = password
+        ? `networksetup -setairportnetwork en0 "${ssid}" "${password}"`
+        : `networksetup -setairportnetwork en0 "${ssid}"`;
       
       await this.runNativeCommand(cmd);
 
@@ -50,22 +46,20 @@ export class WifiCapability extends BaseCapability {
         nativeInvocation: cmd,
       };
     } else if (actionId.includes('off') || actionId.includes('disable')) {
-      const cmd = isWin 
-        ? `netsh wlan disconnect`
-        : `networksetup -setairportpower en0 off`;
+      const cmd = `networksetup -setairportpower en0 off`;
       await this.runNativeCommand(cmd);
       return {
         success: true,
-        outputs: { power: 'off', interface: isWin ? 'Wi-Fi' : 'en0', connectedSSID: null },
-        warnings: ['Wi-Fi interface disabled/disconnected'],
+        outputs: { power: 'off', interface: 'en0', connectedSSID: null },
+        warnings: ['Wi-Fi interface disabled'],
         timings: { executionMs: 0, dispatchMs: 0 },
         nativeInvocation: cmd,
       };
     }
 
     // Default power on
-    const cmd = isWin ? `echo "Wi-Fi radio cannot be cleanly toggled without WMI admin; assuming on"` : `networksetup -setairportpower en0 on`;
-    if (!isWin) await this.runNativeCommand(cmd);
+    const cmd = `networksetup -setairportpower en0 on`;
+    await this.runNativeCommand(cmd);
     return {
       success: true,
       outputs: { power: 'on', interface: 'en0' },
@@ -76,22 +70,11 @@ export class WifiCapability extends BaseCapability {
   }
 
   protected async verifyNative(ctx: CapabilityContext, execResult: CapabilityResult): Promise<VerificationResult> {
-    const isWin = process.platform === 'win32';
     try {
-      let isConnected = false;
-      let ssid = null;
-
-      if (isWin) {
-        const { stdout } = await this.runNativeCommand(`netsh wlan show interfaces`);
-        isConnected = stdout.includes(' connected') || stdout.includes(' State') && !stdout.includes(' disconnected');
-        const match = stdout.match(/SSID\s*:\s*(.+)/);
-        ssid = isConnected && match ? match[1].trim() : null;
-      } else {
-        const { stdout } = await this.runNativeCommand(`networksetup -getairportnetwork en0`);
-        isConnected = !stdout.toLowerCase().includes('not associated') && stdout.includes(':');
-        const parts = stdout.split(':');
-        ssid = isConnected ? parts[1]?.trim() || String(execResult.outputs.connectedSSID) : null;
-      }
+      const { stdout } = await this.runNativeCommand(`networksetup -getairportnetwork en0`);
+      const isConnected = !stdout.toLowerCase().includes('not associated') && stdout.includes(':');
+      const parts = stdout.split(':');
+      const ssid = isConnected ? parts[1]?.trim() || String(execResult.outputs.connectedSSID) : null;
 
       return {
         success: true,
@@ -121,7 +104,7 @@ export class WifiCapability extends BaseCapability {
   }
 
   protected async verifyMock(ctx: CapabilityContext, execResult: CapabilityResult): Promise<VerificationResult> {
-    const ssid = String(ctx.actionNode.inputs.ssid || execResult.outputs.connectedSSID || 'Sentinel_5GHz_Network');
+    const ssid = String(ctx.actionNode.inputs.ssid || execResult.outputs.connectedSSID || 'Cero_5GHz_Network');
     return {
       success: true,
       verifiedOutputs: {

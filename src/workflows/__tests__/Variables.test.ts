@@ -21,23 +21,23 @@ describe('WorkflowVariables — 11 Strongly Typed Variable Domains & Runtime Res
     ];
 
     const inputs = {
-      name: 'Sentinel',
+      name: 'Cero',
       count: 42,
       verbose: true,
       files: ['a.ts', 'b.ts'],
       config: { key: 'value' },
       apiKey: 'sk-12345',
-      projectPath: '/Users/pranav/Project Folder/AI Terminal',
+      projectPath: '/home/user/project',
       ide: 'Cursor',
       port: 3000,
       device: 'Magic Keyboard',
-      repo: '/Users/pranav/repos/sentinel',
+      repo: '/Users/dev/repos/cero',
     };
 
     const { resolved, errors } = resolver.resolve(declarations, inputs);
     expect(errors.length).toBe(0);
     expect(Object.keys(resolved).length).toBe(11);
-    expect(resolved.name).toBe('Sentinel');
+    expect(resolved.name).toBe('Cero');
     expect(resolved.port).toBe(3000);
   });
 
@@ -67,10 +67,10 @@ describe('WorkflowVariables — 11 Strongly Typed Variable Domains & Runtime Res
 
   it('should substitute {{variable}} placeholders in action parameters', () => {
     const params = { path: '{{projectPath}}/src', branch: '{{branch}}', port: '{{port}}' };
-    const vars = { projectPath: '/Users/pranav', branch: 'develop', port: '8080' };
+    const vars = { projectPath: '/Users/dev', branch: 'develop', port: '8080' };
 
     const result = resolver.substituteParameters(params, vars);
-    expect(result.path).toBe('/Users/pranav/src');
+    expect(result.path).toBe('/Users/dev/src');
     expect(result.branch).toBe('develop');
     expect(result.port).toBe('8080');
   });

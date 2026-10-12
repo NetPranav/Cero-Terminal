@@ -8,7 +8,7 @@
 import { BaseCapabilityDriver, CapabilityExecutionResult, ExecutionContext, Platform } from '../CapabilitySDK';
 import { invoke } from '@tauri-apps/api/core';
 
-export type DevOperation = 'vscode' | 'cursor' | 'xcode' | 'android_studio' | 'terminal' | 'ssh' | 'github';
+export type DevOperation = 'vscode' | 'cursor' | 'xcode' | 'android_studio' | 'terminal' | 'ssh' | 'github' | 'scaffold';
 
 export interface DevDriverInput {
   operation?: DevOperation;
@@ -16,6 +16,9 @@ export interface DevDriverInput {
   target?: string;
   port?: number;
   command?: string;
+  frontend?: string;
+  backend?: string;
+  projectName?: string;
   [key: string]: any;
 }
 
@@ -80,6 +83,63 @@ export class DeveloperCapability extends BaseCapabilityDriver<DevDriverInput, an
         case 'ssh': return { success: true, data: { sshSession: `connected to ${input.target || 'host'} on port ${input.port || 22}` }, commandExecuted };
         case 'github': return { success: true, data: { ghResult: `GitHub operation "${input.command}" succeeded.` }, commandExecuted };
         default: return { success: true, data: { operation: op }, commandExecuted };
+      }
+    }
+
+    if (op === 'scaffold') {
+      const projName = input.projectName || 'new_project';
+      const fullPath = targetPath === '~' ? `~/${projName}` : `${targetPath}/${projName}`;
+      
+      let scaffoldCmds = [`mkdir -p "${fullPath}"`, `cd "${fullPath}"`];
+      let cmdsToPrint = [`mkdir -p ${fullPath}`, `cd ${fullPath}`];
+      
+      if (input.frontend) {
+        if (input.frontend.toLowerCase().includes('next')) {
+          scaffoldCmds.push(`npx -y create-next-app@latest frontend --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --use-npm`);
+          cmdsToPrint.push(`npx create-next-app frontend`);
+        } else if (input.frontend.toLowerCase().includes('react')) {
+          scaffoldCmds.push(`npx -y create-vite@latest frontend --template react-ts`);
+          cmdsToPrint.push(`npx create-vite frontend`);
+        } else {
+          scaffoldCmds.push(`mkdir -p frontend`);
+        }
+      }
+      
+      if (input.backend) {
+        if (input.backend.toLowerCase().includes('django')) {
+          scaffoldCmds.push(`python3 -m venv venv`, `source venv/bin/activate`, `pip install django`, `django-admin startproject backend`);
+          cmdsToPrint.push(`python3 -m venv venv`, `pip install django`, `django-admin startproject backend`);
+        } else if (input.backend.toLowerCase().includes('express')) {
+          scaffoldCmds.push(`mkdir -p backend`, `cd backend`, `npm init -y`, `npm install express`, `cd ..`);
+          cmdsToPrint.push(`npm init express backend`);
+        } else {
+          scaffoldCmds.push(`mkdir -p backend`);
+        }
+      }
+
+      const finalCmdStr = scaffoldCmds.join(' && ');
+      
+      try {
+        const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('windows');
+        const shell = isWindows ? 'cmd' : 'zsh';
+        const shellArgs = isWindows ? ['/c', finalCmdStr] : ['-l', '-c', finalCmdStr];
+        
+        const output = await invoke<{ code: number; stdout: string; stderr: string }>('execute_command', {
+          command: shell,
+          args: shellArgs
+        });
+        
+        if (output.code === 0) {
+           return { 
+             success: true, 
+             data: { scaffolded: true, path: fullPath, stdout: output.stdout },
+             commandExecuted: cmdsToPrint.join(' && ') 
+           };
+        } else {
+           return { success: false, error: { code: 'SCAFFOLD_FAILED', message: output.stderr || 'Scaffolding failed' } };
+        }
+      } catch (e: any) {
+        return { success: false, error: { code: 'SCAFFOLD_ERR', message: e.message } };
       }
     }
 

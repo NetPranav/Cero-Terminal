@@ -218,46 +218,229 @@ export class AgentRuntime {
     }
   }
 
-  private async attemptPlannerRepair(failedStep: WorkflowStep, _errorMsg: string): Promise<boolean> {
-    this.emit('PlannerRepairRequested', { log: `Requesting planner repair for step ${failedStep.name}...` });
+  private async attemptPlannerRepair(failedStep: WorkflowStep, errorMsg: string): Promise<boolean> {
+    this.emit('PlannerRepairRequested', { log: `Diagnosing failure for step ${failedStep.name}: ${errorMsg}` });
     
     if (this.repairCount >= 3) {
-      this.emit('WorkflowFailed', { log: 'Max planner repairs exceeded.' });
+      this.emit('WorkflowFailed', { log: 'Max planner repairs exceeded (3). Aborting workflow.' });
       return false;
     }
     
-    try {
-      // remainingSteps could be used to pass to the planner
-      const _remainingSteps = this.workflow.steps.filter(s => 
-        !this.state.completedSteps.includes(s.id) && s.id !== failedStep.id
-      );
+    this.repairCount++;
 
-      // In real code, we would call the repair API of the Planner:
-      // const repairResponse = await this.planner.repairPlan(...)
-      // Since Planner API is simplified, we mock the result for now:
+    try {
+      const strategy = this.diagnoseFailure(failedStep, errorMsg);
+      this.emit('PlannerRepairStarted', { log: `Repair strategy: ${strategy}`, step: failedStep });
+
+      switch (strategy) {
+        case 'PATH_NOT_FOUND':
+          return await this.repairPathNotFound(failedStep, errorMsg);
+        case 'PERMISSION_DENIED':
+          return await this.repairPermissionDenied(failedStep);
+        case 'COMMAND_NOT_FOUND':
+          return await this.repairCommandNotFound(failedStep, errorMsg);
+        case 'PROCESS_NOT_FOUND':
+          return await this.repairProcessNotFound(failedStep);
+        case 'ALREADY_EXISTS':
+          // File/folder already exists — skip this step, it's already done
+          this.emit('PlannerRepairCompleted', { log: `Target already exists. Skipping step ${failedStep.name}.` });
+          this.workflowEngine.markTaskComplete(this.workflow.id, failedStep, { skipped: true, reason: 'already_exists' });
+          this.state.completedSteps.push(failedStep.id);
+          return true;
+        case 'TIMEOUT':
+          // Retry with increased timeout
+          return await this.retryWithTimeout(failedStep);
+        default:
+          this.emit('PlannerRepairCompleted', { log: `No specific repair available for: ${errorMsg}. Skipping step.` });
+          return false;
+      }
+    } catch (e: any) {
+      this.emit('WorkflowFailed', { log: `Planner repair threw error: ${e.message}` });
+      return false;
+    }
+  }
+
+  /**
+   * Diagnose the type of failure to determine the appropriate repair strategy.
+   */
+  private diagnoseFailure(step: WorkflowStep, errorMsg: string): string {
+    const lower = errorMsg.toLowerCase();
+
+    if (lower.includes('no such file') || lower.includes('not found') || lower.includes('enoent') || lower.includes('does not exist') || lower.includes('path not found')) {
+      // Differentiate between missing file and missing executable
+      if (lower.includes('failed to execute') && lower.includes('os error 2')) {
+        return 'COMMAND_NOT_FOUND';
+      }
+      return 'PATH_NOT_FOUND';
+    }
+    if (lower.includes('permission denied') || lower.includes('eperm') || lower.includes('eacces') || lower.includes('operation not permitted') || lower.includes('access denied')) {
+      return 'PERMISSION_DENIED';
+    }
+    if (lower.includes('command not found') || lower.includes('not recognized') || lower.includes('is not a command') || lower.includes('no such command') || (lower.includes('failed to execute') && lower.includes('os error 2'))) {
+      return 'COMMAND_NOT_FOUND';
+    }
+    if (lower.includes('no matching process') || lower.includes('no process found') || lower.includes('no such process') || lower.includes('esrch')) {
+      return 'PROCESS_NOT_FOUND';
+    }
+    if (lower.includes('already exists') || lower.includes('eexist') || lower.includes('file exists')) {
+      return 'ALREADY_EXISTS';
+    }
+    if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('etimedout')) {
+      return 'TIMEOUT';
+    }
+
+    return 'UNKNOWN';
+  }
+
+  /**
+   * Repair: Path not found — attempt to create missing parent directories or resolve fuzzy path.
+   */
+  private async repairPathNotFound(step: WorkflowStep, errorMsg: string): Promise<boolean> {
+    const params = step.parameters || {};
+    const targetPath = params.path || params.directory || params.source || '';
+    
+    if (!targetPath) return false;
+
+    // Strategy 1: If creating/navigating, auto-create parent directories
+    if (step.capabilityId?.includes('mkdir') || step.capabilityId?.includes('create') || step.capabilityId?.includes('navigate')) {
+      const parentPath = targetPath.split('/').slice(0, -1).join('/');
+      if (parentPath) {
+        this.emit('PlannerRepairCompleted', { log: `Creating missing parent directory: ${parentPath}` });
+        
+        const mkdirStep: WorkflowStep = {
+          id: step.id + '_repair_mkdir',
+          name: `Auto-create parent: ${parentPath}`,
+          type: 'ExecuteCapability',
+          capabilityId: 'filesystem.mkdir',
+          parameters: { path: parentPath, recursive: true },
+          dependencies: [],
+          retryPolicy: { type: 'none', maxAttempts: 0, delayMs: 0 }
+        };
+        
+        this.workflowEngine.injectSteps(this.workflow.id, [mkdirStep]);
+        const mkdirSuccess = await this.executeStepWithRetry(mkdirStep);
+        
+        if (mkdirSuccess) {
+          // Retry original step now that parent exists
+          const retryStep: WorkflowStep = {
+            ...step,
+            id: step.id + '_retried',
+            name: step.name + ' (Retried)',
+            retryPolicy: { type: 'none', maxAttempts: 0, delayMs: 0 }
+          };
+          return await this.executeStepWithRetry(retryStep);
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Repair: Permission denied — request elevated authorization from user.
+   */
+  private async repairPermissionDenied(step: WorkflowStep): Promise<boolean> {
+    this.emit('PlannerRepairCompleted', { log: 'Permission denied. Requesting elevated authorization...' });
+    
+    // Re-run the step but force the permission prompt
+    const elevatedStep: WorkflowStep = {
+      ...step,
+      id: step.id + '_elevated',
+      name: step.name + ' (Elevated)',
+      retryPolicy: { type: 'none', maxAttempts: 0, delayMs: 0 }
+    };
+    
+    return await this.executeStepWithRetry(elevatedStep);
+  }
+
+  /**
+   * Repair: Command not found — suggest using shell.execute with a corrected command.
+   */
+  private async repairCommandNotFound(step: WorkflowStep, errorMsg: string): Promise<boolean> {
+    // Extract the missing command name from the error
+    const cmdMatch = errorMsg.match(/(?:command not found|not recognized):\s*(\S+)/i) || 
+                     errorMsg.match(/(\S+):\s*(?:command not found|not recognized)/i) ||
+                     errorMsg.match(/Failed to execute (\S+):/i);
+    
+    if (cmdMatch && cmdMatch[1]) {
+      const missingCmd = cmdMatch[1].replace(/['"]/g, '');
+      // It is read from program output: only a plain package name may reach the shell
+      if (!/^[A-Za-z0-9][A-Za-z0-9._+@-]{0,80}$/.test(missingCmd)) return false;
       
-      this.repairCount++;
-      await new Promise(r => setTimeout(r, 1500)); // Simulate LLM latency
+      // Generalized Auto-heal: Attempt to install ANY missing dependency via Homebrew
+      this.emit('PlannerRepairCompleted', { log: `Missing dependency "${missingCmd}". Attempting to auto-install via Homebrew...` });
       
-      this.emit('PlannerRepairCompleted', { log: 'Planner provided a patched workflow segment.' });
-      
-      // Inject dummy repaired step (in reality, inject the steps from planner)
-      const repairedStep: WorkflowStep = {
-        ...failedStep,
-        id: failedStep.id + '_repaired',
-        name: failedStep.name + ' (Repaired)',
+      const brewStep: WorkflowStep = {
+        id: step.id + '_repair_brew',
+        name: `Auto-install dependency: ${missingCmd}`,
+        type: 'ExecuteCapability',
+        capabilityId: 'shell.execute',
+        parameters: { 
+          command: 'sh',
+          args: ['-c', 'export PATH=$PATH:/opt/homebrew/bin:/usr/local/bin && brew install -- "$1"', 'sh', missingCmd] 
+        },
+        dependencies: [],
         retryPolicy: { type: 'none', maxAttempts: 0, delayMs: 0 }
       };
       
-      this.workflowEngine.injectSteps(this.workflow.id, [repairedStep]);
+      this.workflowEngine.injectSteps(this.workflow.id, [brewStep]);
+      const brewSuccess = await this.executeStepWithRetry(brewStep);
       
-      // Continue execution on the repaired step
-      return await this.executeStepWithRetry(repairedStep);
-      
-    } catch (e) {
-      this.emit('WorkflowFailed', { log: 'Planner repair failed.' });
-      return false;
+      if (brewSuccess) {
+        // Retry original step now that dependency is installed
+        const retryStep: WorkflowStep = {
+          ...step,
+          id: step.id + '_retried',
+          name: step.name + ' (Retried)',
+          retryPolicy: { type: 'none', maxAttempts: 0, delayMs: 0 }
+        };
+        return await this.executeStepWithRetry(retryStep);
+      } else {
+        this.emit('PlannerRepairCompleted', { log: `Command "${missingCmd}" not found. Auto-install failed. Step skipped.` });
+      }
     }
+    
+    return false;
+  }
+
+  /**
+   * Repair: Process not found — retry with fuzzy process name matching.
+   */
+  private async repairProcessNotFound(step: WorkflowStep): Promise<boolean> {
+    const params = step.parameters || {};
+    const processName = params.process || params.app || params.name || '';
+    
+    if (!processName) return false;
+
+    this.emit('PlannerRepairCompleted', { log: `Process "${processName}" not found. Attempting fuzzy match...` });
+    
+    // Retry with a more permissive search — the capability driver should handle fuzzy matching
+    const fuzzyStep: WorkflowStep = {
+      ...step,
+      id: step.id + '_fuzzy',
+      name: step.name + ' (Fuzzy Match)',
+      parameters: { ...params, fuzzy: true, query: processName },
+      retryPolicy: { type: 'none', maxAttempts: 0, delayMs: 0 }
+    };
+    
+    return await this.executeStepWithRetry(fuzzyStep);
+  }
+
+  /**
+   * Repair: Timeout — retry with extended timeout.
+   */
+  private async retryWithTimeout(step: WorkflowStep): Promise<boolean> {
+    this.emit('PlannerRepairCompleted', { log: 'Operation timed out. Retrying with extended timeout...' });
+    
+    const retryStep: WorkflowStep = {
+      ...step,
+      id: step.id + '_timeout_retry',
+      name: step.name + ' (Extended Timeout)',
+      parameters: { ...(step.parameters || {}), timeout: 30000 },
+      retryPolicy: { type: 'none', maxAttempts: 0, delayMs: 0 }
+    };
+    
+    return await this.executeStepWithRetry(retryStep);
   }
 
   private generateSummary(): ExecutionSummary {

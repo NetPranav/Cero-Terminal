@@ -1,12 +1,12 @@
 {
   "terminal.integrated.profiles.osx": {
-    "Sentinel Terminal": {
-      "path": "/Applications/Sentinel Terminal.app/Contents/MacOS/Sentinel Terminal",
+    "Cero": {
+      "path": "/Applications/Cero.app/Contents/MacOS/Cero",
       "icon": "terminal",
       "overrideName": true
     }
   },
-  "terminal.integrated.defaultProfile.osx": "Sentinel Terminal",
+  "terminal.integrated.defaultProfile.osx": "Cero",
   "terminal.integrated.fontFamily": "Menlo, Monaco, 'Courier New', monospace",
   "terminal.integrated.fontSize": 14
 }

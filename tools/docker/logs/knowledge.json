@@ -1,0 +1,38 @@
+{
+  "toolId": "docker.logs",
+  "aliases": [
+    "docker logs",
+    "check container logs",
+    "view docker logs"
+  ],
+  "synonyms": [
+    "please docker logs",
+    "please check container logs",
+    "please view docker logs"
+  ],
+  "commonUserWording": [
+    "check logs for container redis_db",
+    "could you check logs for container redis_db",
+    "docker logs",
+    "check container logs",
+    "view docker logs"
+  ],
+  "commonMistakes": [],
+  "entityHints": {
+    "container": [
+      "test_value"
+    ],
+    "tail": [
+      "test_value"
+    ]
+  },
+  "deviceNamingPatterns": [],
+  "commonAbbreviations": {},
+  "languageVariations": [
+    "check logs for container redis_db",
+    "docker logs",
+    "check container logs",
+    "view docker logs"
+  ],
+  "relatedTools": []
+}

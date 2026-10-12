@@ -27,13 +27,10 @@ export class SystemCapability extends BaseCapability {
   protected async executeNative(ctx: CapabilityContext): Promise<CapabilityResult> {
     const inputs = ctx.actionNode.inputs;
     const actionId = ctx.actionNode.action.id;
-    const isWin = process.platform === 'win32';
 
     if (actionId.includes('volume') || inputs.volume !== undefined) {
       const level = Math.min(100, Math.max(0, Number(inputs.volume || inputs.level || 50)));
-      const cmd = isWin
-        ? `powershell -Command "(new-object -com wscript.shell).SendKeys([char]175)"`
-        : `osascript -e "set volume output volume ${level}"`;
+      const cmd = `osascript -e "set volume output volume ${level}"`;
       await this.runNativeCommand(cmd);
       return {
         success: true,
@@ -54,13 +51,12 @@ export class SystemCapability extends BaseCapability {
   }
 
   protected async verifyNative(ctx: CapabilityContext, execResult: CapabilityResult): Promise<VerificationResult> {
-    const isWin = process.platform === 'win32';
     return {
       success: true,
       verifiedOutputs: { verifiedSystemState: 'stable', ...execResult.outputs },
       durationMs: 0,
       warnings: [],
-      verificationMethod: isWin ? 'systeminfo_state_check' : 'system_profiler_state_check',
+      verificationMethod: 'system_profiler_state_check',
     };
   }
 

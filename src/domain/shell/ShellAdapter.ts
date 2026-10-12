@@ -10,6 +10,8 @@ export interface ShellProfile {
   supportsTrueColor: boolean;
 }
 
+import { isLinux } from '../../shared/platform';
+
 export class ShellAdapter {
   private static instance: ShellAdapter;
   
@@ -35,7 +37,7 @@ export class ShellAdapter {
     fish: {
       id: 'fish',
       name: 'Fish',
-      defaultPath: '/usr/local/bin/fish',
+      defaultPath: '/usr/bin/fish',
       loginFlag: '--login',
       interactiveFlag: '-i',
       configFilePath: '.config/fish/config.fish',
@@ -44,7 +46,7 @@ export class ShellAdapter {
     nushell: {
       id: 'nushell',
       name: 'Nushell',
-      defaultPath: '/usr/local/bin/nu',
+      defaultPath: '/usr/bin/nu',
       loginFlag: '--login',
       interactiveFlag: '-i',
       configFilePath: '.config/nushell/config.nu',
@@ -53,7 +55,7 @@ export class ShellAdapter {
     powershell: {
       id: 'powershell',
       name: 'PowerShell',
-      defaultPath: '/usr/local/bin/pwsh',
+      defaultPath: 'pwsh',
       loginFlag: '-NoLogo',
       interactiveFlag: '-NoExit',
       configFilePath: '.config/powershell/Microsoft.PowerShell_profile.ps1',
@@ -74,16 +76,18 @@ export class ShellAdapter {
    * Detect the user's default login shell from environment variable or platform default.
    */
   public detectLoginShell(envShellPath?: string): ShellProfile {
-    const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('win');
-    const targetPath = envShellPath || (isWindows ? 'powershell.exe' : '/bin/zsh');
+    const linux = isLinux();
+    const fallback = linux ? '/bin/bash' : '/bin/zsh';
+    const targetPath = envShellPath || fallback;
     const lower = targetPath.toLowerCase();
 
     if (lower.includes('bash')) return this.profiles.bash;
     if (lower.includes('fish')) return this.profiles.fish;
     if (lower.includes('nu')) return this.profiles.nushell;
     if (lower.includes('pwsh') || lower.includes('powershell')) return this.profiles.powershell;
+    if (lower.includes('zsh')) return this.profiles.zsh;
 
-    return this.profiles.zsh;
+    return linux ? this.profiles.bash : this.profiles.zsh;
   }
 
   /**
@@ -121,9 +125,9 @@ export class ShellAdapter {
     return {
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
-      TERM_PROGRAM: 'Sentinel Terminal',
+      TERM_PROGRAM: 'Cero',
       TERM_PROGRAM_VERSION: '0.1.0',
-      SENTINEL_TERMINAL: '1',
+      CERO_TERMINAL: '1',
       LANG: 'en_US.UTF-8',
       LC_ALL: 'en_US.UTF-8',
       ...customEnv,

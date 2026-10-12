@@ -1,0 +1,25 @@
+{
+  "toolId": "system.dotfile",
+  "version": "1.0.0",
+  "description": "Executes native driver for Manage Dotfile and Rice Settings.",
+  "steps": [
+    {
+      "id": "step_exec_main",
+      "name": "Execute Manage Dotfile and Rice Settings",
+      "type": "ExecuteCapability",
+      "capabilityId": "system.dotfile",
+      "parameters": {
+        "app": "{{app}}",
+        "enable": "{{enable}}",
+        "target": "{{target}}"
+      },
+      "dependencies": [],
+      "onError": "fail"
+    }
+  ],
+  "successCondition": "step:step_exec_main:success",
+  "errorHandling": {
+    "strategy": "fail_fast",
+    "maxRetries": 0
+  }
+}

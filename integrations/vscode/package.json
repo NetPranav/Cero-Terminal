@@ -1,9 +1,9 @@
 {
-  "name": "sentinel-terminal-integration",
-  "displayName": "Sentinel Terminal",
+  "name": "cero-terminal-integration",
+  "displayName": "Cero",
   "description": "First-Class macOS Desktop Terminal Emulator integration for Visual Studio Code",
   "version": "1.0.0",
-  "publisher": "sentinel",
+  "publisher": "cero",
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -15,9 +15,9 @@
     "terminal": {
       "profiles": [
         {
-          "id": "sentinel-terminal.profile",
-          "title": "Sentinel Terminal",
-          "path": "/Applications/Sentinel Terminal.app/Contents/MacOS/Sentinel Terminal",
+          "id": "cero-terminal.profile",
+          "title": "Cero",
+          "path": "/Applications/Cero.app/Contents/MacOS/Cero",
           "icon": "terminal",
           "overrideName": true
         }
@@ -25,15 +25,15 @@
     },
     "commands": [
       {
-        "command": "sentinel-terminal.openInSentinel",
-        "title": "Open in Sentinel Terminal",
+        "command": "cero-terminal.openInCero",
+        "title": "Open in Cero",
         "category": "Terminal"
       }
     ],
     "menus": {
       "explorer/context": [
         {
-          "command": "sentinel-terminal.openInSentinel",
+          "command": "cero-terminal.openInCero",
           "group": "2_workspace",
           "when": "explorerResourceIsFolder"
         }
@@ -44,7 +44,7 @@
   "keywords": [
     "terminal",
     "macos",
-    "sentinel",
+    "cero",
     "pty",
     "shell"
   ],

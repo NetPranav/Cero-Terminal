@@ -7,7 +7,6 @@
 
 import { BaseCapabilityDriver, CapabilityExecutionResult, ExecutionContext, Platform } from '../CapabilitySDK';
 import { readTextFile, readDir, copyFile, remove, exists, type DirEntry, rename, mkdir, writeTextFile } from '@tauri-apps/plugin-fs';
-import { Command } from '@tauri-apps/plugin-shell';
 import { invoke } from '@tauri-apps/api/core';
 
 export type FsOperation =
@@ -69,6 +68,42 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
     return this.execute({ operation: 'delete', path });
   }
 
+  private static cachedHomeDir: string | null = null;
+
+  public static async getHomeDir(): Promise<string> {
+    if (FilesystemSDKCapability.cachedHomeDir) {
+      return FilesystemSDKCapability.cachedHomeDir;
+    }
+
+    if (typeof process !== 'undefined' && (process.env.HOME || process.env.USERPROFILE)) {
+      FilesystemSDKCapability.cachedHomeDir = process.env.HOME || process.env.USERPROFILE || '';
+      return FilesystemSDKCapability.cachedHomeDir;
+    }
+
+    try {
+      const hRes = await invoke<{ stdout: string }>('execute_command', {
+        command: 'sh',
+        args: ['-c', 'echo $HOME']
+      });
+      const hd = (hRes?.stdout || '').trim();
+      if (hd) {
+        FilesystemSDKCapability.cachedHomeDir = hd;
+        return hd;
+      }
+    } catch {
+      // fallback
+    }
+
+    return '';
+  }
+
+  public static async expandTilde(p: string): Promise<string> {
+    if (!p || !p.startsWith('~')) return p;
+    const home = await FilesystemSDKCapability.getHomeDir();
+    if (!home) return p;
+    return p === '~' ? home : p.replace(/^~(?=$|\/|\\)/, home);
+  }
+
   protected async performExecution(
     input: FsDriverInput,
     _context: ExecutionContext,
@@ -89,13 +124,10 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
       const commandExecuted = `fs.${op}(${JSON.stringify(input)})`;
       switch (op) {
-        case 'read': return { success: true, data: { content: 'mock filesystem content' }, commandExecuted };
-        case 'list': return { success: true, data: { entries: [{ name: 'file1.ts', isDirectory: false }, { name: 'folder', isDirectory: true }] }, commandExecuted };
-        case 'search': return { success: true, data: { matches: [`${targetPath}/matched_file.ts`] }, commandExecuted };
+        case 'read': return { success: true, data: { content: 'mock filesystem content', stdout: 'mock filesystem content' }, commandExecuted };
+        case 'list': return { success: true, data: { entries: [{ name: 'file1.txt', isFile: true }, { name: 'folder1', isDirectory: true }], stdout: 'file1.txt\nfolder1/' }, commandExecuted };
+        case 'search': return { success: true, data: { matches: ['/workspace/src/app.ts'], stdout: '/workspace/src/app.ts' }, commandExecuted };
         case 'copy': return { success: true, data: { copied: true }, commandExecuted, rollbackPayload: { action: 'remove', target: input.destination } };
-        case 'locate_files': return { success: true, data: { files: [`/Users/mock/Documents/${input.name}`] }, commandExecuted };
-        case 'locate_folders': return { success: true, data: { folders: [`/Users/mock/Workspace/${input.name}`] }, commandExecuted };
-        case 'grep': return { success: true, data: { matches: [{ file: `${targetPath}/config.ts`, line: 10, content: `// matched ${input.query}` }] }, commandExecuted };
         case 'move': return { success: true, data: { moved: true }, commandExecuted, rollbackPayload: { action: 'move', source: input.destination, destination: input.source } };
         case 'rename': return { success: true, data: { renamed: true }, commandExecuted, rollbackPayload: { action: 'rename', oldName: input.path, newName: input.newName } };
         case 'compress': return { success: true, data: { archive: input.archiveName }, commandExecuted };
@@ -122,13 +154,7 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
         const baseCwd = (_context?.cwd && _context.cwd.trim() !== '' && _context.cwd !== '/') ? _context.cwd : '~';
         resolvedPath = `${baseCwd.replace(/\/+$/, '')}/${resolvedPath.replace(/^\.\//, '')}`;
       }
-      if (resolvedPath.startsWith('~/') || resolvedPath === '~') {
-        try {
-          const hRes = await invoke<{ stdout: string }>('execute_command', { command: 'sh', args: ['-c', 'echo $HOME'] });
-          const hd = (hRes?.stdout || '').trim();
-          if (hd) resolvedPath = resolvedPath === '~' ? hd : resolvedPath.replace(/^~/, hd);
-        } catch { /* ignore */ }
-      }
+      resolvedPath = await FilesystemSDKCapability.expandTilde(resolvedPath);
 
       switch (op) {
         case 'read': {
@@ -174,7 +200,7 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
             stdout = `Directory Contents (${targetPath}):\r\n  (Directory is completely empty on disk — 0 folders, 0 files)`;
           } else {
             stdout = `Directory Contents (${targetPath}):\r\n` +
-              entries.map(e => `  ${e.isDirectory ? '📁' : '📄'} ${e.name}`).join('\r\n');
+              entries.map(e => `  ${e.isDirectory ? '[DIR]' : '[FILE]'} ${e.name}`).join('\r\n');
           }
           return { success: true, data: { entries, stdout }, commandExecuted: `fs.readDir("${resolvedPath}")` };
         }
@@ -199,7 +225,7 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
           try {
             await writeTextFile(resolvedPath, content);
           } catch {
-            const res = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', { command: 'sh', args: ['-c', `mkdir -p "$(dirname "${resolvedPath}")" && touch "${resolvedPath}"`] });
+            const res = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', { command: 'sh', args: ['-c', 'mkdir -p -- "$(dirname -- "$1")" && touch -- "$1"', 'sh', resolvedPath] });
             if (res.code !== 0) {
               return { success: false, error: { code: 'CREATE_FILE_FAILED', message: res.stderr || `Failed to create file at ${resolvedPath}` } };
             }
@@ -212,23 +238,15 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
         case 'cd': {
           if (!resolvedPath) return { success: false, error: { code: 'MISSING_PATH', message: 'Path required' } };
           const stdout = `Changed directory to: ${targetPath}`;
-          return { success: true, data: { path: resolvedPath, stdout }, commandExecuted: `cd "${resolvedPath}"` };
+          return { success: true, data: { path: resolvedPath, stdout, code: 0 }, commandExecuted: `cd "${resolvedPath}"` };
         }
 
         case 'copy': {
           let src = input.source || input.path || '';
           let dest = input.destination || '';
           if (!src || !dest) return { success: false, error: { code: 'MISSING_PATHS', message: 'Source and destination required' } };
-          if (src.startsWith('~/') || dest.startsWith('~/')) {
-            try {
-              const hRes = await invoke<{ stdout: string }>('execute_command', { command: 'sh', args: ['-c', 'echo $HOME'] });
-              const hd = (hRes?.stdout || '').trim();
-              if (hd) {
-                src = src.replace(/^~/, hd);
-                dest = dest.replace(/^~/, hd);
-              }
-            } catch { /* ignore */ }
-          }
+          src = await FilesystemSDKCapability.expandTilde(src);
+          dest = await FilesystemSDKCapability.expandTilde(dest);
           await copyFile(src, dest);
           return { success: true, data: { copied: true }, commandExecuted: `fs.copyFile("${src}", "${dest}")`, rollbackPayload: { action: 'remove', target: dest } };
         }
@@ -237,16 +255,8 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
           let src = input.source || input.path || '';
           let dest = input.destination || '';
           if (!src || !dest) return { success: false, error: { code: 'MISSING_PATHS', message: 'Source and destination required' } };
-          if (src.startsWith('~/') || dest.startsWith('~/')) {
-            try {
-              const hRes = await invoke<{ stdout: string }>('execute_command', { command: 'sh', args: ['-c', 'echo $HOME'] });
-              const hd = (hRes?.stdout || '').trim();
-              if (hd) {
-                src = src.replace(/^~/, hd);
-                dest = dest.replace(/^~/, hd);
-              }
-            } catch { /* ignore */ }
-          }
+          src = await FilesystemSDKCapability.expandTilde(src);
+          dest = await FilesystemSDKCapability.expandTilde(dest);
           await rename(src, dest);
           return { success: true, data: { moved: true }, commandExecuted: `fs.rename("${src}", "${dest}")`, rollbackPayload: { action: 'move', source: dest, destination: src } };
         }
@@ -267,7 +277,7 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
 
         case 'trash': {
           if (!resolvedPath) return { success: false, error: { code: 'MISSING_PATH', message: 'Path required' } };
-          const trashCmd = await invoke<{ code: number; stderr: string }>('execute_command', { command: 'sh', args: ['-c', `mv "${resolvedPath}" "$HOME/.Trash/" 2>/dev/null || rm -rf "${resolvedPath}"`] });
+          const trashCmd = await invoke<{ code: number; stderr: string }>('execute_command', { command: 'sh', args: ['-c', 'mv -- "$1" "$HOME/.Trash/"', 'sh', resolvedPath] });
           if (trashCmd.code !== 0) {
             return { success: false, error: { code: 'TRASH_FAILED', message: trashCmd.stderr || `Failed to move ${resolvedPath} to Trash` } };
           }
@@ -283,43 +293,107 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
           if (startDir === 'here' || startDir === '.' || startDir === './') {
             const cwd = (this as any).context?.cwd;
             startDir = (cwd && cwd.trim() !== '' && cwd !== '/') ? cwd : '.';
-          } else if (startDir === 'unknown') {
+          } else if (startDir === 'unknown' || startDir === 'system' || startDir === 'my system') {
             startDir = '~';
           }
-          let resolvedDir = startDir;
-          if (resolvedDir.startsWith('~/') || resolvedDir === '~') {
-            try {
-              const hRes = await invoke<{ stdout: string }>('execute_command', { command: 'sh', args: ['-c', 'echo $HOME'] });
-              const hd = (hRes?.stdout || '').trim();
-              if (hd) resolvedDir = resolvedDir === '~' ? hd : resolvedDir.replace(/^~/, hd);
-            } catch { /* ignore */ }
-          }
-          const cleanPattern = pattern.toString().trim() || '*';
-          const inamePattern = cleanPattern.includes('*') ? cleanPattern : `*${cleanPattern}*`;
-          const findArgs = [resolvedDir, '-maxdepth', '10', '-iname', inamePattern, '-not', '-path', '*/.*'];
-          if (input.size) {
-            findArgs.push('-type', 'f', '-size', String(input.size));
-          }
+          let resolvedDir = await FilesystemSDKCapability.expandTilde(startDir);
+          const cleanPattern = pattern.toString().trim().replace(/^[*\s]+|[*\s]+$/g, '') || '*';
+          const isFolderSearch = op === 'locate_folders' || input.type === 'directory' || input.type === 'folder' || pattern.toLowerCase().includes('folder');
           let matches: string[] = [];
           let stdout = '';
-          try {
-            const findCmd = await invoke<{ stdout: string; stderr: string; code?: number }>('execute_command', {
-              command: 'find',
-              args: findArgs
-            });
-            if (findCmd && findCmd.stdout) {
-              matches = findCmd.stdout.split('\n').map(l => l.trim()).filter(Boolean);
-            }
-            const sizeMsg = input.size ? ` (size ${input.size})` : '';
-            if (matches.length > 0) {
-              stdout = `Located ${matches.length} match(es) for "${cleanPattern}"${sizeMsg} in ${startDir}:\r\n` + matches.map(m => `  • ${m}`).join('\r\n');
-            } else {
-              stdout = `No folder or file matching "${cleanPattern}"${sizeMsg} was found under ${startDir}.`;
-            }
-          } catch {
-            stdout = `Could not execute search for "${cleanPattern}" in ${startDir}.`;
+
+          // 1. Fast path: macOS Spotlight mdfind index (sub-100ms full-disk search)
+          if (typeof process !== 'undefined' && (process.platform === 'darwin' || (typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')))) {
+            try {
+              const mdQuery = isFolderSearch
+                ? `kMDItemFSName == '*${cleanPattern}*'c && kMDItemContentType == 'public.folder'`
+                : `kMDItemFSName == '*${cleanPattern}*'c`;
+              const mdCmd = await invoke<{ stdout: string; code?: number }>('execute_command', {
+                command: 'mdfind',
+                args: [mdQuery]
+              });
+              if (mdCmd && mdCmd.stdout) {
+                matches = mdCmd.stdout
+                  .split('\n')
+                  .map(l => l.trim())
+                  .filter(l => {
+                    if (!l) return false;
+                    if (l.includes('/node_modules/') || l.includes('/.git/') || l.includes('/Library/Caches/') || l.includes('/.Trash/')) return false;
+                    if (isFolderSearch && (l.endsWith('.app') || l.includes('.app/') || l.endsWith('.framework') || l.includes('.framework/') || l.endsWith('.appex'))) {
+                      return false;
+                    }
+                    return true;
+                  });
+              }
+            } catch { /* fallback to find */ }
           }
-          return { success: true, data: { matches, pattern: cleanPattern, dir: startDir, size: input.size, stdout }, commandExecuted: `find "${resolvedDir}" -iname "${inamePattern}"${input.size ? ` -size ${input.size}` : ''}` };
+
+          // 2. Fallback to find if mdfind produced no matches
+          if (matches.length === 0) {
+            // Check typo variants (e.g. "fronted" -> "frontend")
+            const typoVariant = cleanPattern.toLowerCase() === 'fronted' ? 'frontend' : null;
+            const inamePattern = cleanPattern.includes('*') ? cleanPattern : `*${cleanPattern}*`;
+            const findArgs = [resolvedDir, '-maxdepth', '8', '-iname', inamePattern, '-not', '-path', '*/.*', '-not', '-path', '*/node_modules/*'];
+            if (input.size) {
+              findArgs.push('-type', 'f', '-size', String(input.size));
+            }
+            if (isFolderSearch) {
+              findArgs.push('-type', 'd');
+            }
+            try {
+              const findCmd = await invoke<{ stdout: string; stderr: string; code?: number }>('execute_command', {
+                command: 'find',
+                args: findArgs
+              });
+              if (findCmd && findCmd.stdout) {
+                matches = findCmd.stdout
+                  .split('\n')
+                  .map(l => l.trim())
+                  .filter(l => {
+                    if (!l) return false;
+                    if (isFolderSearch && (l.endsWith('.app') || l.includes('.app/') || l.endsWith('.framework') || l.includes('.framework/') || l.endsWith('.appex'))) {
+                      return false;
+                    }
+                    return true;
+                  });
+              }
+            } catch { /* ignore */ }
+
+            // If still 0 matches and typoVariant exists, try typoVariant with mdfind/find
+            if (matches.length === 0 && typoVariant) {
+              try {
+                const altCmd = await invoke<{ stdout: string; code?: number }>('execute_command', {
+                  command: 'mdfind',
+                  args: [`kMDItemFSName == '*${typoVariant}*'c && kMDItemContentType == 'public.folder'`]
+                });
+                if (altCmd && altCmd.stdout) {
+                  matches = altCmd.stdout
+                    .split('\n')
+                    .map(l => l.trim())
+                    .filter(l => {
+                      if (!l) return false;
+                      if (l.includes('/node_modules/') || l.includes('/.git/') || l.includes('/Library/Caches/') || l.includes('/.Trash/')) return false;
+                      if (isFolderSearch && (l.endsWith('.app') || l.includes('.app/') || l.endsWith('.framework') || l.includes('.framework/') || l.endsWith('.appex'))) {
+                        return false;
+                      }
+                      return true;
+                    });
+                }
+              } catch { /* ignore */ }
+            }
+          }
+
+          const sizeMsg = input.size ? ` (size ${input.size})` : '';
+          if (matches.length > 0) {
+            stdout = `Located ${matches.length} match(es) for "${cleanPattern}"${sizeMsg} in ${startDir}:\r\n` + matches.slice(0, 30).map(m => `  • ${m}`).join('\r\n');
+            if (matches.length > 30) {
+              stdout += `\r\n  ... and ${matches.length - 30} more match(es).`;
+            }
+          } else {
+            stdout = `No folder or file matching "${cleanPattern}"${sizeMsg} was found under ${startDir}.`;
+          }
+
+          return { success: true, data: { matches, pattern: cleanPattern, dir: startDir, size: input.size, stdout }, commandExecuted: `search "${cleanPattern}" in ${startDir}` };
         }
 
         case 'grep': {
@@ -352,7 +426,8 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
         }
       }
     } catch (e: any) {
-      return { success: false, error: { code: 'FS_ERROR', message: e.message || `Failed to execute ${op}` } };
+      const errMsg = typeof e === 'string' ? e : (e?.message || (e ? JSON.stringify(e) : `Failed to execute ${op}`));
+      return { success: false, error: { code: 'FS_ERROR', message: errMsg } };
     }
   }
 

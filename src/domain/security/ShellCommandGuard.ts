@@ -1,5 +1,6 @@
 import { ExecutionPreviewPlan } from './ExecutionEngine';
 import { ISecurityEngine, RiskAnalysisResult, SecurityEngine } from './SecurityEngine';
+import { ShellAstParser } from './ShellAstParser';
 
 export type ShellGuardAction = 'allow' | 'require_approval' | 'deny';
 
@@ -37,45 +38,203 @@ export class ShellCommandGuard {
       };
     }
 
-    const parts = command.split(/\s+/);
-    const binary = parts[0];
-    const args = parts.slice(1);
-    let risk = this.securityEngine.analyzeCommand(binary, args);
-
-    // Catch single-token destructive binaries missed by spaced patterns
-    risk = this.enhanceRiskForEdgeCases(command, binary, risk);
-
-    const pipeRisk = this.analyzePipedExecution(command);
-    if (pipeRisk && pipeRisk.score > risk.score) {
-      risk = pipeRisk;
-    }
-
-    const protectedPath = this.detectProtectedPathDeletion(command);
-    if (protectedPath) {
+    // 1. Syntactic AST Validation
+    const syntax = ShellAstParser.validateSyntax(command);
+    if (!syntax.valid) {
       return {
         action: 'deny',
         command,
         risk: {
-          score: 100,
+          score: 95,
           level: 'CRITICAL',
-          explanation: `Hard block: destructive operation targeting protected path '${protectedPath}'.`,
-          requiresPassword: true,
-          requiresConsent: true
+          explanation: `Shell AST syntax error: ${syntax.error}`,
+          requiresPassword: false,
+          requiresConsent: false
         },
-        blockReason: `Cannot delete or modify protected system path: ${protectedPath}`
+        blockReason: `Syntax validation failed: ${syntax.error}`
       };
     }
 
-    if (this.shouldRequireApproval(risk)) {
+    // Check piped execution risk on the whole command line first (e.g. curl ... | bash)
+    const wholePipeRisk = this.analyzePipedExecution(command);
+
+    let highestRisk: RiskAnalysisResult = wholePipeRisk || {
+      score: 0,
+      level: 'SAFE',
+      explanation: 'Safe command.',
+      requiresPassword: false,
+      requiresConsent: false
+    };
+
+    try {
+      const ast = ShellAstParser.parse(command);
+
+      // Check catastrophic destructive operations across AST (rm -rf /, dd overwrite, mkfs, etc.)
+      const destructive = ShellAstParser.isDestructiveOperation(ast);
+
+      const simpleCommands = ShellAstParser.getAllSimpleCommands(ast);
+
+      for (const cmdNode of simpleCommands) {
+        const fullCmdStr = cmdNode.rawText || `${cmdNode.name} ${cmdNode.args.join(' ')}`;
+        const subProtectedPath = this.detectProtectedPathDeletion(fullCmdStr);
+        if (subProtectedPath) {
+          return {
+            action: 'deny',
+            command,
+            risk: {
+              score: 100,
+              level: 'CRITICAL',
+              explanation: `Hard block: destructive operation targeting protected path '${subProtectedPath}'.`,
+              requiresPassword: true,
+              requiresConsent: true
+            },
+            blockReason: `Cannot delete or modify protected system path: ${subProtectedPath}`
+          };
+        }
+
+        const binary = cmdNode.name;
+        const args = cmdNode.args;
+        let subRisk = this.securityEngine.analyzeCommand(binary, args);
+
+        // Catch single-token destructive binaries missed by spaced patterns
+        subRisk = this.enhanceRiskForEdgeCases(fullCmdStr, binary, subRisk);
+
+        const pipeRisk = this.analyzePipedExecution(fullCmdStr);
+        if (pipeRisk && pipeRisk.score > subRisk.score) {
+          subRisk = pipeRisk;
+        }
+
+        if (subRisk.score > highestRisk.score) {
+          highestRisk = {
+            ...subRisk,
+            requiresPassword: highestRisk.requiresPassword || subRisk.requiresPassword,
+            requiresConsent: highestRisk.requiresConsent || subRisk.requiresConsent
+          };
+        } else {
+          highestRisk = {
+            ...highestRisk,
+            requiresPassword: highestRisk.requiresPassword || subRisk.requiresPassword,
+            requiresConsent: highestRisk.requiresConsent || subRisk.requiresConsent
+          };
+        }
+      }
+
+      if (destructive.isDestructive) {
+        highestRisk = {
+          score: Math.max(highestRisk.score, 98),
+          level: 'CRITICAL',
+          explanation: destructive.reasons.join('; '),
+          requiresPassword: true,
+          requiresConsent: true
+        };
+      }
+    } catch {
+      // Fallback to splitting if AST parse encountered edge case
+      const subCommands = this.splitCompoundCommands(command);
+      for (const subCmd of subCommands) {
+        const subProtectedPath = this.detectProtectedPathDeletion(subCmd);
+        if (subProtectedPath) {
+          return {
+            action: 'deny',
+            command,
+            risk: {
+              score: 100,
+              level: 'CRITICAL',
+              explanation: `Hard block: destructive operation targeting protected path '${subProtectedPath}'.`,
+              requiresPassword: true,
+              requiresConsent: true
+            },
+            blockReason: `Cannot delete or modify protected system path: ${subProtectedPath}`
+          };
+        }
+        const parts = subCmd.split(/\s+/);
+        const binary = parts[0];
+        const args = parts.slice(1);
+        let subRisk = this.securityEngine.analyzeCommand(binary, args);
+        subRisk = this.enhanceRiskForEdgeCases(subCmd, binary, subRisk);
+        if (subRisk.score > highestRisk.score) {
+          highestRisk = subRisk;
+        }
+      }
+    }
+
+    if (this.shouldRequireApproval(highestRisk)) {
       return {
         action: 'require_approval',
         command,
-        risk,
-        previewPlan: this.toPreviewPlan(command, risk)
+        risk: highestRisk,
+        previewPlan: this.toPreviewPlan(command, highestRisk)
       };
     }
 
-    return { action: 'allow', command, risk };
+    return { action: 'allow', command, risk: highestRisk };
+  }
+
+  /**
+   * Splits compound commands on unquoted operators (;, &&, ||, |, &)
+   */
+  public splitCompoundCommands(commandLine: string): string[] {
+    const subCommands: string[] = [];
+    let current = '';
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let isEscaped = false;
+
+    for (let i = 0; i < commandLine.length; i++) {
+      const char = commandLine[i];
+
+      if (isEscaped) {
+        current += char;
+        isEscaped = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        isEscaped = true;
+        current += char;
+        continue;
+      }
+
+      if (char === "'" && !inDoubleQuote) {
+        inSingleQuote = !inSingleQuote;
+        current += char;
+        continue;
+      }
+
+      if (char === '"' && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote;
+        current += char;
+        continue;
+      }
+
+      if (!inSingleQuote && !inDoubleQuote) {
+        // Check for && or ||
+        if (
+          (char === '&' && commandLine[i + 1] === '&') ||
+          (char === '|' && commandLine[i + 1] === '|')
+        ) {
+          if (current.trim()) subCommands.push(current.trim());
+          current = '';
+          i++; // Skip second operator character
+          continue;
+        }
+
+        // Check for ; or single | or &
+        if (char === ';' || char === '|' || char === '&') {
+          if (current.trim()) subCommands.push(current.trim());
+          current = '';
+          continue;
+        }
+      }
+
+      current += char;
+    }
+
+    if (current.trim()) {
+      subCommands.push(current.trim());
+    }
+
+    return subCommands.length > 0 ? subCommands : [commandLine.trim()];
   }
 
   private shouldRequireApproval(risk: RiskAnalysisResult): boolean {
@@ -157,14 +316,22 @@ export class ShellCommandGuard {
 
   private detectProtectedPathDeletion(command: string): string | null {
     const protectedPaths = ['/System', '/usr', '/bin', '/sbin', '/etc', '/var', '/Windows', '/Library'];
-    const lower = command.toLowerCase();
+    const parts = command.trim().split(/\s+/);
+    if (parts.length === 0) return null;
 
-    if (!/\b(rm|rmdir|unlink|shred|trash|mv)\b/.test(lower)) {
+    let binary = parts[0].toLowerCase();
+    let restParts = parts.slice(1);
+    if (binary === 'sudo' || binary === 'doas') {
+      binary = (restParts[0] || '').toLowerCase();
+      restParts = restParts.slice(1);
+    }
+
+    const destructiveBinaries = ['rm', 'rmdir', 'unlink', 'shred', 'trash', 'mv'];
+    if (!destructiveBinaries.includes(binary)) {
       return null;
     }
 
-    const tokens = command.trim().split(/\s+/);
-    const targets = tokens.filter((token) => !token.startsWith('-') && !/^(rm|rmdir|unlink|shred|trash|mv|sudo)$/i.test(token));
+    const targets = restParts.filter((token) => !token.startsWith('-'));
 
     for (const target of targets) {
       const normalized = target.replace(/^['"]|['"]$/g, '');

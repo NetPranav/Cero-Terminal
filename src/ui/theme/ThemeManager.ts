@@ -91,23 +91,23 @@ export class ThemeManager {
 
     this.styleElement.textContent = `
       :root {
-        --sentinel-bg: ${bgWithAlpha};
-        --sentinel-bg-solid: ${theme.colors.background};
-        --sentinel-fg: ${theme.colors.foreground};
-        --sentinel-cursor: ${theme.colors.cursor};
-        --sentinel-selection: ${theme.colors.selection};
+        --cero-bg: ${bgWithAlpha};
+        --cero-bg-solid: ${theme.colors.background};
+        --cero-fg: ${theme.colors.foreground};
+        --cero-cursor: ${theme.colors.cursor};
+        --cero-selection: ${theme.colors.selection};
         
-        --sentinel-border: ${theme.id === 'apple-light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'};
-        --sentinel-border-active: ${theme.id === 'apple-light' ? 'rgba(0, 0, 0, 0.35)' : 'rgba(255, 255, 255, 0.35)'};
-        --sentinel-hover: ${theme.id === 'apple-light' ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)'};
-        --sentinel-modal-bg: ${theme.id === 'apple-light' ? 'rgba(245, 245, 247, 0.97)' : 'rgba(20, 20, 22, 0.97)'};
-        --sentinel-accent: ${theme.id === 'apple-light' ? '#000000' : '#FFFFFF'};
+        --cero-border: ${theme.id === 'apple-light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'};
+        --cero-border-active: ${theme.id === 'apple-light' ? 'rgba(0, 0, 0, 0.35)' : 'rgba(255, 255, 255, 0.35)'};
+        --cero-hover: ${theme.id === 'apple-light' ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)'};
+        --cero-modal-bg: ${theme.id === 'apple-light' ? 'rgba(245, 245, 247, 0.97)' : 'rgba(20, 20, 22, 0.97)'};
+        --cero-accent: ${theme.id === 'apple-light' ? '#000000' : '#FFFFFF'};
 
-        --sentinel-font: ${theme.ui.fontFamily};
-        --sentinel-font-size: ${theme.ui.fontSize}px;
+        --cero-font: ${theme.ui.fontFamily};
+        --cero-font-size: ${theme.ui.fontSize}px;
         
-        --sentinel-backdrop: ${backdropFilter};
-        --sentinel-border-glow: none;
+        --cero-backdrop: ${backdropFilter};
+        --cero-border-glow: none;
       }
       
       body {
@@ -115,9 +115,9 @@ export class ThemeManager {
       }
       
       #root {
-        background-color: var(--sentinel-bg);
-        backdrop-filter: var(--sentinel-backdrop);
-        -webkit-backdrop-filter: var(--sentinel-backdrop);
+        background-color: var(--cero-bg);
+        backdrop-filter: var(--cero-backdrop);
+        -webkit-backdrop-filter: var(--cero-backdrop);
       }
     `;
   }

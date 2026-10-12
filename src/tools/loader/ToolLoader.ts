@@ -33,6 +33,12 @@ import { TagIndex } from '../registry/TagIndex';
 import { AliasIndex } from '../registry/AliasIndex';
 import { KnowledgeIndex } from '../registry/KnowledgeIndex';
 
+// Keep the desktop bundle browser-safe. Node 20.18+ exposes built-in modules
+// through process without requiring a statically imported Node-only module.
+const nodeRequire = typeof process !== 'undefined'
+  ? (process as any).getBuiltinModule?.('node:module')?.createRequire(import.meta.url) ?? null
+  : null;
+
 export interface LoadDiagnostic {
   toolPath: string;
   file: string;
@@ -67,6 +73,20 @@ export interface RawToolBundle {
 
 export class ToolLoader {
   private state: ToolRegistryState;
+  private static sharedState: ToolRegistryState | null = null;
+
+  /**
+   * The tool registry is identical for every terminal tab; load and validate it once instead of
+   * re-indexing all tool bundles per tab.
+   */
+  public static getSharedState(): ToolRegistryState {
+    if (!ToolLoader.sharedState) {
+      const loader = new ToolLoader();
+      loader.loadAll(true);
+      ToolLoader.sharedState = loader.getState();
+    }
+    return ToolLoader.sharedState;
+  }
 
   constructor() {
     this.state = {
@@ -82,7 +102,7 @@ export class ToolLoader {
   /**
    * Load all dynamically discovered tools, validate schemas, and build indexes.
    */
-  public loadAll(): LoadResult {
+  public loadAll(silent?: boolean): LoadResult {
     const diagnostics: LoadDiagnostic[] = [];
     let loaded = 0;
     let failed = 0;
@@ -95,28 +115,80 @@ export class ToolLoader {
     this.state.aliasIndex.clear();
     this.state.knowledgeIndex.clear();
 
-    const toolModules = import.meta.glob('../../../tools/**/tool.json', { eager: true });
-    const workflowModules = import.meta.glob('../../../tools/**/workflow.json', { eager: true });
-    const knowledgeModules = import.meta.glob('../../../tools/**/knowledge.json', { eager: true });
-    const examplesModules = import.meta.glob('../../../tools/**/examples.json', { eager: true });
-    const testsModules = import.meta.glob('../../../tools/**/tests.json', { eager: true });
+    let bundles: Record<string, RawToolBundle> = {};
 
-    const bundles: Record<string, RawToolBundle> = {};
+    if (typeof (import.meta as any).glob === 'function') {
+      const toolModules = (import.meta as any).glob('../../../tools/**/tool.json', { eager: true });
+      const workflowModules = (import.meta as any).glob('../../../tools/**/workflow.json', { eager: true });
+      const knowledgeModules = (import.meta as any).glob('../../../tools/**/knowledge.json', { eager: true });
+      const examplesModules = (import.meta as any).glob('../../../tools/**/examples.json', { eager: true });
+      const testsModules = (import.meta as any).glob('../../../tools/**/tests.json', { eager: true });
 
-    for (const [path, module] of Object.entries(toolModules)) {
-      const dirPath = path.substring(0, path.lastIndexOf('/'));
-      const folderPath = dirPath.replace('../../../', '');
-      
-      const getDef = (mod: any) => mod?.default !== undefined ? mod.default : mod;
+      for (const [path, module] of Object.entries(toolModules)) {
+        const dirPath = path.substring(0, path.lastIndexOf('/'));
+        const folderPath = dirPath.replace('../../../', '');
+        const getDef = (mod: any) => mod?.default !== undefined ? mod.default : mod;
 
-      bundles[dirPath] = {
-        tool: getDef(module),
-        workflow: getDef(workflowModules[`${dirPath}/workflow.json`]),
-        knowledge: getDef(knowledgeModules[`${dirPath}/knowledge.json`]),
-        examples: getDef(examplesModules[`${dirPath}/examples.json`]),
-        tests: getDef(testsModules[`${dirPath}/tests.json`]),
-        folderPath
-      };
+        bundles[dirPath] = {
+          tool: getDef(module),
+          workflow: getDef(workflowModules[`${dirPath}/workflow.json`]),
+          knowledge: getDef(knowledgeModules[`${dirPath}/knowledge.json`]),
+          examples: getDef(examplesModules[`${dirPath}/examples.json`]),
+          tests: getDef(testsModules[`${dirPath}/tests.json`]),
+          folderPath
+        };
+      }
+    } else if (nodeRequire) {
+      // Node.js CLI runtime fallback
+      try {
+        const fs = nodeRequire('node:fs');
+        const path = nodeRequire('node:path');
+        const rootDir = process.cwd();
+        const toolsDir = path.resolve(rootDir, 'tools');
+
+        if (fs.existsSync(toolsDir)) {
+          const findToolDirs = (dir: string): string[] => {
+            let results: string[] = [];
+            const list = fs.readdirSync(dir, { withFileTypes: true });
+            for (const dirent of list) {
+              if (dirent.isDirectory()) {
+                const full = path.join(dir, dirent.name);
+                if (fs.existsSync(path.join(full, 'tool.json'))) {
+                  results.push(full);
+                } else {
+                  results = results.concat(findToolDirs(full));
+                }
+              }
+            }
+            return results;
+          };
+
+          const toolDirs = findToolDirs(toolsDir);
+          for (const dir of toolDirs) {
+            const readJsonSafe = (file: string) => {
+              try {
+                const p = path.join(dir, file);
+                if (fs.existsSync(p)) {
+                  return JSON.parse(fs.readFileSync(p, 'utf-8'));
+                }
+              } catch {}
+              return undefined;
+            };
+
+            const relPath = path.relative(rootDir, dir);
+            bundles[dir] = {
+              tool: readJsonSafe('tool.json'),
+              workflow: readJsonSafe('workflow.json'),
+              knowledge: readJsonSafe('knowledge.json'),
+              examples: readJsonSafe('examples.json'),
+              tests: readJsonSafe('tests.json'),
+              folderPath: relPath
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('[ToolLoader] Node.js directory scan error:', e);
+      }
     }
 
     for (const bundle of Object.values(bundles)) {
@@ -128,10 +200,12 @@ export class ToolLoader {
       }
     }
 
-    console.log(`[ToolLoader] Loaded ${loaded} tools, ${failed} failed.`);
-    for (const d of diagnostics) {
-      const prefix = d.level === 'error' ? '❌' : '⚠️';
-      console.warn(`${prefix} [${d.toolPath}/${d.file}] ${d.message}`);
+    if (!silent) {
+      console.log(`[ToolLoader] Loaded ${loaded} tools, ${failed} failed.`);
+      for (const d of diagnostics) {
+        const prefix = d.level === 'error' ? '[x]' : '[!]';
+        console.warn(`${prefix} [${d.toolPath}/${d.file}] ${d.message}`);
+      }
     }
 
     return { success: failed === 0, toolsLoaded: loaded, toolsFailed: failed, diagnostics };

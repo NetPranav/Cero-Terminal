@@ -1,36 +1,55 @@
-# Sentinel Terminal Frequently Asked Questions (FAQ)
+# Cero: Frequently asked questions
 
-Find answers to common user questions regarding Sentinel's local AI features, privacy guardrails, system interactions, and general usage.
+## Privacy and the built-in model
 
----
+### Does Cero send my commands or files to the cloud?
+Not with the built-in model or Ollama: the request and the command output stay on your computer. If you choose an API
+provider (OpenAI, Anthropic, Groq, DeepSeek, OpenRouter or a custom endpoint), your request and the output Cero needs
+to answer it are sent to that provider. API keys are kept in the macOS Keychain, the Windows Credential Manager, or a
+private `0600` file on Linux.
 
-## 🔒 Privacy & Local AI
+### Do I need to install Ollama?
+No. Cero runs its own `llama-server` and uses a Qwen model it downloads on first use. The default is
+Qwen 2.5 Coder 3B (about 2 GB); smaller (0.5B, 1.5B) and larger (Qwen3 4B) choices are in Settings. Downloads are
+checked against a pinned SHA-256 and resume if interrupted. An existing Ollama server can be chosen in Settings instead.
 
-### Does Sentinel send my code, commands, or private data to the cloud?
-**No.** Sentinel is engineered as an offline-first solution. All natural language parsing, command translation, and intentional workflow reasoning take place locally on your computer via your native hardware and localized Ollama runtime. Zero telemetry, keystrokes, or filesystem paths ever transmit to external cloud services or public LLM endpoints.
+### Does it work offline?
+After the model is downloaded, yes, with the built-in model or Ollama. API providers need a connection.
 
-### Why does Sentinel recommend the Qwen 2.5 local AI model?
-Sentinel pairs with lightweight, hyper-optimized models such as **Qwen 2.5:1.5b**. This configuration achieves near-instantaneous inference responsiveness (typically under a few hundred milliseconds), minimal RAM footprint, and superior command syntax comprehension—all while operating entirely offline on standard laptop hardware or Apple Silicon processors.
+## Using it
 
-### What happens if I disconnect from the internet?
-Sentinel retains full conversational AI capabilities without an internet connection. Because your language model runs on localized machine resources, feature workflows—including directory navigation, file pattern hunting, process termination, and interactive shell scripting—continue operating at peak performance anywhere you work.
+### How does Cero tell a request from a shell command?
+A line starting with `>` is a request. Everything else goes to your shell (zsh or bash on Linux and macOS,
+PowerShell on Windows), so `vim`, `tmux`, `git`, `docker` and `ssh` behave as in any terminal.
+See [COMMANDS.md](COMMANDS.md).
 
----
+### What does the status bar show?
+`AI: local` (built-in model), `AI: API` or `AI: Ollama` while that provider works. `AI: Off` appears only when the
+built-in engine is stopped. While a request runs it also shows the stage and a progress estimate.
 
-## 💻 Terminal Compatibility & Performance
+### How do I stop a request?
+`Ctrl+C` stops the running request and its command. Waiting requests stay in a queue (`/queue`); press `Ctrl+C` again
+within 1.5 seconds to clear it. With no request running, `Ctrl+C` goes to the shell.
 
-### Can I still run traditional terminal utilities and shell scripts?
-**Absolutely.** Sentinel acts as a high-performance native terminal emulator utilizing hardware-accelerated WebGL rendering and native pseudo-terminal (PTY) communication. Tools such as `vim`, `nano`, `tmux`, `git`, `docker`, and SSH work exactly as they do in classic command prompt environments.
+### How do I save and replay a workflow?
+Say "save this as a workflow called x" in a request, or add `:: save as workflow x`. Cero runs the task, then writes the
+steps that really ran to a `.flow` file. Replay with `run the workflow x` or by double-clicking the file.
+See [FLOW_FILES.md](FLOW_FILES.md).
 
-### How does Sentinel distinguish between conversational AI commands and normal UNIX syntax?
-Sentinel applies real-time evaluation heuristics. Standard system commands (`cd`, `git status`, `ls -lah`, `npm test`) bypass language interpretation completely for direct execution in your active shell. Natural language expressions (`"take me to downloads folder"`, `"open youtube.com in safari"`, or `"stop chrome"`) automatically route to Sentinel's AI Intent Engine for smart execution and prompt synchronization.
+### Does Cero learn from what I do?
+Only when you say so (`/learn`). See [LEARNING.md](LEARNING.md).
 
----
+### What happens when a command fails?
+Cero shows a suggested fix. Press `Tab` or type `>fix` to apply it.
 
-## 🛡️ Safety & Security Controls
+## Safety
 
-### What happens if I ask Sentinel to delete important files or run a risky operation?
-Sentinel incorporates a proactive **Zero-Trust Security Engine**. Every automated workflow receives a real-time danger and risk score. If a proposed action involves destructive file operations or administrative modifications, Sentinel immediately intercepts the workflow and presents an interactive authorization dialog requiring your explicit verification before execution can continue.
+### What stops Cero from running `rm -rf /`?
+The command safety guardian refuses catastrophic commands (root deletion, raw disk writes, formatting, permission
+lockouts, fork bombs, firmware wipes, C library removal, obfuscated pipes) both when you type them and when a model
+proposes them. Commands that change files, the system or the network wait for your click on Run or Deny.
+See [SECURITY.md](SECURITY.md).
 
-### Can Sentinel safely stop stuck desktop applications and background processes?
-**Yes.** When you issue natural language instructions like `"kill antigravity"` or `"stop chrome"`, Sentinel executes verified OS cleanup capabilities that sweep both the main application process and any lingering helper threads or orphan background services, keeping your system memory clean and responsive.
+### Can I undo what Cero did?
+`>what did you just do` lists the changes made this session; `>undo last step` reverses the last reversible one.
+The log lives in memory, so it is gone when you close Cero.

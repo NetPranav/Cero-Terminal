@@ -2,10 +2,10 @@
  * ThemeEngine.ts — Runtime theme switching
  */
 
-export type AppTheme = 'Sentinel Dark' | 'Sentinel Light' | 'Glass' | 'Minimal' | 'OLED' | 'Matrix' | 'Developer';
+export type AppTheme = 'Cero Dark' | 'Cero Light' | 'Glass' | 'Minimal' | 'OLED' | 'Matrix' | 'Developer';
 
 export class ThemeEngine {
-  private currentTheme: AppTheme = 'Sentinel Dark';
+  private currentTheme: AppTheme = 'Cero Dark';
 
   public setTheme(theme: AppTheme): void {
     this.currentTheme = theme;
@@ -17,6 +17,6 @@ export class ThemeEngine {
   }
 
   public getAvailableThemes(): AppTheme[] {
-    return ['Sentinel Dark', 'Sentinel Light', 'Glass', 'Minimal', 'OLED', 'Matrix', 'Developer'];
+    return ['Cero Dark', 'Cero Light', 'Glass', 'Minimal', 'OLED', 'Matrix', 'Developer'];
   }
 }

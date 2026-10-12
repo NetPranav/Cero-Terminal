@@ -48,7 +48,7 @@ export class PermissionManager implements IPermissionManager {
   private loadState(): void {
     if (typeof localStorage !== 'undefined') {
       try {
-        const saved = localStorage.getItem('sentinel_permission_state');
+        const saved = localStorage.getItem('cero_permission_state');
         if (saved) {
           const data = JSON.parse(saved);
           if (data.profile) {
@@ -72,7 +72,7 @@ export class PermissionManager implements IPermissionManager {
       try {
         const permsObj: Record<string, string> = {};
         this.permissions.forEach((val, key) => { permsObj[key] = val; });
-        localStorage.setItem('sentinel_permission_state', JSON.stringify({
+        localStorage.setItem('cero_permission_state', JSON.stringify({
           profile: this.currentProfile,
           permissions: permsObj
         }));

@@ -1,5 +1,5 @@
 /**
- * MemoryTypes.ts — Core Data Models for Sentinel Memory Engine
+ * MemoryTypes.ts — Core Data Models for Cero Memory Engine
  *
  * Enforces immutable provenance, strict privacy labels, confidence scoring,
  * and semantic revision histories for the Knowledge Graph.

@@ -60,10 +60,72 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
       expect((res.data as any).dryRun).toBe(true);
     });
 
+    it('should resolve Homebrew package identifiers and properly target casks on macOS', async () => {
+      const appRegistry = AppAliasRegistry.getInstance();
+      
+      const bravePkg = appRegistry.resolvePackage('Brave Browser');
+      expect(bravePkg.name).toBe('brave-browser');
+      expect(bravePkg.isCask).toBe(true);
+
+      const chromePkg = appRegistry.resolvePackage('Google Chrome');
+      expect(chromePkg.name).toBe('google-chrome');
+      expect(chromePkg.isCask).toBe(true);
+
+      const vscodePkg = appRegistry.resolvePackage('VS Code');
+      expect(vscodePkg.name).toBe('visual-studio-code');
+      expect(vscodePkg.isCask).toBe(true);
+
+      const gitPkg = appRegistry.resolvePackage('git');
+      expect(gitPkg.name).toBe('git');
+      expect(gitPkg.isCask).toBe(false);
+    });
+
+    it('should execute application update with normalized cask arguments', async () => {
+      const appDriver = new ApplicationCapability();
+      
+      // GUI Application update test
+      const braveRes = await appDriver.update('Brave Browser');
+      expect(braveRes.success).toBe(true);
+      expect(braveRes.data?.updated).toBe(true);
+      expect(braveRes.data?.package).toBe('brave-browser');
+      expect(braveRes.commandExecuted).toBe('brew upgrade --cask brave-browser');
+
+      // System app update exclusion test
+      const safariRes = await appDriver.update('Safari');
+      expect(safariRes.success).toBe(true);
+      expect(safariRes.data?.updated).toBe(false);
+      expect((safariRes.data as any)?.reason).toBe('System application');
+    });
+
     it('should handle cancellation cleanly', async () => {
       const appDriver = new ApplicationCapability();
       const cancelRes = await appDriver.cancel();
       expect(typeof cancelRes).toBe('boolean');
+    });
+
+    it('should skip package installation if target is already installed', async () => {
+      const appDriver = new ApplicationCapability('application.install');
+      const res = await appDriver.execute({
+        operation: 'install',
+        app: 'neovim',
+        mockAlreadyInstalled: true
+      });
+      expect(res.success).toBe(true);
+      expect(res.data?.alreadyInstalled).toBe(true);
+      expect(res.data?.stdout).toContain('already installed');
+    });
+
+    it('should execute reinstall when reinstall or force flag is specified even if installed', async () => {
+      const appDriver = new ApplicationCapability('application.install');
+      const res = await appDriver.execute({
+        operation: 'install',
+        app: 'neovim',
+        mockAlreadyInstalled: true,
+        reinstall: true
+      });
+      expect(res.success).toBe(true);
+      expect(res.data?.reinstalled).toBe(true);
+      expect(res.data?.alreadyInstalled).toBeUndefined();
     });
   });
 
@@ -86,8 +148,27 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
       expect(ytRes.data?.url).toContain('youtube.com');
       expect(ytRes.commandExecuted).toContain('open');
 
-      const ghRes = await browserDriver.search('Sentinel terminal', 'github');
+      const ghRes = await browserDriver.search('Cero terminal', 'github');
       expect(ghRes.data?.url).toContain('github.com/search');
+    });
+
+    it('should target specific browser with -a when appName is provided', async () => {
+      const browserDriver = new BrowserCapability('browser.navigate');
+      const res = await browserDriver.execute({ url: 'youtube.com', appName: 'Safari' });
+
+      expect(res.success).toBe(true);
+      expect(res.data?.url).toBe('https://youtube.com');
+      expect(res.data?.browser).toBe('Safari');
+      expect(res.commandExecuted).toBe('open -a "Safari" "https://youtube.com"');
+    });
+
+    it('should resolve browser aliases (e.g., chrome -> Google Chrome)', async () => {
+      const browserDriver = new BrowserCapability('browser.navigate');
+      const res = await browserDriver.execute({ url: 'github.com', browser: 'chrome' });
+
+      expect(res.success).toBe(true);
+      expect(res.data?.browser).toBe('Google Chrome');
+      expect(res.commandExecuted).toBe('open -a "Google Chrome" "https://github.com"');
     });
   });
 
@@ -133,6 +214,33 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
       expect(connectRes.success).toBe(true);
       expect(connectRes.data?.device).toBe('AirPods Pro');
     });
+
+    it('should gracefully handle missing blueutil binary on stock macOS by falling back to Bluetooth Settings', async () => {
+      BluetoothCapability.mockBlueutilMissing = true;
+      try {
+        const btDriver = new BluetoothCapability('network.bluetooth.on');
+        const onRes = await btDriver.turnOn();
+        expect(onRes.success).toBe(true);
+        expect((onRes.data as any)?.fallback).toBe('settings');
+        expect((onRes.data as any)?.openedSettings).toBe(true);
+        expect(onRes.commandExecuted).toContain('x-apple.systempreferences:com.apple.BluetoothSettings');
+
+        const connectRes = await btDriver.connect('Soundcore Space One');
+        expect(connectRes.success).toBe(true);
+        expect((connectRes.data as any)?.fallback).toBe('settings');
+        expect((connectRes.data as any)?.openedSettings).toBe(true);
+        expect(connectRes.commandExecuted).toContain('x-apple.systempreferences:com.apple.BluetoothSettings');
+      } finally {
+        BluetoothCapability.mockBlueutilMissing = false;
+      }
+    });
+
+    it('should connect to peripherals even when queries include accessory nouns (Issue 8 / GitHub #6)', async () => {
+      const btDriver = new BluetoothCapability();
+      const res = await btDriver.connect('soundcore space one headphone');
+      expect(res.success).toBe(true);
+      expect(res.data?.connected).toBe(true);
+    });
   });
 
   describe('5. FilesystemSDKCapability (Pure Native Filesystem Driver)', () => {
@@ -175,6 +283,9 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
       expect(shellRes.success).toBe(true);
       expect(shellRes.data?.code).toBe(0);
 
+      const shellWithTildeCwd = await shellDriver.execute({ command: 'echo hello', cwd: '~' });
+      expect(shellWithTildeCwd.success).toBe(true);
+
       const verifyShell = await shellDriver.verify({ command: 'echo hello' }, shellRes);
       expect(verifyShell).toBe(true);
     });
@@ -192,6 +303,13 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
 
       const rolledBack = await gitDriver.rollback({ directory: './core_repo' }, cloneRes);
       expect(rolledBack).toBe(true);
+    });
+
+    it('should propagate working directory (cwd) context across git invocations (Issue 10 / GitHub #4)', async () => {
+      const gitDriver = new GitCapability('git.status');
+      const res = await gitDriver.execute({ directory: '/workspace/custom-repo' }, { cwd: '/workspace/custom-repo' } as any);
+      expect(res.success).toBe(true);
+      expect(res.commandExecuted).toContain('git status');
     });
   });
 
@@ -241,7 +359,7 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
       const allTools = loader.getState().toolIndex.getAll();
       expect(allTools.length).toBeGreaterThanOrEqual(91);
 
-      // Verify that every single loaded tool ID in the entire Sentinel capability library is bound to a concrete TypeScript driver
+      // Verify that every single loaded tool ID in the entire Cero capability library is bound to a concrete TypeScript driver
       for (const tool of allTools) {
         const toolId = tool.definition.id;
         const driver = registry.getDriver(toolId);

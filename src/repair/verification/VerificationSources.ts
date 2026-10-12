@@ -165,7 +165,7 @@ export class VerificationSources {
       return { success: !!fg.data, confidence: fg.confidence, summary: `Active application process table operational (Foreground: [${fg.data}])` };
     }
     if (actionId.includes('filesystem') || actionId.includes('file')) {
-      const ex = await this.stateEngine.queries.exists('/Users/pranav/Project Folder/AI Terminal');
+      const ex = await this.stateEngine.queries.exists('/home/user/project');
       return { success: ex.data, confidence: ex.confidence, summary: `Filesystem storage hierarchy verified accessible` };
     }
 

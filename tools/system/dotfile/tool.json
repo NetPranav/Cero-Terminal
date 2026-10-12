@@ -1,0 +1,62 @@
+{
+  "id": "system.dotfile",
+  "version": "1.0.0",
+  "displayName": "Manage Dotfile and Rice Settings",
+  "description": "Safely manages and toggles startup applications, environment settings, and desktop rice configurations (Hyprland, i3, Sway, Waybar, bashrc, zshrc).",
+  "domain": "system",
+  "category": "System",
+  "tags": [
+    "system",
+    "dotfile",
+    "rice",
+    "hyprland",
+    "i3",
+    "sway",
+    "autostart",
+    "config",
+    "startup"
+  ],
+  "aliases": [
+    "toggle autostart",
+    "turn on in rice",
+    "turn off in rice",
+    "disable on startup",
+    "enable on startup",
+    "hyprland config",
+    "edit dotfile",
+    "rice config"
+  ],
+  "supportedPlatforms": [
+    "macos",
+    "windows",
+    "linux"
+  ],
+  "requiredPermissions": [
+    "FilesystemWrite"
+  ],
+  "securityRisk": "MEDIUM",
+  "parameters": [
+    {
+      "name": "app",
+      "type": "string",
+      "description": "Name of the application, daemon, or script to configure in rice/autostart",
+      "required": true
+    },
+    {
+      "name": "enable",
+      "type": "boolean",
+      "description": "True to enable/uncomment in autostart, false to disable/comment out",
+      "required": true
+    }
+  ],
+  "optionalParameters": [
+    {
+      "name": "target",
+      "type": "string",
+      "description": "Target configuration (hyprland, i3, sway, bashrc, zshrc, or file path)"
+    }
+  ],
+  "estimatedExecutionTime": "1s",
+  "confirmationRequired": false,
+  "undoable": true
+}

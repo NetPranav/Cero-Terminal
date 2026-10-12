@@ -1,43 +1,53 @@
-# Sentinel Terminal Keyboard Shortcuts
+# Keyboard shortcuts
 
-Sentinel is engineered for rapid keyboard-first navigation and efficient control of multi-pane terminal workspaces. Use the following keyboard shortcuts to streamline your productivity.
+On macOS use `Cmd` where this page says `Ctrl`. Checked against `App.tsx` and `TerminalView.tsx`.
+Keys listed under "Not built yet" are in [FUTURE_SCOPE.md](FUTURE_SCOPE.md).
 
----
+## Windows and panels
+| Action | Keys |
+|---|---|
+| Command palette | `Ctrl+Shift+P` |
+| Settings (full screen; `Esc` closes it) | `Ctrl+,` |
+| Workflow Manager | `Ctrl+Shift+W` |
+| Plugin marketplace | `Ctrl+Shift+X` |
+| Shortcuts and help | `F1`, `Ctrl+/` or `Ctrl+?` |
+| Fuzzy history search | `Ctrl+R` |
 
-## ⚡ Global Application Navigation
+## Tabs and panes
+| Action | Keys |
+|---|---|
+| New tab | `Ctrl+T` |
+| Close pane, or tab when it is the only pane | `Ctrl+W` |
+| Rename tab | double-click the tab |
+| Split side by side | `Ctrl+D` |
+| Split stacked | `Ctrl+Shift+D` |
+| Resize panes | drag the divider |
 
-| Action | macOS Shortcut | Windows / Linux Shortcut | Description |
-| :--- | :--- | :--- | :--- |
-| **Open Command Palette** | `Cmd + Shift + P` | `Ctrl + Shift + P` | Launches the interactive command palette for instant tool execution and settings search. |
-| **New Terminal Tab** | `Cmd + T` | `Ctrl + T` | Creates a new independent terminal session tab in your current workspace. |
-| **Close Current Tab** | `Cmd + W` | `Ctrl + W` | Closes the active terminal session and terminates any attached sub-processes safely. |
-| **Cycle Next Tab** | `Cmd + Shift + ]` or `Cmd + Tab` | `Ctrl + Shift + ]` | Switches focus immediately to the next open workspace tab. |
-| **Cycle Previous Tab** | `Cmd + Shift + [` | `Ctrl + Shift + [` | Switches focus immediately to the previously active workspace tab. |
+The F1 help screen currently lists different split keys (`Ctrl+Shift+D` and `Ctrl+Alt+D`) and tab keys `1..9`;
+the table above is what the app does.
 
----
+## Terminal
+| Action | Keys |
+|---|---|
+| Search the scrollback | `Ctrl+Shift+F` |
+| Next / previous match | `Enter` / `Shift+Enter` |
+| Case / whole word / regex | `Alt+C` / `Alt+W` / `Alt+R` |
+| Close search | `Esc` |
+| Copy | `Ctrl+Shift+C`, `Ctrl+Insert`, or `Ctrl+C` while text is selected |
+| Paste | `Ctrl+V`, `Ctrl+Shift+V`, `Shift+Insert` |
+| Clear the screen | `Ctrl+K` (also `Ctrl+L` in the shell) |
 
-## 🪟 Multi-Pane Workspace Controls
+## Requests and suggestions
+| Action | Keys |
+|---|---|
+| Start a request | `>` at the start of the line |
+| Accept the grey suggestion | `Tab`, or `Right` at the end of the line (a setting turns Right off). It is accepted only while it still matches the line; after a paste or an edit it is dropped. |
+| Apply a suggested fix | `Tab`, or type `>fix` / `>heal` |
+| Stop the running request | `Ctrl+C`: the model call, its commands and open approval cards stop and the task shows as cancelled. Waiting prompts are kept and the queue pauses (`/queue resume`). A second `Ctrl+C` within 1.5 s clears the queue. A draft you are typing is kept. With nothing running, `Ctrl+C` goes to the shell. |
+| Queue panel | `/queue`, or click the queue count in the status bar. `Esc` closes it while it has focus. |
+| Answer an approval | click **Run** or **Deny** (Enter and Esc do not answer it) |
+| Move through a long wrapped prompt | `Up` / `Down` |
 
-| Action | macOS Shortcut | Windows / Linux Shortcut | Description |
-| :--- | :--- | :--- | :--- |
-| **Split Pane Vertically** | `Cmd + D` | `Ctrl + Shift + D` | Divides the active terminal window vertically into two side-by-side execution environments. |
-| **Split Pane Horizontally** | `Cmd + Shift + D` | `Ctrl + Shift + H` | Divides the active terminal window horizontally into upper and lower workspaces. |
-| **Navigate Panes** | `Cmd + Alt + Arrow Keys` | `Alt + Arrow Keys` | Moves visual and interactive keyboard focus between adjacent split panes. |
-
----
-
-## 🍏 Native macOS Top Menu Bar Actions
-
-When running on macOS, utilize your desktop monitor's top application menu bar right next to the apple icon:
-- **`Sentinel Terminal ➔ Personalization ➔ Appearance & Color Themes...`**: Access visual styling, glassmorphism blur intensity, and custom color layouts.
-- **`Sentinel Terminal ➔ Personalization ➔ AI Engine & Model Settings...`**: Inspect active local Ollama connections, switch AI intelligence models, and configure natural language preferences.
-
----
-
-## 🐚 Interactive Shell & Command Editing
-
-| Action | macOS Shortcut | Windows / Linux Shortcut | Description |
-| :--- | :--- | :--- | :--- |
-| **Cancel Interactive Prompt** | `Ctrl + C` | `Ctrl + C` | Instantly halts active terminal programs or interrupts natural language task queries. |
-| **Accept AI Ghost Suggestion** | `Tab` or `Right Arrow` | `Tab` or `Right Arrow` | Seamlessly autocompletes terminal commands proposed by Sentinel's intelligent autocomplete engine. |
-| **Clear Terminal Screen** | `Cmd + K` or type `clear` | `Ctrl + L` or type `clear` | Wipes scrollback screen buffer while retaining session directory memory and environment variables. |
+## Not built yet
+`Ctrl+Shift+Z` (Zen/Visual toggle; use Settings or the palette), `Ctrl+1..9`, `Ctrl+Tab`, `Alt+Arrow` pane focus,
+`Ctrl+O` workspace switcher, `Ctrl+Alt+P` ports drawer, `Ctrl+Shift+H`.

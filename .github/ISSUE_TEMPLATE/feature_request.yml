@@ -1,0 +1,52 @@
+name: 💡 Feature or Tool Request
+description: Propose a new tool, capability, AI planning behavior, or workflow improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We welcome feature ideas and new tool proposals for Cero!
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Capability Domain / Area
+      description: Which area of Cero does this feature proposal belong to?
+      options:
+        - AI Planning & Agent Loop
+        - Developer Tooling & IDEs
+        - Desktop Application Orchestration
+        - System Diagnostics & Hardware
+        - Network & Wireless (Wi-Fi, Bluetooth)
+        - Filesystem & Navigation
+        - UI, Themes & Glassmorphism
+        - Security & Permissions Engine
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Is your feature request related to a specific workflow friction or missing tool?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution & Example Natural Language Prompt
+      description: What conversational command should trigger this? What should the terminal execute?
+      placeholder: |
+        Prompt: >connect to my soundcore space one
+        Expected Tool: network.bluetooth.connect
+        Behavior: Connects via blueutil / WinRT / bluetoothctl and updates system output.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative Approaches Considered
+      description: Any other CLI utilities, APIs, or workarounds you have looked at?

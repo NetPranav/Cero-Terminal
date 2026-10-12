@@ -31,14 +31,11 @@ export class PermissionManager {
     if (capability.mockMode || this.isMockMode) {
       // In mock testing mode, simulate that all permissions are automatically granted
       for (const perm of capability.metadata.requiredPermissions) {
-        const remedyHint = process.platform === 'win32' 
-          ? `Ensure ${perm} is enabled in Windows Settings > Privacy & security.`
-          : `Ensure ${perm} is enabled in macOS System Settings > Privacy & Security > ${perm}.`;
         results.push({
           permissionId: perm,
           granted: this.overrideGrants.get(perm.toLowerCase()) ?? true,
           status: (this.overrideGrants.get(perm.toLowerCase()) === false) ? 'denied' : 'granted',
-          remedyHint,
+          remedyHint: `Ensure ${perm} is enabled in macOS System Settings > Privacy & Security > ${perm}.`,
         });
       }
       return results;
@@ -56,14 +53,11 @@ export class PermissionManager {
       } else {
         // In native mode, check basic accessibility/privacy grants via structured query simulation
         const isGranted = await this.checkNativeGrant(perm);
-        const remedyHint = process.platform === 'win32'
-          ? `Navigate to Windows Settings > Privacy & security and enable ${perm} for Sentinel Terminal.`
-          : `Navigate to macOS System Settings > Privacy & Security > ${perm} and enable Sentinel Terminal.`;
         results.push({
           permissionId: perm,
           granted: isGranted,
           status: isGranted ? 'granted' : 'prompt_needed',
-          remedyHint,
+          remedyHint: `Navigate to macOS System Settings > Privacy & Security > ${perm} and enable Cero.`,
         });
       }
     }

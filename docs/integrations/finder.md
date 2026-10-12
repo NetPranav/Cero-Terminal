@@ -1,18 +1,22 @@
-# Finder Quick Action Service ("Open in Sentinel")
+# "Open in Cero" from a file manager
 
-Sentinel Terminal provides native macOS Finder integration, allowing users to right-click any directory in Finder to open an interactive terminal session at that exact location.
+Settings, Desktop Integrations (or the setup wizard) installs a right-click action that opens Cero in a folder.
 
-## Enabling Finder Integration
-In the Sentinel **Setup Wizard** or under **Personalization**, enable **Finder Quick Actions**.
-This installs an Automator workflow service to:
-`~/Library/Services/Open in Sentinel.workflow`
+## Linux (user-space, no root)
+| File manager | Installed to |
+|---|---|
+| Nautilus (GNOME Files) | `~/.local/share/nautilus/scripts/` |
+| Nemo (Cinnamon) | `~/.local/share/nemo/scripts/` |
+| Caja (MATE) | uses the same script variables |
+| Dolphin (KDE) | `~/.local/share/kio/servicemenus/cero_open.desktop` (and the KDE 5 services folder) |
+| Thunar (Xfce) | a custom action in `~/.config/Thunar/uca.xml` |
 
-## How to Use in Finder
-1. Navigate to any folder in macOS Finder.
-2. Right-click the folder icon (or invoke Two-Finger Tap on trackpad).
-3. Scroll down to **Services** (or **Quick Actions** depending on OS version) → Select **Open in Sentinel**.
-4. Sentinel opens immediately with your login shell running inside that working directory.
+Right-click a folder, then Scripts (Nautilus, Nemo) or the context menu, and choose **Open in Cero**. The script calls
+`~/.local/bin/cero <folder>`. If the entry does not appear, restart the file manager (`nautilus -q`, `thunar -q`).
 
-## Troubleshooting
-If "Open in Sentinel" does not appear immediately:
-- Go to **macOS System Settings** → **Privacy & Security** → **Extensions** → **Finder Extensions** / **Services** and ensure "Open in Sentinel" is ticked on.
+## macOS (Finder Quick Action)
+Enabling it installs `~/Library/Services/Open in Cero.workflow`. Right-click a folder, then Services (or Quick Actions),
+then **Open in Cero**. If it is missing, tick it in System Settings, Privacy & Security, Extensions.
+
+## `.flow` files
+Cero also registers the `.flow` file type and icon (`application/x-cero-workflow`), so double-clicking a flow opens it.

@@ -1,36 +1,50 @@
-# Sentinel Terminal Themes & Visual Customization
+# Cero — Visual Aesthetic & Theme Architecture
 
-Sentinel is built around a philosophy of visual excellence and intuitive ergonomics. Using modern UI principles, harmonious color schemes, and glassmorphic window styling, Sentinel provides a workspace that feels premium and responsive.
-
----
-
-## 🎨 Accessing the Customization Engine
-
-When running Sentinel on macOS, personalization settings are available at a moment's notice right at the very top of your desktop screen:
-1. Navigate to your computer monitor's top application menu bar.
-2. Select **`Personalization ➔ Appearance & Color Themes...`**.
-3. The real-time aesthetic configuration overlay immediately pops open across your active workspace.
+Cero is built around a philosophy of focused minimalism, low eye fatigue, and visual precision. Moving away from distracting neon gradients and oversaturated interface chrome, Cero implements a strictly matte monochrome and grayscale design system.
 
 ---
 
-## 💎 Glassmorphism & Translucent Architecture
+## 1. Design Philosophy: Focused Minimalism
 
-Sentinel abandons simple opaque background rectangles in favor of deep visual dimensionality:
-- **Acrylic Transparency Controls**: Adjust background window opacity seamlessly from crystalline clarity to deep frosted matte using real-time sliders.
-- **Dynamic Backdrop Blurring**: Customize glassmorphism blur depth to diffuse underlying desktop windows and rich wallpapers without impacting terminal readability or text contrast.
-- **Fluid Micro-Animations**: Interactive tab transitions, command palette overlays, and status notification banners incorporate smooth motion easing that keeps the interface responsive and engaging.
-
----
-
-## 🌈 Professional Color Palettes
-
-Choose from carefully curated visual themes tailored for all-day comfort and low eye fatigue:
-- **Classic Dark**: Sleek midnight undertones matched with vibrant accent hues and high-contrast terminal syntax coloration. Perfect for intensive developer editing sessions.
-- **Minimalist Light**: A clean, refined porcelain design offering sharp typographic definition for well-lit workstation environments.
-- **Cyberpunk Neon**: High-energy futuristic accents featuring vivid purples, luminescent greens, and bold terminal indicators designed to make your development workspace stand out.
+- **Zero-Distraction Monochromaticity**: Navigational chrome, tab headers, modal dialogs, and status indicators operate strictly within a calibrated grayscale spectrum. Visual hierarchy is communicated through subtle contrast lightness and opacity tiers.
+- **Matte & Zero-Glow Finish**: Eliminates glaring drop-shadows and saturated borders in favor of a crisp, dry matte charcoal finish with hairline sub-pixel boundaries.
+- **Glassmorphic Dimensionality**: Combines translucent dark surfaces (`rgba(16, 18, 24, 0.92)`) with hardware-accelerated backdrop blurring (`backdrop-filter: blur(20px)`) to provide clean depth without compromising text contrast.
+- **Ergonomic Long-Session Comfort**: Formulated to reduce eye strain during extended night and day engineering sessions.
 
 ---
 
-## 🖋️ Typography & Visual Clarity
+## 2. Zen Mode vs. Visual Mode
 
-Sentinel implements sub-pixel rendered typography that guarantees pristine code legibility across standard displays and high-resolution Retina screens. Customize terminal font sizing, line spacing, and cursor accent highlights directly within your visual preference controls to craft a terminal environment built exactly for you.
+Cero has two interface profiles. Switch between them in Settings (Terminal) or with "Toggle UI mode" in the command palette (a `Ctrl+Shift+Z` shortcut is planned: see [FUTURE_SCOPE.md](FUTURE_SCOPE.md)):
+
+### A. Zen Mode (Default)
+- Designed for maximum immersion and distraction-free terminal work.
+- Hides the Workflows button from the footer status bar.
+- Keeps the shell name, folder breadcrumbs, CPU and RAM, the clock and the AI status.
+
+### B. Visual Mode
+- Designed for rich mouse-and-keyboard multitasking.
+- Adds a **Workflows** button to the status bar that opens the Workflow Manager (`Ctrl+Shift+W`).
+- Projects and ports have no buttons: ask in the terminal (`>show listening ports`, `>switch to <folder>`).
+
+---
+
+## 3. Surfaces
+
+Panels use translucent dark surfaces with a backdrop blur and hairline borders (`rgba(255, 255, 255, 0.08)` to `0.14`).
+The blur and opacity are fixed in CSS; adjustable sliders are not built yet ([FUTURE_SCOPE.md](FUTURE_SCOPE.md)).
+
+---
+
+## 4. Typography & Numerical Precision
+
+- **Interface Sans-Serif**: Employs system font stacks (`SF Pro Text`, `Segoe UI`, `Inter`, `system-ui`) with sub-pixel antialiasing for modal controls and navigational labels.
+- **Terminal Monospace Stack**: Uses `ui-monospace`, `SFMono-Regular`, `Menlo`, `Monaco`, and `Consolas` for code buffers, paths, and status telemetry.
+- **Tabular Numerals**: Enforces `font-variant-numeric: tabular-nums` across timers, CPU/RAM usage meters, and prompt percentage progress counters to eliminate layout jitter during high-frequency updates.
+
+---
+
+## 5. Comprehensive Design System Reference
+
+For the exhaustive specification of color tokens, surface elevations, type scales, border definitions, and component hierarchies, refer to:
+- **[`ui.md`](ui.md)** — Master UI Design System & Aesthetic Architecture.

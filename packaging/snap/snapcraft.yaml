@@ -1,0 +1,52 @@
+name: cero-terminal
+base: core24
+version: '2.0.0'
+summary: Autonomous AI-Native Linux Terminal Copilot
+description: |
+  Cero is a high-performance AI-native Linux terminal emulator featuring
+  embedded llama-server orchestration, deterministic multi-stage workflow replay,
+  autonomous terminal actions with shadow PTY simulation, and native system diagnostics.
+
+grade: stable
+confinement: classic
+
+apps:
+  cero-terminal:
+    command: usr/bin/cero-terminal
+    desktop: usr/share/applications/cero-terminal.desktop
+    extensions: [gnome]
+    plugs:
+      - home
+      - network
+      - network-bind
+      - desktop
+      - desktop-legacy
+      - x11
+      - wayland
+      - opengl
+      - system-observe
+
+parts:
+  cero-terminal:
+    plugin: dump
+    source: ../../src-tauri/target/release/
+    stage:
+      - cero-terminal
+    organize:
+      cero-terminal: usr/bin/cero-terminal
+
+  desktop:
+    plugin: dump
+    source: ../arch/
+    stage:
+      - cero-terminal.desktop
+    organize:
+      cero-terminal.desktop: usr/share/applications/cero-terminal.desktop
+
+  icons:
+    plugin: dump
+    source: ../../src-tauri/icons/
+    stage:
+      - icon.png
+    organize:
+      icon.png: usr/share/icons/hicolor/512x512/apps/cero-terminal.png

@@ -1,8 +1,8 @@
 /**
- * CapabilitySDK.ts — Core Architecture for Sentinel Execution Capabilities
+ * CapabilitySDK.ts — Core Architecture for Cero Execution Capabilities
  * 
  * Defines the standard interfaces and base classes for concrete capability execution drivers.
- * Every capability in Sentinel must implement this interface, exposing four critical operations:
+ * Every capability in Cero must implement this interface, exposing four critical operations:
  * - execute(): Run platform-specific actions (Launch Services, native APIs, Node filesystem)
  * - verify(): Confirm action success via OS diagnostic queries or filesystem inspection
  * - rollback(): Revert changes safely if verification fails or user undoes action
@@ -95,7 +95,30 @@ export abstract class BaseCapabilityDriver<I = any, O = any> implements ICapabil
         };
       }
 
-      const result = await this.performExecution(input, context, this.activeCancelToken);
+      let timeoutHandle: any = null;
+      const timeoutPromise = context.timeoutMs && context.timeoutMs > 0
+        ? new Promise<CapabilityExecutionResult<O>>((resolve) => {
+            timeoutHandle = setTimeout(async () => {
+              if (this.activeCancelToken) {
+                this.activeCancelToken.cancelled = true;
+              }
+              await this.cancel();
+              resolve({
+                success: false,
+                cancelled: true,
+                error: {
+                  code: 'EXECUTION_TIMEOUT',
+                  message: `Execution timed out after ${context.timeoutMs}ms`
+                }
+              });
+            }, context.timeoutMs);
+          })
+        : null;
+
+      const execPromise = this.performExecution(input, context, this.activeCancelToken);
+      const result = timeoutPromise ? await Promise.race([execPromise, timeoutPromise]) : await execPromise;
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+
       result.executionTimeMs = performance.now() - startTime;
       return result;
     } catch (err: any) {
@@ -142,9 +165,15 @@ export abstract class BaseCapabilityDriver<I = any, O = any> implements ICapabil
   protected detectPlatform(): Platform {
     if (typeof navigator !== 'undefined') {
       const ua = navigator.userAgent.toLowerCase();
+      if (ua.includes('linux') || ua.includes('x11')) return 'linux';
       if (ua.includes('mac')) return 'macos';
       if (ua.includes('win')) return 'windows';
     }
-    return 'macos'; // Default developer platform for Sentinel Terminal
+    if (typeof process !== 'undefined' && process.platform) {
+      if (process.platform === 'linux') return 'linux';
+      if (process.platform === 'darwin') return 'macos';
+      if (process.platform === 'win32') return 'windows';
+    }
+    return 'linux';
   }
 }

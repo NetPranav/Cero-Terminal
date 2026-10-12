@@ -9,7 +9,7 @@ import { BaseCapabilityDriver, CapabilityExecutionResult, ExecutionContext, Plat
 import { invoke } from '@tauri-apps/api/core';
 import { AppAliasRegistry } from '../../../domain/capabilities/AppAliasRegistry';
 
-export type AppOperation = 'open' | 'close' | 'force_quit' | 'focus' | 'minimize' | 'maximize' | 'list_running' | 'install' | 'uninstall';
+export type AppOperation = 'open' | 'close' | 'force_quit' | 'focus' | 'minimize' | 'maximize' | 'list_running' | 'install' | 'uninstall' | 'update';
 
 export interface AppDriverInput {
   operation?: AppOperation;
@@ -49,6 +49,10 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
     return this.execute({ operation: 'list_running' });
   }
 
+  public async update(appName: string): Promise<CapabilityExecutionResult<{ updated: boolean; package?: string }>> {
+    return this.execute({ operation: 'update', app: appName });
+  }
+
   protected async performExecution(
     input: AppDriverInput,
     context: ExecutionContext,
@@ -63,8 +67,8 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
       op = this.capabilityId.replace('application.', '') as AppOperation;
     }
 
-    const rawTarget = input.app || input.package || '';
-    const target = (op === 'open' || op === 'close' || op === 'force_quit' || op === 'focus' || op === 'minimize' || op === 'maximize')
+    const rawTarget = input.app || input.process || input.name || input.package || input.target || '';
+    const target = (op === 'open' || op === 'close' || op === 'force_quit' || op === 'focus' || op === 'minimize' || op === 'maximize' || op === 'update' || op === 'install' || op === 'uninstall' || op === 'list_running')
       ? AppAliasRegistry.getInstance().resolve(rawTarget)
       : rawTarget;
 
@@ -86,13 +90,69 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
         case 'maximize':
           return { success: true, data: { maximized: true }, commandExecuted };
         case 'list_running': {
-          const mockApps = ['Sentinel Terminal', 'Antigravity IDE', 'Google Chrome', 'Safari', 'Preview'];
+          const mockApps = ['Cero', 'Antigravity IDE', 'Google Chrome', 'Safari', 'Preview', 'Music'];
+          if (rawTarget) {
+            const filterLower = rawTarget.toLowerCase();
+            const matchedApp = mockApps.find(a => a.toLowerCase() === filterLower || a.toLowerCase().includes(filterLower));
+            const isRunning = !!matchedApp;
+            const appName = matchedApp || target || rawTarget;
+            return {
+              success: true,
+              data: { isRunning, app: appName, apps: mockApps, stdout: `The application "${appName}" is ${isRunning ? 'running' : 'not running'}.` },
+              commandExecuted
+            };
+          }
           return { success: true, data: { apps: mockApps, stdout: `Currently Running Desktop Applications (${mockApps.length}):\r\n  • ` + mockApps.join('\r\n  • ') }, commandExecuted };
         }
-        case 'install':
-          return { success: true, data: { installed: true, package: target }, commandExecuted, rollbackPayload: { action: 'uninstall', package: target } };
-        case 'uninstall':
-          return { success: true, data: { uninstalled: true, package: target }, commandExecuted };
+        case 'install': {
+          const pkgInfo = AppAliasRegistry.getInstance().resolvePackage(target);
+          const isReinstall = Boolean(
+            input.reinstall || 
+            input.force || 
+            (input.prompt && /re-?install|remove\s+and\s+install/i.test(input.prompt))
+          );
+          if (input.mockAlreadyInstalled && !isReinstall) {
+            return {
+              success: true,
+              data: { installed: true, alreadyInstalled: true, package: pkgInfo.name, isCask: pkgInfo.isCask, stdout: `${target} is already installed.` },
+              commandExecuted: `which ${target}`
+            };
+          }
+          return { 
+            success: true, 
+            data: { installed: true, package: pkgInfo.name, isCask: pkgInfo.isCask, reinstalled: isReinstall }, 
+            commandExecuted: isReinstall ? `brew reinstall ${pkgInfo.name}` : `brew install ${pkgInfo.isCask ? '--cask ' : ''}${pkgInfo.name}`, 
+            rollbackPayload: { action: 'uninstall', package: pkgInfo.name } 
+          };
+        }
+        case 'uninstall': {
+          const pkgInfo = AppAliasRegistry.getInstance().resolvePackage(target);
+          return { success: true, data: { uninstalled: true, package: pkgInfo.name, isCask: pkgInfo.isCask }, commandExecuted: `brew uninstall ${pkgInfo.isCask ? '--cask ' : ''}${pkgInfo.name}` };
+        }
+        case 'update': {
+          if (target.toLowerCase() === 'safari' || target.toLowerCase() === 'finder' || target.toLowerCase() === 'system settings') {
+            return {
+              success: true,
+              data: { updated: false, reason: 'System application', stdout: `${target} is a macOS system application and can only be updated via System Settings -> Software Update.` },
+              commandExecuted: 'echo'
+            };
+          }
+          const pkgInfo = AppAliasRegistry.getInstance().resolvePackage(target);
+          const pkgName = pkgInfo.name;
+          const isCask = pkgInfo.isCask;
+          const mockCmd = `brew upgrade ${isCask ? '--cask ' : ''}${pkgName}`;
+          return {
+            success: true,
+            data: {
+              updated: true,
+              app: target,
+              package: pkgName,
+              isCask,
+              stdout: `Successfully upgraded ${target} (${pkgName}) via Homebrew.`
+            },
+            commandExecuted: mockCmd
+          };
+        }
         default:
           return { success: true, data: { executed: true }, commandExecuted };
       }
@@ -165,6 +225,12 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
             'movies': '~/Movies',
             'home': '~',
             'project folder': '~/Project Folder',
+            'build': './build',
+            'build folder': './build',
+            'the build folder': './build',
+            'build directory': './build',
+            'dist': './dist',
+            'dist folder': './dist',
             'this': '.',
             'current': '.',
             'here': '.'
@@ -173,6 +239,8 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
           if (folderMapping[cleanTarget]) {
             resolvedTarget = folderMapping[cleanTarget];
             isPathOrFolder = true;
+          } else if (cleanTarget === 'application' || cleanTarget === 'app' || cleanTarget === 'the app' || cleanTarget === 'the application' || cleanTarget === 'built app' || cleanTarget === 'built application') {
+            resolvedTarget = 'Cero';
           } else if (target.startsWith('/') || target.startsWith('~/') || target.startsWith('./') || target === '~') {
             isPathOrFolder = true;
           }
@@ -201,8 +269,50 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
           command = 'cmd.exe';
           cmdArgs = ['/c', 'start', '', target, ...extraArgs];
         } else {
-          command = target;
-          cmdArgs = extraArgs;
+          // Linux (Arch Linux, Ubuntu, Debian, Fedora, etc.)
+          const cleanTarget = target.toLowerCase().replace(/\s*(?:fod?le?r|dir(?:ectory)?)\s*$/i, '').trim();
+          const folderMapping: Record<string, string> = {
+            'downloads': '~/Downloads',
+            'donwloads': '~/Downloads',
+            'downlods': '~/Downloads',
+            'desktop': '~/Desktop',
+            'documents': '~/Documents',
+            'pictures': '~/Pictures',
+            'music': '~/Music',
+            'videos': '~/Videos',
+            'movies': '~/Videos',
+            'home': '~',
+            'this': '.',
+            'current': '.',
+            'here': '.'
+          };
+
+          if (folderMapping[cleanTarget]) {
+            resolvedTarget = folderMapping[cleanTarget];
+            isPathOrFolder = true;
+          } else if (target.startsWith('/') || target.startsWith('~/') || target.startsWith('./') || target === '~') {
+            isPathOrFolder = true;
+          }
+
+          if (isPathOrFolder && typeof resolvedTarget === 'string') {
+            if (!resolvedTarget.startsWith('/') && !resolvedTarget.startsWith('~/') && resolvedTarget !== '~') {
+              const baseCwd = (context?.cwd && context.cwd.trim() !== '' && context.cwd !== '/') ? context.cwd : '~';
+              resolvedTarget = resolvedTarget === '.' ? baseCwd : `${baseCwd.replace(/\/+$/, '')}/${resolvedTarget.replace(/^\.\//, '')}`;
+            }
+            if (resolvedTarget.startsWith('~/') || resolvedTarget === '~') {
+              try {
+                const hRes = await invoke<{ stdout: string }>('execute_command', { command: 'sh', args: ['-c', 'echo $HOME'] });
+                const hd = (hRes?.stdout || '').trim();
+                if (hd) resolvedTarget = resolvedTarget === '~' ? hd : resolvedTarget.replace(/^~/, hd);
+              } catch { /* ignore */ }
+            }
+            command = 'xdg-open';
+            cmdArgs = [resolvedTarget];
+          } else {
+            command = 'sh';
+            const extra = extraArgs.length > 0 ? ` "${extraArgs.join(' ')}"` : '';
+            cmdArgs = ['-c', `gtk-launch "${target}"${extra} 2>/dev/null || which "${target.toLowerCase()}" >/dev/null 2>&1 && "${target.toLowerCase()}"${extra} & || xdg-open "${extraArgs.join(' ') || target}" 2>/dev/null`];
+          }
         }
 
         const output = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', { command, args: cmdArgs });
@@ -221,11 +331,28 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
 
       if (op === 'close' || op === 'force_quit') {
         const flag = op === 'force_quit' ? '-9' : '-15';
-        await invoke('execute_command', { command: 'pkill', args: [flag, '-i', '-f', target] });
-        return { success: true, data: { closed: true, allProcessesStopped: true }, commandExecuted: `pkill ${flag} -i -f ${target}` };
+        let killed = false;
+        if (platform === 'macos' && op === 'close') {
+          try {
+            const osascriptRes = await invoke<{ code?: number }>('execute_command', {
+              command: 'osascript',
+              args: ['-e', 'on run argv', '-e', 'tell application (item 1 of argv) to quit', '-e', 'end run', target]
+            });
+            if (osascriptRes && (osascriptRes.code === 0 || osascriptRes.code === undefined)) {
+              killed = true;
+            }
+          } catch {
+            // fall back to pkill
+          }
+        }
+        if (!killed) {
+          await invoke('execute_command', { command: 'pkill', args: [flag, '-i', '-f', target] });
+        }
+        return { success: true, data: { closed: true, allProcessesStopped: true, stdout: `Closed application "${target}"` }, commandExecuted: `pkill ${flag} -i -f ${target}` };
       }
 
       if (op === 'list_running') {
+        const filter = (rawTarget || '').trim().toLowerCase();
         if (platform === 'macos') {
           const output = await invoke<{ stdout: string; code: number }>('execute_command', { 
             command: 'osascript', 
@@ -236,34 +363,190 @@ export class ApplicationCapability extends BaseCapabilityDriver<AppDriverInput, 
             .map(s => s.trim())
             .filter(Boolean)
             .map(name => {
-              if (name === 'tauri-app') return 'Sentinel Terminal';
+              if (name === 'tauri-app') return 'Cero';
               if (name === 'Electron') return 'Antigravity IDE';
               if (name === 'chrome' || name === 'Google Chrome') return 'Google Chrome';
               return name;
             });
           apps = Array.from(new Set(apps));
+          if (filter) {
+            const matchedApp = apps.find(a => a.toLowerCase() === filter || a.toLowerCase().includes(filter));
+            const isRunning = !!matchedApp;
+            const appDisplayName = matchedApp || target || filter;
+            const stdoutText = isRunning
+              ? `The application "${appDisplayName}" is running.`
+              : `The application "${appDisplayName}" is not running.`;
+            return {
+              success: true,
+              data: { isRunning, app: appDisplayName, apps, stdout: stdoutText },
+              commandExecuted: `osascript -e 'tell application "System Events" to get GUI processes'`
+            };
+          }
           const stdoutText = `Currently Running Desktop Applications (${apps.length}):\r\n  • ` + apps.join('\r\n  • ');
           return { success: true, data: { apps, stdout: stdoutText }, commandExecuted: `osascript -e 'tell application "System Events" to get GUI processes'` };
         } else {
           const output = await invoke<{ stdout: string }>('execute_command', { command: 'ps', args: ['-eo', 'comm'] });
           const apps = (output?.stdout || '').split('\n').filter(Boolean);
+          if (filter) {
+            const isRunning = apps.some(a => a.toLowerCase().includes(filter));
+            const stdoutText = isRunning
+              ? `The application "${target || filter}" is running.`
+              : `The application "${target || filter}" is not running.`;
+            return {
+              success: true,
+              data: { isRunning, app: target || filter, apps, stdout: stdoutText },
+              commandExecuted: `ps -eo comm`
+            };
+          }
           const stdoutText = `Running Processes (${apps.length}):\r\n  • ` + apps.slice(0, 20).join('\r\n  • ');
           return { success: true, data: { apps, stdout: stdoutText }, commandExecuted: `ps -eo comm` };
         }
       }
 
       if (op === 'install') {
-        const cmd = platform === 'macos' ? 'brew' : 'apt';
-        const args = platform === 'macos' ? ['install', target] : ['install', '-y', target];
-        await invoke('execute_command', { command: cmd, args });
-        return { success: true, data: { installed: true }, commandExecuted: `${cmd} ${args.join(' ')}`, rollbackPayload: { action: 'uninstall', package: target } };
+        const isReinstall = Boolean(
+          input.reinstall || 
+          input.force || 
+          (input.prompt && /re-?install|remove\s+and\s+install/i.test(input.prompt))
+        );
+
+        if (platform === 'macos') {
+          const pkgInfo = AppAliasRegistry.getInstance().resolvePackage(target);
+          if (!isReinstall) {
+            try {
+              const checkRes = await invoke<{ code: number }>('execute_command', {
+                command: 'sh',
+                args: ['-c', 'which -- "$1" >/dev/null 2>&1 || brew list -- "$2" >/dev/null 2>&1', 'sh', target.toLowerCase(), pkgInfo.name]
+              });
+              if (checkRes.code === 0) {
+                return {
+                  success: true,
+                  data: { installed: true, alreadyInstalled: true, package: pkgInfo.name, isCask: pkgInfo.isCask, stdout: `${target} is already installed. Skipped installation.` },
+                  commandExecuted: `which ${target.toLowerCase()}`
+                };
+              }
+            } catch { /* proceed to install */ }
+          } else {
+            try {
+              const unargs = pkgInfo.isCask ? ['uninstall', '--cask', pkgInfo.name] : ['uninstall', pkgInfo.name];
+              await invoke('execute_command', { command: 'brew', args: unargs });
+            } catch { /* ignore uninstall failure */ }
+          }
+
+          const args = pkgInfo.isCask ? ['install', '--cask', pkgInfo.name] : ['install', pkgInfo.name];
+          await invoke('execute_command', { command: 'brew', args });
+          return { success: true, data: { installed: true, package: pkgInfo.name, isCask: pkgInfo.isCask, reinstalled: isReinstall }, commandExecuted: `brew ${args.join(' ')}`, rollbackPayload: { action: 'uninstall', package: pkgInfo.name } };
+        } else {
+          // Linux (Arch / Debian / Fedora / openSUSE / Flatpak)
+          if (!isReinstall) {
+            try {
+              const checkRes = await invoke<{ code: number }>('execute_command', {
+                command: 'sh',
+                args: ['-c', `which "$1" >/dev/null 2>&1 || (which pacman >/dev/null 2>&1 && pacman -Q "$1" >/dev/null 2>&1) || (which dpkg-query >/dev/null 2>&1 && dpkg-query -W -f='\${Status}' "$1" 2>/dev/null | grep -q "ok installed") || (which zypper >/dev/null 2>&1 && rpm -q "$1" >/dev/null 2>&1)`, 'sh', target.toLowerCase()]
+              });
+              if (checkRes.code === 0) {
+                return {
+                  success: true,
+                  data: {
+                    installed: true,
+                    alreadyInstalled: true,
+                    package: target,
+                    stdout: `Package "${target}" is already installed on the system. Skipped package manager installation.`
+                  },
+                  commandExecuted: `which ${target.toLowerCase()}`
+                };
+              }
+            } catch { /* proceed to install */ }
+          } else {
+            try {
+              const unCmd = 'sh';
+              const unArgs = ['-c', `which pacman >/dev/null 2>&1 && sudo pacman -R --noconfirm "${target}" || which apt-get >/dev/null 2>&1 && sudo apt-get remove -y "${target}" || which dnf >/dev/null 2>&1 && sudo dnf remove -y "${target}" || which zypper >/dev/null 2>&1 && sudo zypper remove -y "${target}"`];
+              await invoke('execute_command', { command: unCmd, args: unArgs });
+            } catch { /* ignore removal error */ }
+          }
+
+          const cmd = 'sh';
+          const args = ['-c', `which pacman >/dev/null 2>&1 && sudo pacman -S --noconfirm "${target}" || which apt-get >/dev/null 2>&1 && sudo apt-get install -y "${target}" || which dnf >/dev/null 2>&1 && sudo dnf install -y "${target}" || which zypper >/dev/null 2>&1 && sudo zypper install -y "${target}" || which flatpak >/dev/null 2>&1 && flatpak install -y "${target}"`];
+          await invoke('execute_command', { command: cmd, args });
+          return { success: true, data: { installed: true, package: target, reinstalled: isReinstall }, commandExecuted: `${cmd} ${args.join(' ')}`, rollbackPayload: { action: 'uninstall', package: target } };
+        }
       }
 
       if (op === 'uninstall') {
-        const cmd = platform === 'macos' ? 'brew' : 'apt';
-        const args = platform === 'macos' ? ['uninstall', target] : ['remove', '-y', target];
-        await invoke('execute_command', { command: cmd, args });
-        return { success: true, data: { uninstalled: true }, commandExecuted: `${cmd} ${args.join(' ')}` };
+        if (platform === 'macos') {
+          const pkgInfo = AppAliasRegistry.getInstance().resolvePackage(target);
+          const args = pkgInfo.isCask ? ['uninstall', '--cask', pkgInfo.name] : ['uninstall', pkgInfo.name];
+          await invoke('execute_command', { command: 'brew', args });
+          return { success: true, data: { uninstalled: true, package: pkgInfo.name, isCask: pkgInfo.isCask }, commandExecuted: `brew ${args.join(' ')}` };
+        } else {
+          const cmd = 'sh';
+          const args = ['-c', `which pacman >/dev/null 2>&1 && sudo pacman -R --noconfirm "${target}" || which apt-get >/dev/null 2>&1 && sudo apt-get remove -y "${target}" || which dnf >/dev/null 2>&1 && sudo dnf remove -y "${target}" || which zypper >/dev/null 2>&1 && sudo zypper remove -y "${target}"`];
+          await invoke('execute_command', { command: cmd, args });
+          return { success: true, data: { uninstalled: true, package: target }, commandExecuted: `${cmd} ${args.join(' ')}` };
+        }
+      }
+
+      if (op === 'update') {
+        if (!target) {
+          return { success: false, error: { code: 'NO_TARGET', message: 'No application specified to update.' } };
+        }
+        
+        // Exclude system apps
+        const systemApps = ['safari', 'finder', 'system settings', 'system preferences', 'calculator', 'calendar', 'notes', 'mail', 'messages', 'preview'];
+        if (systemApps.includes(target.toLowerCase())) {
+          return { 
+            success: true, 
+            data: { updated: false, reason: 'System application', stdout: `${target} is a macOS system application and can only be updated via System Settings -> Software Update.` },
+            commandExecuted: 'echo'
+          };
+        }
+
+        if (platform === 'macos') {
+          const pkgInfo = AppAliasRegistry.getInstance().resolvePackage(target);
+          const pkgName = pkgInfo.name;
+          const isCask = pkgInfo.isCask;
+          const args = isCask ? ['upgrade', '--cask', pkgName] : ['upgrade', pkgName];
+          
+          try {
+            const res = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', { command: 'brew', args });
+            if (res.code === 0) {
+              return { success: true, data: { updated: true, app: target, package: pkgName, isCask, stdout: res.stdout }, commandExecuted: `brew ${args.join(' ')}` };
+            } else {
+              // Try fallback to formula or cask
+              const fallbackArgs = isCask ? ['upgrade', pkgName] : ['upgrade', '--cask', pkgName];
+              const fbRes = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', { command: 'brew', args: fallbackArgs });
+              if (fbRes.code === 0) {
+                return { success: true, data: { updated: true, app: target, package: pkgName, isCask: !isCask, stdout: fbRes.stdout }, commandExecuted: `brew ${fallbackArgs.join(' ')}` };
+              }
+
+              return { 
+                success: true, 
+                data: { updated: false, app: target, package: pkgName, stdout: `Could not update ${target} (${pkgName}) via Homebrew. It might not be managed by a package manager, or it is already up to date. \n\n${res.stderr || res.stdout}` },
+                commandExecuted: `brew ${args.join(' ')}` 
+              };
+            }
+          } catch (err: any) {
+            return { 
+              success: true, 
+              data: { updated: false, app: target, package: pkgName, error: err.message, stdout: `Could not update ${target}. Please update it from within the app itself.` },
+              commandExecuted: `brew ${args.join(' ')}` 
+            };
+          }
+        } else {
+          // Linux apt
+          const pkgName = target.toLowerCase().replace(/\s+/g, '-');
+          const args = ['upgrade', '-y', pkgName];
+          try {
+            const res = await invoke<{ stdout: string; stderr: string; code: number }>('execute_command', { command: 'apt', args });
+            return {
+              success: res.code === 0,
+              data: { updated: res.code === 0, stdout: res.stdout || res.stderr },
+              commandExecuted: `apt ${args.join(' ')}`
+            };
+          } catch (err: any) {
+            return { success: false, error: { code: 'UPDATE_FAILED', message: err.message } };
+          }
+        }
       }
 
       // Window manipulation operations fallback

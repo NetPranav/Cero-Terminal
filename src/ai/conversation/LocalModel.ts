@@ -29,7 +29,7 @@ const DEFAULT_CONFIG: LocalModelConfig = {
 };
 
 /**
- * Thin abstraction over ModelProvider. Sentinel's conversation module
+ * Thin abstraction over ModelProvider. Cero's conversation module
  * calls only this class — never the underlying provider directly.
  */
 export class LocalModel {

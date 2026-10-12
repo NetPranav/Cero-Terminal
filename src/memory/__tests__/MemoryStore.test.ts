@@ -15,7 +15,7 @@ describe('MemoryStore — Append-Only Revision History Persistence', () => {
       type: 'Project',
       layer: 'long_term',
       label: 'private',
-      data: { name: 'Sentinel', status: 'active' },
+      data: { name: 'Cero', status: 'active' },
       provenance: {
         source: 'user',
         sourceType: 'user_explicit',

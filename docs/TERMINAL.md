@@ -1,28 +1,33 @@
-# Sentinel Terminal High-Performance Shell
+# The terminal
 
-At its core, Sentinel provides a robust, native terminal emulator engineered for speed, interactive compatibility, and seamless multitasking. Whether running intensive server builds or editing code via interactive text editors, Sentinel delivers reliable performance.
+Cero is a Tauri v2 desktop terminal: xterm.js in the window, a real PTY and your login shell behind it.
 
----
+## Rendering
+- `@xterm/xterm` with the WebGL addon. If the graphics context is lost, Cero falls back to the standard renderer
+  and redraws the cursor.
+- Full-screen programs (`vim`, `nano`, `tmux`, `htop`) work. `PtyStateTracker` detects the alternate screen and
+  switches off the grey suggestion and output observers while one runs.
+- Environment given to every session: `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=Cero`, `CERO_TERMINAL=1`.
 
-## 🚀 Hardware-Accelerated WebGL Rendering
+## Tabs and panes
+- New tab `Ctrl+T`, close tab or pane `Ctrl+W`. Double-click a tab to rename it.
+- Split side by side `Ctrl+D`, split stacked `Ctrl+Shift+D`. Drag the divider to resize (8 px grab area).
+- Each tab and pane keeps its own output history, shell and working directory.
+- Not built yet: `Ctrl+1..9`, `Ctrl+Tab` and `Alt+Arrow` for tab and pane navigation (see [FUTURE_SCOPE.md](FUTURE_SCOPE.md)).
 
-Say goodbye to input buffering and display latency:
-- **Sub-Millisecond Responsiveness**: Built with advanced **WebGL rendering engine pipelines** that accelerate character drawing and scrolling animations directly on your computer's GPU.
-- **Flawless Interactive Tooling**: High-performance pseudo-terminal (PTY) synchronization guarantees 100%compatibility with command-line tools like `vim`, `nano`, `tmux`, `git interactive rebase`, `htop`, and Docker monitoring tools.
+## Search (`Ctrl+Shift+F`)
+Opens a search bar in the focused pane with a live match count. `Enter` goes to the next match, `Shift+Enter` to the
+previous one. `Alt+C` toggles case, `Alt+W` whole word, `Alt+R` regular expression; `Esc` closes it.
+You can also ask: "search the terminal for ERROR".
 
----
+## Copy, paste, clear, history
+- Copy: `Ctrl+Shift+C`, or `Ctrl+C` while text is selected. Paste: `Ctrl+V`, `Ctrl+Shift+V` or `Shift+Insert`.
+- Clear: `Ctrl+K` (or `Ctrl+L` / `clear` in the shell).
+- History: `Ctrl+R` opens a fuzzy search over every command and `>` request you ran.
 
-## 🪟 Intelligent Workspace Multiplying & Pane Routing
-
-Eliminate desktop clutter by dividing your command workflow into multi-directional workspaces:
-- **Vertical & Horizontal Split Screens**: Quickly split active sessions using keyboard shortcuts (`Cmd + D` and `Cmd + Shift + D`). Organize build monitors, test runners, and git interfaces side-by-side.
-- **Session Memory Persistence**: Sentinel utilizes dedicated output ring-buffers for every open session tab and split pane. When switching tabs, resizing windows, or dividing views, your full terminal scrollback history and active shell processes remain preserved without blinking or vanishing.
-- **Directory-Aware Footer Hierarchy**: A dynamic interactive status bar tracks your active folder structure, active security profiles, and current time in real-time across every selected pane.
-
----
-
-## 🍏 Standalone Native System Polish
-
-When running as a packaged desktop application (`Sentinel Terminal.app`), Sentinel configures your runtime session for instant developer readiness:
-- **Interactive TERM Enforcement**: Automatically injects full interactive environmental definitions (`TERM=xterm-256color`, `COLORTERM=truecolor`, and `LANG=en_US.UTF-8`), guaranteeing that shell line editing and **Backspace** keyboard keys operate smoothly without fallback teleprinter glitches.
-- **System Binary & Path Integration**: Seamlessly pulls Homebrew directories (`/opt/homebrew/bin`) and local command utilities directly into your default standalone session so your developer CLI utilities run instantly from initial launch.
+## Suggestions (grey text)
+`AutocompleteEngine` shows one suggestion after the cursor from command history (filtered by folder), project files
+and scripts (`package.json`, `Cargo.toml`), and patterns you taught with `/learn`.
+- `Tab` accepts it. `Right` at the end of the line accepts it too (Settings, Terminal, "Accept suggestion with Right arrow").
+- Other arrow keys, Home and End only move the cursor. A suggestion that no longer matches the line (after a paste or edit) is dropped.
+- Up and Down move between the lines of a long wrapped prompt (`PromptNavigationEngine`) and otherwise recall shell history.

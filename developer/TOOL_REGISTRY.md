@@ -1,6 +1,6 @@
 # AI Operating Knowledge Base — Tool Registry
 
-The **Tool Registry** acts as Sentinel’s persistent **AI Operating Knowledge Base**. Rather than hardcoding simple string scripts or brittle LLM prompts, Sentinel utilizes structured, schema-driven operational capability definitions.
+The **Tool Registry** acts as Cero’s persistent **AI Operating Knowledge Base**. Rather than hardcoding simple string scripts or brittle LLM prompts, Cero utilizes structured, schema-driven operational capability definitions.
 
 ---
 

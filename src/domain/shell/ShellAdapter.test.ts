@@ -8,9 +8,11 @@ describe('ShellAdapter', () => {
     expect(adapter.detectLoginShell('/bin/zsh').id).toBe('zsh');
     expect(adapter.detectLoginShell('/opt/homebrew/bin/bash').id).toBe('bash');
     expect(adapter.detectLoginShell('/usr/local/bin/fish').id).toBe('fish');
+    expect(adapter.detectLoginShell('/usr/bin/fish').id).toBe('fish');
     expect(adapter.detectLoginShell('/opt/homebrew/bin/nu').id).toBe('nushell');
     expect(adapter.detectLoginShell('/usr/local/bin/pwsh').id).toBe('powershell');
-    expect(adapter.detectLoginShell(undefined).id).toBe('zsh'); // macOS default fallback
+    const expectedDefault = process.platform === 'linux' ? 'bash' : 'zsh';
+    expect(adapter.detectLoginShell(undefined).id).toBe(expectedDefault);
   });
 
   it('retrieves accurate shell configuration paths and flags', () => {
@@ -35,8 +37,8 @@ describe('ShellAdapter', () => {
     const env = adapter.getTerminalEnvironment({ CUSTOM_VAR: 'test' });
     expect(env.TERM).toBe('xterm-256color');
     expect(env.COLORTERM).toBe('truecolor');
-    expect(env.TERM_PROGRAM).toBe('Sentinel Terminal');
-    expect(env.SENTINEL_TERMINAL).toBe('1');
+    expect(env.TERM_PROGRAM).toBe('Cero');
+    expect(env.CERO_TERMINAL).toBe('1');
     expect(env.CUSTOM_VAR).toBe('test');
   });
 });

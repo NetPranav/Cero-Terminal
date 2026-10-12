@@ -1,0 +1,73 @@
+name: Sync Shared Core to Platform Branches
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/**'
+      - 'src/ai/**'
+      - 'src/presentation/**'
+      - 'src/workflows/**'
+      - 'src/domain/security/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-platforms:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target_branch: [windows, linux]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync shared layers into ${{ matrix.target_branch }}
+        run: |
+          git checkout ${{ matrix.target_branch }}
+          git checkout main -- \
+            tools/ \
+            src/ai/ \
+            src/presentation/ \
+            src/workflows/ \
+            src/domain/security/
+
+          # Check if there are changes
+          if git diff --staged --quiet; then
+            echo "No shared changes to sync for ${{ matrix.target_branch }}."
+            exit 0
+          fi
+
+          SYNC_BRANCH="sync/shared-core-to-${{ matrix.target_branch }}"
+          git checkout -B "$SYNC_BRANCH"
+          git commit -m "chore(sync): update shared core layers from main"
+          git push -f origin "$SYNC_BRANCH"
+
+          # Create or update pull request using gh CLI
+          gh pr create \
+            --base ${{ matrix.target_branch }} \
+            --head "$SYNC_BRANCH" \
+            --title "chore(sync): update shared core from main into ${{ matrix.target_branch }}" \
+            --body "Automated synchronization of shared OS-agnostic layers from \`main\`:
+            - \`tools/\` (tool schemas, tests, knowledge)
+            - \`src/ai/\` (planning engine, agent loop, prompts)
+            - \`src/presentation/\` (React UI, TerminalView, styling)
+            - \`src/workflows/\` (workflow engines)
+            - \`src/domain/security/\` (policy engine)
+            
+            Platform-specific drivers and Rust code were untouched." \
+            || echo "Pull request already exists."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

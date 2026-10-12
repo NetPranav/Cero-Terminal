@@ -57,7 +57,7 @@ describe('WorkflowStorage, Registry & Sharing — Versioned Persistence & Discov
       .build();
 
     const payload = sharing.exportWorkflow(wf);
-    expect(payload.format).toBe('sentinel-workflow-v1');
+    expect(payload.format).toBe('cero-workflow-v1');
     expect(payload.checksum).toBeDefined();
 
     const result = sharing.importWorkflow(payload);

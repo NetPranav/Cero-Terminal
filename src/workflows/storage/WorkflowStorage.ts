@@ -84,7 +84,7 @@ export class WorkflowStorage {
     const wf = this.workflows.get(id);
     if (!wf) return undefined;
     return JSON.stringify({
-      format: 'sentinel-workflow-v1',
+      format: 'cero-workflow-v1',
       exportedAt: Date.now(),
       workflow: wf,
       checksum: this.computeChecksum(wf),
@@ -97,7 +97,7 @@ export class WorkflowStorage {
   public importFromJSON(jsonStr: string): UserWorkflow | undefined {
     try {
       const payload = JSON.parse(jsonStr);
-      if (payload.format !== 'sentinel-workflow-v1' || !payload.workflow) {
+      if (payload.format !== 'cero-workflow-v1' || !payload.workflow) {
         return undefined;
       }
       const wf = payload.workflow as UserWorkflow;

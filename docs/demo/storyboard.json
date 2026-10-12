@@ -1,0 +1,162 @@
+{
+ "brand": "Cero 2.2",
+ "slides": [
+  {
+   "id": "title",
+   "kind": "title",
+   "kicker": "Cero 2.2",
+   "title": "A terminal you can<br><span>talk to.</span>",
+   "body": "Plain words in. Real commands out. You approve what changes anything.",
+   "duration": 4.4,
+   "icon": "terminal"
+  },
+  {
+   "id": "ask",
+   "kind": "feature",
+   "kicker": "01  Ask",
+   "title": "Ask in <span>plain words</span>",
+   "body": "Answers come from your real files, not a guess.",
+   "duration": 3.6,
+   "icon": "terminal"
+  },
+  {
+   "id": "real",
+   "kind": "feature",
+   "kicker": "02  It finds the real thing",
+   "title": "Wrong name?<br><span>It asks, it does not guess.</span>",
+   "body": "Spelling and typos are forgiven. Nothing is created or opened by mistake.",
+   "duration": 4.4,
+   "icon": "folder"
+  },
+  {
+   "id": "save",
+   "kind": "feature",
+   "kicker": "03  Save what you did",
+   "title": "Say <span>\"save this as a workflow\"</span>",
+   "body": "It runs the task, then saves what really ran as a .flow file.",
+   "duration": 4.0,
+   "icon": "file"
+  },
+  {
+   "id": "run",
+   "kind": "feature",
+   "kicker": "04  Run it anywhere",
+   "title": "Double-click <span>to run</span>",
+   "body": "Cero lists every command and waits for your click.",
+   "duration": 3.6,
+   "icon": "pointer"
+  },
+  {
+   "id": "stop",
+   "kind": "feature",
+   "kicker": "05  Stay in control",
+   "title": "Ctrl+C <span>stops it</span>",
+   "body": "The request and the command it started, right away.",
+   "duration": 3.6,
+   "icon": "shield"
+  },
+  {
+   "id": "teach",
+   "kind": "feature",
+   "kicker": "06  Teach it",
+   "title": "It learns <span>only when you say so</span>",
+   "body": "Type /learn after a request that worked. Nothing is learned by watching you.",
+   "duration": 4.2,
+   "icon": "layers"
+  },
+  {
+   "id": "closing",
+   "kind": "closing",
+   "kicker": "Free and open source",
+   "title": "Cero",
+   "body": "macOS, Windows and Linux. The AI runs on your computer.",
+   "duration": 5,
+   "icon": "",
+   "pill": "github.com/NetPranav/Sentinal-Terminal"
+  }
+ ],
+ "sequence": [
+  {
+   "slide": "title"
+  },
+  {
+   "slide": "ask"
+  },
+  {
+   "clip": "ask",
+   "cuts": [
+    [
+     1.0,
+     24.5
+    ]
+   ]
+  },
+  {
+   "slide": "real"
+  },
+  {
+   "clip": "real",
+   "cuts": [
+    [
+     1.0,
+     25.0
+    ]
+   ]
+  },
+  {
+   "slide": "save"
+  },
+  {
+   "clip": "save",
+   "cuts": [
+    [
+     1.0,
+     15.0
+    ]
+   ]
+  },
+  {
+   "slide": "run"
+  },
+  {
+   "clip": "run",
+   "cuts": [
+    [
+     1.0,
+     14.5
+    ]
+   ]
+  },
+  {
+   "slide": "stop"
+  },
+  {
+   "clip": "stop",
+   "cuts": [
+    [
+     0.8,
+     4.0
+    ],
+    [
+     12.0,
+     28.5
+    ]
+   ]
+  },
+  {
+   "slide": "teach"
+  },
+  {
+   "clip": "teach",
+   "cuts": [
+    [
+     1.0,
+     21.0
+    ]
+   ]
+  },
+  {
+   "slide": "closing"
+  }
+ ]
+}

@@ -34,7 +34,7 @@ describe('Phase X — Telemetry & Fine-Tuning Pipeline Verification', () => {
 
     expect(lines).toHaveLength(2);
     const item1 = JSON.parse(lines[0]);
-    expect(item1.instruction).toContain('Sentinel Tool Registry');
+    expect(item1.instruction).toContain('Cero Tool Registry');
     expect(item1.input).toBe('Turn on bluetooth and connect my headphones.');
     expect(JSON.parse(item1.output)).toEqual(mockPlan);
   });

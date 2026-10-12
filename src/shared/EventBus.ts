@@ -10,13 +10,13 @@ export type EventType =
   | 'PlanGenerated'
   | 'ExecutionStarted';
 
-export interface SentinelEvent {
+export interface CeroEvent {
   type: EventType;
   payload?: any;
   timestamp: number;
 }
 
-export type EventHandler = (event: SentinelEvent) => void;
+export type EventHandler = (event: CeroEvent) => void;
 
 export class EventBus {
   private static instance: EventBus;
@@ -46,7 +46,7 @@ export class EventBus {
   }
 
   public publish(eventType: EventType, payload?: any): void {
-    const event: SentinelEvent = {
+    const event: CeroEvent = {
       type: eventType,
       payload,
       timestamp: Date.now(),

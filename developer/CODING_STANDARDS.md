@@ -1,6 +1,6 @@
-# Sentinel Engineering & Coding Standards
+# Cero Engineering & Coding Standards
 
-To preserve codebase maintainability across multi-tier languages and asynchronous IPC boundaries, all contributors to Sentinel Terminal must adhere to the following strict coding standards.
+To preserve codebase maintainability across multi-tier languages and asynchronous IPC boundaries, all contributors to Cero must adhere to the following strict coding standards.
 
 ---
 

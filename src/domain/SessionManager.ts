@@ -6,7 +6,8 @@ export interface PtyOutputEvent {
   data: number[]; // Sent as array of u8 from Rust
 }
 
-export type TerminalOutputCallback = (data: Uint8Array) => void;
+/** `replay` is true for buffered history re-sent to a remounted pane (not new output) */
+export type TerminalOutputCallback = (data: Uint8Array, replay?: boolean) => void;
 
 export class SessionManager {
   private static instance: SessionManager;
@@ -14,7 +15,8 @@ export class SessionManager {
   private sessionBuffers: Map<string, Uint8Array[]> = new Map();
 
   private constructor() {
-    this.initListeners();
+    // Outside the desktop app (CLI, tests) there is no Tauri event bus; nothing to listen to
+    this.initListeners().catch(() => {});
   }
 
   public static getInstance(): SessionManager {
@@ -92,11 +94,36 @@ export class SessionManager {
     if (callbacks && !callbacks.includes(callback)) {
       callbacks.push(callback);
     }
-    // Replay existing buffered output immediately so screen contents restore on component mount/split
+    // Replay existing buffered output immediately so screen contents restore on component mount/split.
+    // Marked as replay: the pane draws it but must not record it again (history would double on
+    // every layout change) or diagnose it as new output.
     const existingBuffer = this.sessionBuffers.get(sessionId);
     if (existingBuffer && existingBuffer.length > 0) {
-      existingBuffer.forEach(chunk => callback(chunk));
+      [...existingBuffer].forEach(chunk => callback(chunk, true));
     }
+  }
+
+  /**
+   * The terminal view currently showing each session. A pane is rebuilt when the layout changes
+   * (a split, a closed neighbour); an agent request started in the old view keeps running and its
+   * output must reach the new view, not the discarded one.
+   */
+  private displays = new Map<string, (text: string) => void>();
+
+  /** Register the view showing a session; returns a detach that only removes this view. */
+  public attachDisplay(sessionId: string, write: (text: string) => void): () => void {
+    this.displays.set(sessionId, write);
+    return () => {
+      if (this.displays.get(sessionId) === write) this.displays.delete(sessionId);
+    };
+  }
+
+  /** Draw Cero's own text in the session's current view. False when no view is attached. */
+  public display(sessionId: string, text: string): boolean {
+    const write = this.displays.get(sessionId);
+    if (!write) return false;
+    write(text);
+    return true;
   }
 
   public offOutput(sessionId: string, callback: TerminalOutputCallback): void {

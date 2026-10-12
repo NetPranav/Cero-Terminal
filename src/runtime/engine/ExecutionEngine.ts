@@ -1,5 +1,5 @@
 /**
- * ExecutionEngine.ts — Master orchestrator for Sentinel Terminal V3 Execution Runtime
+ * ExecutionEngine.ts — Master orchestrator for Cero V3 Execution Runtime
  *
  * Coordinates ExecutionSessions, Schedulers, State Machines, and Event Streams.
  * Guaranteed stateless between sessions: retains zero session state after execution completes.

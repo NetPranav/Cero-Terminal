@@ -1,10 +1,10 @@
-# Sentinel Terminal — Cursor IDE Integration
+# Cero — Cursor IDE Integration
 
-Integrate **Sentinel Terminal** as your default modern terminal emulator inside Cursor IDE on macOS.
+Integrate **Cero** as your default modern terminal emulator inside Cursor IDE on macOS.
 
 ## Automated Setup via Setup Wizard
 
-In Sentinel Terminal, open the **Installer Setup Wizard** and toggle **Enable IDE Profiles**. Sentinel automatically discovers and configures your Cursor user preferences at:
+In Cero, open the **Installer Setup Wizard** and toggle **Enable IDE Profiles**. Cero automatically discovers and configures your Cursor user preferences at:
 `~/Library/Application Support/Cursor/User/settings.json`
 
 ## Manual Profile Installation
@@ -14,17 +14,17 @@ Copy the contents of `cursor-profile.json` directly into your Cursor `settings.j
 ```json
 {
   "terminal.integrated.profiles.osx": {
-    "Sentinel Terminal": {
-      "path": "/Applications/Sentinel Terminal.app/Contents/MacOS/Sentinel Terminal",
+    "Cero": {
+      "path": "/Applications/Cero.app/Contents/MacOS/Cero",
       "icon": "terminal",
       "overrideName": true
     }
   },
-  "terminal.integrated.defaultProfile.osx": "Sentinel Terminal"
+  "terminal.integrated.defaultProfile.osx": "Cero"
 }
 ```
 
 ## Benefits in Cursor
-- **AI Intent Parity**: Consistent terminal environment variables (`SENTINEL_TERMINAL=1`).
+- **AI Intent Parity**: Consistent terminal environment variables (`CERO_TERMINAL=1`).
 - **High-Performance PTY**: Smooth scrolling with a 100,000-line scrollback capacity.
 - **Auto-Detection**: Works out of the box with custom `zsh`, `bash`, `fish`, and `nushell` dotfile themes.

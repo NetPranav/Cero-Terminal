@@ -22,14 +22,14 @@ describe('AdaptiveVerificationEngine & MultiStageVerifier — Evidence-Based Res
   it('should combine evidence across multiple independent observation sources with high confidence', async () => {
     const mockExec: CapabilityResult = {
       success: true,
-      outputs: { connectedSSID: 'Sentinel_5G_Network' },
+      outputs: { connectedSSID: 'Cero_5G_Network' },
       warnings: [],
       timings: { executionMs: 5, dispatchMs: 0 },
     };
 
     const res = await verifier.verifyAction('wifi.connect', mockExec, undefined, undefined, {
       type: 'isConnected',
-      target: 'Sentinel_5G_Network',
+      target: 'Cero_5G_Network',
       expectedValue: true,
     });
 
@@ -37,7 +37,7 @@ describe('AdaptiveVerificationEngine & MultiStageVerifier — Evidence-Based Res
     expect(res.confidence).toBeGreaterThanOrEqual(0.8);
     expect(res.evidence.length).toBeGreaterThanOrEqual(2);
     expect(res.reasoning).toContain('Verification passed');
-    expect(res.verifiedOutputs.connectedSSID).toBe('Sentinel_5G_Network');
+    expect(res.verifiedOutputs.connectedSSID).toBe('Cero_5G_Network');
   });
 
   it('should trigger delayed Stage 2 settling checks when initial verification indicates asynchronous race conditions', async () => {

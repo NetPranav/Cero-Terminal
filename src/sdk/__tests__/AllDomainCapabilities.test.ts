@@ -100,13 +100,13 @@ describe('All Domain Capabilities — Comprehensive 13-Domain Verification', () 
   });
 
   it('12. TerminalCapability: should bridge commands into PTY zsh/bash sessions with clean exit code auditing', async () => {
-    const res = await executor.execute(createTestNode('term-1', 'terminal.run', { command: 'echo "Sentinel OS"' }), context);
+    const res = await executor.execute(createTestNode('term-1', 'terminal.run', { command: 'echo "Cero OS"' }), context);
     expect(res.success).toBe(true);
     expect(res.verification?.verifiedOutputs.activeShell).toBe('/bin/zsh');
   });
 
   it('13. DeveloperCapability: should trigger engineering toolchains and open IDEs (Cursor, VS Code, Xcode)', async () => {
-    const res = await executor.execute(createTestNode('dev-1', 'developer.open', { ide: 'Cursor', path: '/Users/pranav/Project Folder/AI Terminal' }), context);
+    const res = await executor.execute(createTestNode('dev-1', 'developer.open', { ide: 'Cursor', path: '/home/user/project' }), context);
     expect(res.success).toBe(true);
     expect(res.outputs.ide).toBe('Cursor');
     expect(res.verification?.verifiedOutputs.activeEditor).toBe('Cursor AI');

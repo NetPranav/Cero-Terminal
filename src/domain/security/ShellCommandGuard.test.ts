@@ -48,4 +48,36 @@ describe('ShellCommandGuard', () => {
     expect(guard.evaluate('').action).toBe('allow');
     expect(guard.evaluate('   ').action).toBe('allow');
   });
+
+  describe('Compound Command Chaining Security (Issue 9 / GitHub #2)', () => {
+    it('detects destructive secondary commands chained with &&', () => {
+      const res = guard.evaluate('echo "done" && rm -rf ./temp');
+      expect(res.action).toBe('require_approval');
+      expect(res.risk.level).toBe('CRITICAL');
+      expect(res.risk.requiresConsent).toBe(true);
+    });
+
+    it('detects process termination commands chained with ;', () => {
+      const res = guard.evaluate('ls; kill -9 1234');
+      expect(res.action).toBe('require_approval');
+      expect(res.risk.level).toBe('ADMIN');
+      expect(res.risk.requiresPassword).toBe(true);
+    });
+
+    it('denies protected path deletion chained with ||', () => {
+      const res = guard.evaluate('true || sudo rm -rf /');
+      expect(res.action).toBe('deny');
+      expect(res.risk.level).toBe('CRITICAL');
+    });
+
+    it('does not split compound operators inside quotes', () => {
+      expect(guard.evaluate('echo "hello && world"').action).toBe('allow');
+      expect(guard.evaluate("echo 'rm -rf /'").action).toBe('allow');
+    });
+
+    it('allows chained harmless read-only commands', () => {
+      expect(guard.evaluate('git status && npm test').action).toBe('allow');
+      expect(guard.evaluate('date; whoami').action).toBe('allow');
+    });
+  });
 });

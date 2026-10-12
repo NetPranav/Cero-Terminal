@@ -34,7 +34,7 @@ describe('WorkflowScheduler — Multi-Trigger Scheduling & Event-Driven Evaluati
 
     const wf2 = new WorkflowBuilder('FS Watcher')
       .addAction('s', 'S', 'system.noop')
-      .addTrigger('filesystem_event', { watchPath: '/Users/pranav/Documents' })
+      .addTrigger('filesystem_event', { watchPath: '/Users/dev/Documents' })
       .build();
 
     scheduler.schedule(wf1);
@@ -43,7 +43,7 @@ describe('WorkflowScheduler — Multi-Trigger Scheduling & Event-Driven Evaluati
     const loginReady = scheduler.evaluateEventTrigger('login');
     expect(loginReady.length).toBe(1);
 
-    const fsReady = scheduler.evaluateEventTrigger('filesystem_change', { path: '/Users/pranav/Documents/report.pdf' });
+    const fsReady = scheduler.evaluateEventTrigger('filesystem_change', { path: '/Users/dev/Documents/report.pdf' });
     expect(fsReady.length).toBe(1);
 
     const noMatch = scheduler.evaluateEventTrigger('filesystem_change', { path: '/tmp/other.txt' });

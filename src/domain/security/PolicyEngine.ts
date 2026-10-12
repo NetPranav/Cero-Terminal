@@ -1,3 +1,10 @@
+import {
+  PolicyCategory,
+  PolicyPosture,
+  CategoryPolicy,
+  DEFAULT_CATEGORY_POLICIES
+} from './SecurityEngine';
+
 export type PolicyResult = 'Allow' | 'Deny' | 'Ask' | 'Conditional';
 
 export interface PolicyRule {
@@ -8,14 +15,28 @@ export interface PolicyRule {
 
 export interface IPolicyEngine {
   evaluate(capabilityId: string, input: any): PolicyResult;
+  evaluateCategories(categories: PolicyCategory[]): PolicyResult;
   addRule(rule: PolicyRule): void;
+  registerCategory(category: PolicyCategory, defaultPosture: PolicyPosture, options?: Partial<CategoryPolicy>): void;
+  setCategoryPosture(category: PolicyCategory, posture: PolicyPosture): void;
+  getCategoryPosture(category: PolicyCategory): PolicyPosture;
+  getCategoryPolicy(category: PolicyCategory): CategoryPolicy | undefined;
+  getAllCategoryPolicies(): CategoryPolicy[];
 }
 
 export class PolicyEngine implements IPolicyEngine {
   private rules: PolicyRule[] = [];
+  private categoryPolicies: Map<PolicyCategory, CategoryPolicy> = new Map();
 
   constructor() {
+    this.registerDefaultCategories();
     this.registerDefaultRules();
+  }
+
+  private registerDefaultCategories() {
+    for (const [cat, policy] of Object.entries(DEFAULT_CATEGORY_POLICIES)) {
+      this.categoryPolicies.set(cat as PolicyCategory, { ...policy });
+    }
   }
 
   private registerDefaultRules() {
@@ -45,8 +66,24 @@ export class PolicyEngine implements IPolicyEngine {
 
         if (isDeleteCap) {
           const rawPath = String(input.path || input.target || input.source || '').trim();
-          // Remove quotes, and remove trailing slashes (unless the path is literally "/" or "//")
-          const normalized = rawPath.replace(/^['"]|['"]$/g, '').replace(/(.+)\/+$/, '$1');
+          let clean = rawPath.replace(/^['"]|['"]$/g, '').trim().replace(/(.+)\/+$/, '$1');
+
+          // Normalize dot-segments (../) to prevent directory traversal bypasses
+          if (clean.startsWith('/')) {
+            const parts = clean.split(/\/+/);
+            const resolved: string[] = [];
+            for (const part of parts) {
+              if (part === '' || part === '.') continue;
+              if (part === '..') {
+                resolved.pop();
+              } else {
+                resolved.push(part);
+              }
+            }
+            clean = '/' + resolved.join('/');
+          }
+
+          const normalized = clean;
 
           const protectedRoots = [
             '/', '~', '$HOME', '${HOME}', 
@@ -55,7 +92,17 @@ export class PolicyEngine implements IPolicyEngine {
           
           const destructiveGlobs = ['/*', '~/*', '$HOME/*', '/System/*', '/usr/*', '/bin/*', '/etc/*'];
 
-          if (protectedRoots.includes(normalized) || destructiveGlobs.includes(rawPath)) {
+          for (const root of protectedRoots) {
+            if (root === '/' || root === '~' || root === '$HOME' || root === '${HOME}') {
+              if (normalized === root) return 'Deny';
+            } else {
+              if (normalized === root || normalized.startsWith(root + '/')) {
+                return 'Deny';
+              }
+            }
+          }
+
+          if (destructiveGlobs.includes(rawPath) || destructiveGlobs.includes(normalized)) {
             return 'Deny';
           }
         }
@@ -78,6 +125,55 @@ export class PolicyEngine implements IPolicyEngine {
       if (result === 'Conditional' && finalResult === 'Allow') finalResult = 'Conditional';
     }
 
+    return finalResult;
+  }
+
+  public registerCategory(category: PolicyCategory, defaultPosture: PolicyPosture, options?: Partial<CategoryPolicy>): void {
+    const existing = this.categoryPolicies.get(category) || DEFAULT_CATEGORY_POLICIES[category] || {
+      category,
+      defaultPosture,
+      consentRequired: defaultPosture === 'ask',
+      requiresPassword: false
+    };
+    this.categoryPolicies.set(category, {
+      ...existing,
+      category,
+      defaultPosture,
+      ...options
+    });
+  }
+
+  public setCategoryPosture(category: PolicyCategory, posture: PolicyPosture): void {
+    const policy = this.categoryPolicies.get(category);
+    if (policy) {
+      policy.defaultPosture = posture;
+      policy.consentRequired = posture === 'ask';
+    } else {
+      this.registerCategory(category, posture);
+    }
+  }
+
+  public getCategoryPolicy(category: PolicyCategory): CategoryPolicy | undefined {
+    return this.categoryPolicies.get(category);
+  }
+
+  public getCategoryPosture(category: PolicyCategory): PolicyPosture {
+    return this.categoryPolicies.get(category)?.defaultPosture || 'ask';
+  }
+
+  public getAllCategoryPolicies(): CategoryPolicy[] {
+    return Array.from(this.categoryPolicies.values());
+  }
+
+  public evaluateCategories(categories: PolicyCategory[]): PolicyResult {
+    if (!categories || categories.length === 0) return 'Allow';
+
+    let finalResult: PolicyResult = 'Allow';
+    for (const cat of categories) {
+      const posture = this.getCategoryPosture(cat);
+      if (posture === 'deny') return 'Deny';
+      if (posture === 'ask') finalResult = 'Ask';
+    }
     return finalResult;
   }
 }

@@ -1,6 +1,6 @@
 # Automated Testing & Quality Assurance Guide
 
-Sentinel relies on a continuous, automated unit testing architecture to ensure high system stability, regression-free conversational translations, and deterministic capability executions across operating system deployments.
+Cero relies on a continuous, automated unit testing architecture to ensure high system stability, regression-free conversational translations, and deterministic capability executions across operating system deployments.
 
 ---
 

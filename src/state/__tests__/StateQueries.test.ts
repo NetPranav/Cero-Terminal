@@ -33,12 +33,12 @@ describe('StateQueries — Strongly-Typed Ergonomic Query Layer', () => {
     const btConn = await queries.isConnected('Magic Keyboard');
     expect(btConn.data).toBe(true);
 
-    const wifiConn = await queries.isConnected('Sentinel_5G_Network');
+    const wifiConn = await queries.isConnected('Cero_5G_Network');
     expect(wifiConn.data).toBe(true);
   });
 
   it('4 & 5. exists & isEmpty: should verify directory paths and emptiness assertions', async () => {
-    const exRes = await queries.exists('/Users/pranav/Project Folder/AI Terminal');
+    const exRes = await queries.exists('/home/user/project');
     expect(exRes.data).toBe(true);
 
     const emptyRes = await queries.isEmpty('/tmp/empty_test_folder');
@@ -57,7 +57,7 @@ describe('StateQueries — Strongly-Typed Ergonomic Query Layer', () => {
 
   it('8, 9 & 10. currentSSID, batteryLevel & foregroundApp: should query system status with metadata', async () => {
     const ssidRes = await queries.currentSSID();
-    expect(ssidRes.data).toBe('Sentinel_5G_Network');
+    expect(ssidRes.data).toBe('Cero_5G_Network');
 
     const battRes = await queries.batteryLevel();
     expect(battRes.data).toBe(92);

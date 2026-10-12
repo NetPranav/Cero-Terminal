@@ -1,0 +1,24 @@
+{
+  "toolId": "docker.logs",
+  "version": "1.0.0",
+  "description": "Executes native driver for Retrieve Container Logs.",
+  "steps": [
+    {
+      "id": "step_exec_main",
+      "name": "Execute Retrieve Container Logs",
+      "type": "ExecuteCapability",
+      "capabilityId": "docker.logs",
+      "parameters": {
+        "container": "{{container}}",
+        "tail": "{{tail}}"
+      },
+      "dependencies": [],
+      "onError": "fail"
+    }
+  ],
+  "successCondition": "step:step_exec_main:success",
+  "errorHandling": {
+    "strategy": "fail_fast",
+    "maxRetries": 0
+  }
+}

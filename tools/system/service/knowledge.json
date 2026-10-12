@@ -1,0 +1,36 @@
+{
+  "toolId": "system.service",
+  "aliases": [
+    "start service",
+    "stop service",
+    "restart service",
+    "enable service",
+    "disable service",
+    "service status",
+    "systemctl",
+    "launchctl"
+  ],
+  "synonyms": [
+    "please start service",
+    "please stop service",
+    "please restart service",
+    "manage background service"
+  ],
+  "commonUserWording": [
+    "restart docker service",
+    "check status of postgresql service",
+    "enable bluetooth service"
+  ],
+  "commonMistakes": [],
+  "entityHints": {
+    "service": ["docker", "postgresql", "bluetooth", "nginx"],
+    "action": ["start", "stop", "restart", "enable", "disable", "status"]
+  },
+  "deviceNamingPatterns": [],
+  "commonAbbreviations": {},
+  "languageVariations": [
+    "restart service docker",
+    "start nginx service"
+  ],
+  "relatedTools": ["system.kill_process"]
+}

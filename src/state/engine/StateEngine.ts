@@ -1,7 +1,7 @@
 /**
  * StateEngine.ts — Centralized State Engine & World Model Synchronization Hub
  *
- * Serves as Sentinel's single source of truth for all operating system state.
+ * Serves as Cero's single source of truth for all operating system state.
  * Orchestrates Hot/Cold caching, watcher subscriptions, decentralized collector harvests,
  * immutable snapshot history, structural diffing, and ergonomic query evaluation.
  */

@@ -1,6 +1,6 @@
-# 🤝 Contributing to Sentinel Terminal
+# 🤝 Contributing to Cero
 
-We are thrilled that you are interested in contributing to **Sentinel Terminal**! Whether you are solving bugs, optimizing AI entity extraction, extending our native capabilities SDK, or designing UI animations, this document provides everything you need to know to participate productively in our ecosystem.
+We are thrilled that you are interested in contributing to **Cero**! Whether you are solving bugs, optimizing AI entity extraction, extending our native capabilities SDK, or designing UI animations, this document provides everything you need to know to participate productively in our ecosystem.
 
 ---
 
@@ -24,7 +24,7 @@ We are thrilled that you are interested in contributing to **Sentinel Terminal**
 
 ## 🏛️ Development Architecture & Mental Model
 
-Sentinel Terminal operates on a strict **4-Tier Unified Agent Ecosystem**:
+Cero operates on a strict **4-Tier Unified Agent Ecosystem**:
 
 ```
 [ Frontend: React 19 / Vite / xterm.js ] ─── (Tauri IPC) ─── [ Backend: Tauri v2 / Rust PTY ]
@@ -83,7 +83,7 @@ npm run tauri dev
 
 ## 🧩 How to Add a New AI Operating Tool / Capability
 
-One of the most impactful ways to contribute is extending Sentinel's OS functionality. Let's walk through creating a brand new custom capability:
+One of the most impactful ways to contribute is extending Cero's OS functionality. Let's walk through creating a brand new custom capability:
 
 ### Step 1: Define the Tool Schema
 Navigate to `tools/` and choose an appropriate domain directory (e.g., `system/`, `network/`, `application/`, `media/`). Create a directory and add a `tool.json`:

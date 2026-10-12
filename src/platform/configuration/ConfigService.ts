@@ -4,14 +4,14 @@
 
 export type RuntimeProfile = 'Development' | 'Production' | 'Portable' | 'Recovery' | 'Safe Mode';
 
-export interface SentinelConfig {
+export interface CeroConfig {
   readonly profile: RuntimeProfile;
   readonly maxMemoryGb: number;
   readonly telemetryEnabled: boolean;
   readonly autoUpdate: boolean;
 }
 
-const DEFAULT_CONFIG: SentinelConfig = {
+const DEFAULT_CONFIG: CeroConfig = {
   profile: 'Production',
   maxMemoryGb: 4,
   telemetryEnabled: true,
@@ -19,9 +19,9 @@ const DEFAULT_CONFIG: SentinelConfig = {
 };
 
 export class ConfigService {
-  private config: SentinelConfig;
+  private config: CeroConfig;
 
-  constructor(initialConfig: Partial<SentinelConfig> = {}) {
+  constructor(initialConfig: Partial<CeroConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...initialConfig };
   }
 
@@ -29,11 +29,11 @@ export class ConfigService {
     return this.config.profile;
   }
 
-  public getConfig(): Readonly<SentinelConfig> {
+  public getConfig(): Readonly<CeroConfig> {
     return Object.freeze({ ...this.config });
   }
 
-  public update(newValues: Partial<SentinelConfig>): void {
+  public update(newValues: Partial<CeroConfig>): void {
     this.config = { ...this.config, ...newValues };
   }
 }

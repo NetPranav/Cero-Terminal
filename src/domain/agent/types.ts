@@ -11,6 +11,7 @@ export type AgentEvent =
   | 'RetrySucceeded'
   | 'RetryFailed'
   | 'PlannerRepairRequested'
+  | 'PlannerRepairStarted'
   | 'PlannerRepairCompleted'
   | 'ApprovalRequested'
   | 'ApprovalGranted'

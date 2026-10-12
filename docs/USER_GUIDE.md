@@ -1,56 +1,57 @@
-# Sentinel Terminal User Guide
+# Cero: user guide
 
-Welcome to **Sentinel**, an AI-native workspace designed to modernize how you interact with your machine. Whether you are navigating complex filesystem architectures, managing background system processes, or running traditional software engineering utilities, Sentinel provides an intelligent, seamless computing interface.
+## 1. Starting
+Open Cero from your launcher, or run `cero` (or `cero /path`). On first launch the setup wizard offers to download a
+model (default Qwen 2.5 Coder 3B, about 2 GB), pick Zen or Visual mode and install the optional integrations. Status bar
+`AI: local` means the built-in model is ready. Starting with 2.2 your `~/.sentinel` folder is moved to `~/.cero`.
 
----
+## 2. Commands and requests
+Plain commands go to your shell. A line starting with `>` is a request:
 
-## 🚀 Launching Sentinel
-
-When you open Sentinel Terminal, you are greeted with a fast, hardware-accelerated command line environment powered by native system APIs and an offline artificial intelligence engine.
-
-1. **Open the Application**: Double-click **`Sentinel Terminal.app`** from your macOS Applications folder, Dock, or desktop workspace.
-2. **AI Initialization**: Sentinel automatically connects to your local Ollama runtime behind the scenes. You never need to configure complex API keys or external developer cloud services.
-3. **Interactive Prompt**: Start typing immediately in standard command syntax or express instructions using conversation.
-
----
-
-## 🗣️ Conversational Intelligence vs. Standard Shell Commands
-
-Sentinel features an embedded **AI Intent & Planning Engine** that interprets conversational commands without disrupting standard utilities. To ensure zero ambiguity between ordinary Unix command syntax and automated AI assistance, Sentinel uses an explicit **`>`** trigger prefix.
-
-### Standard Command Execution
-Execute industry-standard utilities without friction or delay. Standard commands without the `>` prefix run directly as sub-millisecond shell commands:
-```bash
-git pull origin main
-docker ps -a
-cd ~/Projects && ls -lh
+```text
+>show me the processes using the most memory
+>find files changed in the last day in src
+>write a python script in /tmp/netmon.py that prints network speed, then run it
 ```
 
-### Natural Language & AI Workflows (`>`)
-To summon AI assistance, simply start your line with the **`>`** prompt symbol. Sentinel instantly translates your conversational intent into secure operating system capability workflows:
-- **Direct Workspace Navigation**: 
-  - `>take me to Downloads folder` ➔ Automatically moves your active terminal prompt to `~/Downloads`.
-  - `>take me home` / `>go back` ➔ Instantly updates your current working directory.
-- **Application & Desktop Management**:
-  - `>tell me all the running applications` ➔ Lists running desktop GUI applications (e.g. Sentinel Terminal, Chrome, Safari, Preview) cleanly without OS background daemons.
-  - `>open youtube.com in safari` or `>open workspace in cursor` ➔ Launches native applications and IDEs directly.
-- **Process & Daemon Control**:
-  - `>stop chrome` or `>kill antigravity` ➔ Safely targets and halts active application processes and background threads.
-- **System, Hardware & Network Diagnostics**:
-  - `>check gpu status and vram` / `>what ports are open` / `>scan available wifi networks` ➔ Executes instantaneous hardware and connectivity evaluations.
+Cero shows commands that change things in an approval card at the bottom-right. Click **Run** or **Deny**.
+Full list of requests and slash commands: [COMMANDS.md](COMMANDS.md).
 
----
+While a request runs, the status bar shows its stage and progress. `Ctrl+C` stops it. Requests typed meanwhile wait in
+a queue: open it with `/queue` or by clicking the queue count.
 
-## 🪟 Multi-Pane Workspace & Window Management
+## 3. When something fails
+A suggested fix appears; press `Tab` or type `>fix`. To undo a Cero change: `>undo last step`.
 
-Sentinel empowers multithreaded workflows through intuitive workspace splitting:
-- **Vertical & Horizontal Splits**: Organize complex engineering environments by slicing terminal views into parallel split panes.
-- **Independent Session Persistence**: Each pane maintains its own isolated directory path, scrollback history, and dedicated AI execution context.
-- **System Top Menu Bar Access**: Utilize your native desktop menu bar under **Personalization** to open new tabs, customize appearance, or tweak local AI models on the fly.
+## 4. Workflows
+```text
+>clean build output, run the tests and package it :: save as workflow release-prep
+>open spotify and save this as a workflow called music
+run the workflow release-prep
+```
+Cero runs the task, then saves the steps that really ran as `~/.cero/workflows/<name>.flow` (or where you choose) and
+prints `Saved workflow "name" (N steps) to <path>` or `Not saved: <reason>`. `Ctrl+Shift+W` opens the Workflow Manager.
+Details and the file format: [FLOW_FILES.md](FLOW_FILES.md).
 
----
+## 5. Open things by name
+`>open the folder gitBrains in VS Code`, `>open firefox`. Typos get a question, not a guess. `/app chrome "Google Chrome"`
+maps a short name to an application.
 
-## 💡 Next Steps
-- Explore full capability breakdowns in the **[Features Overview](file:///docs/FEATURES.md)**.
-- Master efficient interaction with **[Keyboard Shortcuts](file:///docs/KEYBOARD_SHORTCUTS.md)**.
-- Discover visual personalization in our **[Theme & Appearance Guide](file:///docs/THEMES.md)**.
+## 6. Settings (`Ctrl+,`)
+Full-screen. Tabs: AI (model downloads, hardware recommendation, API keys with "Test Connection", Ollama), Desktop
+Integrations (`cero` command, file-manager actions, VS Code and Cursor profiles), Terminal (Zen/Visual mode, "Accept
+suggestion with Right arrow"), General (shell, folders, re-run onboarding). `Esc` closes it.
+
+## 7. Layout
+Tabs `Ctrl+T`, split `Ctrl+D` / `Ctrl+Shift+D`, search `Ctrl+Shift+F`, history `Ctrl+R`, palette `Ctrl+Shift+P`, help `F1`.
+All keys: [KEYBOARD_SHORTCUTS.md](KEYBOARD_SHORTCUTS.md).
+
+## 8. Safety
+Catastrophic commands (`rm -rf /`, `dd` onto a disk, `mkfs`, `chmod -R 000 /`, fork bombs) are refused with an
+explanation and a safer alternative. See [SECURITY.md](SECURITY.md).
+
+## 9. Teaching
+`/learn` teaches the request above it. Nothing is learned otherwise. See [LEARNING.md](LEARNING.md).
+
+## 10. Problems
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md) and `cero --debug` for live logs.

@@ -14,7 +14,7 @@ describe('WorkflowTemplates — 6 Built-in Immutable Templates & Clean Compilati
     for (const tpl of builtinTemplates) {
       expect(tpl.immutable).toBe(true);
       expect(tpl.source).toBe('builtin');
-      expect(tpl.metadata.author).toBe('Sentinel');
+      expect(tpl.metadata.author).toBe('Cero');
       expect(tpl.nodes.length).toBeGreaterThan(0);
       expect(tpl.outputs.length).toBeGreaterThan(0);
     }

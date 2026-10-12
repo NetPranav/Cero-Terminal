@@ -1,0 +1,4463 @@
+{
+  "version": "1.0.0",
+  "description": "Cero AI Tool Calling Evaluation and Verification Suite",
+  "totalToolsCovered": 101,
+  "totalTestCases": 211,
+  "domains": [
+    "application",
+    "browser",
+    "developer",
+    "docker",
+    "filesystem",
+    "git",
+    "network",
+    "node",
+    "python",
+    "shell",
+    "system"
+  ],
+  "testCases": [
+    {
+      "id": "TC-APP-CLOSE-01",
+      "scenario": "Gracefully close application",
+      "prompt": "close Spotify",
+      "expectedTool": "application.close",
+      "params": {
+        "app": "Spotify"
+      },
+      "description": "Requests clean termination of Spotify.",
+      "domain": "application",
+      "displayName": "Close Desktop Application",
+      "toolDescription": "Gracefully requests an running application process or window to quit.",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Application name to close"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-CLOSE-02",
+      "scenario": "Quit desktop client",
+      "prompt": "quit Telegram",
+      "expectedTool": "application.close",
+      "params": {
+        "app": "Telegram"
+      },
+      "description": "Quits Telegram application.",
+      "domain": "application",
+      "displayName": "Close Desktop Application",
+      "toolDescription": "Gracefully requests an running application process or window to quit.",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Application name to close"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-FOC-01",
+      "scenario": "Focus application window to foreground",
+      "prompt": "focus Cursor window",
+      "expectedTool": "application.focus",
+      "params": {
+        "app": "Cursor"
+      },
+      "description": "Brings Cursor IDE to the active foreground screen.",
+      "domain": "application",
+      "displayName": "Focus Application Window",
+      "toolDescription": "Brings a desktop application window to the foreground screen focus.",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Application name to focus"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-FOC-02",
+      "scenario": "Bring Terminal to front",
+      "prompt": "bring Terminal to front",
+      "expectedTool": "application.focus",
+      "params": {
+        "app": "Terminal"
+      },
+      "description": "Activates Terminal window focus.",
+      "domain": "application",
+      "displayName": "Focus Application Window",
+      "toolDescription": "Brings a desktop application window to the foreground screen focus.",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Application name to focus"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-FQ-01",
+      "scenario": "Force quit unresponsive application",
+      "prompt": "force quit Discord",
+      "expectedTool": "application.force_quit",
+      "params": {
+        "app": "Discord"
+      },
+      "description": "Instantly terminates unresponsive Discord process.",
+      "domain": "application",
+      "displayName": "Force Quit Application",
+      "toolDescription": "Instantly terminates an unresponsive desktop application or frozen process (pkill -9).",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Application name or process ID to force quit"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-FQ-02",
+      "scenario": "Force close frozen browser",
+      "prompt": "force close Chrome",
+      "expectedTool": "application.force_quit",
+      "params": {
+        "app": "Chrome"
+      },
+      "description": "Sends SIGKILL equivalent to frozen application.",
+      "domain": "application",
+      "displayName": "Force Quit Application",
+      "toolDescription": "Instantly terminates an unresponsive desktop application or frozen process (pkill -9).",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Application name or process ID to force quit"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-INST-01",
+      "scenario": "Install CLI tool via package manager",
+      "prompt": "install htop via brew",
+      "expectedTool": "application.install",
+      "params": {
+        "package": "htop"
+      },
+      "description": "Installs package via system package manager (Homebrew).",
+      "domain": "application",
+      "displayName": "Install Desktop Package or App",
+      "toolDescription": "Installs software application via native OS package managers (Homebrew, apt, winget).",
+      "requiredParameters": [
+        {
+          "name": "package",
+          "type": "string",
+          "desc": "Package or application name to install"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-INST-02",
+      "scenario": "Install utility package",
+      "prompt": "install ripgrep",
+      "expectedTool": "application.install",
+      "params": {
+        "package": "ripgrep"
+      },
+      "description": "Installs command-line package.",
+      "domain": "application",
+      "displayName": "Install Desktop Package or App",
+      "toolDescription": "Installs software application via native OS package managers (Homebrew, apt, winget).",
+      "requiredParameters": [
+        {
+          "name": "package",
+          "type": "string",
+          "desc": "Package or application name to install"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-LIST-01",
+      "scenario": "List all running GUI applications",
+      "prompt": "list running applications",
+      "expectedTool": "application.list_running",
+      "params": {},
+      "description": "Lists all actively running desktop GUI apps.",
+      "domain": "application",
+      "displayName": "List Running Applications",
+      "toolDescription": "Lists all actively running desktop graphical applications and their PIDs.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-LIST-02",
+      "scenario": "Check what apps are active",
+      "prompt": "what apps are open right now?",
+      "expectedTool": "application.list_running",
+      "params": {},
+      "description": "Inspects macOS WindowServer / LaunchServices running apps.",
+      "domain": "application",
+      "displayName": "List Running Applications",
+      "toolDescription": "Lists all actively running desktop graphical applications and their PIDs.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-MAX-01",
+      "scenario": "Maximize application window",
+      "prompt": "maximize Safari window",
+      "expectedTool": "application.maximize",
+      "params": {
+        "app": "Safari"
+      },
+      "description": "Maximizes or full-screens application window.",
+      "domain": "application",
+      "displayName": "Maximize Application Window",
+      "toolDescription": "Maximizes or switches application window into full-screen workspace mode.",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Application name to maximize or full-screen"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-MAX-02",
+      "scenario": "Full screen code editor",
+      "prompt": "put VS Code in full screen",
+      "expectedTool": "application.maximize",
+      "params": {
+        "app": "VS Code"
+      },
+      "description": "Expands window to fill desktop workspace.",
+      "domain": "application",
+      "displayName": "Maximize Application Window",
+      "toolDescription": "Maximizes or switches application window into full-screen workspace mode.",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Application name to maximize or full-screen"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-MIN-01",
+      "scenario": "Minimize application window to dock",
+      "prompt": "minimize Slack window",
+      "expectedTool": "application.minimize",
+      "params": {
+        "app": "Slack"
+      },
+      "description": "Minimizes window to OS taskbar or dock.",
+      "domain": "application",
+      "displayName": "Minimize Application Window",
+      "toolDescription": "Minimizes application window down to system dock or taskbar.",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Application name to minimize"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-MIN-02",
+      "scenario": "Minimize audio player",
+      "prompt": "minimize Spotify",
+      "expectedTool": "application.minimize",
+      "params": {
+        "app": "Spotify"
+      },
+      "description": "Hides Spotify window from viewport.",
+      "domain": "application",
+      "displayName": "Minimize Application Window",
+      "toolDescription": "Minimizes application window down to system dock or taskbar.",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Application name to minimize"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-OPEN-01",
+      "scenario": "Open desktop web browser",
+      "prompt": "open Safari",
+      "expectedTool": "application.open",
+      "params": {
+        "app": "Safari"
+      },
+      "description": "Launches native Safari browser application.",
+      "domain": "application",
+      "displayName": "Open Desktop Application",
+      "toolDescription": "Opens a system desktop application using native launchers (Launch Services) with optional URL, file, or target arguments.",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Application name or bundle path"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "desc": "Optional web URL or domain to open in application"
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "desc": "Optional file path to open in application"
+        },
+        {
+          "name": "args",
+          "type": "string",
+          "desc": "Optional command line target arguments"
+        }
+      ]
+    },
+    {
+      "id": "TC-APP-OPEN-02",
+      "scenario": "Launch code editor",
+      "prompt": "launch Visual Studio Code",
+      "expectedTool": "application.open",
+      "params": {
+        "app": "Visual Studio Code"
+      },
+      "description": "Launches VS Code editor.",
+      "domain": "application",
+      "displayName": "Open Desktop Application",
+      "toolDescription": "Opens a system desktop application using native launchers (Launch Services) with optional URL, file, or target arguments.",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Application name or bundle path"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "desc": "Optional web URL or domain to open in application"
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "desc": "Optional file path to open in application"
+        },
+        {
+          "name": "args",
+          "type": "string",
+          "desc": "Optional command line target arguments"
+        }
+      ]
+    },
+    {
+      "id": "TC-APP-OPEN-03",
+      "scenario": "Open communication app",
+      "prompt": "open Slack",
+      "expectedTool": "application.open",
+      "params": {
+        "app": "Slack"
+      },
+      "description": "Opens Slack application.",
+      "domain": "application",
+      "displayName": "Open Desktop Application",
+      "toolDescription": "Opens a system desktop application using native launchers (Launch Services) with optional URL, file, or target arguments.",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Application name or bundle path"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "desc": "Optional web URL or domain to open in application"
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "desc": "Optional file path to open in application"
+        },
+        {
+          "name": "args",
+          "type": "string",
+          "desc": "Optional command line target arguments"
+        }
+      ]
+    },
+    {
+      "id": "TC-APP-UNINST-01",
+      "scenario": "Uninstall application package",
+      "prompt": "uninstall package wget",
+      "expectedTool": "application.uninstall",
+      "params": {
+        "package": "wget"
+      },
+      "description": "Removes installed software package.",
+      "domain": "application",
+      "displayName": "Uninstall Desktop Application",
+      "toolDescription": "Uninstalls or removes software package via system package manager or App cleaner.",
+      "requiredParameters": [
+        {
+          "name": "package",
+          "type": "string",
+          "desc": "Package or application name to remove"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-UNINST-02",
+      "scenario": "Remove CLI tool",
+      "prompt": "remove package tree",
+      "expectedTool": "application.uninstall",
+      "params": {
+        "package": "tree"
+      },
+      "description": "Uninstalls utility package from OS.",
+      "domain": "application",
+      "displayName": "Uninstall Desktop Application",
+      "toolDescription": "Uninstalls or removes software package via system package manager or App cleaner.",
+      "requiredParameters": [
+        {
+          "name": "package",
+          "type": "string",
+          "desc": "Package or application name to remove"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-UPD-01",
+      "scenario": "Update desktop application",
+      "prompt": "update Brave browser",
+      "expectedTool": "application.update",
+      "params": {
+        "app": "Brave Browser"
+      },
+      "description": "Checks and updates application to latest version.",
+      "domain": "application",
+      "displayName": "Update Application",
+      "toolDescription": "Checks for updates and upgrades an application using the system package manager (e.g., Homebrew). Cannot update system apps like Safari or Finder.",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Name of the application to update."
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-APP-UPD-02",
+      "scenario": "Update developer tool",
+      "prompt": "check updates for Docker Desktop",
+      "expectedTool": "application.update",
+      "params": {
+        "app": "Docker Desktop"
+      },
+      "description": "Triggers update check and upgrade workflow.",
+      "domain": "application",
+      "displayName": "Update Application",
+      "toolDescription": "Checks for updates and upgrades an application using the system package manager (e.g., Homebrew). Cannot update system apps like Safari or Finder.",
+      "requiredParameters": [
+        {
+          "name": "app",
+          "type": "string",
+          "desc": "Name of the application to update."
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-BRW-BM-01",
+      "scenario": "List browser bookmarks",
+      "prompt": "list my browser bookmarks",
+      "expectedTool": "browser.bookmarks",
+      "params": {},
+      "description": "Displays user saved bookmark links and favorites.",
+      "domain": "browser",
+      "displayName": "Inspect Browser Bookmarks",
+      "toolDescription": "Queries and displays user saved bookmark links and favorite websites.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "filter",
+          "type": "string",
+          "desc": "Keyword filter to search bookmark titles"
+        }
+      ]
+    },
+    {
+      "id": "TC-BRW-BM-02",
+      "scenario": "Inspect saved links",
+      "prompt": "show saved bookmarks",
+      "expectedTool": "browser.bookmarks",
+      "params": {},
+      "description": "Retrieves bookmark hierarchy.",
+      "domain": "browser",
+      "displayName": "Inspect Browser Bookmarks",
+      "toolDescription": "Queries and displays user saved bookmark links and favorite websites.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "filter",
+          "type": "string",
+          "desc": "Keyword filter to search bookmark titles"
+        }
+      ]
+    },
+    {
+      "id": "TC-BRW-CLTAB-01",
+      "scenario": "Close active browser tab",
+      "prompt": "close browser tab",
+      "expectedTool": "browser.close_tabs",
+      "params": {},
+      "description": "Closes active browser tab.",
+      "domain": "browser",
+      "displayName": "Close Browser Tabs",
+      "toolDescription": "Closes active browser tab or all open background tabs.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "target",
+          "type": "string",
+          "desc": "Tab target: current, background, or all"
+        }
+      ]
+    },
+    {
+      "id": "TC-BRW-CLTAB-02",
+      "scenario": "Close open browser tabs",
+      "prompt": "close open tabs in browser",
+      "expectedTool": "browser.close_tabs",
+      "params": {},
+      "description": "Closes target tab sessions.",
+      "domain": "browser",
+      "displayName": "Close Browser Tabs",
+      "toolDescription": "Closes active browser tab or all open background tabs.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "target",
+          "type": "string",
+          "desc": "Tab target: current, background, or all"
+        }
+      ]
+    },
+    {
+      "id": "TC-BRW-DL-01",
+      "scenario": "Check recent browser downloads",
+      "prompt": "check recent browser downloads",
+      "expectedTool": "browser.downloads",
+      "params": {},
+      "description": "Lists files recently downloaded via web browser.",
+      "domain": "browser",
+      "displayName": "Check Browser Downloads",
+      "toolDescription": "Lists recent files downloaded via the system web browser.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "limit",
+          "type": "number",
+          "desc": "Maximum number of downloads to list"
+        }
+      ]
+    },
+    {
+      "id": "TC-BRW-DL-02",
+      "scenario": "Show downloaded files",
+      "prompt": "show files downloaded from browser",
+      "expectedTool": "browser.downloads",
+      "params": {},
+      "description": "Queries download history log.",
+      "domain": "browser",
+      "displayName": "Check Browser Downloads",
+      "toolDescription": "Lists recent files downloaded via the system web browser.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "limit",
+          "type": "number",
+          "desc": "Maximum number of downloads to list"
+        }
+      ]
+    },
+    {
+      "id": "TC-BRW-HIST-01",
+      "scenario": "Query recent browser history",
+      "prompt": "show recent browser history",
+      "expectedTool": "browser.history",
+      "params": {},
+      "description": "Searches recent web browsing history entries.",
+      "domain": "browser",
+      "displayName": "Query Browser History",
+      "toolDescription": "Searches recent web browsing navigation history entries.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "query",
+          "type": "string",
+          "desc": "Domain or title query keyword"
+        }
+      ]
+    },
+    {
+      "id": "TC-BRW-HIST-02",
+      "scenario": "Check today visited sites",
+      "prompt": "what websites did I visit today?",
+      "expectedTool": "browser.history",
+      "params": {},
+      "description": "Queries browsing history database.",
+      "domain": "browser",
+      "displayName": "Query Browser History",
+      "toolDescription": "Searches recent web browsing navigation history entries.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "query",
+          "type": "string",
+          "desc": "Domain or title query keyword"
+        }
+      ]
+    },
+    {
+      "id": "TC-BRW-NAV-01",
+      "scenario": "Navigate browser to web URL",
+      "prompt": "open youtube.com in safari",
+      "expectedTool": "browser.navigate",
+      "params": {
+        "url": "youtube.com"
+      },
+      "description": "Launches default browser and navigates to target URL.",
+      "domain": "browser",
+      "displayName": "Navigate Browser to URL",
+      "toolDescription": "Launches default system web browser and navigates directly to web URL.",
+      "requiredParameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "desc": "Web address to visit"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-BRW-NAV-02",
+      "scenario": "Navigate to GitHub trending page",
+      "prompt": "navigate to https://github.com/trending",
+      "expectedTool": "browser.navigate",
+      "params": {
+        "url": "https://github.com/trending"
+      },
+      "description": "Opens trending repositories page in browser.",
+      "domain": "browser",
+      "displayName": "Navigate Browser to URL",
+      "toolDescription": "Launches default system web browser and navigates directly to web URL.",
+      "requiredParameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "desc": "Web address to visit"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-BRW-TAB-01",
+      "scenario": "Open a new empty browser tab",
+      "prompt": "open a new browser tab",
+      "expectedTool": "browser.new_tab",
+      "params": {},
+      "description": "Creates new tab in active browser.",
+      "domain": "browser",
+      "displayName": "Open New Browser Tab",
+      "toolDescription": "Opens a blank or target URL new tab inside the currently running web browser.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "desc": "Optional initial URL for new tab"
+        }
+      ]
+    },
+    {
+      "id": "TC-BRW-TAB-02",
+      "scenario": "Open new tab shorthand",
+      "prompt": "new tab in chrome",
+      "expectedTool": "browser.new_tab",
+      "params": {},
+      "description": "Spawns blank tab in browser window.",
+      "domain": "browser",
+      "displayName": "Open New Browser Tab",
+      "toolDescription": "Opens a blank or target URL new tab inside the currently running web browser.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "desc": "Optional initial URL for new tab"
+        }
+      ]
+    },
+    {
+      "id": "TC-BRW-REL-01",
+      "scenario": "Reload current webpage",
+      "prompt": "reload the current web page",
+      "expectedTool": "browser.reload",
+      "params": {},
+      "description": "Refreshes the active web page in the browser.",
+      "domain": "browser",
+      "displayName": "Reload Active Browser Tab",
+      "toolDescription": "Reloads or refreshes the current active web page inside the default browser.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-BRW-REL-02",
+      "scenario": "Refresh active tab",
+      "prompt": "refresh browser tab",
+      "expectedTool": "browser.reload",
+      "params": {},
+      "description": "Re-fetches page contents.",
+      "domain": "browser",
+      "displayName": "Reload Active Browser Tab",
+      "toolDescription": "Reloads or refreshes the current active web page inside the default browser.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-BRW-SRCH-01",
+      "scenario": "Search technical topic on the web",
+      "prompt": "search the web for Rust ownership",
+      "expectedTool": "browser.search",
+      "params": {
+        "query": "Rust ownership"
+      },
+      "description": "Launches web search query in system browser.",
+      "domain": "browser",
+      "displayName": "Search the Web in Browser",
+      "toolDescription": "Launches search query directly in default system browser on Google, YouTube, or GitHub.",
+      "requiredParameters": [
+        {
+          "name": "query",
+          "type": "string",
+          "desc": "Keywords to search"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "engine",
+          "type": "string",
+          "desc": "Target search engine"
+        }
+      ]
+    },
+    {
+      "id": "TC-BRW-SRCH-02",
+      "scenario": "Search documentation online",
+      "prompt": "google latest TypeScript 5.5 release notes",
+      "expectedTool": "browser.search",
+      "params": {
+        "query": "latest TypeScript 5.5 release notes"
+      },
+      "description": "Performs web search for release documentation.",
+      "domain": "browser",
+      "displayName": "Search the Web in Browser",
+      "toolDescription": "Launches search query directly in default system browser on Google, YouTube, or GitHub.",
+      "requiredParameters": [
+        {
+          "name": "query",
+          "type": "string",
+          "desc": "Keywords to search"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "engine",
+          "type": "string",
+          "desc": "Target search engine"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-AS-01",
+      "scenario": "Open project in Android Studio",
+      "prompt": "open in Android Studio",
+      "expectedTool": "developer.android_studio",
+      "params": {},
+      "description": "Launches Google Android Studio IDE environment.",
+      "domain": "developer",
+      "displayName": "Open in Android Studio",
+      "toolDescription": "Launches Google Android Studio IDE environment on target Android workspace.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Android project directory path"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-AS-02",
+      "scenario": "Launch Android developer tools",
+      "prompt": "start android studio",
+      "expectedTool": "developer.android_studio",
+      "params": {},
+      "description": "Initializes Android Studio IDE.",
+      "domain": "developer",
+      "displayName": "Open in Android Studio",
+      "toolDescription": "Launches Google Android Studio IDE environment on target Android workspace.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Android project directory path"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-CURS-01",
+      "scenario": "Open workspace in Cursor AI IDE",
+      "prompt": "open in Cursor AI IDE",
+      "expectedTool": "developer.cursor",
+      "params": {},
+      "description": "Launches Cursor AI Code Editor targeting current workspace.",
+      "domain": "developer",
+      "displayName": "Open in Cursor AI IDE",
+      "toolDescription": "Launches Cursor AI Code Editor (`cursor`) on target repository workspace.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Workspace path to launch in Cursor"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-CURS-02",
+      "scenario": "Launch cursor editor",
+      "prompt": "open cursor",
+      "expectedTool": "developer.cursor",
+      "params": {},
+      "description": "Opens Cursor application window.",
+      "domain": "developer",
+      "displayName": "Open in Cursor AI IDE",
+      "toolDescription": "Launches Cursor AI Code Editor (`cursor`) on target repository workspace.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Workspace path to launch in Cursor"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-GH-01",
+      "scenario": "List pull requests via GitHub CLI",
+      "prompt": "interact with GitHub CLI pr list",
+      "expectedTool": "developer.github",
+      "params": {
+        "command": "pr list"
+      },
+      "description": "Executes GitHub repository workflows via official gh CLI.",
+      "domain": "developer",
+      "displayName": "Interact with GitHub CLI",
+      "toolDescription": "Executes GitHub repository workflows via official `gh` CLI or opens repository in web.",
+      "requiredParameters": [
+        {
+          "name": "command",
+          "type": "string",
+          "desc": "GitHub workflow command e.g. pr create, issue list, repo view"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-DEV-GH-02",
+      "scenario": "View repository status via gh",
+      "prompt": "gh repo status",
+      "expectedTool": "developer.github",
+      "params": {
+        "command": "repo status"
+      },
+      "description": "Executes gh repo status check.",
+      "domain": "developer",
+      "displayName": "Interact with GitHub CLI",
+      "toolDescription": "Executes GitHub repository workflows via official `gh` CLI or opens repository in web.",
+      "requiredParameters": [
+        {
+          "name": "command",
+          "type": "string",
+          "desc": "GitHub workflow command e.g. pr create, issue list, repo view"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-DEV-SCAF-01",
+      "scenario": "Scaffold full-stack project with Next.js and Django",
+      "prompt": "make a folder and initialize a frontend with next project and backend with python django",
+      "expectedTool": "developer.scaffold",
+      "params": {
+        "projectName": "my_project",
+        "frontend": "nextjs",
+        "backend": "django"
+      },
+      "description": "Scaffolds full-stack application architecture with Next.js and Django.",
+      "domain": "developer",
+      "displayName": "Scaffold Project Architecture",
+      "toolDescription": "Initializes a full-stack project architecture with the specified frontend and backend frameworks.",
+      "requiredParameters": [
+        {
+          "name": "projectName",
+          "type": "string",
+          "desc": "The name of the root project folder to create."
+        },
+        {
+          "name": "frontend",
+          "type": "string",
+          "desc": "Frontend framework to use (e.g., 'nextjs', 'react')."
+        },
+        {
+          "name": "backend",
+          "type": "string",
+          "desc": "Backend framework to use (e.g., 'django', 'express')."
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Working directory path to create the project in"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-SCAF-02",
+      "scenario": "Scaffold React and Express project",
+      "prompt": "scaffold a project named dashboard with react and express",
+      "expectedTool": "developer.scaffold",
+      "params": {
+        "projectName": "dashboard",
+        "frontend": "react",
+        "backend": "express"
+      },
+      "description": "Generates client and server boilerplate.",
+      "domain": "developer",
+      "displayName": "Scaffold Project Architecture",
+      "toolDescription": "Initializes a full-stack project architecture with the specified frontend and backend frameworks.",
+      "requiredParameters": [
+        {
+          "name": "projectName",
+          "type": "string",
+          "desc": "The name of the root project folder to create."
+        },
+        {
+          "name": "frontend",
+          "type": "string",
+          "desc": "Frontend framework to use (e.g., 'nextjs', 'react')."
+        },
+        {
+          "name": "backend",
+          "type": "string",
+          "desc": "Backend framework to use (e.g., 'django', 'express')."
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Working directory path to create the project in"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-SSH-01",
+      "scenario": "Connect to remote host via SSH",
+      "prompt": "connect via SSH to dev@192.168.1.50",
+      "expectedTool": "developer.ssh",
+      "params": {
+        "target": "dev@192.168.1.50"
+      },
+      "description": "Establishes secure shell remote terminal session.",
+      "domain": "developer",
+      "displayName": "Connect via SSH Remote Session",
+      "toolDescription": "Establishes secure shell (SSH) remote terminal connection to destination server host.",
+      "requiredParameters": [
+        {
+          "name": "target",
+          "type": "string",
+          "desc": "SSH connection string e.g. user@hostname"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "port",
+          "type": "number",
+          "desc": "Remote SSH TCP server port"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-SSH-02",
+      "scenario": "SSH to server with username",
+      "prompt": "ssh ubuntu@staging.internal.net",
+      "expectedTool": "developer.ssh",
+      "params": {
+        "target": "ubuntu@staging.internal.net"
+      },
+      "description": "Connects to remote server over SSH.",
+      "domain": "developer",
+      "displayName": "Connect via SSH Remote Session",
+      "toolDescription": "Establishes secure shell (SSH) remote terminal connection to destination server host.",
+      "requiredParameters": [
+        {
+          "name": "target",
+          "type": "string",
+          "desc": "SSH connection string e.g. user@hostname"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "port",
+          "type": "number",
+          "desc": "Remote SSH TCP server port"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-TERM-01",
+      "scenario": "Launch standalone native terminal window",
+      "prompt": "launch standalone terminal",
+      "expectedTool": "developer.terminal",
+      "params": {},
+      "description": "Spawns new native GUI Terminal emulator window.",
+      "domain": "developer",
+      "displayName": "Launch Standalone Terminal",
+      "toolDescription": "Spawns a new native GUI Terminal emulator window (Terminal.app, iTerm2, Alacritty) at path.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Starting working directory path for new terminal"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-TERM-02",
+      "scenario": "Open separate terminal window",
+      "prompt": "open native terminal app",
+      "expectedTool": "developer.terminal",
+      "params": {},
+      "description": "Launches macOS Terminal.app.",
+      "domain": "developer",
+      "displayName": "Launch Standalone Terminal",
+      "toolDescription": "Spawns a new native GUI Terminal emulator window (Terminal.app, iTerm2, Alacritty) at path.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Starting working directory path for new terminal"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-VSC-01",
+      "scenario": "Open project in Visual Studio Code",
+      "prompt": "open current project in VS Code",
+      "expectedTool": "developer.vscode",
+      "params": {},
+      "description": "Launches VS Code IDE editor on workspace directory.",
+      "domain": "developer",
+      "displayName": "Open in Visual Studio Code",
+      "toolDescription": "Launches VS Code IDE editor (`code`) opening specified project folder or file path.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Project directory or file path to open in VS Code"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-VSC-02",
+      "scenario": "Launch code editor here",
+      "prompt": "open vscode here",
+      "expectedTool": "developer.vscode",
+      "params": {},
+      "description": "Opens VS Code targeting current directory.",
+      "domain": "developer",
+      "displayName": "Open in Visual Studio Code",
+      "toolDescription": "Launches VS Code IDE editor (`code`) opening specified project folder or file path.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Project directory or file path to open in VS Code"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-XC-01",
+      "scenario": "Open project in Apple Xcode IDE",
+      "prompt": "open in Apple Xcode IDE",
+      "expectedTool": "developer.xcode",
+      "params": {},
+      "description": "Opens Xcode workspace or project bundle.",
+      "domain": "developer",
+      "displayName": "Open in Apple Xcode IDE",
+      "toolDescription": "Opens Xcode workspace, project bundle, or Apple developer development suite (`xed`).",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Path to .xcodeproj, .xcworkspace, or swift folder"
+        }
+      ]
+    },
+    {
+      "id": "TC-DEV-XC-02",
+      "scenario": "Launch Xcode for iOS app",
+      "prompt": "launch xcode",
+      "expectedTool": "developer.xcode",
+      "params": {},
+      "description": "Spawns Apple Xcode developer environment.",
+      "domain": "developer",
+      "displayName": "Open in Apple Xcode IDE",
+      "toolDescription": "Opens Xcode workspace, project bundle, or Apple developer development suite (`xed`).",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Path to .xcodeproj, .xcworkspace, or swift folder"
+        }
+      ]
+    },
+    {
+      "id": "TC-DKR-CDWN-01",
+      "scenario": "Stop Docker Compose stack",
+      "prompt": "stop docker compose stack",
+      "expectedTool": "docker.compose_down",
+      "params": {},
+      "description": "Stops and removes containers, networks, and volumes.",
+      "domain": "docker",
+      "displayName": "Stop Docker Compose Stack",
+      "toolDescription": "Stops and removes containers, networks, and volumes created by Docker Compose.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "volumes",
+          "type": "boolean",
+          "desc": "Remove associated named volumes (-v)"
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "desc": "Path to docker-compose file"
+        }
+      ]
+    },
+    {
+      "id": "TC-DKR-CDWN-02",
+      "scenario": "Tear down docker compose environment",
+      "prompt": "docker-compose down",
+      "expectedTool": "docker.compose_down",
+      "params": {},
+      "description": "Gracefully cleans up compose network and containers.",
+      "domain": "docker",
+      "displayName": "Stop Docker Compose Stack",
+      "toolDescription": "Stops and removes containers, networks, and volumes created by Docker Compose.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "volumes",
+          "type": "boolean",
+          "desc": "Remove associated named volumes (-v)"
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "desc": "Path to docker-compose file"
+        }
+      ]
+    },
+    {
+      "id": "TC-DKR-CUP-01",
+      "scenario": "Start Docker Compose services",
+      "prompt": "start docker compose stack",
+      "expectedTool": "docker.compose_up",
+      "params": {},
+      "description": "Starts multi-container application services defined in docker-compose.yml.",
+      "domain": "docker",
+      "displayName": "Start Docker Compose Stack",
+      "toolDescription": "Starts multi-container application services defined in docker-compose.yml.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "detach",
+          "type": "boolean",
+          "desc": "Run containers in background detached mode (-d)"
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "desc": "Path to docker-compose file"
+        }
+      ]
+    },
+    {
+      "id": "TC-DKR-CUP-02",
+      "scenario": "Docker compose up in background",
+      "prompt": "docker-compose up -d",
+      "expectedTool": "docker.compose_up",
+      "params": {},
+      "description": "Spawns compose stack daemon containers.",
+      "domain": "docker",
+      "displayName": "Start Docker Compose Stack",
+      "toolDescription": "Starts multi-container application services defined in docker-compose.yml.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "detach",
+          "type": "boolean",
+          "desc": "Run containers in background detached mode (-d)"
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "desc": "Path to docker-compose file"
+        }
+      ]
+    },
+    {
+      "id": "TC-DKR-EXEC-01",
+      "scenario": "Execute command inside container",
+      "prompt": "execute \"uptime\" inside container web-api",
+      "expectedTool": "docker.exec",
+      "params": {
+        "container": "web-api",
+        "command": "uptime"
+      },
+      "description": "Executes command inside isolated container filesystem.",
+      "domain": "docker",
+      "displayName": "Execute Command inside Container",
+      "toolDescription": "Executes an interactive shell command or instruction inside a running Docker container.",
+      "requiredParameters": [
+        {
+          "name": "container",
+          "type": "string",
+          "desc": "Target container ID or name"
+        },
+        {
+          "name": "command",
+          "type": "string",
+          "desc": "Shell command string to run inside container"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-DKR-EXEC-02",
+      "scenario": "Run database migration inside container",
+      "prompt": "docker exec backend-service npm run migrate",
+      "expectedTool": "docker.exec",
+      "params": {
+        "container": "backend-service",
+        "command": "npm run migrate"
+      },
+      "description": "Executes process inside active container.",
+      "domain": "docker",
+      "displayName": "Execute Command inside Container",
+      "toolDescription": "Executes an interactive shell command or instruction inside a running Docker container.",
+      "requiredParameters": [
+        {
+          "name": "container",
+          "type": "string",
+          "desc": "Target container ID or name"
+        },
+        {
+          "name": "command",
+          "type": "string",
+          "desc": "Shell command string to run inside container"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-DKR-IMG-01",
+      "scenario": "List cached Docker images",
+      "prompt": "list cached Docker images",
+      "expectedTool": "docker.images",
+      "params": {},
+      "description": "Lists local cached Docker container images, tags, and sizes.",
+      "domain": "docker",
+      "displayName": "List Cached Docker Images",
+      "toolDescription": "Lists local cached Docker container images, tags, and sizes.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-DKR-IMG-02",
+      "scenario": "Show docker image repository",
+      "prompt": "show docker images on machine",
+      "expectedTool": "docker.images",
+      "params": {},
+      "description": "Inspects image registry cache.",
+      "domain": "docker",
+      "displayName": "List Cached Docker Images",
+      "toolDescription": "Lists local cached Docker container images, tags, and sizes.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-DKR-LOG-01",
+      "scenario": "Retrieve logs for web API container",
+      "prompt": "retrieve logs for container web-api",
+      "expectedTool": "docker.logs",
+      "params": {
+        "container": "web-api"
+      },
+      "description": "Retrieves stdout/stderr runtime logs from container.",
+      "domain": "docker",
+      "displayName": "Retrieve Container Logs",
+      "toolDescription": "Retrieves stdout/stderr runtime logs from a specified Docker container.",
+      "requiredParameters": [
+        {
+          "name": "container",
+          "type": "string",
+          "desc": "Container ID or name"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "tail",
+          "type": "number",
+          "desc": "Number of recent log lines to show"
+        }
+      ]
+    },
+    {
+      "id": "TC-DKR-LOG-02",
+      "scenario": "Inspect database container logs",
+      "prompt": "show docker logs for postgres-db",
+      "expectedTool": "docker.logs",
+      "params": {
+        "container": "postgres-db"
+      },
+      "description": "Streams recent logs from PostgreSQL container.",
+      "domain": "docker",
+      "displayName": "Retrieve Container Logs",
+      "toolDescription": "Retrieves stdout/stderr runtime logs from a specified Docker container.",
+      "requiredParameters": [
+        {
+          "name": "container",
+          "type": "string",
+          "desc": "Container ID or name"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "tail",
+          "type": "number",
+          "desc": "Number of recent log lines to show"
+        }
+      ]
+    },
+    {
+      "id": "TC-DKR-PS-01",
+      "scenario": "List running Docker containers",
+      "prompt": "list running Docker containers",
+      "expectedTool": "docker.ps",
+      "params": {},
+      "description": "Lists running and stopped Docker container instances.",
+      "domain": "docker",
+      "displayName": "List Running Docker Containers",
+      "toolDescription": "Lists running and stopped Docker container instances and container statuses.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "all",
+          "type": "boolean",
+          "desc": "Include stopped containers (-a)"
+        }
+      ]
+    },
+    {
+      "id": "TC-DKR-PS-02",
+      "scenario": "Check active container status",
+      "prompt": "show docker containers",
+      "expectedTool": "docker.ps",
+      "params": {},
+      "description": "Queries docker daemon for active container IDs.",
+      "domain": "docker",
+      "displayName": "List Running Docker Containers",
+      "toolDescription": "Lists running and stopped Docker container instances and container statuses.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "all",
+          "type": "boolean",
+          "desc": "Include stopped containers (-a)"
+        }
+      ]
+    },
+    {
+      "id": "TC-DKR-REST-01",
+      "scenario": "Restart Docker container",
+      "prompt": "restart container nginx-gateway",
+      "expectedTool": "docker.restart",
+      "params": {
+        "container": "nginx-gateway"
+      },
+      "description": "Restarts running or stopped Docker container.",
+      "domain": "docker",
+      "displayName": "Restart Docker Container",
+      "toolDescription": "Restarts a running or stopped Docker container service.",
+      "requiredParameters": [
+        {
+          "name": "container",
+          "type": "string",
+          "desc": "Container ID or name to restart"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-DKR-REST-02",
+      "scenario": "Reboot backend service container",
+      "prompt": "docker restart auth-service",
+      "expectedTool": "docker.restart",
+      "params": {
+        "container": "auth-service"
+      },
+      "description": "Cycles container lifecycle.",
+      "domain": "docker",
+      "displayName": "Restart Docker Container",
+      "toolDescription": "Restarts a running or stopped Docker container service.",
+      "requiredParameters": [
+        {
+          "name": "container",
+          "type": "string",
+          "desc": "Container ID or name to restart"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-DKR-STOP-01",
+      "scenario": "Stop running container",
+      "prompt": "stop container redis-cache",
+      "expectedTool": "docker.stop",
+      "params": {
+        "container": "redis-cache"
+      },
+      "description": "Gracefully stops an actively running Docker container.",
+      "domain": "docker",
+      "displayName": "Stop Running Container",
+      "toolDescription": "Gracefully stops an actively running Docker container instance.",
+      "requiredParameters": [
+        {
+          "name": "container",
+          "type": "string",
+          "desc": "Container ID or name to stop"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-DKR-STOP-02",
+      "scenario": "Halt background worker container",
+      "prompt": "docker stop worker-node-1",
+      "expectedTool": "docker.stop",
+      "params": {
+        "container": "worker-node-1"
+      },
+      "description": "Sends SIGTERM to stop target container.",
+      "domain": "docker",
+      "displayName": "Stop Running Container",
+      "toolDescription": "Gracefully stops an actively running Docker container instance.",
+      "requiredParameters": [
+        {
+          "name": "container",
+          "type": "string",
+          "desc": "Container ID or name to stop"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-COMP-01",
+      "scenario": "Compress folder into zip archive",
+      "prompt": "compress dist folder into dist.zip",
+      "expectedTool": "filesystem.compress",
+      "params": {
+        "source": "dist",
+        "archiveName": "dist.zip"
+      },
+      "description": "Compresses folder into standard zip archive.",
+      "domain": "filesystem",
+      "displayName": "Compress Files to Archive",
+      "toolDescription": "Compresses files or directories into a zip or tar archive.",
+      "requiredParameters": [
+        {
+          "name": "source",
+          "type": "string",
+          "desc": "Directory or files to compress"
+        },
+        {
+          "name": "archiveName",
+          "type": "string",
+          "desc": "Name of destination zip/tar archive"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-COMP-02",
+      "scenario": "Archive directory to tarball",
+      "prompt": "archive src to backup.tar.gz",
+      "expectedTool": "filesystem.compress",
+      "params": {
+        "source": "src",
+        "archiveName": "backup.tar.gz"
+      },
+      "description": "Creates gzip compressed tar archive.",
+      "domain": "filesystem",
+      "displayName": "Compress Files to Archive",
+      "toolDescription": "Compresses files or directories into a zip or tar archive.",
+      "requiredParameters": [
+        {
+          "name": "source",
+          "type": "string",
+          "desc": "Directory or files to compress"
+        },
+        {
+          "name": "archiveName",
+          "type": "string",
+          "desc": "Name of destination zip/tar archive"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-COPY-01",
+      "scenario": "Copy file to backup destination",
+      "prompt": "copy config.json to config.bak",
+      "expectedTool": "filesystem.copy",
+      "params": {
+        "source": "config.json",
+        "destination": "config.bak"
+      },
+      "description": "Copies file preserving attributes.",
+      "domain": "filesystem",
+      "displayName": "Copy File or Directory",
+      "toolDescription": "Copies a source file or directory to a destination path using native filesystem APIs.",
+      "requiredParameters": [
+        {
+          "name": "source",
+          "type": "string",
+          "desc": "Source path to copy"
+        },
+        {
+          "name": "destination",
+          "type": "string",
+          "desc": "Target destination path"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-COPY-02",
+      "scenario": "Copy asset to public directory",
+      "prompt": "copy ./assets/icon.png to ./public/icon.png",
+      "expectedTool": "filesystem.copy",
+      "params": {
+        "source": "./assets/icon.png",
+        "destination": "./public/icon.png"
+      },
+      "description": "Transfers static asset file.",
+      "domain": "filesystem",
+      "displayName": "Copy File or Directory",
+      "toolDescription": "Copies a source file or directory to a destination path using native filesystem APIs.",
+      "requiredParameters": [
+        {
+          "name": "source",
+          "type": "string",
+          "desc": "Source path to copy"
+        },
+        {
+          "name": "destination",
+          "type": "string",
+          "desc": "Target destination path"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-CREAT-01",
+      "scenario": "Create a new text file",
+      "prompt": "create a new file notes.txt",
+      "expectedTool": "filesystem.create",
+      "params": {
+        "path": "notes.txt"
+      },
+      "description": "Initializes a new empty file on disk.",
+      "domain": "filesystem",
+      "displayName": "Create New File",
+      "toolDescription": "Creates a new empty file or initializes a file with content on disk.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "File path to create"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "content",
+          "type": "string",
+          "desc": "Optional initial file content"
+        }
+      ]
+    },
+    {
+      "id": "TC-FS-CREAT-02",
+      "scenario": "Create TypeScript file",
+      "prompt": "create file src/types/CustomEvent.ts",
+      "expectedTool": "filesystem.create",
+      "params": {
+        "path": "src/types/CustomEvent.ts"
+      },
+      "description": "Creates new source code file.",
+      "domain": "filesystem",
+      "displayName": "Create New File",
+      "toolDescription": "Creates a new empty file or initializes a file with content on disk.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "File path to create"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "content",
+          "type": "string",
+          "desc": "Optional initial file content"
+        }
+      ]
+    },
+    {
+      "id": "TC-FS-DEL-01",
+      "scenario": "Permanently delete temp file",
+      "prompt": "permanently delete scratch/temp_cache.log",
+      "expectedTool": "filesystem.delete",
+      "params": {
+        "path": "scratch/temp_cache.log"
+      },
+      "description": "Permanently deletes file from disk without sending to Trash.",
+      "domain": "filesystem",
+      "displayName": "Permanently Delete File or Folder",
+      "toolDescription": "Permanently deletes a file or directory path from disk.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Target file or directory path to remove"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-DEL-02",
+      "scenario": "Delete temporary lock file",
+      "prompt": "delete lock.tmp",
+      "expectedTool": "filesystem.delete",
+      "params": {
+        "path": "lock.tmp"
+      },
+      "description": "Removes target file directly.",
+      "domain": "filesystem",
+      "displayName": "Permanently Delete File or Folder",
+      "toolDescription": "Permanently deletes a file or directory path from disk.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Target file or directory path to remove"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-DU-01",
+      "scenario": "Check disk usage of current workspace",
+      "prompt": "check disk usage here",
+      "expectedTool": "filesystem.disk_usage",
+      "params": {},
+      "description": "Calculates cumulative directory sizes and block allocations.",
+      "domain": "filesystem",
+      "displayName": "Check Disk Capacity and Usage",
+      "toolDescription": "Queries available storage space and folder size usage statistics (df/du).",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Directory or mount path to analyze"
+        }
+      ]
+    },
+    {
+      "id": "TC-FS-DU-02",
+      "scenario": "Check node_modules size",
+      "prompt": "how much disk space is node_modules taking up?",
+      "expectedTool": "filesystem.disk_usage",
+      "params": {},
+      "description": "Evaluates folder footprint.",
+      "domain": "filesystem",
+      "displayName": "Check Disk Capacity and Usage",
+      "toolDescription": "Queries available storage space and folder size usage statistics (df/du).",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Directory or mount path to analyze"
+        }
+      ]
+    },
+    {
+      "id": "TC-FS-DUP-01",
+      "scenario": "Duplicate environment config template",
+      "prompt": "duplicate .env.example",
+      "expectedTool": "filesystem.duplicate",
+      "params": {
+        "path": ".env.example"
+      },
+      "description": "Creates duplicate copy of configuration template.",
+      "domain": "filesystem",
+      "displayName": "Duplicate File or Directory",
+      "toolDescription": "Creates an immediate duplicated copy of a file or folder with timestamp or copy suffix.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "File or folder path to duplicate"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-DUP-02",
+      "scenario": "Duplicate test spec file",
+      "prompt": "duplicate test_spec.ts",
+      "expectedTool": "filesystem.duplicate",
+      "params": {
+        "path": "test_spec.ts"
+      },
+      "description": "Generates immediate duplicate copy.",
+      "domain": "filesystem",
+      "displayName": "Duplicate File or Directory",
+      "toolDescription": "Creates an immediate duplicated copy of a file or folder with timestamp or copy suffix.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "File or folder path to duplicate"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-EXT-01",
+      "scenario": "Extract zip archive",
+      "prompt": "extract bundle.zip archive",
+      "expectedTool": "filesystem.extract",
+      "params": {
+        "archivePath": "bundle.zip"
+      },
+      "description": "Extracts archive contents into current directory.",
+      "domain": "filesystem",
+      "displayName": "Extract Archive File",
+      "toolDescription": "Extracts contents from a zip, tar, or compressed archive file into target directory.",
+      "requiredParameters": [
+        {
+          "name": "archivePath",
+          "type": "string",
+          "desc": "Path to zip/tar archive file"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "destination",
+          "type": "string",
+          "desc": "Target directory for extracted files"
+        }
+      ]
+    },
+    {
+      "id": "TC-FS-EXT-02",
+      "scenario": "Unpack tar.gz archive",
+      "prompt": "unzip vendor_libs.tar.gz",
+      "expectedTool": "filesystem.extract",
+      "params": {
+        "archivePath": "vendor_libs.tar.gz"
+      },
+      "description": "Unpacks compressed archive.",
+      "domain": "filesystem",
+      "displayName": "Extract Archive File",
+      "toolDescription": "Extracts contents from a zip, tar, or compressed archive file into target directory.",
+      "requiredParameters": [
+        {
+          "name": "archivePath",
+          "type": "string",
+          "desc": "Path to zip/tar archive file"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "destination",
+          "type": "string",
+          "desc": "Target directory for extracted files"
+        }
+      ]
+    },
+    {
+      "id": "TC-FS-GREP-01",
+      "scenario": "Search for text pattern in source directory",
+      "prompt": "search for pattern TODO in src",
+      "expectedTool": "filesystem.grep",
+      "params": {
+        "path": "src",
+        "query": "TODO"
+      },
+      "description": "Searches inside text files for matching regex or literal string.",
+      "domain": "filesystem",
+      "displayName": "Search by File Content",
+      "toolDescription": "Searches inside text files for matching regex patterns or literal strings.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Directory or file path to search inside"
+        },
+        {
+          "name": "query",
+          "type": "string",
+          "desc": "String or regex pattern to match"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-GREP-02",
+      "scenario": "Grep for configuration constant",
+      "prompt": "grep for API_KEY in config",
+      "expectedTool": "filesystem.grep",
+      "params": {
+        "path": "config",
+        "query": "API_KEY"
+      },
+      "description": "Finds occurrences of API_KEY in config files.",
+      "domain": "filesystem",
+      "displayName": "Search by File Content",
+      "toolDescription": "Searches inside text files for matching regex patterns or literal strings.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Directory or file path to search inside"
+        },
+        {
+          "name": "query",
+          "type": "string",
+          "desc": "String or regex pattern to match"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-LIST-01",
+      "scenario": "List files in current directory",
+      "prompt": "list files",
+      "expectedTool": "filesystem.list",
+      "params": {
+        "path": "."
+      },
+      "description": "Lists files and folders in active working directory.",
+      "domain": "filesystem",
+      "displayName": "List Directory Contents",
+      "toolDescription": "Lists files and folders in target directory path.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Directory path to list"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-LIST-02",
+      "scenario": "List files in home Documents",
+      "prompt": "show files in ~/Documents",
+      "expectedTool": "filesystem.list",
+      "params": {
+        "path": "~/Documents"
+      },
+      "description": "Inspects user Documents folder directory listing.",
+      "domain": "filesystem",
+      "displayName": "List Directory Contents",
+      "toolDescription": "Lists files and folders in target directory path.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Directory path to list"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-LIST-03",
+      "scenario": "List project subfolder",
+      "prompt": "ls src/domain",
+      "expectedTool": "filesystem.list",
+      "params": {
+        "path": "src/domain"
+      },
+      "description": "Lists contents of relative path.",
+      "domain": "filesystem",
+      "displayName": "List Directory Contents",
+      "toolDescription": "Lists files and folders in target directory path.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Directory path to list"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-LOCF-01",
+      "scenario": "Locate file by exact filename",
+      "prompt": "locate file named config.json",
+      "expectedTool": "filesystem.locate_files",
+      "params": {
+        "name": "config.json"
+      },
+      "description": "Fast OS index lookup for file name across filesystem.",
+      "domain": "filesystem",
+      "displayName": "Locate Specific Files",
+      "toolDescription": "Fast file location lookup across the OS filesystem by filename.",
+      "requiredParameters": [
+        {
+          "name": "name",
+          "type": "string",
+          "desc": "Target filename or substring"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-LOCF-02",
+      "scenario": "Locate package manifest file",
+      "prompt": "locate package.json",
+      "expectedTool": "filesystem.locate_files",
+      "params": {
+        "name": "package.json"
+      },
+      "description": "Finds instances of package.json on disk.",
+      "domain": "filesystem",
+      "displayName": "Locate Specific Files",
+      "toolDescription": "Fast file location lookup across the OS filesystem by filename.",
+      "requiredParameters": [
+        {
+          "name": "name",
+          "type": "string",
+          "desc": "Target filename or substring"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-LOCD-01",
+      "scenario": "Locate directory by folder name",
+      "prompt": "locate folder named node_modules",
+      "expectedTool": "filesystem.locate_folders",
+      "params": {
+        "name": "node_modules"
+      },
+      "description": "Finds directory paths matching target folder name.",
+      "domain": "filesystem",
+      "displayName": "Locate Specific Folders",
+      "toolDescription": "Finds directory paths across the operating system filesystem.",
+      "requiredParameters": [
+        {
+          "name": "name",
+          "type": "string",
+          "desc": "Folder name or substring"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-LOCD-02",
+      "scenario": "Locate project folder",
+      "prompt": "locate directory AI Terminal",
+      "expectedTool": "filesystem.locate_folders",
+      "params": {
+        "name": "AI Terminal"
+      },
+      "description": "Finds location of AI Terminal folder.",
+      "domain": "filesystem",
+      "displayName": "Locate Specific Folders",
+      "toolDescription": "Finds directory paths across the operating system filesystem.",
+      "requiredParameters": [
+        {
+          "name": "name",
+          "type": "string",
+          "desc": "Folder name or substring"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-MKDIR-01",
+      "scenario": "Create directory in current workspace",
+      "prompt": "create a folder called build_output",
+      "expectedTool": "filesystem.mkdir",
+      "params": {
+        "path": "build_output"
+      },
+      "description": "Creates new folder hierarchy on disk.",
+      "domain": "filesystem",
+      "displayName": "Create New Directory",
+      "toolDescription": "Creates a new folder or directory hierarchy on disk.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Directory or folder path to create"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-MKDIR-02",
+      "scenario": "Create nested components directory",
+      "prompt": "mkdir src/components/modals",
+      "expectedTool": "filesystem.mkdir",
+      "params": {
+        "path": "src/components/modals"
+      },
+      "description": "Recursively creates nested directory structure.",
+      "domain": "filesystem",
+      "displayName": "Create New Directory",
+      "toolDescription": "Creates a new folder or directory hierarchy on disk.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Directory or folder path to create"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-MOVE-01",
+      "scenario": "Move file to documents folder",
+      "prompt": "move draft.md to ~/Documents/draft.md",
+      "expectedTool": "filesystem.move",
+      "params": {
+        "source": "draft.md",
+        "destination": "~/Documents/draft.md"
+      },
+      "description": "Relocates file from source to target path.",
+      "domain": "filesystem",
+      "displayName": "Move File or Directory",
+      "toolDescription": "Moves a file or directory from source path to destination path.",
+      "requiredParameters": [
+        {
+          "name": "source",
+          "type": "string",
+          "desc": "Source file or folder path"
+        },
+        {
+          "name": "destination",
+          "type": "string",
+          "desc": "New target location path"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-MOVE-02",
+      "scenario": "Move build artifact to Desktop",
+      "prompt": "move ./dist/bundle.js to ~/Desktop/bundle.js",
+      "expectedTool": "filesystem.move",
+      "params": {
+        "source": "./dist/bundle.js",
+        "destination": "~/Desktop/bundle.js"
+      },
+      "description": "Moves compiled artifact.",
+      "domain": "filesystem",
+      "displayName": "Move File or Directory",
+      "toolDescription": "Moves a file or directory from source path to destination path.",
+      "requiredParameters": [
+        {
+          "name": "source",
+          "type": "string",
+          "desc": "Source file or folder path"
+        },
+        {
+          "name": "destination",
+          "type": "string",
+          "desc": "New target location path"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-NAV-01",
+      "scenario": "Navigate to user downloads directory",
+      "prompt": "take me to downloads folder",
+      "expectedTool": "filesystem.navigate",
+      "params": {
+        "path": "~/Downloads"
+      },
+      "description": "Changes active working directory to ~/Downloads.",
+      "domain": "filesystem",
+      "displayName": "Change Current Working Directory",
+      "toolDescription": "Navigates terminal or active session to a target directory path (cd).",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Target directory path to switch to"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-NAV-02",
+      "scenario": "Navigate upwards two directories",
+      "prompt": "go back up two directories",
+      "expectedTool": "filesystem.navigate",
+      "params": {
+        "path": "../.."
+      },
+      "description": "Traverses parent directories in the shell.",
+      "domain": "filesystem",
+      "displayName": "Change Current Working Directory",
+      "toolDescription": "Navigates terminal or active session to a target directory path (cd).",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Target directory path to switch to"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-NAV-03",
+      "scenario": "Navigate to project workspace root",
+      "prompt": "navigate to ~/Project Folder/AI Terminal",
+      "expectedTool": "filesystem.navigate",
+      "params": {
+        "path": "~/Project Folder/AI Terminal"
+      },
+      "description": "Sets working directory to specific absolute path.",
+      "domain": "filesystem",
+      "displayName": "Change Current Working Directory",
+      "toolDescription": "Navigates terminal or active session to a target directory path (cd).",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Target directory path to switch to"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-PERM-01",
+      "scenario": "Inspect file permissions",
+      "prompt": "check permissions of deploy.sh",
+      "expectedTool": "filesystem.permissions",
+      "params": {
+        "path": "deploy.sh"
+      },
+      "description": "Queries POSIX read/write/execute file permissions.",
+      "domain": "filesystem",
+      "displayName": "Inspect or Modify File Permissions",
+      "toolDescription": "Queries or updates Unix filesystem POSIX read/write/execute permissions (chmod/chown).",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Target file or directory path"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "mode",
+          "type": "string",
+          "desc": "Octal or symbol mode e.g. 755 or +x"
+        }
+      ]
+    },
+    {
+      "id": "TC-FS-PERM-02",
+      "scenario": "Make script executable",
+      "prompt": "make script run_test.sh executable",
+      "expectedTool": "filesystem.permissions",
+      "params": {
+        "path": "run_test.sh"
+      },
+      "description": "Applies executable mode bits to script file.",
+      "domain": "filesystem",
+      "displayName": "Inspect or Modify File Permissions",
+      "toolDescription": "Queries or updates Unix filesystem POSIX read/write/execute permissions (chmod/chown).",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Target file or directory path"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "mode",
+          "type": "string",
+          "desc": "Octal or symbol mode e.g. 755 or +x"
+        }
+      ]
+    },
+    {
+      "id": "TC-FS-READ-01",
+      "scenario": "Read JSON configuration file",
+      "prompt": "read content of package.json",
+      "expectedTool": "filesystem.read",
+      "params": {
+        "path": "package.json"
+      },
+      "description": "Safely reads text content from specified file path.",
+      "domain": "filesystem",
+      "displayName": "Read File Content",
+      "toolDescription": "Reads text content from a specified file path using safe native APIs.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "File path to read"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-READ-02",
+      "scenario": "Inspect markdown documentation",
+      "prompt": "view README.md file",
+      "expectedTool": "filesystem.read",
+      "params": {
+        "path": "README.md"
+      },
+      "description": "Displays contents of project README.",
+      "domain": "filesystem",
+      "displayName": "Read File Content",
+      "toolDescription": "Reads text content from a specified file path using safe native APIs.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "File path to read"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-REC-01",
+      "scenario": "Query recently modified files",
+      "prompt": "show recently modified files",
+      "expectedTool": "filesystem.recent_files",
+      "params": {},
+      "description": "Retrieves files created or modified recently.",
+      "domain": "filesystem",
+      "displayName": "Query Recently Modified Files",
+      "toolDescription": "Retrieves a list of files recently created, modified, or accessed across the system.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "count",
+          "type": "number",
+          "desc": "Maximum number of recent files to list"
+        }
+      ]
+    },
+    {
+      "id": "TC-FS-REC-02",
+      "scenario": "Check files modified today",
+      "prompt": "search for logs modified today",
+      "expectedTool": "filesystem.recent_files",
+      "params": {},
+      "description": "Inspects mtime timestamps across workspace.",
+      "domain": "filesystem",
+      "displayName": "Query Recently Modified Files",
+      "toolDescription": "Retrieves a list of files recently created, modified, or accessed across the system.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "count",
+          "type": "number",
+          "desc": "Maximum number of recent files to list"
+        }
+      ]
+    },
+    {
+      "id": "TC-FS-REN-01",
+      "scenario": "Rename file in same folder",
+      "prompt": "rename old_index.html to index.html",
+      "expectedTool": "filesystem.rename",
+      "params": {
+        "path": "old_index.html",
+        "newName": "index.html"
+      },
+      "description": "Renames existing file.",
+      "domain": "filesystem",
+      "displayName": "Rename File or Directory",
+      "toolDescription": "Renames an existing file or directory path.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Current path of file or directory"
+        },
+        {
+          "name": "newName",
+          "type": "string",
+          "desc": "New file name or title"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-REN-02",
+      "scenario": "Rename directory",
+      "prompt": "rename directory temp_cache to archive_cache",
+      "expectedTool": "filesystem.rename",
+      "params": {
+        "path": "temp_cache",
+        "newName": "archive_cache"
+      },
+      "description": "Renames target directory.",
+      "domain": "filesystem",
+      "displayName": "Rename File or Directory",
+      "toolDescription": "Renames an existing file or directory path.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "Current path of file or directory"
+        },
+        {
+          "name": "newName",
+          "type": "string",
+          "desc": "New file name or title"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-REST-01",
+      "scenario": "Restore deleted file from system Trash",
+      "prompt": "restore important_notes.txt from trash",
+      "expectedTool": "filesystem.restore",
+      "params": {
+        "name": "important_notes.txt"
+      },
+      "description": "Restores file from Trash back to its original directory location.",
+      "domain": "filesystem",
+      "displayName": "Restore File from Trash",
+      "toolDescription": "Restores a recently deleted file from system Trash back to its original path.",
+      "requiredParameters": [
+        {
+          "name": "name",
+          "type": "string",
+          "desc": "Filename or trashed path to restore"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-REST-02",
+      "scenario": "Undelete document",
+      "prompt": "undelete presentation.key",
+      "expectedTool": "filesystem.restore",
+      "params": {
+        "name": "presentation.key"
+      },
+      "description": "Recovers deleted presentation from Trash.",
+      "domain": "filesystem",
+      "displayName": "Restore File from Trash",
+      "toolDescription": "Restores a recently deleted file from system Trash back to its original path.",
+      "requiredParameters": [
+        {
+          "name": "name",
+          "type": "string",
+          "desc": "Filename or trashed path to restore"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-SRCH-01",
+      "scenario": "Search files matching glob in subfolder",
+      "prompt": "find all json files in tools",
+      "expectedTool": "filesystem.search",
+      "params": {
+        "dir": "tools",
+        "pattern": "*.json"
+      },
+      "description": "Searches recursively under tools directory for .json files.",
+      "domain": "filesystem",
+      "displayName": "Search Filesystem by Name",
+      "toolDescription": "Searches directory recursively for files or folders matching a filename pattern.",
+      "requiredParameters": [
+        {
+          "name": "dir",
+          "type": "string",
+          "desc": "Starting root directory path"
+        },
+        {
+          "name": "pattern",
+          "type": "string",
+          "desc": "Search keyword or glob pattern"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-SRCH-02",
+      "scenario": "Search files matching extension in source",
+      "prompt": "search for *.ts files under src",
+      "expectedTool": "filesystem.search",
+      "params": {
+        "dir": "src",
+        "pattern": "*.ts"
+      },
+      "description": "Finds all TypeScript source files recursively.",
+      "domain": "filesystem",
+      "displayName": "Search Filesystem by Name",
+      "toolDescription": "Searches directory recursively for files or folders matching a filename pattern.",
+      "requiredParameters": [
+        {
+          "name": "dir",
+          "type": "string",
+          "desc": "Starting root directory path"
+        },
+        {
+          "name": "pattern",
+          "type": "string",
+          "desc": "Search keyword or glob pattern"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-SRCH-03",
+      "scenario": "Search images in current directory",
+      "prompt": "tell me all the png files here",
+      "expectedTool": "filesystem.search",
+      "params": {
+        "dir": ".",
+        "pattern": "*.png"
+      },
+      "description": "Lists PNG assets in current directory.",
+      "domain": "filesystem",
+      "displayName": "Search Filesystem by Name",
+      "toolDescription": "Searches directory recursively for files or folders matching a filename pattern.",
+      "requiredParameters": [
+        {
+          "name": "dir",
+          "type": "string",
+          "desc": "Starting root directory path"
+        },
+        {
+          "name": "pattern",
+          "type": "string",
+          "desc": "Search keyword or glob pattern"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-TRASH-01",
+      "scenario": "Move file safely to system Trash",
+      "prompt": "move obsolete_report.pdf to trash",
+      "expectedTool": "filesystem.trash",
+      "params": {
+        "path": "obsolete_report.pdf"
+      },
+      "description": "Safely moves target file into macOS system Trash.",
+      "domain": "filesystem",
+      "displayName": "Move to System Trash",
+      "toolDescription": "Safely moves a file or directory to the macOS/OS system Trash or Recycle Bin.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "File or directory path to move to trash"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-FS-TRASH-02",
+      "scenario": "Trash unused folder",
+      "prompt": "trash unused_dir",
+      "expectedTool": "filesystem.trash",
+      "params": {
+        "path": "unused_dir"
+      },
+      "description": "Recycles folder into system trash.",
+      "domain": "filesystem",
+      "displayName": "Move to System Trash",
+      "toolDescription": "Safely moves a file or directory to the macOS/OS system Trash or Recycle Bin.",
+      "requiredParameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "desc": "File or directory path to move to trash"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-GIT-BR-01",
+      "scenario": "List repository git branches",
+      "prompt": "list all git branches",
+      "expectedTool": "git.branch",
+      "params": {},
+      "description": "Lists local and tracked remote branches.",
+      "domain": "git",
+      "displayName": "Manage Git Branches",
+      "toolDescription": "Lists existing branches, creates new branch, or deletes branch.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "operation",
+          "type": "string",
+          "desc": "Branch action: list, create, or delete"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "desc": "Target branch name for create or delete"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-BR-02",
+      "scenario": "Show active branch name",
+      "prompt": "what git branch am I on?",
+      "expectedTool": "git.branch",
+      "params": {},
+      "description": "Identifies current HEAD branch.",
+      "domain": "git",
+      "displayName": "Manage Git Branches",
+      "toolDescription": "Lists existing branches, creates new branch, or deletes branch.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "operation",
+          "type": "string",
+          "desc": "Branch action: list, create, or delete"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "desc": "Target branch name for create or delete"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-CO-01",
+      "scenario": "Switch to feature branch",
+      "prompt": "switch to branch feature/bluetooth-tools",
+      "expectedTool": "git.checkout",
+      "params": {
+        "target": "feature/bluetooth-tools"
+      },
+      "description": "Switches repository working tree to designated branch.",
+      "domain": "git",
+      "displayName": "Checkout Git Branch or Commit",
+      "toolDescription": "Switches working tree to a target git branch, commit hash, or tag.",
+      "requiredParameters": [
+        {
+          "name": "target",
+          "type": "string",
+          "desc": "Branch name, tag, or commit SHA to checkout"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "create",
+          "type": "boolean",
+          "desc": "Create branch if non existent (-b)"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-CO-02",
+      "scenario": "Checkout main branch",
+      "prompt": "checkout main",
+      "expectedTool": "git.checkout",
+      "params": {
+        "target": "main"
+      },
+      "description": "Switches HEAD to main branch.",
+      "domain": "git",
+      "displayName": "Checkout Git Branch or Commit",
+      "toolDescription": "Switches working tree to a target git branch, commit hash, or tag.",
+      "requiredParameters": [
+        {
+          "name": "target",
+          "type": "string",
+          "desc": "Branch name, tag, or commit SHA to checkout"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "create",
+          "type": "boolean",
+          "desc": "Create branch if non existent (-b)"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-CLONE-01",
+      "scenario": "Clone remote git repository",
+      "prompt": "clone git repo https://github.com/facebook/react.git",
+      "expectedTool": "git.clone",
+      "params": {
+        "url": "https://github.com/facebook/react.git"
+      },
+      "description": "Clones remote repository into local directory.",
+      "domain": "git",
+      "displayName": "Clone Git Repository",
+      "toolDescription": "Closes remote Git repository URL into local workspace directory.",
+      "requiredParameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "desc": "Repository Git URL"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "directory",
+          "type": "string",
+          "desc": "Target local directory path"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-CLONE-02",
+      "scenario": "Clone repository via SSH URL",
+      "prompt": "clone repo git@github.com:torvalds/linux.git",
+      "expectedTool": "git.clone",
+      "params": {
+        "url": "git@github.com:torvalds/linux.git"
+      },
+      "description": "Clones repository via secure shell address.",
+      "domain": "git",
+      "displayName": "Clone Git Repository",
+      "toolDescription": "Closes remote Git repository URL into local workspace directory.",
+      "requiredParameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "desc": "Repository Git URL"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "directory",
+          "type": "string",
+          "desc": "Target local directory path"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-CI-01",
+      "scenario": "Record git commit with message",
+      "prompt": "commit changes with message \"feat: add bluetooth testing suite\"",
+      "expectedTool": "git.commit",
+      "params": {
+        "message": "feat: add bluetooth testing suite"
+      },
+      "description": "Stages modified files and records commit with message.",
+      "domain": "git",
+      "displayName": "Record Git Commit",
+      "toolDescription": "Stages modified workspace files and records a version commit with message.",
+      "requiredParameters": [
+        {
+          "name": "message",
+          "type": "string",
+          "desc": "Commit message describing changes"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "all",
+          "type": "boolean",
+          "desc": "Auto stage modified files (-a)"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-CI-02",
+      "scenario": "Git commit with bug fix summary",
+      "prompt": "commit changes with message \"fix: handle empty parameter schema\"",
+      "expectedTool": "git.commit",
+      "params": {
+        "message": "fix: handle empty parameter schema"
+      },
+      "description": "Creates version commit.",
+      "domain": "git",
+      "displayName": "Record Git Commit",
+      "toolDescription": "Stages modified workspace files and records a version commit with message.",
+      "requiredParameters": [
+        {
+          "name": "message",
+          "type": "string",
+          "desc": "Commit message describing changes"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "all",
+          "type": "boolean",
+          "desc": "Auto stage modified files (-a)"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-DIFF-01",
+      "scenario": "View unstaged working tree diff",
+      "prompt": "view git diff for unstaged changes",
+      "expectedTool": "git.diff",
+      "params": {},
+      "description": "Displays line modifications across working tree.",
+      "domain": "git",
+      "displayName": "View Git Workspace Diff",
+      "toolDescription": "Displays file modification differences between workspace, index, or branches.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "target",
+          "type": "string",
+          "desc": "Optional branch or commit to diff against"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-DIFF-02",
+      "scenario": "Show workspace modifications",
+      "prompt": "show git diff",
+      "expectedTool": "git.diff",
+      "params": {},
+      "description": "Compares active edits against git index.",
+      "domain": "git",
+      "displayName": "View Git Workspace Diff",
+      "toolDescription": "Displays file modification differences between workspace, index, or branches.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "target",
+          "type": "string",
+          "desc": "Optional branch or commit to diff against"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-LOG-01",
+      "scenario": "Inspect recent git commit history",
+      "prompt": "show recent git commits",
+      "expectedTool": "git.log",
+      "params": {},
+      "description": "Displays recent commit log entries, hashes, and authorship.",
+      "domain": "git",
+      "displayName": "Inspect Git Commit History",
+      "toolDescription": "Displays recent commit log history and authorship metadata.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "maxCount",
+          "type": "number",
+          "desc": "Maximum number of commit logs to retrieve"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-LOG-02",
+      "scenario": "Show commit log",
+      "prompt": "git log",
+      "expectedTool": "git.log",
+      "params": {},
+      "description": "Inspects repository commit graph.",
+      "domain": "git",
+      "displayName": "Inspect Git Commit History",
+      "toolDescription": "Displays recent commit log history and authorship metadata.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "maxCount",
+          "type": "number",
+          "desc": "Maximum number of commit logs to retrieve"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-MRG-01",
+      "scenario": "Merge source branch into current",
+      "prompt": "merge branch develop into current branch",
+      "expectedTool": "git.merge",
+      "params": {
+        "branch": "develop"
+      },
+      "description": "Merges commit history from develop into active branch.",
+      "domain": "git",
+      "displayName": "Merge Git Branch",
+      "toolDescription": "Merges changes from specified source branch into current active branch.",
+      "requiredParameters": [
+        {
+          "name": "branch",
+          "type": "string",
+          "desc": "Source branch to merge into current branch"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-GIT-MRG-02",
+      "scenario": "Merge staging branch",
+      "prompt": "git merge staging",
+      "expectedTool": "git.merge",
+      "params": {
+        "branch": "staging"
+      },
+      "description": "Executes git merge with staging.",
+      "domain": "git",
+      "displayName": "Merge Git Branch",
+      "toolDescription": "Merges changes from specified source branch into current active branch.",
+      "requiredParameters": [
+        {
+          "name": "branch",
+          "type": "string",
+          "desc": "Source branch to merge into current branch"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-GIT-PULL-01",
+      "scenario": "Pull remote changes from upstream",
+      "prompt": "pull remote git changes",
+      "expectedTool": "git.pull",
+      "params": {},
+      "description": "Fetches and merges remote commits into active branch.",
+      "domain": "git",
+      "displayName": "Pull Remote Git Changes",
+      "toolDescription": "Fetches and merges latest upstream commit changes from remote repository.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "remote",
+          "type": "string",
+          "desc": "Target remote name"
+        },
+        {
+          "name": "branch",
+          "type": "string",
+          "desc": "Target branch name"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-PULL-02",
+      "scenario": "Git pull from origin",
+      "prompt": "git pull origin main",
+      "expectedTool": "git.pull",
+      "params": {},
+      "description": "Synchronizes local branch with remote repository.",
+      "domain": "git",
+      "displayName": "Pull Remote Git Changes",
+      "toolDescription": "Fetches and merges latest upstream commit changes from remote repository.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "remote",
+          "type": "string",
+          "desc": "Target remote name"
+        },
+        {
+          "name": "branch",
+          "type": "string",
+          "desc": "Target branch name"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-PUSH-01",
+      "scenario": "Push commits to origin",
+      "prompt": "push git commits to origin",
+      "expectedTool": "git.push",
+      "params": {},
+      "description": "Pushes local commits upstream to remote origin.",
+      "domain": "git",
+      "displayName": "Push Git Commits",
+      "toolDescription": "Pushes local branch commits to remote repository origin server.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "remote",
+          "type": "string",
+          "desc": "Target remote name"
+        },
+        {
+          "name": "branch",
+          "type": "string",
+          "desc": "Target branch name"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-PUSH-02",
+      "scenario": "Git push current branch",
+      "prompt": "git push",
+      "expectedTool": "git.push",
+      "params": {},
+      "description": "Publishes local commits.",
+      "domain": "git",
+      "displayName": "Push Git Commits",
+      "toolDescription": "Pushes local branch commits to remote repository origin server.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "remote",
+          "type": "string",
+          "desc": "Target remote name"
+        },
+        {
+          "name": "branch",
+          "type": "string",
+          "desc": "Target branch name"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-STASH-01",
+      "scenario": "Stash uncommitted changes",
+      "prompt": "stash workspace modifications",
+      "expectedTool": "git.stash",
+      "params": {},
+      "description": "Temporarily stashes dirty working tree changes.",
+      "domain": "git",
+      "displayName": "Stash Workspace Modifications",
+      "toolDescription": "Stashes uncommitted modified files or applies recently stored stash.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "operation",
+          "type": "string",
+          "desc": "Stash operation: save, pop, list, or clear"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-STASH-02",
+      "scenario": "Git stash working directory",
+      "prompt": "git stash save \"wip before merge\"",
+      "expectedTool": "git.stash",
+      "params": {},
+      "description": "Safeguards pending changes into stash stack.",
+      "domain": "git",
+      "displayName": "Stash Workspace Modifications",
+      "toolDescription": "Stashes uncommitted modified files or applies recently stored stash.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "operation",
+          "type": "string",
+          "desc": "Stash operation: save, pop, list, or clear"
+        }
+      ]
+    },
+    {
+      "id": "TC-GIT-STAT-01",
+      "scenario": "Check git working tree status",
+      "prompt": "git status",
+      "expectedTool": "git.status",
+      "params": {},
+      "description": "Inspects active branch, staged changes, and modified files.",
+      "domain": "git",
+      "displayName": "Check Git Status",
+      "toolDescription": "Inspects git repository branch, tracked changes, modified files, and staging status.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-GIT-STAT-02",
+      "scenario": "Check modified files and branch",
+      "prompt": "check git status and recent changes",
+      "expectedTool": "git.status",
+      "params": {},
+      "description": "Returns working directory cleanliness report.",
+      "domain": "git",
+      "displayName": "Check Git Status",
+      "toolDescription": "Inspects git repository branch, tracked changes, modified files, and staging status.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-BT-CONN-01",
+      "scenario": "Connect Soundcore Space One headphone (User Specific Example)",
+      "prompt": "connect soundcore space one headphone",
+      "expectedTool": "network.bluetooth.connect",
+      "params": {
+        "device": "soundcore space one headphone"
+      },
+      "description": "Establishes wireless Bluetooth link to Soundcore Space One headphones.",
+      "domain": "network",
+      "displayName": "Connect to Bluetooth Device",
+      "toolDescription": "Establishes wireless link to paired Bluetooth headphones, speakers, or peripheral device.",
+      "requiredParameters": [
+        {
+          "name": "device",
+          "type": "string",
+          "desc": "Device name or MAC address"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-BT-CONN-02",
+      "scenario": "Pair AirPods Pro headphones",
+      "prompt": "pair bluetooth headphones AirPods Pro",
+      "expectedTool": "network.bluetooth.connect",
+      "params": {
+        "device": "AirPods Pro"
+      },
+      "description": "Connects to paired Apple AirPods Pro peripheral.",
+      "domain": "network",
+      "displayName": "Connect to Bluetooth Device",
+      "toolDescription": "Establishes wireless link to paired Bluetooth headphones, speakers, or peripheral device.",
+      "requiredParameters": [
+        {
+          "name": "device",
+          "type": "string",
+          "desc": "Device name or MAC address"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-BT-CONN-03",
+      "scenario": "Connect device by MAC address",
+      "prompt": "connect to bluetooth device 00:1A:7D:DA:71:13",
+      "expectedTool": "network.bluetooth.connect",
+      "params": {
+        "device": "00:1A:7D:DA:71:13"
+      },
+      "description": "Direct hardware connection via Bluetooth MAC address.",
+      "domain": "network",
+      "displayName": "Connect to Bluetooth Device",
+      "toolDescription": "Establishes wireless link to paired Bluetooth headphones, speakers, or peripheral device.",
+      "requiredParameters": [
+        {
+          "name": "device",
+          "type": "string",
+          "desc": "Device name or MAC address"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-BT-LIST-01",
+      "scenario": "Check if any bluetooth device is available (User Specific Example)",
+      "prompt": "check if any bluetooth device is available",
+      "expectedTool": "network.bluetooth.list",
+      "params": {},
+      "description": "Scans and lists all discoverable Bluetooth devices and accessories.",
+      "domain": "network",
+      "displayName": "List Bluetooth Devices",
+      "toolDescription": "Scans and lists all discoverable Bluetooth devices, including paired and connected devices.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-BT-LIST-02",
+      "scenario": "Show all paired and reachable devices",
+      "prompt": "show me all bluetooth devices",
+      "expectedTool": "network.bluetooth.list",
+      "params": {},
+      "description": "Queries Bluetooth subsystem for currently connected and nearby devices.",
+      "domain": "network",
+      "displayName": "List Bluetooth Devices",
+      "toolDescription": "Scans and lists all discoverable Bluetooth devices, including paired and connected devices.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-BT-OFF-01",
+      "scenario": "Direct command to turn off Bluetooth radio",
+      "prompt": "turn off bluetooth",
+      "expectedTool": "network.bluetooth.off",
+      "params": {},
+      "description": "Disables system Bluetooth radio to conserve battery.",
+      "domain": "network",
+      "displayName": "Turn Bluetooth Off",
+      "toolDescription": "Disables system Bluetooth hardware radio transmitter to conserve power.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-BT-OFF-02",
+      "scenario": "Deactivate Bluetooth adapter",
+      "prompt": "disable bluetooth",
+      "expectedTool": "network.bluetooth.off",
+      "params": {},
+      "description": "Shuts down active Bluetooth transmitter.",
+      "domain": "network",
+      "displayName": "Turn Bluetooth Off",
+      "toolDescription": "Disables system Bluetooth hardware radio transmitter to conserve power.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-BT-ON-01",
+      "scenario": "Direct command to turn on Bluetooth radio",
+      "prompt": "turn on bluetooth",
+      "expectedTool": "network.bluetooth.on",
+      "params": {},
+      "description": "Enables system Bluetooth radio adapter.",
+      "domain": "network",
+      "displayName": "Turn Bluetooth On",
+      "toolDescription": "Enables system Bluetooth hardware radio transmitter.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-BT-ON-02",
+      "scenario": "Conversational command to enable Bluetooth",
+      "prompt": "please enable bluetooth adapter",
+      "expectedTool": "network.bluetooth.on",
+      "params": {},
+      "description": "Powers up wireless Bluetooth transmitter.",
+      "domain": "network",
+      "displayName": "Turn Bluetooth On",
+      "toolDescription": "Enables system Bluetooth hardware radio transmitter.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-DNS-01",
+      "scenario": "Query DNS domain records",
+      "prompt": "lookup DNS for github.com",
+      "expectedTool": "network.dns",
+      "params": {
+        "domain": "github.com"
+      },
+      "description": "Performs DNS resolution lookup for A, CNAME, and MX records.",
+      "domain": "network",
+      "displayName": "Query DNS Domain Records",
+      "toolDescription": "Performs DNS resolution lookup for A, CNAME, MX, and TXT records (dig/nslookup).",
+      "requiredParameters": [
+        {
+          "name": "domain",
+          "type": "string",
+          "desc": "Target domain name to query"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "recordType",
+          "type": "string",
+          "desc": "Record type A, AAAA, MX, CNAME, TXT, or ALL"
+        }
+      ]
+    },
+    {
+      "id": "TC-NET-DNS-02",
+      "scenario": "Resolve host domain names",
+      "prompt": "query dns records for openai.com",
+      "expectedTool": "network.dns",
+      "params": {
+        "domain": "openai.com"
+      },
+      "description": "Queries nameservers for OpenAI domain record resolution.",
+      "domain": "network",
+      "displayName": "Query DNS Domain Records",
+      "toolDescription": "Performs DNS resolution lookup for A, CNAME, MX, and TXT records (dig/nslookup).",
+      "requiredParameters": [
+        {
+          "name": "domain",
+          "type": "string",
+          "desc": "Target domain name to query"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "recordType",
+          "type": "string",
+          "desc": "Record type A, AAAA, MX, CNAME, TXT, or ALL"
+        }
+      ]
+    },
+    {
+      "id": "TC-NET-IFACE-01",
+      "scenario": "Inspect physical and virtual network interfaces",
+      "prompt": "show all network interfaces",
+      "expectedTool": "network.interfaces",
+      "params": {},
+      "description": "Displays status, MAC address, and IP configuration of en0, lo0, etc.",
+      "domain": "network",
+      "displayName": "Inspect Network Interfaces",
+      "toolDescription": "Queries system physical and virtual network adapters, status, and MAC addresses.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-IFACE-02",
+      "scenario": "List network adapters",
+      "prompt": "list physical and virtual network adapters",
+      "expectedTool": "network.interfaces",
+      "params": {},
+      "description": "Queries OS network adapter tables.",
+      "domain": "network",
+      "displayName": "Inspect Network Interfaces",
+      "toolDescription": "Queries system physical and virtual network adapters, status, and MAC addresses.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-IP-01",
+      "scenario": "Query system IP addresses",
+      "prompt": "what is my IP address?",
+      "expectedTool": "network.ip",
+      "params": {},
+      "description": "Retrieves active local LAN IPv4/IPv6 and public facing WAN addresses.",
+      "domain": "network",
+      "displayName": "Resolve System IP Addresses",
+      "toolDescription": "Retrieves active local LAN IP addresses and public facing WAN internet IP.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-IP-02",
+      "scenario": "Show network IP bindings",
+      "prompt": "show my internal and external ip",
+      "expectedTool": "network.ip",
+      "params": {},
+      "description": "Displays internal adapter IPs alongside public gateway IP.",
+      "domain": "network",
+      "displayName": "Resolve System IP Addresses",
+      "toolDescription": "Retrieves active local LAN IP addresses and public facing WAN internet IP.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-PING-01",
+      "scenario": "Ping domain hostname",
+      "prompt": "ping google.com",
+      "expectedTool": "network.ping",
+      "params": {
+        "host": "google.com"
+      },
+      "description": "Sends ICMP echo packets to test host reachability and latency.",
+      "domain": "network",
+      "displayName": "Ping Network Host",
+      "toolDescription": "Sends ICMP echo packets to test network reachability and packet latency (ping).",
+      "requiredParameters": [
+        {
+          "name": "host",
+          "type": "string",
+          "desc": "Target hostname or IP address"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "count",
+          "type": "number",
+          "desc": "Number of ICMP packets to send"
+        }
+      ]
+    },
+    {
+      "id": "TC-NET-PING-02",
+      "scenario": "Ping public DNS IP",
+      "prompt": "test connection to 1.1.1.1",
+      "expectedTool": "network.ping",
+      "params": {
+        "host": "1.1.1.1"
+      },
+      "description": "Tests network round-trip time to Cloudflare primary DNS.",
+      "domain": "network",
+      "displayName": "Ping Network Host",
+      "toolDescription": "Sends ICMP echo packets to test network reachability and packet latency (ping).",
+      "requiredParameters": [
+        {
+          "name": "host",
+          "type": "string",
+          "desc": "Target hostname or IP address"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "count",
+          "type": "number",
+          "desc": "Number of ICMP packets to send"
+        }
+      ]
+    },
+    {
+      "id": "TC-NET-PORT-01",
+      "scenario": "Check specific development port",
+      "prompt": "check if port 3000 is open",
+      "expectedTool": "network.ports",
+      "params": {
+        "port": 3000
+      },
+      "description": "Inspects if port 3000 has an active listening process.",
+      "domain": "network",
+      "displayName": "Inspect Open Network Ports",
+      "toolDescription": "Lists open listening TCP/UDP network ports and binding process IDs (lsof/netstat).",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "port",
+          "type": "number",
+          "desc": "Optional specific port number to check binding"
+        }
+      ]
+    },
+    {
+      "id": "TC-NET-PORT-02",
+      "scenario": "List all open listening ports",
+      "prompt": "show all listening ports",
+      "expectedTool": "network.ports",
+      "params": {},
+      "description": "Lists all open TCP/UDP sockets and binding process IDs.",
+      "domain": "network",
+      "displayName": "Inspect Open Network Ports",
+      "toolDescription": "Lists open listening TCP/UDP network ports and binding process IDs (lsof/netstat).",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "port",
+          "type": "number",
+          "desc": "Optional specific port number to check binding"
+        }
+      ]
+    },
+    {
+      "id": "TC-NET-PORT-03",
+      "scenario": "Check alternative web port",
+      "prompt": "is port 8080 in use?",
+      "expectedTool": "network.ports",
+      "params": {
+        "port": 8080
+      },
+      "description": "Queries socket table for port 8080 occupancy.",
+      "domain": "network",
+      "displayName": "Inspect Open Network Ports",
+      "toolDescription": "Lists open listening TCP/UDP network ports and binding process IDs (lsof/netstat).",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "port",
+          "type": "number",
+          "desc": "Optional specific port number to check binding"
+        }
+      ]
+    },
+    {
+      "id": "TC-NET-TRACE-01",
+      "scenario": "Traceroute to cloud endpoint",
+      "prompt": "traceroute to cloudflare.com",
+      "expectedTool": "network.traceroute",
+      "params": {
+        "host": "cloudflare.com"
+      },
+      "description": "Traces packet routing gateway hops across Internet to target host.",
+      "domain": "network",
+      "displayName": "Traceroute Network Path",
+      "toolDescription": "Traces packet routing gateway hops across Internet to target destination host.",
+      "requiredParameters": [
+        {
+          "name": "host",
+          "type": "string",
+          "desc": "Target hostname or destination IP"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-TRACE-02",
+      "scenario": "Trace path to public DNS resolver",
+      "prompt": "trace route to 8.8.8.8",
+      "expectedTool": "network.traceroute",
+      "params": {
+        "host": "8.8.8.8"
+      },
+      "description": "Performs hop-by-hop latency inspection to Google DNS.",
+      "domain": "network",
+      "displayName": "Traceroute Network Path",
+      "toolDescription": "Traces packet routing gateway hops across Internet to target destination host.",
+      "requiredParameters": [
+        {
+          "name": "host",
+          "type": "string",
+          "desc": "Target hostname or destination IP"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-WIFI-CONN-01",
+      "scenario": "Connect to Wi-Fi SSID with 5G suffix",
+      "prompt": "connect to wifi Office-Network-5G",
+      "expectedTool": "network.wifi.connect",
+      "params": {
+        "ssid": "Office-Network-5G"
+      },
+      "description": "Associates system wireless interface with designated SSID.",
+      "domain": "network",
+      "displayName": "Connect to Wi-Fi Network",
+      "toolDescription": "Connects system wireless interface directly to specified Wi-Fi network SSID.",
+      "requiredParameters": [
+        {
+          "name": "ssid",
+          "type": "string",
+          "desc": "Wireless network SSID name"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "password",
+          "type": "string",
+          "desc": "WPA network key password"
+        }
+      ]
+    },
+    {
+      "id": "TC-NET-WIFI-CONN-02",
+      "scenario": "Join guest Wi-Fi network",
+      "prompt": "join wifi Starlink_Guest",
+      "expectedTool": "network.wifi.connect",
+      "params": {
+        "ssid": "Starlink_Guest"
+      },
+      "description": "Connects client adapter to specified guest network.",
+      "domain": "network",
+      "displayName": "Connect to Wi-Fi Network",
+      "toolDescription": "Connects system wireless interface directly to specified Wi-Fi network SSID.",
+      "requiredParameters": [
+        {
+          "name": "ssid",
+          "type": "string",
+          "desc": "Wireless network SSID name"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "password",
+          "type": "string",
+          "desc": "WPA network key password"
+        }
+      ]
+    },
+    {
+      "id": "TC-NET-WIFI-OFF-01",
+      "scenario": "Turn Wi-Fi off",
+      "prompt": "turn off wifi",
+      "expectedTool": "network.wifi.off",
+      "params": {},
+      "description": "Disables system Wi-Fi wireless networking interface.",
+      "domain": "network",
+      "displayName": "Turn Wi-Fi Off",
+      "toolDescription": "Disables system Wi-Fi wireless networking radio interface to conserve power and disconnect from wireless networks.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-WIFI-OFF-02",
+      "scenario": "Deactivate wireless adapter",
+      "prompt": "disable wi-fi",
+      "expectedTool": "network.wifi.off",
+      "params": {},
+      "description": "Disconnects and disables active wireless interfaces.",
+      "domain": "network",
+      "displayName": "Turn Wi-Fi Off",
+      "toolDescription": "Disables system Wi-Fi wireless networking radio interface to conserve power and disconnect from wireless networks.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-WIFI-ON-01",
+      "scenario": "Turn Wi-Fi on",
+      "prompt": "turn on wifi",
+      "expectedTool": "network.wifi.on",
+      "params": {},
+      "description": "Enables system Wi-Fi wireless networking radio.",
+      "domain": "network",
+      "displayName": "Turn Wi-Fi On",
+      "toolDescription": "Enables system Wi-Fi wireless networking radio interface.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-WIFI-ON-02",
+      "scenario": "Enable wireless network adapter",
+      "prompt": "enable wi-fi interface",
+      "expectedTool": "network.wifi.on",
+      "params": {},
+      "description": "Powers up wireless network hardware.",
+      "domain": "network",
+      "displayName": "Turn Wi-Fi On",
+      "toolDescription": "Enables system Wi-Fi wireless networking radio interface.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-WIFI-SCAN-01",
+      "scenario": "Scan for available Wi-Fi networks",
+      "prompt": "scan for available wifi networks",
+      "expectedTool": "network.wifi.scan",
+      "params": {},
+      "description": "Scans and lists nearby accessible Wi-Fi SSID networks and signal metrics.",
+      "domain": "network",
+      "displayName": "Scan Wi-Fi Networks",
+      "toolDescription": "Scans and lists nearby accessible wireless Wi-Fi SSID networks and signal strength.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NET-WIFI-SCAN-02",
+      "scenario": "List reachable Wi-Fi SSIDs",
+      "prompt": "what wifi networks are available nearby?",
+      "expectedTool": "network.wifi.scan",
+      "params": {},
+      "description": "Polls wireless broadcast channels for active base stations.",
+      "domain": "network",
+      "displayName": "Scan Wi-Fi Networks",
+      "toolDescription": "Scans and lists nearby accessible wireless Wi-Fi SSID networks and signal strength.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NODE-BUN-01",
+      "scenario": "Run unit test suite with Bun",
+      "prompt": "run bun test",
+      "expectedTool": "node.bun",
+      "params": {
+        "command": "test"
+      },
+      "description": "Executes fast native tests via Bun runtime.",
+      "domain": "node",
+      "displayName": "Execute via Bun Runtime",
+      "toolDescription": "Runs script, test runner, or rapid package installation using modern Bun runtime.",
+      "requiredParameters": [
+        {
+          "name": "command",
+          "type": "string",
+          "desc": "Bun argument command e.g. test, run index.ts, install"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NODE-BUN-02",
+      "scenario": "Execute script with Bun runtime",
+      "prompt": "run bun run index.ts",
+      "expectedTool": "node.bun",
+      "params": {
+        "command": "run index.ts"
+      },
+      "description": "Executes TypeScript directly using Bun.",
+      "domain": "node",
+      "displayName": "Execute via Bun Runtime",
+      "toolDescription": "Runs script, test runner, or rapid package installation using modern Bun runtime.",
+      "requiredParameters": [
+        {
+          "name": "command",
+          "type": "string",
+          "desc": "Bun argument command e.g. test, run index.ts, install"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NODE-NPMI-01",
+      "scenario": "Install project NPM dependencies",
+      "prompt": "install npm dependencies",
+      "expectedTool": "node.npm_install",
+      "params": {},
+      "description": "Installs package dependencies into node_modules.",
+      "domain": "node",
+      "displayName": "Install NPM Dependencies",
+      "toolDescription": "Installs project node_modules dependencies or specific NPM package.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "package",
+          "type": "string",
+          "desc": "Optional package name to add (if omitted installs all from package.json)"
+        },
+        {
+          "name": "global",
+          "type": "boolean",
+          "desc": "Install package globally (-g)"
+        }
+      ]
+    },
+    {
+      "id": "TC-NODE-NPMI-02",
+      "scenario": "Run npm install shorthand",
+      "prompt": "run npm install",
+      "expectedTool": "node.npm_install",
+      "params": {},
+      "description": "Triggers npm package installation.",
+      "domain": "node",
+      "displayName": "Install NPM Dependencies",
+      "toolDescription": "Installs project node_modules dependencies or specific NPM package.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "package",
+          "type": "string",
+          "desc": "Optional package name to add (if omitted installs all from package.json)"
+        },
+        {
+          "name": "global",
+          "type": "boolean",
+          "desc": "Install package globally (-g)"
+        }
+      ]
+    },
+    {
+      "id": "TC-NODE-NPMR-01",
+      "scenario": "Execute npm build script",
+      "prompt": "run npm script \"build\"",
+      "expectedTool": "node.npm_run",
+      "params": {
+        "script": "build"
+      },
+      "description": "Runs build script defined in package.json.",
+      "domain": "node",
+      "displayName": "Execute NPM Script",
+      "toolDescription": "Runs script command defined in package.json (e.g. build, test, dev, lint).",
+      "requiredParameters": [
+        {
+          "name": "script",
+          "type": "string",
+          "desc": "Script target name to run"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "args",
+          "type": "array",
+          "desc": "Additional CLI flag arguments"
+        }
+      ]
+    },
+    {
+      "id": "TC-NODE-NPMR-02",
+      "scenario": "Execute npm test suite",
+      "prompt": "run npm script \"test\"",
+      "expectedTool": "node.npm_run",
+      "params": {
+        "script": "test"
+      },
+      "description": "Runs unit tests via npm test runner.",
+      "domain": "node",
+      "displayName": "Execute NPM Script",
+      "toolDescription": "Runs script command defined in package.json (e.g. build, test, dev, lint).",
+      "requiredParameters": [
+        {
+          "name": "script",
+          "type": "string",
+          "desc": "Script target name to run"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "args",
+          "type": "array",
+          "desc": "Additional CLI flag arguments"
+        }
+      ]
+    },
+    {
+      "id": "TC-NODE-PNPM-01",
+      "scenario": "Run pnpm install",
+      "prompt": "run pnpm install",
+      "expectedTool": "node.pnpm",
+      "params": {
+        "command": "install"
+      },
+      "description": "Executes package installation via fast pnpm store.",
+      "domain": "node",
+      "displayName": "Run PNPM Operation",
+      "toolDescription": "Executes fast disk-efficient package management command via pnpm CLI.",
+      "requiredParameters": [
+        {
+          "name": "command",
+          "type": "string",
+          "desc": "pnpm command argument e.g. install, run build, add"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NODE-PNPM-02",
+      "scenario": "Execute pnpm dev script",
+      "prompt": "run pnpm dev",
+      "expectedTool": "node.pnpm",
+      "params": {
+        "command": "dev"
+      },
+      "description": "Starts local dev server via pnpm.",
+      "domain": "node",
+      "displayName": "Run PNPM Operation",
+      "toolDescription": "Executes fast disk-efficient package management command via pnpm CLI.",
+      "requiredParameters": [
+        {
+          "name": "command",
+          "type": "string",
+          "desc": "pnpm command argument e.g. install, run build, add"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NODE-YARN-01",
+      "scenario": "Run yarn build",
+      "prompt": "run yarn build",
+      "expectedTool": "node.yarn",
+      "params": {
+        "command": "build"
+      },
+      "description": "Executes package compilation with Yarn.",
+      "domain": "node",
+      "displayName": "Manage Packages with Yarn",
+      "toolDescription": "Executes package operations or script running via Yarn package manager.",
+      "requiredParameters": [
+        {
+          "name": "command",
+          "type": "string",
+          "desc": "Yarn command string e.g. add, install, build"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-NODE-YARN-02",
+      "scenario": "Install packages via yarn",
+      "prompt": "yarn install dependencies",
+      "expectedTool": "node.yarn",
+      "params": {
+        "command": "install"
+      },
+      "description": "Installs packages from yarn.lock.",
+      "domain": "node",
+      "displayName": "Manage Packages with Yarn",
+      "toolDescription": "Executes package operations or script running via Yarn package manager.",
+      "requiredParameters": [
+        {
+          "name": "command",
+          "type": "string",
+          "desc": "Yarn command string e.g. add, install, build"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-PY-VENV-01",
+      "scenario": "Create Python virtual environment",
+      "prompt": "create a Python virtual environment",
+      "expectedTool": "python.create_venv",
+      "params": {},
+      "description": "Creates isolated virtual environment (python3 -m venv) in workspace.",
+      "domain": "python",
+      "displayName": "Create Python Virtual Environment",
+      "toolDescription": "Creates an isolated Python environment (python3 -m venv) in target directory.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "directory",
+          "type": "string",
+          "desc": "Directory path for virtual environment folder"
+        }
+      ]
+    },
+    {
+      "id": "TC-PY-VENV-02",
+      "scenario": "Initialize venv environment",
+      "prompt": "setup python venv in current directory",
+      "expectedTool": "python.create_venv",
+      "params": {},
+      "description": "Initializes virtualenv sandbox.",
+      "domain": "python",
+      "displayName": "Create Python Virtual Environment",
+      "toolDescription": "Creates an isolated Python environment (python3 -m venv) in target directory.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "directory",
+          "type": "string",
+          "desc": "Directory path for virtual environment folder"
+        }
+      ]
+    },
+    {
+      "id": "TC-PY-NB-01",
+      "scenario": "Launch Jupyter Notebook server",
+      "prompt": "launch Jupyter Notebook",
+      "expectedTool": "python.notebook",
+      "params": {},
+      "description": "Starts Jupyter Notebook interactive data science server.",
+      "domain": "python",
+      "displayName": "Launch Jupyter Notebook",
+      "toolDescription": "Starts Jupyter Notebook or Lab interactive data science server in current folder.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "lab",
+          "type": "boolean",
+          "desc": "Launch modern JupyterLab UI instead of classic Notebook"
+        }
+      ]
+    },
+    {
+      "id": "TC-PY-NB-02",
+      "scenario": "Start Jupyter Lab",
+      "prompt": "start jupyter lab environment",
+      "expectedTool": "python.notebook",
+      "params": {},
+      "description": "Launches browser-based Jupyter Lab session.",
+      "domain": "python",
+      "displayName": "Launch Jupyter Notebook",
+      "toolDescription": "Starts Jupyter Notebook or Lab interactive data science server in current folder.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "lab",
+          "type": "boolean",
+          "desc": "Launch modern JupyterLab UI instead of classic Notebook"
+        }
+      ]
+    },
+    {
+      "id": "TC-PY-PIP-01",
+      "scenario": "Install Python package via pip",
+      "prompt": "install requests package using pip",
+      "expectedTool": "python.pip_install",
+      "params": {
+        "package": "requests"
+      },
+      "description": "Installs Python library dependency via pip.",
+      "domain": "python",
+      "displayName": "Install Python Pip Package",
+      "toolDescription": "Installs Python software libraries and dependencies via pip package installer.",
+      "requiredParameters": [
+        {
+          "name": "package",
+          "type": "string",
+          "desc": "Package library name or requirements.txt path"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "upgrade",
+          "type": "boolean",
+          "desc": "Upgrade package if already installed (-U)"
+        }
+      ]
+    },
+    {
+      "id": "TC-PY-PIP-02",
+      "scenario": "Install data science libraries",
+      "prompt": "pip install pandas numpy",
+      "expectedTool": "python.pip_install",
+      "params": {
+        "package": "pandas numpy"
+      },
+      "description": "Installs multiple Python wheels.",
+      "domain": "python",
+      "displayName": "Install Python Pip Package",
+      "toolDescription": "Installs Python software libraries and dependencies via pip package installer.",
+      "requiredParameters": [
+        {
+          "name": "package",
+          "type": "string",
+          "desc": "Package library name or requirements.txt path"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "upgrade",
+          "type": "boolean",
+          "desc": "Upgrade package if already installed (-U)"
+        }
+      ]
+    },
+    {
+      "id": "TC-PY-RUN-01",
+      "scenario": "Execute Python script",
+      "prompt": "run python script main.py",
+      "expectedTool": "python.run_script",
+      "params": {
+        "script": "main.py"
+      },
+      "description": "Executes Python 3 script file.",
+      "domain": "python",
+      "displayName": "Execute Python Script",
+      "toolDescription": "Runs Python `.py` script file or code command using Python 3 interpreter.",
+      "requiredParameters": [
+        {
+          "name": "script",
+          "type": "string",
+          "desc": "Path to python `.py` script file or code string"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "args",
+          "type": "array",
+          "desc": "CLI arguments passed into script"
+        }
+      ]
+    },
+    {
+      "id": "TC-PY-RUN-02",
+      "scenario": "Run machine learning training script",
+      "prompt": "run python script scripts/train_model.py",
+      "expectedTool": "python.run_script",
+      "params": {
+        "script": "scripts/train_model.py"
+      },
+      "description": "Executes target python module.",
+      "domain": "python",
+      "displayName": "Execute Python Script",
+      "toolDescription": "Runs Python `.py` script file or code command using Python 3 interpreter.",
+      "requiredParameters": [
+        {
+          "name": "script",
+          "type": "string",
+          "desc": "Path to python `.py` script file or code string"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "args",
+          "type": "array",
+          "desc": "CLI arguments passed into script"
+        }
+      ]
+    },
+    {
+      "id": "TC-SH-EXEC-01",
+      "scenario": "Compound shell pipeline command",
+      "prompt": "show the current directory and its git branch",
+      "expectedTool": "shell.execute",
+      "params": {
+        "command": "pwd && git branch --show-current"
+      },
+      "description": "Executes compound shell command pipeline.",
+      "domain": "shell",
+      "displayName": "Execute Terminal Shell Command",
+      "toolDescription": "Executes a complete macOS zsh command line, including installed CLI tools, pipes, redirects, and shell built-ins.",
+      "requiredParameters": [
+        {
+          "name": "command",
+          "type": "string",
+          "desc": "Complete zsh command line to run, for example: git status --short"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "desc": "Working directory path"
+        }
+      ]
+    },
+    {
+      "id": "TC-SH-EXEC-02",
+      "scenario": "Complex pipeline with find, sort, and head",
+      "prompt": "find the ten largest files here",
+      "expectedTool": "shell.execute",
+      "params": {
+        "command": "find . -type f -print0 | xargs -0 du -h | sort -hr | head -10"
+      },
+      "description": "Runs disk analysis pipeline via native shell.",
+      "domain": "shell",
+      "displayName": "Execute Terminal Shell Command",
+      "toolDescription": "Executes a complete macOS zsh command line, including installed CLI tools, pipes, redirects, and shell built-ins.",
+      "requiredParameters": [
+        {
+          "name": "command",
+          "type": "string",
+          "desc": "Complete zsh command line to run, for example: git status --short"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "desc": "Working directory path"
+        }
+      ]
+    },
+    {
+      "id": "TC-SH-EXEC-03",
+      "scenario": "System diagnostic compound command",
+      "prompt": "run uptime && whoami",
+      "expectedTool": "shell.execute",
+      "params": {
+        "command": "uptime && whoami"
+      },
+      "description": "Executes chained command in zsh.",
+      "domain": "shell",
+      "displayName": "Execute Terminal Shell Command",
+      "toolDescription": "Executes a complete macOS zsh command line, including installed CLI tools, pipes, redirects, and shell built-ins.",
+      "requiredParameters": [
+        {
+          "name": "command",
+          "type": "string",
+          "desc": "Complete zsh command line to run, for example: git status --short"
+        }
+      ],
+      "optionalParameters": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "desc": "Working directory path"
+        }
+      ]
+    },
+    {
+      "id": "TC-SYS-BAT-01",
+      "scenario": "Query laptop battery status",
+      "prompt": "what is my battery level?",
+      "expectedTool": "system.battery",
+      "params": {},
+      "description": "Queries internal battery percentage, charging state, and time remaining.",
+      "domain": "system",
+      "displayName": "Check Battery Level & Power Status",
+      "toolDescription": "Queries internal laptop battery charging percentage, time remaining, and power source.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-BAT-02",
+      "scenario": "Check power adapter connection",
+      "prompt": "check battery status and power source",
+      "expectedTool": "system.battery",
+      "params": {},
+      "description": "Verifies AC power source and cycle health.",
+      "domain": "system",
+      "displayName": "Check Battery Level & Power Status",
+      "toolDescription": "Queries internal laptop battery charging percentage, time remaining, and power source.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-CPU-01",
+      "scenario": "Inspect real-time CPU load",
+      "prompt": "check CPU utilization",
+      "expectedTool": "system.cpu",
+      "params": {},
+      "description": "Monitors real-time processor core load percentages and frequencies.",
+      "domain": "system",
+      "displayName": "Inspect CPU Utilization",
+      "toolDescription": "Monitors real-time processor core load percentages and frequency metrics.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-CPU-02",
+      "scenario": "Check processor health",
+      "prompt": "how much CPU is the system using right now?",
+      "expectedTool": "system.cpu",
+      "params": {},
+      "description": "Measures total user/system processor consumption.",
+      "domain": "system",
+      "displayName": "Inspect CPU Utilization",
+      "toolDescription": "Monitors real-time processor core load percentages and frequency metrics.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-GPU-01",
+      "scenario": "Inspect GPU acceleration status",
+      "prompt": "check GPU acceleration status",
+      "expectedTool": "system.gpu",
+      "params": {},
+      "description": "Queries active graphics hardware model, VRAM utilization, and clock.",
+      "domain": "system",
+      "displayName": "Inspect GPU Acceleration Status",
+      "toolDescription": "Queries active graphics hardware model, video VRAM usage, and rendering utilization.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-GPU-02",
+      "scenario": "Check graphics memory usage",
+      "prompt": "how much VRAM is being used?",
+      "expectedTool": "system.gpu",
+      "params": {},
+      "description": "Inspects Metal / OpenGL / GPU memory metrics.",
+      "domain": "system",
+      "displayName": "Inspect GPU Acceleration Status",
+      "toolDescription": "Queries active graphics hardware model, video VRAM usage, and rendering utilization.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-INFO-01",
+      "scenario": "Get system diagnostic information",
+      "prompt": "system info",
+      "expectedTool": "system.info",
+      "params": {},
+      "description": "Retrieves OS platform, kernel version, machine architecture, and hostname.",
+      "domain": "system",
+      "displayName": "Get System Diagnostic Info",
+      "toolDescription": "Retrieves OS platform, kernel version, machine architecture, computer specs and uptime metrics.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-INFO-02",
+      "scenario": "Hardware specifications overview",
+      "prompt": "what are my hardware specs and macOS version?",
+      "expectedTool": "system.info",
+      "params": {},
+      "description": "Outputs complete system architecture report.",
+      "domain": "system",
+      "displayName": "Get System Diagnostic Info",
+      "toolDescription": "Retrieves OS platform, kernel version, machine architecture, computer specs and uptime metrics.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-KILL-01",
+      "scenario": "Terminate process by application name",
+      "prompt": "kill process Google Chrome",
+      "expectedTool": "system.kill_process",
+      "params": {
+        "process": "Google Chrome"
+      },
+      "description": "Terminates active Chrome browser processes.",
+      "domain": "system",
+      "displayName": "Kill System Process",
+      "toolDescription": "Terminates an active system process or background task by process name or PID.",
+      "requiredParameters": [
+        {
+          "name": "process",
+          "type": "string",
+          "desc": "Process name or PID to terminate"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-KILL-02",
+      "scenario": "Terminate process by PID",
+      "prompt": "kill process 8942",
+      "expectedTool": "system.kill_process",
+      "params": {
+        "process": "8942"
+      },
+      "description": "Terminates target process by process ID.",
+      "domain": "system",
+      "displayName": "Kill System Process",
+      "toolDescription": "Terminates an active system process or background task by process name or PID.",
+      "requiredParameters": [
+        {
+          "name": "process",
+          "type": "string",
+          "desc": "Process name or PID to terminate"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-KILL-03",
+      "scenario": "Stop background runtime daemon",
+      "prompt": "stop node process",
+      "expectedTool": "system.kill_process",
+      "params": {
+        "process": "node"
+      },
+      "description": "Terminates active Node.js processes.",
+      "domain": "system",
+      "displayName": "Kill System Process",
+      "toolDescription": "Terminates an active system process or background task by process name or PID.",
+      "requiredParameters": [
+        {
+          "name": "process",
+          "type": "string",
+          "desc": "Process name or PID to terminate"
+        }
+      ],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-LOCK-01",
+      "scenario": "Lock system workstation",
+      "prompt": "lock the laptop",
+      "expectedTool": "system.lock",
+      "params": {},
+      "description": "Locks the operating system screen immediately.",
+      "domain": "system",
+      "displayName": "Lock System",
+      "toolDescription": "Locks the operating system screen immediately.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-LOCK-02",
+      "scenario": "Instant display lock",
+      "prompt": "lock the screen now",
+      "expectedTool": "system.lock",
+      "params": {},
+      "description": "Secures user session and turns off display.",
+      "domain": "system",
+      "displayName": "Lock System",
+      "toolDescription": "Locks the operating system screen immediately.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-PROC-01",
+      "scenario": "Sort processes by CPU consumption",
+      "prompt": "which process is using the most CPU?",
+      "expectedTool": "system.processes",
+      "params": {
+        "sort": "cpu"
+      },
+      "description": "Lists top CPU consuming processes and background tasks.",
+      "domain": "system",
+      "displayName": "Monitor Active OS Processes",
+      "toolDescription": "Lists top CPU or memory consuming processes, daemons, and background services.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "sort",
+          "type": "string",
+          "desc": "Sort criteria: cpu or ram"
+        },
+        {
+          "name": "count",
+          "type": "number",
+          "desc": "Number of top processes to list"
+        }
+      ]
+    },
+    {
+      "id": "TC-SYS-PROC-02",
+      "scenario": "Sort processes by RAM consumption",
+      "prompt": "show top memory consuming processes",
+      "expectedTool": "system.processes",
+      "params": {
+        "sort": "ram"
+      },
+      "description": "Lists top memory consuming applications and daemons.",
+      "domain": "system",
+      "displayName": "Monitor Active OS Processes",
+      "toolDescription": "Lists top CPU or memory consuming processes, daemons, and background services.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "sort",
+          "type": "string",
+          "desc": "Sort criteria: cpu or ram"
+        },
+        {
+          "name": "count",
+          "type": "number",
+          "desc": "Number of top processes to list"
+        }
+      ]
+    },
+    {
+      "id": "TC-SYS-PROC-03",
+      "scenario": "General process snapshot",
+      "prompt": "show running processes",
+      "expectedTool": "system.processes",
+      "params": {},
+      "description": "Retrieves active process table.",
+      "domain": "system",
+      "displayName": "Monitor Active OS Processes",
+      "toolDescription": "Lists top CPU or memory consuming processes, daemons, and background services.",
+      "requiredParameters": [],
+      "optionalParameters": [
+        {
+          "name": "sort",
+          "type": "string",
+          "desc": "Sort criteria: cpu or ram"
+        },
+        {
+          "name": "count",
+          "type": "number",
+          "desc": "Number of top processes to list"
+        }
+      ]
+    },
+    {
+      "id": "TC-SYS-RAM-01",
+      "scenario": "Inspect physical RAM capacity",
+      "prompt": "how much RAM is available?",
+      "expectedTool": "system.ram",
+      "params": {},
+      "description": "Checks total physical system RAM capacity and free memory buffers.",
+      "domain": "system",
+      "displayName": "Inspect RAM Memory Capacity",
+      "toolDescription": "Checks total physical system RAM capacity, actively allocated memory, and free cache.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-RAM-02",
+      "scenario": "Check memory pressure and swap",
+      "prompt": "show memory usage and swap capacity",
+      "expectedTool": "system.ram",
+      "params": {},
+      "description": "Inspects active, inactive, wired RAM and paging activity.",
+      "domain": "system",
+      "displayName": "Inspect RAM Memory Capacity",
+      "toolDescription": "Checks total physical system RAM capacity, actively allocated memory, and free cache.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-STOR-01",
+      "scenario": "Check available disk space",
+      "prompt": "check available disk space",
+      "expectedTool": "system.storage",
+      "params": {},
+      "description": "Lists mounted disk partitions, filesystem formats, and free gigabytes.",
+      "domain": "system",
+      "displayName": "Inspect Storage Health & Volumes",
+      "toolDescription": "Lists mounted disk partitions, filesystem volume formats, and SSD health status.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-STOR-02",
+      "scenario": "Inspect root volume capacity",
+      "prompt": "how much free storage do I have on my hard drive?",
+      "expectedTool": "system.storage",
+      "params": {},
+      "description": "Evaluates system drive capacity and utilization.",
+      "domain": "system",
+      "displayName": "Inspect Storage Health & Volumes",
+      "toolDescription": "Lists mounted disk partitions, filesystem volume formats, and SSD health status.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-TEMP-01",
+      "scenario": "Query CPU core thermal sensors",
+      "prompt": "check thermal sensors",
+      "expectedTool": "system.temperature",
+      "params": {},
+      "description": "Queries CPU core thermal diode and fan cooling subsystem temperatures.",
+      "domain": "system",
+      "displayName": "Check Thermal Sensors",
+      "toolDescription": "Queries CPU core thermal diode and fan cooling subsystem temperature metrics.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-TEMP-02",
+      "scenario": "Check thermal throttling status",
+      "prompt": "is the computer overheating?",
+      "expectedTool": "system.temperature",
+      "params": {},
+      "description": "Checks hardware temperature status against safety thresholds.",
+      "domain": "system",
+      "displayName": "Check Thermal Sensors",
+      "toolDescription": "Queries CPU core thermal diode and fan cooling subsystem temperature metrics.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-UP-01",
+      "scenario": "Query system uptime duration",
+      "prompt": "how long has my system been running?",
+      "expectedTool": "system.uptime",
+      "params": {},
+      "description": "Displays time elapsed since last boot and load averages.",
+      "domain": "system",
+      "displayName": "Query System Uptime Duration",
+      "toolDescription": "Displays time elapsed since last operating system boot and average system loads.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    },
+    {
+      "id": "TC-SYS-UP-02",
+      "scenario": "Check boot timestamp",
+      "prompt": "check system uptime",
+      "expectedTool": "system.uptime",
+      "params": {},
+      "description": "Returns machine uptime in days, hours, and minutes.",
+      "domain": "system",
+      "displayName": "Query System Uptime Duration",
+      "toolDescription": "Displays time elapsed since last operating system boot and average system loads.",
+      "requiredParameters": [],
+      "optionalParameters": []
+    }
+  ]
+}

@@ -20,7 +20,7 @@ describe('WorkflowExecutionEngine — End-to-End IR → ActionGraph → Runtime 
 
   it('should execute a simple sequential workflow through the full compile → dispatch lifecycle', async () => {
     const wf = new WorkflowBuilder('Test Workflow')
-      .addVariable('name', 'string', 'Name', false, 'Sentinel')
+      .addVariable('name', 'string', 'Name', false, 'Cero')
       .addAction('step1', 'Greet', 'system.noop', { greeting: '{{name}}' })
       .addAction('step2', 'Done', 'system.noop', {}, ['step1'])
       .addOutput('greeting', 'string', 'Greeting', 'step1', 'greeting')

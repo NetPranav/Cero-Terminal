@@ -2,16 +2,19 @@
  * ToolSearcher.ts
  * 
  * Multi-dimensional semantic search across all registry indexes with stopword exclusion,
- * typo tolerance, and strict domain isolation guardrails.
+ * typo tolerance, verb-aware scoring, entity-context boosting, and strict domain isolation guardrails.
  * 
  * Search dimensions (in priority order):
  * 1. Tool ID exact match (score: 1000)
  * 2. Alias exact match (score: 900)
- * 3. Domain + action match (score: 800)
- * 4. Typo-tolerant Tool ID & Name semantic word match (score: variable, 400/term)
- * 5. Tag match (score: 400)
+ * 3. Multi-word alias substring match (score: 850)
+ * 4. Domain + action match (score: 800)
+ * 5. Entity-context boosting (score: up to 600)
  * 6. Knowledge index scored match (score: variable, up to 500)
- * 7. Description fuzzy match (score: up to 300)
+ * 7. Typo-tolerant Tool ID & Name semantic word match (score: variable, 400/term)
+ * 8. Tag match (score: 400)
+ * 9. Action verb group match (score: 350)
+ * 10. Description fuzzy match (score: up to 300)
  */
 
 import { ToolRegistryState } from '../loader/ToolLoader';
@@ -57,6 +60,16 @@ const STOPWORDS = new Set([
   'please', 'could', 'would', 'kindly', 'want', 'need', 'help', 'did', 'does', 'have', 'has', 'had', 'been', 'what'
 ]);
 
+import { VerbSynonyms } from '../../ai/intent/SynonymMap';
+
+/** Action verbs auto-generated from centralized SynonymMap */
+const ACTION_VERB_GROUPS: Record<string, string[]> = Object.fromEntries(
+  Object.entries(VerbSynonyms).map(([canonical, synonyms]) => [
+    canonical,
+    [canonical, ...synonyms.map(s => s.split(/\s+/)[0])] // Use first word of multi-word synonyms
+  ])
+);
+
 export class ToolSearcher {
   constructor(private registry: ToolRegistryState) {}
 
@@ -90,6 +103,16 @@ export class ToolSearcher {
       }
     }
 
+    // 2b. Multi-word alias substring matching
+    for (const tool of this.registry.toolIndex.getAll()) {
+      for (const alias of (tool.definition.aliases || [])) {
+        const aliasLower = alias.toLowerCase();
+        if (aliasLower.includes(' ') && normalizedQuery.includes(aliasLower)) {
+          this.addScore(scores, tool.definition.id, 850, `Multi-word alias substring match: "${alias}"`);
+        }
+      }
+    }
+
     // 3. Domain + action match (if intent is provided)
     if (intent) {
       const domainTools = this.registry.domainIndex.getToolIds(intent.domain);
@@ -106,12 +129,42 @@ export class ToolSearcher {
       }
     }
 
-    // 5. Entity match
+    // 5. Entity-context boosting
     if (entities) {
       for (const entityType of Object.keys(entities)) {
         const entityTools = this.registry.entityIndex.getToolIds(entityType);
         for (const toolId of entityTools) {
           this.addScore(scores, toolId, 500, `Entity match: ${entityType}`);
+        }
+      }
+
+      // Domain-level entity boosting
+      if (entities.bluetooth_devices?.length || entities.device_names?.length) {
+        const btTools = this.registry.domainIndex.getToolIds('network');
+        for (const toolId of btTools) {
+          if (toolId.includes('bluetooth')) {
+            this.addScore(scores, toolId, 600, 'Entity context: bluetooth device detected');
+          }
+        }
+      }
+      if (entities.SSID?.length) {
+        const wifiTools = this.registry.domainIndex.getToolIds('network');
+        for (const toolId of wifiTools) {
+          if (toolId.includes('wifi')) {
+            this.addScore(scores, toolId, 600, 'Entity context: SSID detected');
+          }
+        }
+      }
+      if (entities.folders?.length || entities.paths?.length) {
+        const fsTools = this.registry.domainIndex.getToolIds('filesystem');
+        for (const toolId of fsTools) {
+          this.addScore(scores, toolId, 200, 'Entity context: path/folder detected');
+        }
+      }
+      if (entities.applications?.length || entities.processes?.length) {
+        const appTools = this.registry.domainIndex.getToolIds('application');
+        for (const toolId of appTools) {
+          this.addScore(scores, toolId, 200, 'Entity context: application/process detected');
         }
       }
     }
@@ -148,6 +201,26 @@ export class ToolSearcher {
       }
     }
 
+    // 8. Action verb + tool alias/tag compound matching
+    const detectedActions = this.extractActionVerbs(normalizedQuery);
+    if (detectedActions.length > 0) {
+      for (const tool of this.registry.toolIndex.getAll()) {
+        const toolTags = new Set((tool.definition.tags || []).map(t => t.toLowerCase()));
+        const toolAliasWords = new Set((tool.definition.aliases || []).flatMap(a => a.toLowerCase().split(/\s+/)));
+        const idParts = new Set(tool.definition.id.toLowerCase().split('.'));
+
+        for (const action of detectedActions) {
+          const verbGroup = this.getVerbGroup(action);
+          if (verbGroup) {
+            const hasVerbMatch = verbGroup.some(v => toolTags.has(v) || toolAliasWords.has(v) || idParts.has(v));
+            if (hasVerbMatch) {
+              this.addScore(scores, tool.definition.id, 350, `Action verb group match: "${action}"`);
+            }
+          }
+        }
+      }
+    }
+
     // Build results
     const results: SearchResult[] = [];
     for (const [toolId, data] of scores.entries()) {
@@ -167,32 +240,23 @@ export class ToolSearcher {
       const toolId = res.tool.definition.id.toLowerCase();
       const dispName = res.tool.definition.displayName.toLowerCase();
 
-      // Never match Bluetooth tools if no Bluetooth keywords were mentioned
       if ((toolId.includes('bluetooth') || dispName.includes('bluetooth')) && !hasBluetooth) {
         res.score -= 3000;
       }
-
-      // Never match Wi-Fi tools if no Wi-Fi keywords were mentioned (unless paired with bluetooth)
       if ((toolId.includes('wifi') || dispName.includes('wifi') || dispName.includes('wireless')) && !hasWifi) {
         res.score -= 3000;
       }
-
-      // Prevent networking/wireless tools from overriding app/process listings
       if (hasAppOrProcess && !hasBluetooth && !hasWifi) {
         if (toolId.includes('network.') || toolId.includes('wifi') || toolId.includes('bluetooth')) {
           res.score -= 3000;
         }
       }
-
-      // Never match Battery tools if no battery keywords were mentioned
       if (toolId.includes('battery') && !hasBattery) {
         res.score -= 3000;
       }
     }
 
-    // Sort by score descending
     results.sort((a, b) => b.score - a.score);
-
     return results;
   }
 
@@ -207,6 +271,32 @@ export class ToolSearcher {
     return results[0];
   }
 
+  /**
+   * Extract action verbs from a query string.
+   */
+  private extractActionVerbs(query: string): string[] {
+    const words = query.split(/\s+/);
+    const verbs: string[] = [];
+    const allVerbs = new Set(Object.values(ACTION_VERB_GROUPS).flat());
+    for (const word of words) {
+      const clean = word.replace(/[^a-z]/g, '');
+      if (allVerbs.has(clean)) {
+        verbs.push(clean);
+      }
+    }
+    return verbs;
+  }
+
+  /**
+   * Get the verb group (list of synonyms) for a given action verb.
+   */
+  private getVerbGroup(verb: string): string[] | null {
+    for (const group of Object.values(ACTION_VERB_GROUPS)) {
+      if (group.includes(verb)) return group;
+    }
+    return null;
+  }
+
   private addScore(scores: Map<string, { score: number; reasons: string[] }>, toolId: string, score: number, reason: string): void {
     const existing = scores.get(toolId);
     if (existing) {
@@ -217,4 +307,3 @@ export class ToolSearcher {
     }
   }
 }
-

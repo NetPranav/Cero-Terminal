@@ -39,6 +39,12 @@
   ],
   "optionalParameters": [
     {
+      "name": "explanation",
+      "type": "string",
+      "description": "One-line plain English explanation of what the command does, without jargon",
+      "required": false
+    },
+    {
       "name": "cwd",
       "type": "string",
       "description": "Working directory path",

@@ -1,0 +1,17 @@
+{
+  "toolId": "system.service",
+  "examples": [
+    {
+      "input": "restart docker service",
+      "expectedIntent": {
+        "domain": "system",
+        "action": "service"
+      },
+      "expectedEntities": {
+        "service": "docker",
+        "action": "restart"
+      },
+      "description": "Restart background docker service"
+    }
+  ]
+}

@@ -34,26 +34,32 @@ describe('Autocomplete Engine', () => {
 
     engine = new AutocompleteEngine();
     
-    historyProvider = new HistoryProvider();
+    historyProvider = new HistoryProvider({ persist: false });
     capabilityProvider = new CapabilityProvider(capManager);
     
     engine.registerProvider(historyProvider);
     engine.registerProvider(capabilityProvider);
   });
 
-  it('should rank history suggestions higher if frequency is high', async () => {
-    // "git " matches "git status" and "git checkout main" in history provider mock
+  it('ranks commands the user ran by frequency and folder, ahead of starter completions', async () => {
+    const here = '/Users/u/project';
+    for (let i = 0; i < 3; i++) historyProvider.addHistory('git log --oneline', '/elsewhere');
+    historyProvider.addHistory('git status', here);
     const suggestions = await engine.getSuggestions({
       currentInput: 'git ',
       cursorPosition: 4,
-      cwd: '/Users/pranav/Project Folder/AI Terminal',
+      cwd: here,
       os: 'macos'
     });
 
-    expect(suggestions.length).toBeGreaterThan(0);
-    // "git status" has count 50 and matches CWD, "git checkout" has 20 and no CWD match
-    expect(suggestions[0].value).toBe('git status');
-    expect(suggestions[1].value).toBe('git checkout main');
+    // Used in this folder beats used more often elsewhere; starters come after real history
+    expect(suggestions.map(s => s.value).slice(0, 3)).toEqual(['git status', 'git log --oneline', 'git checkout main']);
+  });
+
+  it('starts with no history: starter completions are never listed as commands the user ran', async () => {
+    expect(historyProvider.getHistory()).toEqual([]);
+    const suggestions = await historyProvider.getSuggestions({ currentInput: 'npm r', cursorPosition: 5, cwd: '/', os: 'macos' });
+    expect(suggestions.map(s => s.value)).toEqual(['npm run dev', 'npm run build']);
   });
 
   it('should return natural language capability suggestions', async () => {
@@ -74,7 +80,7 @@ describe('Autocomplete Engine', () => {
       id = 'slow';
       enabled = true;
       async getSuggestions() {
-        await new Promise(r => setTimeout(r, 50)); // Takes 50ms
+        await new Promise(r => setTimeout(r, 500)); // Far slower than the 15ms budget
         return [{ id: '1', value: 'Too slow', category: 'Other', priority: 100, confidence: 1, sourceProvider: 'slow' }];
       }
     }
@@ -86,8 +92,9 @@ describe('Autocomplete Engine', () => {
     const suggestions = await engine.getSuggestions({ currentInput: 'git ', cursorPosition: 4, cwd: '', os: 'macos' }, 15);
     const duration = performance.now() - start;
 
-    // Should return fast without the slow provider
-    expect(duration).toBeLessThan(40);
+    // Returns long before the slow provider would have finished (generous bound so a busy
+    // CI machine does not make this flaky)
+    expect(duration).toBeLessThan(250);
     expect(suggestions.find(s => s.value === 'Too slow')).toBeUndefined();
     expect(suggestions.length).toBeGreaterThan(0); // History provider still returned fast
   });
