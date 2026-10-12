@@ -582,7 +582,7 @@ export class BenchmarkRunner {
   public async run(): Promise<BenchmarkReport> {
     const startTime = Date.now();
     const results: PromptExecutionResult[] = [];
-    const detectedOs = process.platform === 'darwin' ? 'mac' : (process.platform === 'win32' ? 'windows' : 'linux');
+    const detectedOs = 'windows';
 
     console.log(`\n${colors.bold}${colors.cyan}══════════════════════════════════════════════════════════════════════════════${colors.reset}`);
     console.log(`  ${colors.bold}Cero AI Terminal — Automated Benchmark Suite (Phase 0)${colors.reset}`);

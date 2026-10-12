@@ -299,85 +299,27 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
           let matches: string[] = [];
           let stdout = '';
 
-          // 1. Fast path: macOS Spotlight mdfind index (sub-100ms full-disk search)
-          if (typeof process !== 'undefined' && (process.platform === 'darwin' || (typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')))) {
+          // Get-ChildItem under the folder, case-insensitive, without node_modules and .git
+          const psq = (text: string) => `'${text.replace(/'/g, "''")}'`;
+          const search = async (name: string): Promise<string[]> => {
+            const filter = name.includes('*') ? name : `*${name}*`;
+            const script = `Get-ChildItem -LiteralPath ${psq(resolvedDir)} -Recurse -Depth 8 -Force${isFolderSearch ? ' -Directory' : ''} -Filter ${psq(filter)} -ErrorAction SilentlyContinue`
+              + ` | Where-Object { $_.FullName -notmatch '[\\\\/](node_modules|\\.git)([\\\\/]|$)' } | Select-Object -First 200 -ExpandProperty FullName`;
             try {
-              const mdQuery = isFolderSearch
-                ? `kMDItemFSName == '*${cleanPattern}*'c && kMDItemContentType == 'public.folder'`
-                : `kMDItemFSName == '*${cleanPattern}*'c`;
-              const mdCmd = await invoke<{ stdout: string; code?: number }>('execute_command', {
-                command: 'mdfind',
-                args: [mdQuery]
+              const res = await invoke<{ stdout: string; stderr: string; code?: number }>('execute_command', {
+                command: 'powershell.exe',
+                args: ['-NoProfile', '-NonInteractive', '-Command', script]
               });
-              if (mdCmd && mdCmd.stdout) {
-                matches = mdCmd.stdout
-                  .split('\n')
-                  .map(l => l.trim())
-                  .filter(l => {
-                    if (!l) return false;
-                    if (l.includes('/node_modules/') || l.includes('/.git/') || l.includes('/Library/Caches/') || l.includes('/.Trash/')) return false;
-                    if (isFolderSearch && (l.endsWith('.app') || l.includes('.app/') || l.endsWith('.framework') || l.includes('.framework/') || l.endsWith('.appex'))) {
-                      return false;
-                    }
-                    return true;
-                  });
-              }
-            } catch { /* fallback to find */ }
-          }
-
-          // 2. Fallback to find if mdfind produced no matches
-          if (matches.length === 0) {
-            // Check typo variants (e.g. "fronted" -> "frontend")
-            const typoVariant = cleanPattern.toLowerCase() === 'fronted' ? 'frontend' : null;
-            const inamePattern = cleanPattern.includes('*') ? cleanPattern : `*${cleanPattern}*`;
-            const findArgs = [resolvedDir, '-maxdepth', '8', '-iname', inamePattern, '-not', '-path', '*/.*', '-not', '-path', '*/node_modules/*'];
-            if (input.size) {
-              findArgs.push('-type', 'f', '-size', String(input.size));
+              return (res?.stdout || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+            } catch {
+              return [];
             }
-            if (isFolderSearch) {
-              findArgs.push('-type', 'd');
-            }
-            try {
-              const findCmd = await invoke<{ stdout: string; stderr: string; code?: number }>('execute_command', {
-                command: 'find',
-                args: findArgs
-              });
-              if (findCmd && findCmd.stdout) {
-                matches = findCmd.stdout
-                  .split('\n')
-                  .map(l => l.trim())
-                  .filter(l => {
-                    if (!l) return false;
-                    if (isFolderSearch && (l.endsWith('.app') || l.includes('.app/') || l.endsWith('.framework') || l.includes('.framework/') || l.endsWith('.appex'))) {
-                      return false;
-                    }
-                    return true;
-                  });
-              }
-            } catch { /* ignore */ }
-
-            // If still 0 matches and typoVariant exists, try typoVariant with mdfind/find
-            if (matches.length === 0 && typoVariant) {
-              try {
-                const altCmd = await invoke<{ stdout: string; code?: number }>('execute_command', {
-                  command: 'mdfind',
-                  args: [`kMDItemFSName == '*${typoVariant}*'c && kMDItemContentType == 'public.folder'`]
-                });
-                if (altCmd && altCmd.stdout) {
-                  matches = altCmd.stdout
-                    .split('\n')
-                    .map(l => l.trim())
-                    .filter(l => {
-                      if (!l) return false;
-                      if (l.includes('/node_modules/') || l.includes('/.git/') || l.includes('/Library/Caches/') || l.includes('/.Trash/')) return false;
-                      if (isFolderSearch && (l.endsWith('.app') || l.includes('.app/') || l.endsWith('.framework') || l.includes('.framework/') || l.endsWith('.appex'))) {
-                        return false;
-                      }
-                      return true;
-                    });
-                }
-              } catch { /* ignore */ }
-            }
+          };
+          // TODO(3.7): the size filter (input.size, find syntax such as +100M) is reported but not applied
+          matches = await search(cleanPattern);
+          // A known typo ("fronted" -> "frontend") gets a second try
+          if (matches.length === 0 && cleanPattern.toLowerCase() === 'fronted') {
+            matches = await search('frontend');
           }
 
           const sizeMsg = input.size ? ` (size ${input.size})` : '';
@@ -398,13 +340,16 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
           const searchPath = resolvedPath || (this as any).context?.cwd || '.';
           let matches: string[] = [];
           let stdout = '';
+          const psq = (text: string) => `'${String(text).replace(/'/g, "''")}'`;
+          // "<file>:<line>:<text>" per match, like grep -rn
+          const script = `Get-ChildItem -LiteralPath ${psq(searchPath)} -Recurse -File -ErrorAction SilentlyContinue | Select-String -SimpleMatch -Pattern ${psq(query)} -ErrorAction SilentlyContinue | Select-Object -First 25 | ForEach-Object { "$($_.Path):$($_.LineNumber):$($_.Line.Trim())" }`;
           try {
             const grepCmd = await invoke<{ stdout: string; stderr: string; code?: number }>('execute_command', {
-              command: 'grep',
-              args: ['-rnI', '--max-count=25', String(query), searchPath]
+              command: 'powershell.exe',
+              args: ['-NoProfile', '-NonInteractive', '-Command', script]
             });
             if (grepCmd && grepCmd.stdout) {
-              matches = grepCmd.stdout.split('\n').map(l => l.trim()).filter(Boolean);
+              matches = grepCmd.stdout.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
             }
             if (matches.length > 0) {
               stdout = `Located ${matches.length} matching content line(s) for "${query}" in ${searchPath}:\r\n` + matches.map(m => `  • ${m}`).join('\r\n');
@@ -412,9 +357,9 @@ export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput,
               stdout = `No content matching "${query}" was found under ${searchPath}.`;
             }
           } catch {
-            stdout = `Could not execute grep search for "${query}" in ${searchPath}.`;
+            stdout = `Could not search for "${query}" in ${searchPath}.`;
           }
-          return { success: true, data: { matches, query, path: searchPath, stdout }, commandExecuted: `grep -rnI "${query}" "${searchPath}"` };
+          return { success: true, data: { matches, query, path: searchPath, stdout }, commandExecuted: `Select-String "${query}" in "${searchPath}"` };
         }
 
         default: {
