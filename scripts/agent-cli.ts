@@ -204,7 +204,8 @@ async function runPrompt(
     }
   });
 
-  const detectedOs = process.platform === 'darwin' ? 'macos' : (process.platform === 'win32' ? 'windows' : 'linux');
+  // The agent on this branch speaks PowerShell only
+  const detectedOs = 'windows';
 
   // Auto-approve or handle authorization for CLI/headless runs
   agentLoop.setAuthorizationHandler(async (plan) => {

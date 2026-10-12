@@ -76,7 +76,7 @@ async function ask(goal: string): Promise<{ status: number; body: any; ms: numbe
     // Same request shape as EmbeddedProvider.executeInference
     body: JSON.stringify({
       messages: [
-        { role: 'system', content: buildSystemPrompt([], { os: 'linux', cwd: homedir() }, goal) },
+        { role: 'system', content: buildSystemPrompt([], { os: 'windows', cwd: homedir() }, goal) },
         { role: 'user', content: goal },
       ],
       max_tokens: 512,

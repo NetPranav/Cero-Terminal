@@ -88,13 +88,11 @@ for f in sorted(os.listdir('src-tauri/src')):
 out.append('')
 # scripts
 SCRIPT_DESC = {
-    'build_all_packages.sh': 'Build the Linux release bundles (deb, rpm, AppImage, pacman) from src-tauri.',
     'build_all_test_cases.js': 'Generate tests/tool_test_cases.json from a tool spec dump (one-off generator).',
-    'sync-shared.sh': 'Pull only the OS-agnostic shared core from another branch (bash).',
-    'sync-shared.ps1': 'Pull only the OS-agnostic shared core from another branch (PowerShell).',
+    'check-rust.mjs': 'cargo check for the Windows build (native on Windows, cargo-xwin on Linux).',
 }
 out += ['## `scripts/`','','| File | Purpose |','|---|---|']
-SCRIPT_DESC.update({'brand': 'Draws the Cero logo as vector art and renders the logo animation video.', 'eval': 'The model reliability test (`npm run eval:model`).', 'icons': 'Builds the .flow document icons.', 'stress': 'Headless stress tests of the real agent against a local model.'})
+SCRIPT_DESC.update({'brand': 'Draws the Cero logo as vector art and renders the logo animation video.', 'eval': 'The model reliability test (`npm run eval:model`).', 'icons': 'Builds the .flow document icons.', 'windows': 'Windows helper scripts (check-triple.ps1).'})
 for f in sorted(os.listdir('scripts')):
     p='scripts/'+f
     if os.path.isdir(p):

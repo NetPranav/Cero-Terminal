@@ -234,16 +234,17 @@ describe('CeroSerlCoordinator — End-to-End Orchestrator', () => {
   });
 
   describe('5. Native Distillation & LoRA Hot-Reload', () => {
-    it('runs MLX fine-tuning in dryRun mode and hot-reloads LoRA adapter', async () => {
+    it('in dryRun mode skips training and hot-reloads the LoRA adapter', async () => {
       vi.spyOn(embeddedEngine, 'hotReloadLora').mockResolvedValue(true);
 
       const result = await coordinator.triggerDistillationAndHotReload({ dryRun: true });
       expect(result.success).toBe(true);
-      expect(result.adapterPath).toContain('cero_mlx_lora.gguf');
+      expect(result.adapterPath).toContain('cero_lora.gguf');
       expect(embeddedEngine.hotReloadLora).toHaveBeenCalled();
     });
 
-    it('handles MLX execution errors gracefully', async () => {
+    it('reports that training is not available on Windows yet, without running anything', async () => {
+      const executor = vi.fn(async () => ({ stdout: '', stderr: '', code: 0 }));
       const failingCoordinator = new CeroSerlCoordinator({
         shadowSimulator,
         deficitLogger,
@@ -252,14 +253,13 @@ describe('CeroSerlCoordinator — End-to-End Orchestrator', () => {
         steeringManager,
         dreamScheduler,
         embeddedEngine,
-        commandExecutor: async () => {
-          throw new Error('Metal GPU Out of Memory');
-        },
+        commandExecutor: executor,
       });
 
       const result = await failingCoordinator.triggerDistillationAndHotReload({ dryRun: false });
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Metal GPU Out of Memory');
+      expect(result.error).toContain('not available on Windows yet');
+      expect(executor).not.toHaveBeenCalled();
     });
   });
 

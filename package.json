@@ -14,13 +14,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "bundle:linux": "tauri build",
-    "bundle:deb": "tauri build --bundles deb",
-    "bundle:rpm": "tauri build --bundles rpm",
-    "bundle:appimage": "tauri build --bundles appimage",
-    "bundle:mac": "tauri build --bundles app",
-    "bundle:dmg": "tauri build --bundles dmg",
-    "check:triple": "npm test && npm run build && cargo check --manifest-path src-tauri/Cargo.toml",
+    "bundle:windows": "tauri build --bundles msi,nsis",
+    "bundle:msi": "tauri build --bundles msi",
+    "bundle:nsis": "tauri build --bundles nsis",
+    "check:rust": "node scripts/check-rust.mjs",
+    "check:triple": "npm test && npm run build && npm run check:rust",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
@@ -29,8 +27,7 @@
     "benchmark": "tsx scripts/benchmark_prompts.ts",
     "benchmark:domain": "tsx scripts/benchmark_prompts.ts --domain",
     "smoke:engine": "tsx scripts/engine_smoke.ts",
-    "eval:model": "tsx scripts/eval/reliability.mts",
-    "stress": "bash scripts/stress/run.sh"
+    "eval:model": "tsx scripts/eval/reliability.mts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",

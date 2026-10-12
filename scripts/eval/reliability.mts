@@ -214,7 +214,7 @@ async function makeAgentRunner() {
       return allowed;
     });
     const result = await Promise.race([
-      agentLoop.run(prompt, { os: 'linux', cwd: work, sessionId: `eval-${Date.now()}-${Math.random()}` }),
+      agentLoop.run(prompt, { os: 'windows', cwd: work, sessionId: `eval-${Date.now()}-${Math.random()}` }),
       new Promise<any>(r => setTimeout(() => r({ summary: 'TIMEOUT', success: false }), 90_000)),
     ]);
     const executed = NodeTauriBridge.getHistory(false).slice(before).map((c: any) => String(c.args?.[1] ?? c.fullCommand));
@@ -295,7 +295,7 @@ async function main() {
     process.stdout.write(`[${cIdx + 1}/${cases.length}] Evaluating ${c.id}... `);
 
     // Build the real agent decision call
-    const decision = buildDecisionCall(c.prompt, { os: 'linux', cwd: '/test' });
+    const decision = buildDecisionCall(c.prompt, { os: 'windows', cwd: '/test' });
 
     let passes = 0;
     const answersSet = new Set<string>();

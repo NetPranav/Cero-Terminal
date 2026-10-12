@@ -5,6 +5,9 @@
  * Phase 0 of CERO_ROADMAP_v5.0:
  * Executes domain-classified prompts against Cero's agent engine, validates
  * results against automated verification oracles, and generates quality reports.
+ *
+ * TODO(4.6): the prompt set and oracles were written for Linux (kernel version, "contains linux",
+ * no macOS artifacts); write the Windows prompt set before relying on this report.
  * 
  * Usage:
  *   npx tsx scripts/benchmark_prompts.ts --domain 1 --headless

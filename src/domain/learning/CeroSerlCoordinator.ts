@@ -570,12 +570,16 @@ export class CeroSerlCoordinator {
   }
 
   // =========================================================================
-  // 3c. MLX DISTILLATION & HOT-RELOAD PIPELINE (with Regression Gate)
+  // 3c. DISTILLATION & HOT-RELOAD PIPELINE (with Regression Gate)
   // =========================================================================
 
   /**
-   * Executes native Apple Silicon MLX LoRA training and hot-reloads the newly
-   * compiled adapter into the embedded llama-server with zero application downtime.
+   * Trains a LoRA adapter and hot-reloads it into the embedded llama-server with zero
+   * application downtime.
+   *
+   * TODO(4.6): the trainer was Apple MLX (scripts/train_cero_mlx.py, removed). Windows needs a
+   * PEFT trainer (scripts/finetune_cero_lora.py) plus GGUF conversion; until then only a dry run
+   * (regression gate and hot-reload of an existing adapter) is possible.
    *
    * Phase 0.75.11: Now includes a mandatory regression gate check against
    * `tests/tool_test_cases.json` before promoting the new adapter.
@@ -596,21 +600,13 @@ export class CeroSerlCoordinator {
   }> {
     const startTime = Date.now();
     const home = typeof process !== 'undefined' && process.env ? (process.env.HOME || '/tmp') : '/tmp';
-    const adapterGguf = options?.customAdapterPath || path.join(home, '.cero', 'models', 'cero_mlx_lora.gguf');
+    const adapterGguf = options?.customAdapterPath || path.join(home, '.cero', 'models', 'cero_lora.gguf');
     const role = options?.modelRole || 'coder';
 
     try {
-      // 1. Run MLX fine-tuning script
-      const cwd = typeof process !== 'undefined' && typeof process.cwd === 'function' ? process.cwd() : '.';
-      const scriptPath = path.join(cwd, 'scripts', 'train_cero_mlx.py');
-      const dryRunFlag = options?.dryRun ? '--dry-run' : '';
-      const trainCmd = `python3 "${scriptPath}" ${dryRunFlag}`.trim();
-
-      if (this.commandExecutor) {
-        const res = await this.commandExecutor(trainCmd);
-        if (res.code !== 0 && !options?.dryRun) {
-          throw new Error(`MLX fine-tuning failed: ${res.stderr || res.stdout}`);
-        }
+      // 1. Fine-tuning: no trainer on Windows yet (see TODO above); a dry run skips it
+      if (!options?.dryRun) {
+        throw new Error('On-device fine-tuning is not available on Windows yet');
       }
 
       // 2. Run regression gate against tool_test_cases.json (Phase 0.75.11)
