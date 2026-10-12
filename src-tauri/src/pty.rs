@@ -52,25 +52,7 @@ pub fn spawn_pty(
         pixel_height: 0,
     }).map_err(|e| e.to_string())?;
 
-    #[cfg(target_os = "windows")]
     let default_shell = "powershell.exe".to_string();
-    #[cfg(target_os = "macos")]
-    let default_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-    #[cfg(target_os = "linux")]
-    let default_shell = std::env::var("SHELL")
-        .ok()
-        .filter(|s| !s.trim().is_empty() && std::path::Path::new(s).exists())
-        .unwrap_or_else(|| {
-            if std::path::Path::new("/bin/bash").exists() {
-                "/bin/bash".to_string()
-            } else if std::path::Path::new("/usr/bin/fish").exists() {
-                "/usr/bin/fish".to_string()
-            } else if std::path::Path::new("/usr/bin/bash").exists() {
-                "/usr/bin/bash".to_string()
-            } else {
-                "/bin/sh".to_string()
-            }
-        });
 
     let target_shell = shell
         .filter(|s| {
@@ -128,77 +110,8 @@ pub fn spawn_pty(
         }
     }
 
-    if let Ok(path) = std::env::var("PATH") {
-        #[allow(unused_mut)] // only macOS and Linux add entries
-        let mut path_additions: Vec<String> = Vec::new();
-        #[cfg(target_os = "macos")]
-        {
-            if !path.contains("/opt/homebrew/bin") { path_additions.push("/opt/homebrew/bin".to_string()); }
-            if !path.contains("/opt/homebrew/sbin") { path_additions.push("/opt/homebrew/sbin".to_string()); }
-            if !path.contains("/usr/local/bin") { path_additions.push("/usr/local/bin".to_string()); }
-        }
-        #[cfg(target_os = "linux")]
-        {
-            if let Ok(home) = std::env::var("HOME") {
-                let local_bin = format!("{}/.local/bin", home);
-                let cargo_bin = format!("{}/.cargo/bin", home);
-                if std::path::Path::new(&local_bin).exists() && !path.contains(&local_bin) {
-                    path_additions.push(local_bin);
-                }
-                if std::path::Path::new(&cargo_bin).exists() && !path.contains(&cargo_bin) {
-                    path_additions.push(cargo_bin);
-                }
-            }
-            if !path.contains("/usr/local/bin") { path_additions.push("/usr/local/bin".to_string()); }
-            if !path.contains("/usr/bin") { path_additions.push("/usr/bin".to_string()); }
-            if !path.contains("/bin") { path_additions.push("/bin".to_string()); }
-            if !path.contains("/usr/local/sbin") { path_additions.push("/usr/local/sbin".to_string()); }
-            if !path.contains("/usr/sbin") { path_additions.push("/usr/sbin".to_string()); }
-            if !path.contains("/sbin") { path_additions.push("/sbin".to_string()); }
-        }
-        if !path_additions.is_empty() {
-            cmd.env("PATH", format!("{}:{}", path, path_additions.join(":")));
-        }
-    } else {
-        #[cfg(target_os = "macos")]
-        cmd.env("PATH", "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
-        #[cfg(target_os = "linux")]
-        cmd.env("PATH", "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin");
-    }
-
-    let _child = match pair.slave.spawn_command(cmd) {
-        Ok(child) => child,
-        Err(e) => {
-            #[cfg(target_os = "linux")]
-            {
-                eprintln!("[pty] Failed to spawn '{}': {}. Falling back to default shell...", target_shell, e);
-                let fallback = if std::path::Path::new("/bin/bash").exists() {
-                    "/bin/bash"
-                } else if std::path::Path::new("/usr/bin/bash").exists() {
-                    "/usr/bin/bash"
-                } else {
-                    "/bin/sh"
-                };
-                let mut fallback_cmd = CommandBuilder::new(fallback);
-                if login_shell == Some(true) {
-                    fallback_cmd.arg("-l");
-                }
-                if let Some(dir) = target_dir {
-                    fallback_cmd.cwd(dir);
-                }
-                fallback_cmd.env("TERM", "xterm-256color");
-                fallback_cmd.env("COLORTERM", "truecolor");
-                fallback_cmd.env("TERM_PROGRAM", "Cero");
-                fallback_cmd.env("TERM_PROGRAM_VERSION", "0.1.0");
-                fallback_cmd.env("CERO_TERMINAL", "1");
-                pair.slave.spawn_command(fallback_cmd).map_err(|fb_err| {
-                    format!("Failed to spawn shell '{}' ({}) and fallback '{}' ({})", target_shell, e, fallback, fb_err)
-                })?
-            }
-            #[cfg(not(target_os = "linux"))]
-            return Err(e.to_string());
-        }
-    };
+    // TODO(2.1): fall back to powershell.exe or cmd.exe when the requested shell cannot start.
+    let _child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     
     drop(pair.slave);
     let shell_pid = _child.process_id();
@@ -290,27 +203,7 @@ pub fn kill_pty(
 
 #[tauri::command]
 pub fn get_default_shell() -> String {
-    #[cfg(target_os = "windows")]
-    return "powershell.exe".to_string();
-
-    #[cfg(target_os = "macos")]
-    return std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-
-    #[cfg(target_os = "linux")]
-    return std::env::var("SHELL")
-        .ok()
-        .filter(|s| !s.trim().is_empty() && std::path::Path::new(s).exists())
-        .unwrap_or_else(|| {
-            if std::path::Path::new("/bin/bash").exists() {
-                "/bin/bash".to_string()
-            } else if std::path::Path::new("/usr/bin/fish").exists() {
-                "/usr/bin/fish".to_string()
-            } else if std::path::Path::new("/usr/bin/bash").exists() {
-                "/usr/bin/bash".to_string()
-            } else {
-                "/bin/sh".to_string()
-            }
-        });
+    "powershell.exe".to_string()
 }
 
 
@@ -325,49 +218,8 @@ pub fn get_pty_cwd(state: State<'_, PtyState>, session_id: String) -> Result<Opt
     Ok(pid.and_then(process_cwd))
 }
 
-#[cfg(target_os = "linux")]
-pub fn process_cwd(pid: u32) -> Option<String> {
-    std::fs::read_link(format!("/proc/{}/cwd", pid))
-        .ok()
-        .map(|p| p.to_string_lossy().into_owned())
-}
-
-#[cfg(target_os = "macos")]
-pub fn process_cwd(pid: u32) -> Option<String> {
-    let mut info: libc::proc_vnodepathinfo = unsafe { std::mem::zeroed() };
-    let size = std::mem::size_of::<libc::proc_vnodepathinfo>() as libc::c_int;
-    let ret = unsafe {
-        libc::proc_pidinfo(
-            pid as libc::c_int,
-            libc::PROC_PIDVNODEPATHINFO,
-            0,
-            &mut info as *mut _ as *mut libc::c_void,
-            size,
-        )
-    };
-    if ret != size {
-        return None;
-    }
-    let path = unsafe { std::ffi::CStr::from_ptr(info.pvi_cdir.vip_path.as_ptr() as *const libc::c_char) };
-    let cwd = path.to_string_lossy().into_owned();
-    if cwd.is_empty() { None } else { Some(cwd) }
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+/// TODO(2.2): read the shell's working directory on Windows (OSC 9;9 / OSC 7 from the shell
+/// integration scripts, with a process-based fallback). Until then there is no value.
 pub fn process_cwd(_pid: u32) -> Option<String> {
     None
-}
-
-#[cfg(test)]
-mod tests {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    use super::process_cwd;
-
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    #[test]
-    fn reads_own_working_directory() {
-        let expected = std::env::current_dir().unwrap().canonicalize().unwrap();
-        let cwd = process_cwd(std::process::id()).expect("cwd of this process");
-        assert_eq!(std::path::Path::new(&cwd).canonicalize().unwrap(), expected);
-    }
 }

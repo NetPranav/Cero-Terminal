@@ -75,11 +75,10 @@ fn cero_engine_dir() -> Option<PathBuf> {
     get_home_dir().map(|home| home.join(".cero").join("engine").join("current"))
 }
 
-/// The engine's file name: `llama-server.exe` on Windows
-const LLAMA_SERVER: &str = if cfg!(windows) { "llama-server.exe" } else { "llama-server" };
+/// The engine's file name
+const LLAMA_SERVER: &str = "llama-server.exe";
 
-/// Console programs started by a GUI app open a console window on Windows unless told not to
-#[cfg(windows)]
+/// Console programs started by a GUI app open a console window unless told not to
 pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 fn find_on_path(binary: &str) -> Option<PathBuf> {
@@ -98,25 +97,19 @@ fn find_llama_server_binary() -> Option<PathBuf> {
 
     if let Some(home) = get_home_dir() {
         candidates.push(home.join(".cero").join("bin").join(LLAMA_SERVER));
-        candidates.push(home.join(".local").join("bin").join(LLAMA_SERVER));
     }
 
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
             candidates.push(parent.join(LLAMA_SERVER));
-            candidates.push(parent.join("../MacOS").join(LLAMA_SERVER));
             candidates.push(parent.join("../bin").join(LLAMA_SERVER));
         }
     }
 
-    // Distro packages (Arch `llama.cpp`, Fedora/Ubuntu builds) and Homebrew
-    candidates.push(PathBuf::from("/usr/bin/llama-server"));
-    candidates.push(PathBuf::from("/usr/local/bin/llama-server"));
-    candidates.push(PathBuf::from("/opt/homebrew/bin/llama-server"));
+    // TODO(2.5): also look in the places Windows installs llama.cpp and Ollama (winget, %LOCALAPPDATA%\Programs)
     if let Some(on_path) = find_on_path(LLAMA_SERVER) {
         candidates.push(on_path);
     }
-    candidates.push(PathBuf::from("/usr/lib/ollama/llama-server"));
 
     candidates.into_iter().find(|p| p.exists() && p.is_file())
 }
@@ -219,19 +212,6 @@ fn find_model_file(preferred: Option<String>) -> Option<PathBuf> {
         }
     }
 
-    // Check system Ollama blobs (/var/lib/ollama/blobs)
-    let var_ollama = PathBuf::from("/var/lib/ollama/blobs");
-    if let Ok(entries) = std::fs::read_dir(&var_ollama) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Ok(metadata) = path.metadata() {
-                if metadata.len() > 500 * 1024 * 1024 {
-                    candidates.push(path);
-                }
-            }
-        }
-    }
-
     candidates.into_iter().find(|p| p.exists() && p.is_file())
 }
 
@@ -243,7 +223,7 @@ pub fn start_embedded_llm(
     gpu_layers: Option<i32>,
 ) -> Result<bool, String> {
     let bin_path = find_llama_server_binary().ok_or_else(|| {
-        "llama-server binary not found in ~/.cero/bin, /usr/lib/ollama, or /usr/bin".to_string()
+        "llama-server binary not found in ~/.cero/engine, ~/.cero/bin, next to Cero, or on PATH".to_string()
     })?;
 
     let model_file = find_model_file(model_path).ok_or_else(|| {
@@ -288,13 +268,10 @@ pub fn start_embedded_llm(
         .map(Stdio::from)
         .unwrap_or_else(Stdio::null);
 
+    use std::os::windows::process::CommandExt;
     let mut cmd = Command::new(&bin_path);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
-    cmd.args(&args)
+    cmd.creation_flags(CREATE_NO_WINDOW)
+        .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(stderr_target);
@@ -303,16 +280,7 @@ pub fn start_embedded_llm(
         cmd.current_dir(bin_dir);
     }
 
-    #[cfg(target_os = "linux")]
-    {
-        use std::os::unix::process::CommandExt;
-        unsafe {
-            cmd.pre_exec(|| {
-                libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
-                Ok(())
-            });
-        }
-    }
+    // TODO(2.5): put the server in a Job Object with kill-on-close, so it dies with Cero even after a crash
 
     let child = cmd
         .spawn()
@@ -683,54 +651,6 @@ mod tests {
     }
 }
 
-/// A llama-server left on Cero's port by an instance that did not exit cleanly (macOS has
-/// no parent-death signal, so a crash or `kill` leaves it holding ~2 GB of RAM). Only a process
-/// that is a llama-server started from ~/.cero is stopped; anything else is left alone.
-#[cfg(unix)]
-pub fn reap_orphaned_server(port: u16) {
-    let Ok(out) = Command::new("lsof")
-        .args(["-nP", &format!("-iTCP:{}", port), "-sTCP:LISTEN", "-t"])
-        .output()
-    else {
-        return;
-    };
-    let own_pid = std::process::id();
-    for pid in String::from_utf8_lossy(&out.stdout).split_whitespace().filter_map(|p| p.parse::<u32>().ok()) {
-        if pid == own_pid {
-            continue;
-        }
-        let Ok(ps) = Command::new("ps").args(["-o", "command=", "-p", &pid.to_string()]).output() else {
-            continue;
-        };
-        let command = String::from_utf8_lossy(&ps.stdout);
-        if is_orphaned_cero_server(&command) {
-            crate::logger::log_info("LLM", &format!("Stopping orphaned llama-server (pid: {}) on port {}", pid, port));
-            unsafe {
-                libc::kill(pid as libc::pid_t, libc::SIGTERM);
-            }
-        }
-    }
-}
-
-#[cfg(not(unix))]
+/// TODO(2.5): stop a llama-server left on Cero's port by an instance that did not exit cleanly.
+/// Windows needs its own lookup (the owning process of the port, then its image path), not `lsof`.
 pub fn reap_orphaned_server(_port: u16) {}
-
-/// True for the command line of a llama-server launched from Cero's own directories.
-pub fn is_orphaned_cero_server(command: &str) -> bool {
-    let first = command.split_whitespace().next().unwrap_or("");
-    first.ends_with("/llama-server") && first.contains("/.cero/")
-}
-
-#[cfg(test)]
-mod reap_tests {
-    use super::is_orphaned_cero_server;
-
-    #[test]
-    fn only_cero_llama_servers_are_reaped() {
-        assert!(is_orphaned_cero_server("/Users/u/.cero/bin/llama-server --host 127.0.0.1 --port 8847"));
-        assert!(is_orphaned_cero_server("/home/u/.cero/engine/current/llama-server -m x"));
-        assert!(!is_orphaned_cero_server("/usr/local/bin/llama-server --port 8847"));
-        assert!(!is_orphaned_cero_server("/Users/u/.cero/bin/python -m http.server 8847"));
-        assert!(!is_orphaned_cero_server(""));
-    }
-}

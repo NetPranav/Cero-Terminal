@@ -172,20 +172,17 @@ pub fn install_engine_archive(archive: &Path, engine_dir: &Path, binary: &str) -
     let scratch = engine_dir.join(".extract");
     let _ = std::fs::remove_dir_all(&scratch);
     std::fs::create_dir_all(&scratch).map_err(|e| e.to_string())?;
+    use std::os::windows::process::CommandExt;
     let mut tar = std::process::Command::new("tar");
-    tar.arg("-xf").arg(archive).arg("-C").arg(&scratch);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        tar.creation_flags(crate::embedded_server::CREATE_NO_WINDOW);
-    }
+    tar.arg("-xf").arg(archive).arg("-C").arg(&scratch)
+        .creation_flags(crate::embedded_server::CREATE_NO_WINDOW);
     let out = tar.output().map_err(|e| format!("could not run tar: {}", e))?;
     if !out.status.success() {
         return Err(format!("tar failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
     }
     let found = find_dir_with(&scratch, binary, 3).ok_or_else(|| format!("{} not found in the archive", binary))?;
     let current = engine_dir.join("current");
-    // An older install may be a symlink (macOS/Linux installer) or a directory
+    // An older install may be a symlink or a directory
     if let Ok(meta) = std::fs::symlink_metadata(&current) {
         if meta.file_type().is_symlink() || meta.is_file() {
             std::fs::remove_file(&current).map_err(|e| e.to_string())?;
@@ -195,16 +192,6 @@ pub fn install_engine_archive(archive: &Path, engine_dir: &Path, binary: &str) -
     }
     std::fs::rename(&found, &current).map_err(|e| e.to_string())?;
     let _ = std::fs::remove_dir_all(&scratch);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let bin = current.join(binary);
-        if let Ok(meta) = std::fs::metadata(&bin) {
-            let mut perms = meta.permissions();
-            perms.set_mode(perms.mode() | 0o755);
-            let _ = std::fs::set_permissions(&bin, perms);
-        }
-    }
     Ok(current.join(binary))
 }
 
@@ -213,7 +200,7 @@ pub fn install_engine_archive(archive: &Path, engine_dir: &Path, binary: &str) -
 pub fn install_cero_engine(relative_archive: String) -> Result<String, String> {
     let archive = crate::process_cmds::resolve_in_cero(&relative_archive)?;
     let engine_dir = crate::process_cmds::resolve_in_cero("engine")?;
-    let binary = if cfg!(windows) { "llama-server.exe" } else { "llama-server" };
+    let binary = "llama-server.exe";
     let installed = install_engine_archive(&archive, &engine_dir, binary)?;
     let _ = std::fs::remove_file(&archive);
     Ok(installed.display().to_string())
@@ -243,7 +230,7 @@ mod tests {
         let dir = temp_dir("install");
         let src = dir.join("pkg").join("llama-b1");
         std::fs::create_dir_all(&src).unwrap();
-        let binary = if cfg!(windows) { "llama-server.exe" } else { "llama-server" };
+        let binary = "llama-server.exe";
         std::fs::write(src.join(binary), b"bin").unwrap();
         std::fs::write(src.join("libggml.so"), b"lib").unwrap();
         let archive = dir.join("engine.tar");

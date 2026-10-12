@@ -51,21 +51,13 @@ pub fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
 const OLD_IDS: [&str; 2] = ["org.sentinel.terminal", "com.pranav.sentinel-terminal"];
 const NEW_ID: &str = "org.cero.terminal";
 
-/// The folders an app keeps per bundle id on this OS: the web view's saved settings and the app's own data
-fn app_data_roots(home: &Path) -> Vec<std::path::PathBuf> {
+/// The folders an app keeps per bundle id: the web view's saved settings and the app's own data
+fn app_data_roots() -> Vec<std::path::PathBuf> {
     let mut roots = Vec::new();
-    if cfg!(target_os = "macos") {
-        roots.push(home.join("Library/WebKit"));
-        roots.push(home.join("Library/Application Support"));
-    } else if cfg!(target_os = "windows") {
-        for var in ["LOCALAPPDATA", "APPDATA"] {
-            if let Ok(v) = std::env::var(var) {
-                roots.push(std::path::PathBuf::from(v));
-            }
+    for var in ["LOCALAPPDATA", "APPDATA"] {
+        if let Ok(v) = std::env::var(var) {
+            roots.push(std::path::PathBuf::from(v));
         }
-    } else {
-        roots.push(home.join(".local/share"));
-        roots.push(home.join(".config"));
     }
     roots
 }
@@ -94,7 +86,7 @@ pub fn migrate_legacy_data() {
     let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) else { return };
     // do the moves first and write the log after: logging can create ~/.cero, and the move needs it not to exist yet
     let moved_home = migrate_home(Path::new(&home));
-    let copied = migrate_app_data(&app_data_roots(Path::new(&home)));
+    let copied = migrate_app_data(&app_data_roots());
     match moved_home {
         Ok(true) => crate::logger::log_info("MIGRATE", "Moved ~/.sentinel to ~/.cero"),
         Ok(false) => {}

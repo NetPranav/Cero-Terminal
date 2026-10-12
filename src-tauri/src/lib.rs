@@ -10,40 +10,6 @@ mod legacy_migration;
 mod file_association;
 pub mod logger;
 
-#[cfg(target_os = "macos")]
-fn request_bluetooth_permission() {
-    use objc::{class, msg_send, sel, sel_impl};
-    use std::os::raw::c_void;
-
-    unsafe {
-        // Force link CoreBluetooth framework
-        #[link(name = "CoreBluetooth", kind = "framework")]
-        extern "C" {}
-
-        let manager_class = class!(CBCentralManager);
-        let alloc: *mut objc::runtime::Object = msg_send![manager_class, alloc];
-        let nil: *mut c_void = std::ptr::null_mut();
-        // Initialize to trigger the permission prompt
-        let _: *mut objc::runtime::Object = msg_send![
-            alloc,
-            initWithDelegate: nil
-            queue: nil
-            options: nil
-        ];
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn request_bluetooth_permission() {}
-
-/// macOS asks "Cero would like to use Bluetooth" the first time CoreBluetooth is touched.
-/// That used to happen at every launch, before anyone had asked for anything Bluetooth-related; now the
-/// app calls this only when a Bluetooth request is made.
-#[tauri::command]
-fn request_bluetooth_access() {
-    request_bluetooth_permission();
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // first of all, before anything creates ~/.cero or opens the web view: bring settings and data from the old
@@ -73,10 +39,8 @@ pub fn run() {
             launch::show_unless_flow(app.handle());
 
             use tauri::Manager;
-            // No separate title bar on any OS: macOS overlays its traffic lights on the tab bar
-            // (tauri.conf.json titleBarStyle Overlay); Windows and Linux draw their own window
-            // controls in the tab bar, so the native frame is removed here.
-            #[cfg(not(target_os = "macos"))]
+            // No separate title bar: Cero draws its own window controls in the tab bar, so the
+            // native frame is removed here.
             if let Some(main_win) = app.get_webview_window("main") {
                 let _ = main_win.set_decorations(false);
             }
@@ -94,90 +58,6 @@ pub fn run() {
                         logger::log_error("WINDOW", &format!("Failed to determine main webview URL: {}", e));
                     }
                 }
-            }
-            
-            #[cfg(target_os = "macos")]
-            {
-                use tauri::menu::{Menu, Submenu, MenuItem, PredefinedMenuItem};
-                use tauri::Emitter;
-
-                let handle = app.handle();
-
-                // 1. App Submenu
-                let app_menu = Submenu::with_items(handle, "Cero", true, &[
-                    &PredefinedMenuItem::about(handle, None, None)?,
-                    &PredefinedMenuItem::separator(handle)?,
-                    &PredefinedMenuItem::services(handle, None)?,
-                    &PredefinedMenuItem::separator(handle)?,
-                    &PredefinedMenuItem::hide(handle, None)?,
-                    &PredefinedMenuItem::hide_others(handle, None)?,
-                    &PredefinedMenuItem::show_all(handle, None)?,
-                    &PredefinedMenuItem::separator(handle)?,
-                    &PredefinedMenuItem::quit(handle, None)?,
-                ])?;
-
-                // 2. Personalization & Settings Submenu (in the native top menu bar)
-                let theme_item = MenuItem::with_id(handle, "open-theme", "Appearance & Color Themes...", true, None::<&str>)?;
-                let ai_item = MenuItem::with_id(handle, "open-ai-settings", "AI Engine & Model Settings...", true, None::<&str>)?;
-                let personalize_menu = Submenu::with_items(handle, "Personalization", true, &[
-                    &theme_item,
-                    &ai_item,
-                ])?;
-
-                // 3. File Submenu
-                let new_tab_item = MenuItem::with_id(handle, "new-tab", "New Terminal Tab", true, Some("CmdOrCtrl+T"))?;
-                let close_tab_item = MenuItem::with_id(handle, "close-tab", "Close Tab", true, Some("CmdOrCtrl+W"))?;
-                let file_menu = Submenu::with_items(handle, "File", true, &[
-                    &new_tab_item,
-                    &close_tab_item,
-                ])?;
-
-                // 4. Edit Submenu
-                let edit_menu = Submenu::with_items(handle, "Edit", true, &[
-                    &PredefinedMenuItem::undo(handle, None)?,
-                    &PredefinedMenuItem::redo(handle, None)?,
-                    &PredefinedMenuItem::separator(handle)?,
-                    &PredefinedMenuItem::cut(handle, None)?,
-                    &PredefinedMenuItem::copy(handle, None)?,
-                    &PredefinedMenuItem::paste(handle, None)?,
-                    &PredefinedMenuItem::select_all(handle, None)?,
-                ])?;
-
-                // 5. View / Window
-                let window_menu = Submenu::with_items(handle, "Window", true, &[
-                    &PredefinedMenuItem::minimize(handle, None)?,
-                    &PredefinedMenuItem::fullscreen(handle, None)?,
-                    &PredefinedMenuItem::separator(handle)?,
-                    &PredefinedMenuItem::close_window(handle, None)?,
-                ])?;
-
-                let menu = Menu::with_items(handle, &[
-                    &app_menu,
-                    &personalize_menu,
-                    &file_menu,
-                    &edit_menu,
-                    &window_menu,
-                ])?;
-
-                app.set_menu(menu)?;
-
-                app.on_menu_event(|app_handle, event| {
-                    match event.id().as_ref() {
-                        "open-theme" => {
-                            let _ = app_handle.emit("menu-event", "open-theme");
-                        },
-                        "open-ai-settings" => {
-                            let _ = app_handle.emit("menu-event", "open-ai-settings");
-                        },
-                        "new-tab" => {
-                            let _ = app_handle.emit("menu-event", "new-tab");
-                        },
-                        "close-tab" => {
-                            let _ = app_handle.emit("menu-event", "close-tab");
-                        },
-                        _ => {}
-                    }
-                });
             }
             Ok(())
         })
@@ -205,7 +85,6 @@ pub fn run() {
             process_cmds::get_system_stats,
             process_cmds::execute_command,
             process_cmds::cancel_command,
-            request_bluetooth_access,
             process_cmds::get_launch_args,
             process_cmds::get_app_binary_path,
             process_cmds::write_system_file,
@@ -274,14 +153,6 @@ pub fn run() {
                     if let Some(state) = app_handle.try_state::<embedded_server::EmbeddedLlmState>() {
                         embedded_server::terminate_embedded_llm_child(&state);
                     }
-                }
-                #[cfg(any(target_os = "macos", target_os = "ios"))]
-                tauri::RunEvent::Opened { urls } => {
-                    use tauri::Emitter;
-                    let url_strings: Vec<String> = urls.into_iter().map(|u| u.to_string()).collect();
-                    logger::log_info("URL", &format!("Opened via protocol handler: {:?}", url_strings));
-                    launch::remember_opened(app_handle, &url_strings);
-                    let _ = app_handle.emit("cero-url", url_strings);
                 }
                 _ => {}
             }

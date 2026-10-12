@@ -37,24 +37,10 @@ impl Drop for RunningGuard {
 }
 
 fn kill_group(pid: u32) {
-    #[cfg(unix)]
-    {
-        unsafe {
-            libc::killpg(pid as libc::pid_t, libc::SIGTERM);
-        }
-        tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-            unsafe {
-                libc::killpg(pid as libc::pid_t, libc::SIGKILL);
-            }
-        });
-    }
-    #[cfg(windows)]
-    {
-        let _ = std::process::Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .spawn();
-    }
+    // TODO(2.4): replace taskkill with a Job Object so the whole tree dies with no helper process
+    let _ = std::process::Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .spawn();
 }
 
 #[tauri::command]
@@ -227,17 +213,9 @@ where
     }
 }
 
-/// Kill the command and everything it started. The child runs in its own process group
-/// (pgid == pid), so `killpg` also reaches grandchildren such as the `find` under `sh -c`.
-async fn kill_process_tree(child: &mut tokio::process::Child, pid: Option<u32>) {
-    #[cfg(unix)]
-    if let Some(pid) = pid {
-        unsafe {
-            libc::killpg(pid as libc::pid_t, libc::SIGKILL);
-        }
-    }
-    #[cfg(not(unix))]
-    let _ = pid;
+/// Kill the command. TODO(2.4): kill the whole tree through a Job Object; until then only the
+/// direct child dies, so grandchildren can outlive a timeout.
+async fn kill_process_tree(child: &mut tokio::process::Child, _pid: Option<u32>) {
     let _ = child.kill().await;
 }
 
@@ -260,10 +238,7 @@ pub async fn run_command(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    #[cfg(unix)]
-    process.process_group(0);
-    // No console window flashing up for every command on Windows
-    #[cfg(windows)]
+    // No console window flashing up for every command
     process.creation_flags(crate::embedded_server::CREATE_NO_WINDOW);
     if let Some(directory) = resolve_working_dir(cwd) {
         process.current_dir(directory);
@@ -395,20 +370,10 @@ fn cero_dir() -> Option<std::path::PathBuf> {
         .map(|home| std::path::PathBuf::from(home).join(".cero"))
 }
 
-/// Make ~/.cero readable by its owner only. It holds the audit log, session transcripts and
-/// learning data; a folder that is world-readable would expose them on machines whose home folders
-/// are open to other users. Everything inside is protected by this folder's permissions.
-pub fn ensure_private_data_dir() {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Some(dir) = cero_dir() {
-            if std::fs::create_dir_all(&dir).is_ok() {
-                let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
-            }
-        }
-    }
-}
+/// ~/.cero holds the audit log, session transcripts and learning data.
+/// TODO(2.9): restrict the folder to its owner with an ACL. Until then it inherits the permissions
+/// of the user profile, which are already limited to the user and administrators.
+pub fn ensure_private_data_dir() {}
 
 /// Resolve a path relative to ~/.cero, refusing anything that escapes it.
 pub(crate) fn resolve_in_cero(relative: &str) -> Result<std::path::PathBuf, String> {
@@ -524,11 +489,6 @@ mod tests {
         assert_eq!(regular.to_str().unwrap(), "/tmp");
     }
 
-    #[cfg(unix)]
-    fn sh(script: &str) -> (String, Vec<String>) {
-        ("sh".to_string(), vec!["-c".to_string(), script.to_string()])
-    }
-
     #[test]
     fn cero_store_paths_cannot_escape() {
         assert!(resolve_in_cero("learning/deficits.jsonl").is_ok());
@@ -536,92 +496,12 @@ mod tests {
         assert!(resolve_in_cero("/etc/passwd").is_err());
         assert!(resolve_in_cero("learning/../../x").is_err());
         assert!(resolve_in_cero("").is_err());
-        #[cfg(windows)]
-        {
-            assert!(resolve_in_cero("\\Windows\\System32\\x").is_err());
-            assert!(resolve_in_cero("C:x").is_err());
-            assert!(resolve_in_cero("C:\\x").is_err());
-            assert!(resolve_in_cero("learning\\deficits.jsonl").is_ok());
-        }
+        assert!(resolve_in_cero("\\Windows\\System32\\x").is_err());
+        assert!(resolve_in_cero("C:x").is_err());
+        assert!(resolve_in_cero("C:\\x").is_err());
+        assert!(resolve_in_cero("learning\\deficits.jsonl").is_ok());
     }
 
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn captures_output_and_exit_code() {
-        let (cmd, args) = sh("echo hello; echo oops 1>&2; exit 3");
-        let out = run_command(cmd, args, Some("/tmp".into()), Some(5_000), None).await.unwrap();
-        assert_eq!(out.stdout.trim(), "hello");
-        assert_eq!(out.stderr.trim(), "oops");
-        assert_eq!(out.code, 3);
-        assert!(!out.timed_out);
-        assert!(!out.cancelled);
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn timeout_kills_the_whole_process_group() {
-        let started = std::time::Instant::now();
-        let (cmd, args) = sh("sleep 30 & sleep 30; wait");
-        let out = run_command(cmd, args, None, Some(300), None).await.unwrap();
-        assert!(out.timed_out);
-        assert_eq!(out.code, TIMEOUT_EXIT_CODE);
-        assert!(started.elapsed() < std::time::Duration::from_secs(5));
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn backgrounded_child_holding_stdout_does_not_block() {
-        // `sleep` inherits the stdout pipe; waiting for EOF would take 5 seconds.
-        let started = std::time::Instant::now();
-        let (cmd, args) = sh("sleep 5 & echo launched");
-        let out = run_command(cmd, args, None, None, None).await.unwrap();
-        assert_eq!(out.stdout.trim(), "launched");
-        assert_eq!(out.code, 0);
-        assert!(started.elapsed() < std::time::Duration::from_secs(2));
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn stdin_is_closed_so_prompts_do_not_hang() {
-        let (cmd, args) = sh("read answer; echo \"got:$answer\"");
-        let out = run_command(cmd, args, None, Some(5_000), None).await.unwrap();
-        assert!(!out.timed_out);
-        assert_eq!(out.stdout.trim(), "got:");
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn cancel_command_stops_running_process() {
-        let _started = std::time::Instant::now();
-        let (cmd, args) = sh("sleep 30");
-        let run_id = "test-cancel-run-1".to_string();
-        let run_id_clone = run_id.clone();
-        let handle = tokio::spawn(async move {
-            run_command(cmd, args, None, None, Some(run_id_clone)).await.unwrap()
-        });
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        let cancelled = cancel_command(run_id.clone()).await.unwrap();
-        assert!(cancelled);
-        let out = handle.await.unwrap();
-        assert!(out.cancelled);
-        assert_eq!(out.code, 130);
-        assert!(!RUNNING.get_or_init(Default::default).lock().unwrap().contains_key(&run_id));
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn cancel_command_kills_grandchildren() {
-        let (cmd, args) = sh("sh -c 'sleep 30 & wait'");
-        let run_id = "test-cancel-run-2".to_string();
-        let run_id_clone = run_id.clone();
-        let handle = tokio::spawn(async move {
-            run_command(cmd, args, None, None, Some(run_id_clone)).await.unwrap()
-        });
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        let cancelled = cancel_command(run_id).await.unwrap();
-        assert!(cancelled);
-        let out = handle.await.unwrap();
-        assert!(out.cancelled);
-        assert_eq!(out.code, 130);
-    }
+    // TODO(2.4): port the run_command tests (output and exit code, timeout, cancel, closed stdin)
+    // to cmd.exe and PowerShell, including a grandchild process that must die with its parent.
 }

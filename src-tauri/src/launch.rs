@@ -3,18 +3,14 @@
 //! The main window starts hidden (tauri.conf.json). A normal launch shows it right away. A launch
 //! that opens a .flow file leaves it hidden and lets the page decide: a flow that only opens apps
 //! and links runs without ever showing the terminal, one that installs or runs commands shows it.
-//! Files macOS hands over (Finder "Open") are kept until the page asks for them, so a file opened
-//! before the page has loaded is not lost.
+//! Files handed over by a second launch (double-clicking a .flow file while Cero runs) are kept until
+//! the page asks for them, so a file opened before the page has loaded is not lost.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
 
 #[derive(Default)]
 pub struct OpenedFiles(pub Mutex<Vec<String>>);
-
-/// Set when a .flow file was opened before the window was shown
-static FLOW_OPENED: AtomicBool = AtomicBool::new(false);
 
 pub fn is_flow_path(p: &str) -> bool {
     let lower = p.to_lowercase();
@@ -32,11 +28,8 @@ pub fn show_main(app: &AppHandle) {
     }
 }
 
-/// Files handed to the running app by the OS (macOS "Open"); remembered for the page.
+/// Files handed to the running app by a second launch; remembered for the page.
 pub fn remember_opened(app: &AppHandle, urls: &[String]) {
-    if urls.iter().any(|u| is_flow_path(u)) {
-        FLOW_OPENED.store(true, Ordering::SeqCst);
-    }
     if let Some(state) = app.try_state::<OpenedFiles>() {
         state.0.lock().unwrap().extend(urls.iter().cloned());
     }
@@ -47,18 +40,6 @@ pub fn show_unless_flow(app: &AppHandle) {
     if launched_with_flow() {
         return;
     }
-    // macOS delivers "open this file" just after launch: wait briefly for it before showing
-    #[cfg(target_os = "macos")]
-    {
-        let handle = app.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(700));
-            if !FLOW_OPENED.load(Ordering::SeqCst) {
-                show_main(&handle);
-            }
-        });
-    }
-    #[cfg(not(target_os = "macos"))]
     show_main(app);
 }
 
@@ -80,7 +61,6 @@ pub fn is_main_window_visible(app: AppHandle) -> bool {
 
 fn resolve_file_path(arg: &str) -> Option<std::path::PathBuf> {
     if let Some(stripped) = arg.strip_prefix("file://") {
-        #[cfg(windows)]
         let stripped = stripped.trim_start_matches('/');
         let path = std::path::PathBuf::from(stripped);
         if path.is_file() {

@@ -1,9 +1,9 @@
 #![allow(dead_code)]
-//! Secrets (API keys): the operating system keychain where there is one, a private file where there is not.
+//! Secrets (API keys) live in Windows Credential Manager. Every command returns an error rather than
+//! pretending: the caller keeps the old copy of a key until a write has been read back.
 //!
-//! macOS: Keychain. Windows: Credential Manager. Linux: `~/.cero/secrets.json` with mode 0600, because
-//! the Secret Service needs system libraries a bare window manager may not have. Every command returns an
-//! error rather than pretending: the caller keeps the old copy of a key until a write has been read back.
+//! The JSON file helpers below are not used at run time. TODO(2.7): decide whether a private file
+//! (with an ACL) is kept as a fallback for machines without Credential Manager, or removed.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -30,11 +30,6 @@ fn write_map(path: &PathBuf, map: &BTreeMap<String, String>) -> Result<(), Strin
     // write next to the target and rename, so a crash never leaves half a file
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
-    }
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
@@ -42,7 +37,7 @@ fn entry_name(service: &str, key: &str) -> String {
     format!("{service}:{key}")
 }
 
-// ---- file backend (Linux, and the unit tests) ---------------------------------------------------
+// ---- file helpers (unit tests only for now) -----------------------------------------------------
 
 pub fn file_set(path: &PathBuf, service: &str, key: &str, value: &str) -> Result<(), String> {
     let mut map = read_map(path);
@@ -62,9 +57,8 @@ pub fn file_delete(path: &PathBuf, service: &str, key: &str) -> Result<(), Strin
     Ok(())
 }
 
-// ---- keychain backend (macOS, Windows) ----------------------------------------------------------
+// ---- Credential Manager backend -----------------------------------------------------------------
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
 mod native {
     pub fn set(service: &str, key: &str, value: &str) -> Result<(), String> {
         keyring::Entry::new(service, key).map_err(|e| e.to_string())?.set_password(value).map_err(|e| e.to_string())
@@ -87,43 +81,22 @@ mod native {
 /// "keychain" or "file": what Settings tells the person
 #[tauri::command]
 pub fn secret_backend() -> String {
-    if cfg!(any(target_os = "macos", target_os = "windows")) { "keychain".into() } else { "file".into() }
+    "keychain".into()
 }
 
 #[tauri::command]
 pub fn secret_set(service: String, key: String, value: String) -> Result<(), String> {
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    {
-        return native::set(&service, &key, &value);
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        file_set(&secrets_file()?, &service, &key, &value)
-    }
+    native::set(&service, &key, &value)
 }
 
 #[tauri::command]
 pub fn secret_get(service: String, key: String) -> Result<Option<String>, String> {
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    {
-        return native::get(&service, &key);
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        Ok(file_get(&secrets_file()?, &service, &key))
-    }
+    native::get(&service, &key)
 }
 
 #[tauri::command]
 pub fn secret_delete(service: String, key: String) -> Result<(), String> {
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    {
-        return native::delete(&service, &key);
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        file_delete(&secrets_file()?, &service, &key)
-    }
+    native::delete(&service, &key)
 }
 
 #[cfg(test)]
@@ -146,17 +119,6 @@ mod tests {
         file_delete(&f, "cloud_api", "openai").unwrap();
         assert_eq!(file_get(&f, "cloud_api", "openai"), None);
         assert_eq!(file_get(&f, "cloud_api", "groq").as_deref(), Some("gsk-test"));
-        let _ = std::fs::remove_dir_all(f.parent().unwrap());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn file_is_private_to_the_owner() {
-        use std::os::unix::fs::PermissionsExt;
-        let f = temp_file("mode");
-        file_set(&f, "s", "k", "v").unwrap();
-        let mode = std::fs::metadata(&f).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600);
         let _ = std::fs::remove_dir_all(f.parent().unwrap());
     }
 

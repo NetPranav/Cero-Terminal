@@ -1,4 +1,4 @@
-//! Continuous watching of log files and systemd units for the error watcher (`>watch`).
+//! Continuous watching of log files and Windows services for the error watcher (`>watch`).
 //!
 //! Files are tailed by polling their size once a second: cheap for a handful of files, works on
 //! every filesystem (including network mounts where inotify does not), and handles rotation and
@@ -75,13 +75,8 @@ pub fn split_lines(partial: &mut Vec<u8>, chunk: &[u8]) -> Vec<String> {
     lines
 }
 
-#[cfg(unix)]
-fn file_identity(meta: &std::fs::Metadata) -> u64 {
-    use std::os::unix::fs::MetadataExt;
-    meta.ino()
-}
-
-#[cfg(not(unix))]
+/// TODO(2.8): return the NTFS file index (`GetFileInformationByHandle`), so a rotated log is noticed.
+/// Until then every file has identity 0 and only truncation restarts the read.
 fn file_identity(_meta: &std::fs::Metadata) -> u64 {
     0
 }
@@ -138,6 +133,8 @@ async fn tail_file(app: AppHandle, id: u64, path: PathBuf, from_start: bool) {
     }
 }
 
+// TODO(2.8): reused to stream Event Log and service output; unused until then.
+#[allow(dead_code)]
 async fn stream_command(app: AppHandle, id: u64, program: String, args: Vec<String>) {
     use tokio::io::AsyncBufReadExt;
     let mut command = tokio::process::Command::new(&program);
@@ -147,7 +144,6 @@ async fn stream_command(app: AppHandle, id: u64, program: String, args: Vec<Stri
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .kill_on_drop(true);
-    #[cfg(windows)]
     command.creation_flags(crate::embedded_server::CREATE_NO_WINDOW);
     let child = command.spawn();
     let Ok(mut child) = child else {
@@ -179,11 +175,6 @@ async fn stream_command(app: AppHandle, id: u64, program: String, args: Vec<Stri
     let _ = child.wait().await;
 }
 
-/// systemd unit names: letters, digits and :_.@- only (never passed through a shell anyway)
-pub fn is_valid_unit_name(unit: &str) -> bool {
-    !unit.is_empty() && unit.len() <= 256 && unit.chars().all(|c| c.is_ascii_alphanumeric() || ":_.@-".contains(c))
-}
-
 fn register(state: &WatchState, kind: &str, target: String, spawn: impl FnOnce(u64) -> tauri::async_runtime::JoinHandle<()>) -> Result<u64, String> {
     let id = state.next_id.fetch_add(1, Ordering::SeqCst) + 1;
     let task = spawn(id);
@@ -205,15 +196,10 @@ pub fn watch_file_start(app: AppHandle, state: tauri::State<'_, WatchState>, pat
 }
 
 #[tauri::command]
+#[allow(unused_variables)] // parameter names are the frontend's argument names; keep them
 pub fn watch_service_start(app: AppHandle, state: tauri::State<'_, WatchState>, unit: String, user: Option<bool>) -> Result<u64, String> {
-    if !is_valid_unit_name(&unit) {
-        return Err(format!("Invalid systemd unit name: {}", unit));
-    }
-    let scope = if user.unwrap_or(false) { "--user-unit" } else { "-u" };
-    let args = vec![scope.to_string(), unit.clone(), "-f".into(), "-n".into(), "0".into(), "-o".into(), "cat".into(), "--no-pager".into()];
-    register(state.inner(), "service", unit, |id| {
-        tauri::async_runtime::spawn(stream_command(app, id, "journalctl".to_string(), args))
-    })
+    // TODO(2.8): watch a Windows service through the Event Log
+    Err("Service watching is not implemented on Windows yet".to_string())
 }
 
 #[tauri::command]
@@ -261,16 +247,8 @@ mod tests {
     fn restarts_after_rotation_or_truncation_and_skips_ahead_when_far_behind() {
         assert_eq!(next_read_offset(500, 100, true), 100);
         assert_eq!(next_read_offset(50, 100, true), 0); // truncated
-        assert_eq!(next_read_offset(500, 100, false), 0); // rotated (new inode)
+        assert_eq!(next_read_offset(500, 100, false), 0); // rotated (new file identity)
         let huge = 10 * MAX_READ_PER_TICK;
         assert_eq!(next_read_offset(huge, 0, true), huge - MAX_READ_PER_TICK);
-    }
-
-    #[test]
-    fn validates_unit_names() {
-        assert!(is_valid_unit_name("nginx.service"));
-        assert!(is_valid_unit_name("getty@tty1.service"));
-        assert!(!is_valid_unit_name("nginx; rm -rf ~"));
-        assert!(!is_valid_unit_name(""));
     }
 }
