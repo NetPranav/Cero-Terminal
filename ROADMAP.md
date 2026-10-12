@@ -6,7 +6,10 @@ stays the reference implementation and never holds Windows-only work. Progress i
 [COMPLETION.md](COMPLETION.md).
 
 - **Target:** Windows 10 22H2 and Windows 11 (23H2, 24H2), x64. ARM64 comes later (Phase 10).
-- **Reference code:** `linux-v2-update` (Cero 2.2.3). It was merged into `windows` on 2026-10-12 (commit `0342a4f`).
+- **Reference code:** `linux-v2-update` (Cero 2.2.3). It was merged into `windows` once, on 2026-10-12 (commit
+  `0342a4f`). From then on, Linux changes are **ported** to Windows, not merged (1.5).
+- **The `windows` branch holds only Windows code.** Linux- and macOS-specific code is removed from it (1.4). The Linux
+  code stays on `linux-v2-update` as the reference.
 - **Output:** a `.msi` installer and a per-user setup `.exe` (NSIS), published as GitHub release `v<version>-windows`.
 
 > **Merging is not porting.** After the merge, the `windows` branch has every Linux feature and fix, but many of them
@@ -58,16 +61,16 @@ them instead of starting from zero.
 ## Guiding principles
 
 1. **`linux-v2-update` is the reference, `windows` is the product.** Windows work happens only on the `windows` branch.
-   Fixes that are not specific to Windows (AI, workflows, tools, shared UI) are made on `linux-v2-update` first, then
-   reach `windows` through a regular merge (1.5). That keeps the two branches from drifting.
-2. **Add, do not replace.** On the `windows` branch, Windows behaviour is **added next to** the Linux and macOS code,
-   never written over it:
-   - in Rust, use `#[cfg(windows)]`;
-   - in TypeScript, use the platform check from 3.1;
-   - for configuration, use `src-tauri/tauri.windows.conf.json`, which Tauri merges over `tauri.conf.json` only on
-     Windows.
-   Deleting Linux code on this branch would make every future merge from Linux conflict. A bonus: OS-gated changes can
-   later be merged back into Linux, and the branches move closer together over time.
+   The Linux branch is read for reference, and its changes are ported to Windows by hand (1.5).
+2. **Windows code only.** The `windows` branch contains no Linux- or macOS-specific code: no `cfg(target_os =
+   "linux")` or `"macos"` blocks, no Linux/macOS drivers, packaging, CI jobs or docs. What stays:
+   - **OS-neutral code** (the AI agent, UI, workflows, tools, security engine), which is the larger part of the app;
+   - **Unix command knowledge that Windows needs.** Windows users run bash through Git Bash and WSL, and models often
+     write Unix commands. So the Unix patterns in the security rules (`rm -rf`, `sudo`) and in the command translator
+     (`CommandPortability.ts`) stay, because they protect and help Windows users.
+   **Cost of this rule:** the branch does not build or run on Linux any more. Rust is checked from Linux with
+   `cargo xwin` (0.3); it runs on Windows CI and on a Windows machine. The TypeScript tests still run on Linux, with the
+   platform set to Windows.
 3. **The tests come first.** Every behaviour change gets a failing Vitest spec or Rust test before the fix (`tdd-guide`).
    Windows-only Rust tests use `#[cfg(windows)]` and run on the `windows-latest` CI runner.
 4. **Nothing is "verified" until it has run on a real Windows machine.** CI builds prove that the code compiles. Only
@@ -85,27 +88,28 @@ Projects/
 └── Cero-windows/    git worktree on windows            (Windows product; this roadmap)
 ```
 
-Both folders are checkouts of **one** repository (`git worktree list`), so they share the history and merging between
-them is ordinary git. Created with: `git worktree add ../Cero-windows windows`.
+Both folders are checkouts of **one** repository (`git worktree list`), so they share the history, and OS-neutral
+Linux commits can be cherry-picked into `windows`. Created with: `git worktree add ../Cero-windows windows`.
 
 | Branch or tag | Role |
 |---|---|
 | `linux-v2-update` | Linux line and the reference. Shared fixes start here. |
-| `windows` | Windows development. Receives `linux-v2-update` through regular merges. |
+| `windows` | Windows development, Windows code only. Receives Linux changes by porting (1.5), not by merging. |
 | `release/windows` | What CI builds and publishes as `v<version>-windows`. Updated by merging `windows` into it. |
 | `windows-legacy` (tag) | The early port, as it was before the 2026-10-12 merge. Reference only. |
+
+`docs/windows/LINUX_PORT_LOG.md` records the last `linux-v2-update` commit that has been reviewed for porting.
 
 New Windows-only files on the `windows` branch:
 
 ```
 ROADMAP.md  COMPLETION.md              (this plan and its progress)
-src-tauri/tauri.windows.conf.json      (Windows config, merged over tauri.conf.json by Tauri on Windows)
 src-tauri/src/job.rs  ...              (new #[cfg(windows)] modules)
 src-tauri/resources/shell-integration/ (cero.ps1, cero.cmd)
 src-tauri/windows/                     (NSIS hooks, WiX fragments, installer bitmaps; already exists)
 src/platform/os.ts  src/platform/paths.ts
 scripts/windows/                       (check-triple.ps1, helper scripts)
-docs/windows/                          (README, WINDOWS_TEST_REPORT, FEATURE_MATRIX, ...)
+docs/windows/                          (README, LINUX_PORT_LOG, WINDOWS_TEST_REPORT, FEATURE_MATRIX, ...)
 ```
 
 ---
@@ -114,7 +118,7 @@ docs/windows/                          (README, WINDOWS_TEST_REPORT, FEATURE_MAT
 
 | Phase | Recommended model | Reason |
 |---|---|---|
-| 0, 1 | Sonnet 5.5 (Opus 5.5 for large merges from Linux with many conflicts) | Mostly setup and git work. |
+| 0, 1 | Sonnet 5.5 for setup; **Opus 5.5 for 1.4** (removing Linux code without breaking Windows paths) | 1.4 touches about 80 files, and a wrong removal breaks a Windows path. |
 | 2 | Opus 5.5 (Fable 5.1 for 2.1 and 2.4 if bugs persist) | ConPTY, Job Objects, and the Win32 APIs carry the highest risk of subtle bugs. |
 | 3 | Opus 5.5 | Shell integration and prompt parsing are subtle. The parsers are mostly patterns, which Sonnet can do. |
 | 4 | Opus 5.5 for prompts and agent; **Fable 5.1 for 4.4 (security)** | A wrong security pattern can delete a user's files. |
@@ -132,12 +136,13 @@ docs/windows/                          (README, WINDOWS_TEST_REPORT, FEATURE_MAT
 
 ### 0.1 Branch strategy
 - All Windows work happens on the existing `windows` branch, checked out as the worktree `../Cero-windows`.
-- `linux-v2-update` never receives Windows-only work. It only gets fixes that Linux wants too, and those flow on to
-  `windows` by merge.
+- `linux-v2-update` never receives Windows-only work. `windows` never keeps Linux-only code. Linux changes reach
+  `windows` by porting (1.5).
 - The early port is kept as the tag `windows-legacy`.
 - When Windows is ready, `windows` is merged into `release/windows` (Phase 7.3).
 - **Done when:** the worktree exists, `windows-legacy` is tagged, and this strategy is recorded here ("Branches and
   folders"). Pushing the branch and the tag to `origin` is part of 1.3.
+- **Required before 1.4:** `cargo xwin` from 0.3, because after 1.4 the branch no longer compiles for Linux.
 
 ### 0.2 Audit of existing Windows work (done while writing this roadmap)
 - Read `origin/windows`: `docs/WINDOWS_PORT_TRACKER.md`, `pty_windows.rs`, and commits `1301171`, `60b071e` and
@@ -166,7 +171,7 @@ docs/windows/                          (README, WINDOWS_TEST_REPORT, FEATURE_MAT
 ### 0.4 Green baseline
 - Fix the test `src/presentation/escapeKey.test.ts` > "stops listening once removed (Settings closed)". It fails on
   all three OSes in CI run `37209730598` but passes locally, which points to a timing or environment difference in CI.
-  The test is shared code, so fix it on `linux-v2-update`, then merge into `windows`.
+  The test is OS-neutral, so fix it on `linux-v2-update` and cherry-pick it into `windows`.
 - Run `npm run check:triple`. The result must be 100% green.
 - **Done when:** CI is green on both `linux-v2-update` and `windows`, with a commit
   `fix(test): escape listener is removed when Settings closes`.
@@ -200,55 +205,93 @@ repeatable way to receive future Linux changes. Nothing in this phase makes feat
   share the Rust build folder with the Linux checkout (`CARGO_TARGET_DIR=../Cero/src-tauri/target`).
 - **Done when:** `git worktree list` shows both folders, and `npm test` runs in `../Cero-windows`.
 
-### 1.3 Merge `linux-v2-update` into `windows`
+### 1.3 Merge `linux-v2-update` into `windows` (one time only)
 - `git merge --no-ff linux-v2-update` inside the worktree.
-- Conflict rule for this first merge: take the Linux version. It is newer and already contains the Windows handling
-  the early port added (the PowerShell default shell, the macOS-only `PATH` additions, the macOS-only `RunEvent::Opened`).
+- Conflict rule for this merge: take the Linux version. It is newer and already contains the Windows handling the
+  early port added (the PowerShell default shell, the macOS-only `PATH` additions, the macOS-only `RunEvent::Opened`).
 - Review every file that still differs from `linux-v2-update` after the merge, and keep only correct, tested work.
 - Verify: `npm test`, `npm run build`, `cargo check`.
-- Push `windows` and the `windows-legacy` tag. Check that `ci.yml` runs on the push, including the `windows-latest`
-  jobs.
-- **Status (2026-10-12):** merged locally as `0342a4f`. 19 conflicts were resolved to Linux. `pty_windows.rs`, the
-  old SDK driver changes and three old docs were dropped (reasons are in the commit message). Tests (2600 passed),
-  build and `cargo check` passed on Linux. **Not pushed yet.**
+- Push `windows` and the `windows-legacy` tag. Check that `ci.yml` runs on the push.
+- **Status (2026-10-12):** merged as `0342a4f`. 19 conflicts were resolved to Linux. `pty_windows.rs`, the old SDK
+  driver changes and three old docs were dropped (reasons are in the commit message). Tests (2600 passed), build and
+  `cargo check` passed on Linux. Pushed to `origin/windows` (`4631b4e..1ed7fe6`).
+- This is the **only** merge from Linux. After 1.4, merging `linux-v2-update` would bring the removed code back.
 - **Done when:** the merge is on `origin/windows`, and CI has run on it.
 
-### 1.4 Windows configuration overlay and scripts (additive)
-- `src-tauri/tauri.windows.conf.json` (Tauri merges it over `tauri.conf.json` on Windows only):
-  - window: `"decorations": false`, `"shadow": true` (today this is done at runtime in `lib.rs`; doing it in config
-    avoids a flash of the native frame);
-  - `bundle.targets: ["msi", "nsis"]`, plus the NSIS and WiX settings from Phase 6.
-  - **Keep `identifier: "org.cero.terminal"`** (it stays in the shared file), so that users of 2.2.0 upgrade in place
-    and keep their Credential Manager keys and WebView2 storage.
-- `package.json`: add `bundle:windows` (`tauri build --bundles msi,nsis`), `bundle:msi` and `bundle:nsis`. Leave the
-  Linux and macOS scripts in place.
-- `src-tauri/Cargo.toml`: under `[target.'cfg(windows)'.dependencies]`, add `windows-sys` (features
-  `Win32_Foundation`, `Win32_System_JobObjects`, `Win32_System_Threading`, `Win32_Storage_FileSystem`,
-  `Win32_System_Console`, `Win32_NetworkManagement_IpHelper`) and `winreg`.
-- `scripts/windows/check-triple.ps1`: runs the same three checks as `npm run check:triple` and stops at the first
-  failure, for PowerShell users.
-- **Done when:** `npm run check:triple` passes on Linux, `cargo xwin check` passes, and `npm run tauri dev` on Windows
-  opens a window without the native frame.
+### 1.4 Make the branch Windows-only (remove Linux and macOS code)
+Do this in the order below, one commit per step, and check after each step. On Linux the checks are `npm test`,
+`npm run build` and `cargo xwin check --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml`. Then
+push, and let the Windows CI run.
 
-### 1.5 Keeping up with Linux
-- **Routine:** after every Linux release, and before every Windows release, run
-  `git -C ../Cero-windows merge linux-v2-update`.
-- **Conflict rules:**
-  - in shared code, take the Linux change, then re-apply the Windows addition beside it;
-  - in Windows-only files (the list in "Branches and folders"), keep the Windows version.
-- After each merge, run `npm run check:triple`, and commit as
-  `merge: linux-v2-update into windows (<linux version>)`.
-- Fixes that are not Windows-specific, found while working on Windows, go to `linux-v2-update` first (a small commit
-  there), then come back with the next merge. Do not fix shared bugs only on `windows`.
-- `main` (macOS) reaches `windows` through `linux-v2-update`, which already merges `main` from time to time.
-- **Done when:** this routine is written in `docs/windows/README.md`, and one more merge from Linux has been done with
-  it.
+1. **Rust (`src-tauri/src`):** remove every `#[cfg(target_os = "linux")]`, `#[cfg(target_os = "macos")]` and
+   `#[cfg(unix)]` item and block, and turn `#[cfg(windows)]` code into plain code. Remove the Linux-only modules and
+   functions: the `.desktop`/MIME parts of `file_association.rs`, `/proc` `process_cwd`, `prctl`, `killpg`, the `lsof`
+   orphan reaper (replaced in 2.5), `journalctl` watching (replaced in 2.8), the macOS menu and Bluetooth permission
+   in `lib.rs`, and Unix-only tests. Where a Windows version does not exist yet, leave a Windows stub that returns a
+   clear "not implemented on Windows yet" error and a `TODO(2.x)` naming the subphase that implements it.
+2. **Rust configuration:** in `Cargo.toml`, remove `objc`, the macOS `keyring` entry and `libc`; move the Windows
+   dependencies to the normal `[dependencies]`; add `windows-sys` (features `Win32_Foundation`,
+   `Win32_System_JobObjects`, `Win32_System_Threading`, `Win32_Storage_FileSystem`, `Win32_System_Console`,
+   `Win32_NetworkManagement_IpHelper`) and `winreg`. Delete `src-tauri/Info.plist` and `icons/icon.icns`.
+3. **`tauri.conf.json`:** remove the `linux` and `macOS` bundle sections, `titleBarStyle`, `hiddenTitle` and
+   `trafficLightPosition`; set `"decorations": false`, `"shadow": true` and `bundle.targets: ["msi", "nsis"]`.
+   **Keep `identifier: "org.cero.terminal"`**, so that users of 2.2.0 upgrade in place and keep their Credential
+   Manager keys and WebView2 storage.
+4. **TypeScript (`src/`):** about 80 files mention Linux or macOS. For each one:
+   - remove the Linux and macOS branches of platform checks, keeping the Windows branch;
+   - remove the macOS and Linux drivers and parsers (`MacSystemParsers.ts`, `blueutil`, `networksetup`, `osascript`,
+     `bluetoothctl`, `nmcli`, `systemctl`, `apt`/`pacman`);
+   - remove Linux-only features: the ROS environment (`src/domain/ros/`), the Hyprland and dotfile "rice" helpers,
+     and the systemd service watching (replaced in 2.8);
+   - **keep** the Unix command patterns in `src/domain/security/` and `CommandPortability.ts` (see principle 2);
+   - in the Vitest setup, make the platform default to `windows`, and update or delete the tests that assert Linux or
+     macOS behaviour.
+5. **Tools (`tools/*/tool.json` and knowledge files):** remove the `linux` and `macos` entries from
+   `supportedPlatforms`, and remove the Linux- and macOS-only examples. Tools that only make sense on Linux or macOS
+   are removed and listed in the feature matrix (1.6).
+6. **Packaging and scripts:** delete `packaging/` (arch, desktop, flatpak, linux, snap), `src-tauri/gen/` if it is
+   tracked, and the Linux/macOS scripts (`scripts/build_all_packages.sh`, `scripts/verify_distro_compatibility.ts`,
+   `scripts/stress/run.sh`, `scripts/release.sh`, `scripts/sync-shared.*`, `scripts/train_cero_mlx.py`). In
+   `package.json`, remove `bundle:linux`, `bundle:deb`, `bundle:rpm`, `bundle:appimage`, `bundle:mac`, `bundle:dmg`
+   and `stress`, and add `bundle:windows` (`tauri build --bundles msi,nsis`), `bundle:msi` and `bundle:nsis`. Add
+   `scripts/windows/check-triple.ps1`.
+7. **CI:** in `ci.yml`, run only `windows-latest`, plus a Linux job that runs `cargo xwin check` and `npm test`. In
+   `release.yml` and `build-installers.yml`, keep only the Windows jobs. Remove `windows` from `sync-shared.yml`.
+8. **Docs:** delete the Linux- and macOS-only docs (`LINUX_TEST_REPORT.md`, `docs/releases/linux.md`,
+   `docs/releases/macos.md`, Linux sections of `TROUBLESHOOTING`, `USER_GUIDE` and `KEYBOARD_SHORTCUTS`), and rewrite
+   `README.md` for Windows.
+9. **Final check:** `git grep -nE 'target_os = "(linux|macos)"|cfg\(unix\)|isLinux|isMac|darwin'` returns nothing,
+   apart from the Unix command patterns kept on purpose (list them in the commit message).
+
+- **Done when:** all nine steps are committed, `cargo xwin check` and `npm test` pass on Linux, and the Windows CI
+  (`cargo test`, `npm test`, `npm run build`) is green.
+
+### 1.5 Porting Linux changes to Windows
+`windows` no longer merges `linux-v2-update`. Instead, Linux changes are reviewed and ported:
+
+1. List what is new on Linux since the last review:
+   `git log --oneline <last reviewed>..linux-v2-update`, where the last reviewed commit is in
+   `docs/windows/LINUX_PORT_LOG.md`.
+2. For each commit, decide and record one of:
+   - **cherry-pick:** the change is OS-neutral (AI, UI, workflows, tools, tests). Run `git cherry-pick -x <commit>`,
+     which records the Linux commit in the message. Remove any Linux-only parts it brings in before committing;
+   - **port:** the change fixes Linux-specific code. Write the Windows equivalent, if Windows has the same problem,
+     with a test, and reference the Linux commit in the message;
+   - **skip:** Linux only, nothing to do on Windows (for example a `.deb` packaging fix).
+3. Run `npm run check:triple` (with `cargo xwin` on Linux), and update `LINUX_PORT_LOG.md` with the new last-reviewed
+   commit and the decision for each commit.
+
+- **When:** after every Linux release, and always before a Windows release.
+- Fixes for OS-neutral bugs found while working on Windows go to `linux-v2-update` first, then come back by
+  cherry-pick, so the two lines do not fork on shared code.
+- **Done when:** `docs/windows/LINUX_PORT_LOG.md` exists, starting from `77fd178` (the commit merged in 1.3), and one
+  real review has been done with this routine.
 
 ### 1.6 Feature parity matrix
 - Create `docs/windows/FEATURE_MATRIX.md`, listing every user-facing feature from `docs/FEATURES.md` with these
-  columns: Linux status, Windows plan (same / adapted / not available), phase, and verified-on-Windows (yes / no).
-- Features that cannot work on Windows (for example the ROS environment and the Hyprland "rice" helpers) are hidden at
-  runtime on Windows, or show a clear "not available on Windows" message. They are never deleted from the branch.
+  columns: Linux status, Windows status (same / adapted / removed), phase, and verified-on-Windows (yes / no).
+- Every feature removed in 1.4 (ROS, rice helpers, systemd watching, Linux-only tools) is listed as "removed", with the
+  reason and, where it makes sense, a Windows replacement idea.
 - **Done when:** every feature in `docs/FEATURES.md` has a row.
 
 ---
@@ -393,8 +436,8 @@ Linux assumptions.
 - **Data location decision:** keep `%USERPROFILE%\.cero` (as 2.2.0 does, and the same layout as Linux), or move to
   `%APPDATA%\Cero`. **Recommendation:** keep `.cero`, for parity and upgrades. Record the decision in
   `docs/windows/README.md`.
-- `lib.rs`: leave the macOS menu block and `request_bluetooth_permission` in place (they are `cfg`-gated). Make
-  `set_decorations(false)` come from `tauri.windows.conf.json` (1.4). Add `#![windows_subsystem = "windows"]` in
+- `lib.rs`: the macOS menu and `request_bluetooth_permission` are gone after 1.4. Remove the runtime
+  `set_decorations(false)` call, which is in `tauri.conf.json` since 1.4. Add `#![windows_subsystem = "windows"]` in
   `main.rs` if it is not there already, so that no console
   window appears in release builds.
 
@@ -424,8 +467,8 @@ Linux assumptions.
   (`$PROFILE` resolved by running `pwsh -NoProfile -Command '$PROFILE'`, which handles OneDrive-redirected
   Documents), its history file and its quoting rules.
 - `detectLoginShell` uses `list_available_shells` (2.3).
-- `src/domain/rice/DotfileManager.ts`: on Windows, offer the PowerShell profile and the Windows Terminal
-  `settings.json` path, or hide the feature (according to the feature matrix).
+- The Linux dotfile ("rice") helpers are removed in 1.4. A Windows version (editing the PowerShell profile and the
+  Windows Terminal `settings.json`) is listed in the feature matrix as a later idea.
 - **Done when:** unit tests cover each profile's prompt pattern and quoting.
 
 ### 3.3 Shell integration scripts (`src-tauri/resources/shell-integration/`)
@@ -515,7 +558,7 @@ its test.
 **Goal:** plain-language requests produce correct PowerShell, run safely, and are judged by Windows-aware security rules.
 
 ### 4.1 System prompt and context
-- `SystemPrompt.ts` and `PromptBuilder.ts` (shared code: add the Windows branch behind the `os` check, so Linux behaviour is unchanged and the change can later go back to Linux): when
+- `SystemPrompt.ts` and `PromptBuilder.ts` : when
   `os = windows`, tell the model the shell is PowerShell (5.1 or 7, with the version), that `&&` exists only in
   PowerShell 7, that paths use drive letters, and to prefer the cmdlets over Unix aliases (`ls` in PowerShell is
   `Get-ChildItem` and takes different flags).
@@ -549,7 +592,7 @@ its test.
 - **Done when:** a test table of at least 40 Unix-to-PowerShell cases passes.
 
 ### 4.4 Security engine for Windows (high priority)
-Files: `src/domain/security/` (shared code: add Windows rules next to the Unix rules, never in place of them), `SecurityEngine.ts`,
+Files: `src/domain/security/` (add the Windows rules; keep the Unix rules, which still guard Git Bash and WSL), `SecurityEngine.ts`,
 `ReadOnlyCommandPolicy.ts`, the policy engine and the guardian. **Write the failing tests first.**
 
 - **Destructive commands** (require consent):
@@ -591,7 +634,7 @@ Files: `src/domain/security/` (shared code: add Windows rules next to the Unix r
 - All 103 tools list `windows`, but their examples and knowledge are mostly Unix. For each tool, check that the
   Windows examples exist and are correct PowerShell. Write a checker script
   (`scripts/windows/check-tool-windows-examples.ts`) that fails when a tool lists `windows` without Windows examples.
-- Tool files are shared: add the Windows examples next to the Unix ones, and offer the fixes back to `linux-v2-update`.
+- After 1.4 the tools list only `windows`. Each one needs correct PowerShell examples.
 - **Done when:** the checker passes and the `ToolRegistry` tests pass.
 
 ### 4.6 Model reliability on Windows
@@ -639,8 +682,8 @@ Files: `src/domain/security/` (shared code: add Windows rules next to the Unix r
   - Alt+Shift+D splits;
   - F11 toggles full screen;
   - Ctrl+, opens Settings.
-- Gate every `metaKey` (Cmd) binding behind macOS in `App.tsx` and `TerminalView.tsx`, so Windows never needs the
-  Windows key for a Cero shortcut. Do not delete the macOS bindings.
+- Remove every `metaKey` (Cmd) binding left after 1.4 in `App.tsx` and `TerminalView.tsx`, so Windows never needs
+  the Windows key for a Cero shortcut.
 - AltGr is reported as Ctrl+Alt on Windows. Make sure AltGr characters (`@`, `{`, `\` on German and other layouts)
   reach the terminal and do not trigger shortcuts.
 - The Ctrl+C state with the queue and running requests (commit `313d14f`) must still work with copy-on-selection.
@@ -684,7 +727,7 @@ Files: `src/domain/security/` (shared code: add Windows rules next to the Unix r
 
 **Goal:** professional, upgrade-safe installers.
 
-### 6.1 Bundle configuration (`tauri.windows.conf.json`, `bundle.windows`)
+### 6.1 Bundle configuration (`tauri.conf.json` `bundle.windows`)
 - `webviewInstallMode`: `downloadBootstrapper` (small installer; WebView2 is present on Windows 11 and most up-to-date
   Windows 10 PCs). Offer an offline build with `offlineInstaller` later if users ask for it.
 - NSIS:
@@ -747,14 +790,12 @@ Files: `src/domain/security/` (shared code: add Windows rules next to the Unix r
 **Goal:** every push to `windows` is tested on Windows, and a release is one merge.
 
 ### 7.1 CI on the `windows` branch (`.github/workflows/ci.yml`)
-- `ci.yml` already runs on pushes and pull requests to `windows`, on Ubuntu, macOS and Windows. Changes:
-  - run `npm run build` on Windows too (today the type check and bundle step runs only on Linux);
+- `ci.yml` runs on pushes and pull requests to `windows`. After 1.4 it has a `windows-latest` job and a Linux
+  `cargo xwin check` job. Changes:
+  - run `npm run build` on Windows (before 1.4, the type check and bundle step ran only on Linux);
   - run `cargo test` (not only `cargo check`) on `windows-latest`, so the `#[cfg(windows)]` PTY, Job Object, registry
     and keyring tests run;
   - add `cargo clippy -- -D warnings` on `windows-latest`.
-- Optional: a Linux job that runs `cargo xwin check --target x86_64-pc-windows-msvc`, so Windows compile errors show
-  up on Linux pull requests too.
-- These edits are additive and useful for Linux as well, so offer them back to `linux-v2-update`.
 - **Done when:** a push to `windows` runs all jobs green, including `cargo test` on Windows.
 
 ### 7.2 Installer smoke test in CI
@@ -779,15 +820,13 @@ Files: `src/domain/security/` (shared code: add Windows rules next to the Unix r
 - **Done when:** a `workflow_dispatch` run on `release/windows`, saved as a draft release, produces both installers
   and the checksums.
 
-### 7.4 Automatic merges from Linux
-- `.github/workflows/sync-shared.yml` copies shared paths from `main` into `windows` (a path checkout, not a merge).
-  That fights the merge model, because it can overwrite Windows additions in shared files. Remove `windows` from its
-  targets.
-- Add `merge-linux-into-windows.yml`: on pushes to `linux-v2-update`, create a branch `sync/linux-to-windows` from
-  `windows`, run `git merge linux-v2-update`, and open a pull request into `windows`. If the merge conflicts, the pull
-  request says so and lists the files, so the merge is finished by hand (1.5). CI (7.1) tests the pull request on
-  Windows.
-- **Done when:** one real Linux change has come through as a pull request and been merged.
+### 7.4 Linux changes report
+- Remove `windows` from `.github/workflows/sync-shared.yml` (done in 1.4 step 7), because it copies Linux files into
+  the branch.
+- Add `linux-changes-report.yml`: once a week, and on pushes to `linux-v2-update`, list the commits after the
+  last-reviewed commit in `docs/windows/LINUX_PORT_LOG.md`, and open or update one GitHub issue, "Linux changes to
+  port", with the list and the files each commit touches. Porting itself stays manual (1.5).
+- **Done when:** the issue is created by the workflow and lists a real Linux commit.
 
 ---
 
@@ -855,8 +894,8 @@ Files: `src/domain/security/` (shared code: add Windows rules next to the Unix r
 - `docs/windows/`: `USER_GUIDE` Windows notes, `TROUBLESHOOTING` (SmartScreen, missing WebView2, execution policy,
   antivirus quarantine of the engine, PSReadLine conflicts, cmd limitations), `KEYBOARD_SHORTCUTS` and `FEATURE_MATRIX`.
 - Root `README.md`: a Windows download row that links to the latest `-windows` release.
-- `docs/CROSS_PLATFORM_SHARING.md`: describe the current model: `windows` receives `linux-v2-update` by merge, the
-  worktree setup, and that the old `sync-shared` path checkout is no longer used for Windows (7.4).
+- `docs/CROSS_PLATFORM_SHARING.md` (kept on `linux-v2-update`): describe the model: `windows` holds Windows code only
+  and receives Linux changes by porting (1.5), the worktree setup, and that `sync-shared` no longer targets Windows.
 
 ### 9.2 Release notes
 - `docs/releases/windows.md`, in the style of the 2.2.0 notes: downloads, what changed since 2.2.0 (all Linux
@@ -864,11 +903,10 @@ Files: `src/domain/security/` (shared code: add Windows rules next to the Unix r
   verified"** list.
 
 ### 9.3 Version and release
-- Bump the version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`. These files are shared
-  with Linux, so the version bump commit on `windows` will conflict with the next Linux bump. Resolve it to the higher
-  version, or keep the Windows version only in `tauri.windows.conf.json` if the two lines must have different numbers.
+- Bump the version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`. Windows has its own
+  version line now, so it does not need to match Linux.
   Suggested: `2.3.0` for the first release from the folder.
-- Merge `linux-v2-update` one last time (1.5). Run `npm run check:triple` on a Windows machine, then commit
+- Review and port the latest Linux changes (1.5). Run `npm run check:triple` on a Windows machine, then commit
   `chore(windows): Cero <version> for Windows`.
 - Merge into `release/windows` and push. Wait for CI to publish `v<version>-windows`.
 - **Final check:** download both installers from the GitHub release page onto a clean VM, check them against
@@ -901,7 +939,8 @@ Files: `src/domain/security/` (shared code: add Windows rules next to the Unix r
 
 | # | Risk or decision | Impact | Mitigation or recommendation |
 |---|---|---|---|
-| 1 | **The branches drift apart.** If merges from Linux are skipped, or Windows changes overwrite shared code, merges get harder every time. | High | The "add, do not replace" rule, regular merges (1.5), automatic merge pull requests (7.4), and "shared fixes go to Linux first". Merge `linux-v2-update` before every Windows release. |
+| 1 | **Linux fixes are missed.** Without merges, every Linux change must be ported by hand, and the OS-neutral code on the two branches can fork. | High | The port log and routine (1.5), the weekly report issue (7.4), "OS-neutral fixes go to Linux first", and a port review before every Windows release. |
+| 1b | **The branch no longer builds on Linux** after 1.4, and your main machine runs Linux. | Medium | `cargo xwin check` on Linux (0.3), Windows CI on every push, and a Windows VM for running the app. |
 | 2 | **No one has run Cero on Windows yet**, including 2.2.0. | High | Phase 8 is mandatory. Release a pre-release first (8.8). |
 | 3 | ConPTY and PSReadLine behave differently from a Unix PTY (repaints, exit detection). | High | Capture fixtures early (3.4). Run the Phase 2 and 3 tests on real Windows as soon as possible, not at the end. |
 | 4 | The security patterns miss a PowerShell bypass. | High | Write the tests first (4.4), get a Fable 5.1 and `security-reviewer` review, and recycle-bin deletes by default. |

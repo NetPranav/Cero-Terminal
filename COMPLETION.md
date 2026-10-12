@@ -18,7 +18,7 @@ This file tracks progress on [ROADMAP.md](ROADMAP.md). The numbers match the roa
 | Phase | Title | Subphases done | Status |
 |---|---|---|---|
 | 0 | Groundwork and baseline | 2 / 5 | In progress |
-| 1 | Bring the windows branch up to date | 1 / 6 | In progress |
+| 1 | Bring the windows branch up to date | 3 / 6 | In progress |
 | 2 | Rust backend for Windows | 0 / 10 | Not started |
 | 3 | Frontend platform layer | 0 / 8 | Not started |
 | 4 | AI agent and security for Windows | 0 / 7 | Not started |
@@ -28,7 +28,7 @@ This file tracks progress on [ROADMAP.md](ROADMAP.md). The numbers match the roa
 | 8 | Verification on real Windows | 0 / 8 | Not started |
 | 9 | Documentation and release | 0 / 3 | Not started |
 | 10 | After release (optional) | 0 / 4 | Not started |
-| **Total** | | **3 / 67** | |
+| **Total** | | **5 / 67** | |
 
 ---
 
@@ -48,11 +48,11 @@ This file tracks progress on [ROADMAP.md](ROADMAP.md). The numbers match the roa
 
 | Done | # | Subphase | Date | Commit | Notes |
 |---|---|---|---|---|---|
-| [ ] | 1.1 | Archive the early port (tag `windows-legacy`) | | | Tagged locally 2026-10-12; waiting for push |
+| [x] | 1.1 | Archive the early port (tag `windows-legacy`) | 2026-10-12 | | Tag pushed to origin |
 | [x] | 1.2 | Worktree for the Windows branch (`../Cero-windows`) | 2026-10-12 | | |
-| [ ] | 1.3 | Merge `linux-v2-update` into `windows` | | `0342a4f` | Merged and verified locally (2600 tests, build, cargo check); waiting for push and CI |
-| [ ] | 1.4 | Windows configuration overlay and scripts (`tauri.windows.conf.json`, `package.json`, `Cargo.toml`) | | | |
-| [ ] | 1.5 | Keeping up with Linux (merge routine documented and used once more) | | | |
+| [x] | 1.3 | Merge `linux-v2-update` into `windows` (one time only) | 2026-10-12 | `0342a4f` | Pushed (`4631b4e..1ed7fe6`); 2600 tests, build, cargo check passed on Linux; CI result to be checked |
+| [ ] | 1.4 | Make the branch Windows-only (remove Linux and macOS code, 9 steps) | | | Needs `cargo xwin` (0.3) first |
+| [ ] | 1.5 | Porting Linux changes (`LINUX_PORT_LOG.md`, cherry-pick / port / skip routine) | | | |
 | [ ] | 1.6 | Feature parity matrix | | | |
 
 ## Phase 2: Rust backend for Windows
@@ -130,7 +130,7 @@ This file tracks progress on [ROADMAP.md](ROADMAP.md). The numbers match the roa
 | [ ] | 7.1 | CI on the `windows` branch (build and `cargo test` on Windows) | | | |
 | [ ] | 7.2 | Installer smoke test in CI | | | |
 | [ ] | 7.3 | Release workflow (smoke test before upload, merge `windows` into `release/windows`) | | | |
-| [ ] | 7.4 | Automatic merge pull requests from Linux (and `sync-shared.yml` no longer targets `windows`) | | | |
+| [ ] | 7.4 | Linux changes report (weekly issue listing commits to port) | | | |
 
 ## Phase 8: Verification on real Windows
 - [ ] **Phase 8 complete**
@@ -163,4 +163,4 @@ This file tracks progress on [ROADMAP.md](ROADMAP.md). The numbers match the roa
 | [ ] | 10.1 | Distribution channels (winget, Scoop) | | | |
 | [ ] | 10.2 | Auto-update | | | |
 | [ ] | 10.3 | ARM64 | | | |
-| [ ] | 10.4 | Reuse the branch-and-worktree model for macOS | | | |
+| [ ] | 10.4 | Reuse this model (separate branch, worktree, port log) for macOS | | | |
