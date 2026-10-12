@@ -21,9 +21,9 @@ describe('ToolParameterValidator — Zero-Hallucination Parameter Coercion', () 
     ]
   };
 
-  const mockDotfileTool: ToolSpec = {
-    id: 'system.dotfile',
-    name: 'Manage Dotfile',
+  const mockAutostartTool: ToolSpec = {
+    id: 'app.autostart',
+    name: 'Manage Autostart',
     description: 'Configure autostart',
     parameters: [
       { name: 'app', type: 'string', required: true, description: 'App name' },
@@ -39,7 +39,7 @@ describe('ToolParameterValidator — Zero-Hallucination Parameter Coercion', () 
   });
 
   it('coerces string boolean ("true"/"false") to boolean type', () => {
-    const res = ToolParameterValidator.validateAndCoerce(mockDotfileTool, { app: 'gazebo', enable: 'false' });
+    const res = ToolParameterValidator.validateAndCoerce(mockAutostartTool, { app: 'spotify', enable: 'false' });
     expect(res.valid).toBe(true);
     expect(res.coercedParams.enable).toBe(false);
     expect(typeof res.coercedParams.enable).toBe('boolean');

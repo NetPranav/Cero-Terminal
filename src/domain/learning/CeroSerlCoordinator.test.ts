@@ -281,7 +281,7 @@ describe('CeroSerlCoordinator — End-to-End Orchestrator', () => {
       expect(dashboard.oracles).toBeDefined();
       expect(dashboard.oracles.tldrCommandsCount).toBeGreaterThanOrEqual(15);
       expect(dashboard.oracles.tldrRecipesCount).toBeGreaterThanOrEqual(50);
-      expect(dashboard.oracles.deterministicRulesCount).toBeGreaterThanOrEqual(50);
+      expect(dashboard.oracles.deterministicRulesCount).toBeGreaterThanOrEqual(45);
       expect(dashboard.oracles.gbnfGrammarsAvailable).toBe(true);
       expect(dashboard.oracles.astParserActive).toBe(true);
     });

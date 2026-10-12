@@ -93,14 +93,6 @@ To push the current branch and set the remote as upstream, use
       expect(diagnosis.remediation?.params.command).toBe('git push --set-upstream origin feat-payments');
     });
 
-    it('diagnoses Docker daemon stopped and suggests launching Docker Desktop', () => {
-      const error = 'Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?';
-      const diagnosis = ErrorDiagnosticsEngine.diagnose(error, 'shell.execute', { command: 'docker ps' });
-
-      expect(diagnosis.category).toBe('SOFTWARE_RECOVERABLE');
-      expect(diagnosis.remediation?.params.command).toContain('open -a Docker');
-    });
-
     it('diagnoses command typo (gti -> git)', () => {
       const error = 'zsh: command not found: gti';
       const diagnosis = ErrorDiagnosticsEngine.diagnose(error, 'shell.execute', { command: 'gti status' });

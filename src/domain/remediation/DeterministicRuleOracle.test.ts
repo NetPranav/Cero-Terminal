@@ -135,32 +135,6 @@ To push the current branch and set the remote as upstream, use
       expect(suggestion?.fixedCommand).toBe('cargo add serde_json');
     });
 
-    it('accepts Xcode license agreement when required by Homebrew', () => {
-      const ctx: RuleContext = {
-        command: 'brew install cmake',
-        output: 'Error: Agreeing to the Xcode/iOS license requires admin privileges, please run `sudo xcodebuild -license` and then try this command again.',
-        exitCode: 1,
-        os: 'mac'
-      };
-
-      const suggestion = oracle.diagnose(ctx);
-      expect(suggestion?.ruleId).toBe('brew_xcode_license');
-      expect(suggestion?.fixedCommand).toBe('sudo xcodebuild -license accept');
-      expect(suggestion?.requiresElevation).toBe(true);
-    });
-
-    it('overwrites conflicting symlinks during brew link', () => {
-      const ctx: RuleContext = {
-        command: 'brew link openssl@3',
-        output: 'Error: The `brew link` step did not complete successfully\nLinking /opt/homebrew/Cellar/openssl@3/3.2.1...\nDirectory not empty\n\nPossible solutions:\n  brew link --overwrite openssl@3',
-        exitCode: 1,
-        os: 'mac'
-      };
-
-      const suggestion = oracle.diagnose(ctx);
-      expect(suggestion?.ruleId).toBe('brew_link_overwrite');
-      expect(suggestion?.fixedCommand).toBe('brew link --overwrite openssl@3');
-    });
   });
 
   describe('Filesystem & Navigation Rules', () => {
@@ -354,19 +328,6 @@ To push the current branch and set the remote as upstream, use
   });
 
   describe('Docker Rules', () => {
-    it('opens Docker Desktop when daemon is not running on macOS', () => {
-      const ctx: RuleContext = {
-        command: 'docker ps',
-        output: 'Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?',
-        exitCode: 1,
-        os: 'mac'
-      };
-
-      const suggestion = oracle.diagnose(ctx);
-      expect(suggestion?.ruleId).toBe('docker_daemon_not_running');
-      expect(suggestion?.fixedCommand).toContain('open -a Docker');
-    });
-
     it('migrates legacy docker-compose to docker compose', () => {
       const ctx: RuleContext = {
         command: 'docker-compose up -d',
@@ -377,34 +338,6 @@ To push the current branch and set the remote as upstream, use
       const suggestion = oracle.diagnose(ctx);
       expect(suggestion?.ruleId).toBe('docker_compose_v2');
       expect(suggestion?.fixedCommand).toBe('docker compose up -d');
-    });
-  });
-
-  describe('macOS Specific Rules', () => {
-    it('clears Gatekeeper quarantine using xattr -cr', () => {
-      const ctx: RuleContext = {
-        command: 'open /Applications/UntrustedApp.app',
-        output: '"UntrustedApp.app" cannot be opened because Apple cannot check it for malicious software.',
-        exitCode: 1,
-        os: 'mac'
-      };
-
-      const suggestion = oracle.diagnose(ctx);
-      expect(suggestion?.ruleId).toBe('macos_gatekeeper_quarantine');
-      expect(suggestion?.fixedCommand).toContain('xattr -cr');
-    });
-
-    it('fixes macOS BSD sed in-place missing empty extension', () => {
-      const ctx: RuleContext = {
-        command: "sed -i 's/foo/bar/g' file.txt",
-        output: 'sed: 1: "file.txt": invalid command code f',
-        exitCode: 1,
-        os: 'mac'
-      };
-
-      const suggestion = oracle.diagnose(ctx);
-      expect(suggestion?.ruleId).toBe('macos_sed_in_place');
-      expect(suggestion?.fixedCommand).toBe("sed -i '' 's/foo/bar/g' file.txt");
     });
   });
 

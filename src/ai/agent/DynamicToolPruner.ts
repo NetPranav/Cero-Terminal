@@ -22,7 +22,6 @@ export class DynamicToolPruner {
     'git': ['git', 'commit', 'branch', 'checkout', 'pull', 'push', 'merge', 'repo', 'repository', 'status', 'diff', 'clone'],
     'docker': ['docker', 'container', 'image', 'compose', 'volume', 'daemon', 'k8s', 'podman'],
     'system.service': ['service', 'systemctl', 'daemon', 'launchctl', 'unit', 'systemd'],
-    'system.dotfile': ['rice', 'hyprland', 'i3', 'sway', 'waybar', 'autostart', 'dotfile', 'bashrc', 'zshrc', 'startup', 'wallpaper'],
     'system': ['process', 'kill', 'cpu', 'ram', 'memory', 'battery', 'storage', 'disk', 'uptime', 'lock', 'temperature', 'specs', 'hardware'],
     'application': ['open', 'launch', 'app', 'application', 'quit', 'force quit', 'close', 'running'],
     'browser': ['browser', 'url', 'web', 'navigate', 'search', 'google', 'youtube', 'github', 'http', 'https', 'chrome', 'safari', 'firefox'],

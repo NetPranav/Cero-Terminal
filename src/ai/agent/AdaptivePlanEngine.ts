@@ -104,7 +104,7 @@ export class AdaptivePlanEngine {
       return heuristic;
     }
 
-    // 2. Try Project & Workspace Discovery Probe (e.g. "run gazebo", "launch node", "run rover")
+    // 2. Try Project & Workspace Discovery Probe (e.g. "run shop", "launch backend")
     const discoveredPlan = await this.probeProjectWorkspaces(goal, context);
     if (discoveredPlan) {
       return discoveredPlan;
@@ -770,32 +770,6 @@ export class AdaptivePlanEngine {
       };
     }
 
-    // 6. Dotfile Rice & Autostart Orchestration
-    const dotfileMatch = lower.match(/(?:turn\s+(on|off)|enable|disable)\s+([a-z0-9_.-]+)\s+(?:in\s+rice|on\s+startup|in\s+autostart|in\s+(hyprland|i3|sway))/i);
-    if (dotfileMatch) {
-      const enable = dotfileMatch[1] === 'on' || lower.startsWith('enable') || (!lower.includes('off') && !lower.includes('disable'));
-      const app = dotfileMatch[2].trim();
-      const targetHint = dotfileMatch[3] || 'hyprland';
-
-      return {
-        summary: `${enable ? 'Enable' : 'Disable'} "${app}" in ${targetHint} rice configuration`,
-        steps: [
-          `Inspect existing ${targetHint} configuration for "${app}"`,
-          `${enable ? 'Enable' : 'Disable'} autostart directive for "${app}" with backup`,
-          'Verify dotfile modification diff'
-        ],
-        phases: [
-          {
-            id: '1',
-            title: `${enable ? 'Enable' : 'Disable'} "${app}" in ${targetHint} config`,
-            tool: 'system.dotfile',
-            params: { app, enable, target: targetHint },
-            status: 'pending'
-          }
-        ]
-      };
-    }
-
     // 7. Compound Project Scaffolding & Git Init Workflow (Multi-Phase)
     if (
       !/(?:\b\d+\.|\bstep\s*\d+)/i.test(goal) &&
@@ -1180,7 +1154,7 @@ User request: ${goal}`;
   }
 
   /**
-   * Probe filesystem workspaces for project matching the goal keyword (e.g. "gazebo", "navigation").
+   * Probe filesystem workspaces for project matching the goal keyword (e.g. "shop", "backend").
    */
   public async probeProjectWorkspaces(
     goal: string,
@@ -1201,9 +1175,6 @@ User request: ${goal}`;
       path.join(context.cwd, 'workspaces'),
       path.join(context.cwd, 'src'),
       path.join(home, 'workspaces'),
-      path.join(home, 'ros_ws'),
-      path.join(home, 'catkin_ws'),
-      path.join(home, 'colcon_ws'),
       path.join(home, 'projects')
     ].filter(r => fs.existsSync(r) || scanner !== undefined);
 

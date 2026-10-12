@@ -15,7 +15,6 @@ describe('DynamicToolPruner — Cognitive Context Pruning Engine', () => {
     { id: 'git.status', name: 'Git Status', description: 'Check repo status', parameters: [] },
     { id: 'git.pull', name: 'Git Pull', description: 'Fetch changes', parameters: [] },
     { id: 'system.service', name: 'Manage Service', description: 'Control systemctl', parameters: [{ name: 'service', type: 'string', required: true, description: '' }] },
-    { id: 'system.dotfile', name: 'Manage Dotfile Rice', description: 'Configure hyprland autostart', parameters: [{ name: 'app', type: 'string', required: true, description: '' }] },
     { id: 'shell.execute', name: 'Execute Shell Command', description: 'Run bash/zsh command', parameters: [{ name: 'command', type: 'string', required: true, description: '' }] }
   ];
 
@@ -43,15 +42,5 @@ describe('DynamicToolPruner — Cognitive Context Pruning Engine', () => {
     expect(ids).toContain('filesystem.search');
     expect(ids).toContain('shell.execute');
     expect(ids).not.toContain('network.bluetooth.connect');
-  });
-
-  it('prunes tools to dotfile rice tools when configuring hyprland or startup', () => {
-    const pruned = DynamicToolPruner.prune(mockTools, 'turn off gazebo in hyprland rice autostart', { maxTools: 5 });
-
-    expect(pruned.length).toBeLessThanOrEqual(5);
-    const ids = pruned.map(t => t.id);
-
-    expect(ids).toContain('system.dotfile');
-    expect(ids).toContain('shell.execute');
   });
 });

@@ -11,7 +11,7 @@ export interface MarketplacePlugin {
   version: string;
   author: string;
   description: string;
-  category: 'DevOps' | 'Robotics' | 'Developer' | 'Cloud' | 'System Rice';
+  category: 'DevOps' | 'Developer' | 'Cloud';
   icon: string;
   permissions: string[];
   installed: boolean;
@@ -36,19 +36,6 @@ export class PluginMarketplaceCatalog {
       installed: true,
       enabled: true,
       downloads: 4820
-    },
-    {
-      id: 'cero.ros2.telemetry',
-      name: 'ROS 2 Telemetry & Echo',
-      version: '2.0.4',
-      author: 'OpenRobotics Guild',
-      description: 'Real-time ROS 2 node graph visualizer, topic echo debugger, and colcon overlay auditor.',
-      category: 'Robotics',
-      icon: 'ros',
-      permissions: ['ExecuteCommands', 'ReadFiles', 'Network'],
-      installed: true,
-      enabled: true,
-      downloads: 6290
     },
     {
       id: 'cero.docker.orchestrator',
@@ -88,19 +75,6 @@ export class PluginMarketplaceCatalog {
       installed: false,
       enabled: false,
       downloads: 3150
-    },
-    {
-      id: 'cero.hyprland.rice',
-      name: 'Hyprland & Waybar Rice Live-Reload',
-      version: '1.5.0',
-      author: 'ArchRice Community',
-      description: 'Live dotfile hot-reload, color palette synchronizer, and Waybar preview.',
-      category: 'System Rice',
-      icon: 'palette',
-      permissions: ['ReadFiles', 'WriteFiles', 'ExecuteCommands'],
-      installed: false,
-      enabled: false,
-      downloads: 5410
     }
   ];
 

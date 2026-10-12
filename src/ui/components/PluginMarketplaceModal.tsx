@@ -7,11 +7,9 @@ import {
   Trash2, 
   Check, 
   Boxes, 
-  Bot, 
   Container, 
   GitBranch, 
-  Cloud, 
-  Palette 
+  Cloud 
 } from 'lucide-react';
 import { MarketplacePlugin, PluginMarketplaceCatalog } from '../../plugins/marketplace/PluginMarketplaceCatalog';
 
@@ -29,7 +27,7 @@ export const PluginMarketplaceModal: React.FC<PluginMarketplaceModalProps> = ({
   const [plugins, setPlugins] = useState<MarketplacePlugin[]>([]);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
-  const categories = ['All', 'DevOps', 'Robotics', 'Developer', 'Cloud', 'System Rice'];
+  const categories = ['All', 'DevOps', 'Developer', 'Cloud'];
 
   const reloadPlugins = () => {
     const list = PluginMarketplaceCatalog.getInstance().search(query, selectedCategory);
@@ -39,11 +37,9 @@ export const PluginMarketplaceModal: React.FC<PluginMarketplaceModalProps> = ({
   const getPluginIcon = (icon: string) => {
     switch (icon) {
       case 'k8s': return <Boxes size={24} color="#38bdf8" />;
-      case 'ros': return <Bot size={24} color="#fb923c" />;
       case 'docker': return <Container size={24} color="#38bdf8" />;
       case 'git': return <GitBranch size={24} color="#4ade80" />;
       case 'cloud': return <Cloud size={24} color="#facc15" />;
-      case 'palette': return <Palette size={24} color="#c084fc" />;
       default: return <Puzzle size={24} color="#a855f7" />;
     }
   };
@@ -130,7 +126,7 @@ export const PluginMarketplaceModal: React.FC<PluginMarketplaceModalProps> = ({
             <div>
               <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>Cero Plugin Marketplace</h2>
               <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
-                Hot-reload capabilities, cloud tools, robotics, and rice extensions
+                Hot-reload capabilities, cloud tools, and developer extensions
               </span>
             </div>
           </div>

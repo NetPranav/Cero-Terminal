@@ -138,7 +138,7 @@ export class CapabilityRegistrySDK {
       'filesystem.locate_files', 'filesystem.locate_folders', 'filesystem.grep',
       'system.processes', 'system.kill_process', 'system.storage', 'system.battery', 'system.info',
       'system.uptime', 'system.cpu', 'system.ram', 'system.temperature',
-      'system.service', 'system.dotfile',
+      'system.service',
       'application.open', 'application.force_quit', 'application.running',
       'browser.navigate', 'browser.search', 'browser.open',
       'git.status', 'git.log', 'git.diff', 'git.pull', 'git.commit', 'git.push', 'git.branch',

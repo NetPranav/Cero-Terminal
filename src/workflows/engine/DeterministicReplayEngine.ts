@@ -46,7 +46,7 @@ export interface ReplayOptions {
    * before the first step runs; approved commands then run without asking again.
    */
   authorizationHandler?: AuthorizationHandler;
-  /** Runs a step that never exits (server, tail -f, ROS node) in its own terminal pane */
+  /** Runs a step that never exits (server, tail -f) in its own terminal pane */
   onLongRunning?: (command: string, cwd: string | undefined, step: WorkflowStepDefinition) => Promise<{ ok: boolean; message: string }>;
 }
 

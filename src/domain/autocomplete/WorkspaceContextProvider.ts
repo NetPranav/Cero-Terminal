@@ -4,7 +4,7 @@ import * as path from 'path';
 
 /**
  * Autocomplete provider that provides context-aware command suggestions
- * based on the active directory's manifest files (Node, Rust, Python, ROS, Docker).
+ * based on the active directory's manifest files (Node, Rust, Python, Docker).
  */
 export class WorkspaceContextProvider implements IAutocompleteProvider {
   id = 'WorkspaceContextProvider';
@@ -72,15 +72,7 @@ export class WorkspaceContextProvider implements IAutocompleteProvider {
         candidateCommands.push({ command: 'docker compose logs -f', desc: 'Follow container log stream' });
       }
 
-      // 5. Check ROS 2 / Colcon
-      if (fs.existsSync(path.join(cwd, 'install', 'setup.bash'))) {
-        candidateCommands.push({ command: 'source install/setup.bash', desc: 'Source ROS 2 workspace overlay' });
-      }
-      if (fs.existsSync(path.join(cwd, 'src'))) {
-        candidateCommands.push({ command: 'colcon build --symlink-install', desc: 'Build ROS 2 colcon workspace' });
-      }
-
-      // 6. Check Makefile
+      // 5. Check Makefile
       if (fs.existsSync(path.join(cwd, 'Makefile'))) {
         candidateCommands.push({ command: 'make', desc: 'Execute default Makefile target' });
         candidateCommands.push({ command: 'make test', desc: 'Run Makefile test target' });

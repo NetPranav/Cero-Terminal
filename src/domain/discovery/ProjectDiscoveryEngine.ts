@@ -1,15 +1,15 @@
 /**
  * Cero — Project & Environment Discovery Engine
  *
- * Scans development workspaces for project manifests (ROS 1/2, Node, Python,
- * Rust, Docker) to enable intelligent "Probe & Disambiguate" capabilities.
+ * Scans development workspaces for project manifests (Node, Python, Rust,
+ * Docker) to enable intelligent "Probe & Disambiguate" capabilities.
  * Prevents blind command failures and generates clean environment sourcing plans.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 
-export type ProjectType = 'ros2' | 'ros1' | 'node' | 'python' | 'rust' | 'docker' | 'generic';
+export type ProjectType = 'node' | 'python' | 'rust' | 'docker' | 'generic';
 
 export interface DiscoveredProject {
   id: string; // "1", "2", "3"
@@ -165,7 +165,7 @@ export class ProjectDiscoveryEngine {
   }
 
   /**
-   * Inspect file signatures in a directory to detect ROS 1/2, Node, Python, or Rust projects.
+   * Inspect file signatures in a directory to detect Node, Python, Rust or Docker projects.
    */
   public static async inspectProjectSignature(
     dir: string,
@@ -188,47 +188,7 @@ export class ProjectDiscoveryEngine {
     let launchTarget: string | undefined;
     let description: string | undefined;
 
-    // 1. ROS 2 Detection (package.xml with ament, install/setup.bash, *.launch.py)
-    const hasPackageXml = filesLower.includes('package.xml') || await scanner.exists(path.join(projectDir, 'package.xml'));
-    const hasInstallSetup = filesLower.includes('install') || await scanner.exists(path.join(projectDir, 'install', 'setup.bash')) || await scanner.exists(path.join(dir, 'install', 'setup.bash'));
-    const hasDevelSetup = filesLower.includes('devel') || await scanner.exists(path.join(projectDir, 'devel', 'setup.bash')) || await scanner.exists(path.join(dir, 'devel', 'setup.bash'));
-    const launchFiles = files.filter(f => f.endsWith('.launch.py') || f.endsWith('.launch'));
-
-    if (hasPackageXml) {
-      const xmlPath = filesLower.includes('package.xml') ? path.join(dir, 'package.xml') : path.join(projectDir, 'package.xml');
-      const xmlContent = await scanner.readFile(xmlPath);
-      if (xmlContent.includes('ament_cmake') || xmlContent.includes('ament_python') || hasInstallSetup) {
-        type = 'ros2';
-        confidence = 90;
-        setupScript = 'source install/setup.bash';
-        description = 'ROS 2 Workspace Package';
-      } else if (xmlContent.includes('catkin') || hasDevelSetup) {
-        type = 'ros1';
-        confidence = 85;
-        setupScript = 'source devel/setup.bash';
-        description = 'ROS 1 Workspace Package';
-      }
-    } else if (hasInstallSetup) {
-      type = 'ros2';
-      confidence = 80;
-      setupScript = 'source install/setup.bash';
-      description = 'ROS 2 Built Workspace Root';
-    } else if (hasDevelSetup) {
-      type = 'ros1';
-      confidence = 80;
-      setupScript = 'source devel/setup.bash';
-      description = 'ROS 1 Built Workspace Root';
-    }
-
-    // Check for launch target inside directory
-    if (launchFiles.length > 0) {
-      // Find matching launch file
-      const matchLaunch = launchFiles.find(l => l.toLowerCase().includes(keyword)) || launchFiles[0];
-      launchTarget = type === 'ros2' ? `ros2 launch ${dirName} ${matchLaunch}` : `roslaunch ${dirName} ${matchLaunch}`;
-      confidence += 10;
-    }
-
-    // 2. Node.js Fullstack / Web
+    // 1. Node.js Fullstack / Web
     if (filesLower.includes('package.json')) {
       type = 'node';
       confidence = confidence || 60;
@@ -241,17 +201,18 @@ export class ProjectDiscoveryEngine {
       } catch {}
     }
 
-    // 3. Python / AI
+    // 2. Python / AI
     if (filesLower.includes('pyproject.toml') || filesLower.includes('requirements.txt') || filesLower.includes('environment.yml')) {
       type = 'python';
       confidence = confidence || 60;
       description = 'Python Environment';
       if (filesLower.includes('main.py')) launchTarget = 'python main.py';
       else if (filesLower.includes('app.py')) launchTarget = 'python app.py';
+      // TODO(4.2): Windows venvs activate with .venv\\Scripts\\Activate.ps1
       setupScript = 'source .venv/bin/activate';
     }
 
-    // 4. Rust
+    // 3. Rust
     if (filesLower.includes('cargo.toml')) {
       type = 'rust';
       confidence = confidence || 60;
@@ -259,7 +220,7 @@ export class ProjectDiscoveryEngine {
       launchTarget = 'cargo run';
     }
 
-    // 5. Docker
+    // 4. Docker
     if (filesLower.includes('docker-compose.yml')) {
       type = 'docker';
       confidence = confidence || 60;
@@ -270,7 +231,6 @@ export class ProjectDiscoveryEngine {
     // Keyword relevance scoring
     const keywordMatches =
       lowerDir.includes(keyword) ||
-      launchFiles.some(l => l.toLowerCase().includes(keyword)) ||
       (description && description.toLowerCase().includes(keyword));
 
     if (keywordMatches) {
@@ -284,7 +244,8 @@ export class ProjectDiscoveryEngine {
         name: dirName,
         path: projectDir,
         type,
-        launchTarget: launchTarget || (type === 'ros2' ? `ros2 run ${dirName} ${keyword}` : `./run.sh`),
+        // TODO(4.2): `./run.sh` is a Unix fallback; pick a Windows default (or none)
+        launchTarget: launchTarget || './run.sh',
         setupScript,
         description: description || `${type.toUpperCase()} Project`,
         confidence
@@ -299,7 +260,7 @@ export class ProjectDiscoveryEngine {
    */
   public static buildDisambiguationPrompt(keyword: string, matches: DiscoveredProject[]): string {
     const list = matches.map(m => {
-      const typeBadge = m.type === 'ros2' ? 'ROS 2' : m.type === 'ros1' ? 'ROS 1' : m.type.toUpperCase();
+      const typeBadge = m.type.toUpperCase();
       const relativePath = m.path.replace(process.env.HOME || '', '~');
       return `  [${m.id}] ${relativePath} (${typeBadge})`;
     }).join('\n');

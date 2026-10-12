@@ -9,11 +9,10 @@ import { BaseCapabilityDriver, CapabilityExecutionResult, ExecutionContext, Plat
 import { invoke } from '@tauri-apps/api/core';
 
 import { SystemServiceManager, ServiceAction } from '../../../domain/services/SystemServiceManager';
-import { DotfileManager } from '../../../domain/rice/DotfileManager';
 import { AppAliasRegistry } from '../../../domain/capabilities/AppAliasRegistry';
 import { parsePmsetBatt, parseVmStat, parseMacDf, parseBootTime, parseLoadAvg, processDisplayName } from './MacSystemParsers';
 
-export type SystemOperation = 'info' | 'battery' | 'cpu' | 'gpu' | 'ram' | 'storage' | 'processes' | 'temperature' | 'uptime' | 'kill_process' | 'kill' | 'lock' | 'service' | 'dotfile';
+export type SystemOperation = 'info' | 'battery' | 'cpu' | 'gpu' | 'ram' | 'storage' | 'processes' | 'temperature' | 'uptime' | 'kill_process' | 'kill' | 'lock' | 'service';
 
 export interface SystemDriverInput {
   operation?: SystemOperation;
@@ -722,26 +721,6 @@ export class SystemSDKCapability extends BaseCapabilityDriver<SystemDriverInput,
         } catch (err: any) {
           return { success: false, error: { code: 'EXECUTION_FAILED', message: err.message } };
         }
-      }
-
-      case 'dotfile': {
-        const app = input.app || input.name || '';
-        const enable = input.enable !== false;
-        const target = input.target || 'hyprland';
-        if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
-          return {
-            success: true,
-            data: { app, enable, target, stdout: `Toggled ${app} in ${target}` },
-            commandExecuted: `dotfile ${enable ? 'enable' : 'disable'} ${app}`
-          };
-        }
-        const changeRes = await DotfileManager.toggleAutostart(app, enable, target);
-        return {
-          success: changeRes.success,
-          data: changeRes,
-          commandExecuted: `dotfile ${enable ? 'enable' : 'disable'} ${app} (${target})`,
-          error: changeRes.error ? { code: 'DOTFILE_ERROR', message: changeRes.error } : undefined
-        };
       }
 
       case 'lock':

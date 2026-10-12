@@ -279,34 +279,6 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
   });
 
   // =========================================================================
-  // Archetype 7: Linux Daemons & Systemd Services
-  // =========================================================================
-  describe('Archetype 7: Linux Daemons & Systemd Services', () => {
-    it('routes systemd failed units inspection via shell.execute fast-path', async () => {
-      const res = await agent.run('list failed systemd services', { os: 'linux', cwd: '/home/test' });
-      expect(res.success).toBe(true);
-      expect(mockToolExecutor.execute).toHaveBeenCalledWith(
-        'shell.execute',
-        expect.objectContaining({ command: expect.stringMatching(/systemctl\s+--failed/i) }),
-        '/home/test',
-        undefined
-      );
-    });
-  });
-
-  // =========================================================================
-  // Archetype 8: Desktop Window & Wayland Rice Management
-  // =========================================================================
-  describe('Archetype 8: Desktop Window & Rice Management', () => {
-    it('decomposes dotfile synchronization or backup requests', () => {
-      const decomposer = MultistagePromptDecomposer.getInstance();
-      const plan = decomposer.decompose('backup dotfiles: clean build, git pull', { cwd: '/home/test' });
-      expect(plan.name).toBe('backup-dotfiles');
-      expect(plan.stages.length).toBeGreaterThanOrEqual(2);
-    });
-  });
-
-  // =========================================================================
   // Archetype 9: Multi-Stage Composite DAG Pipelines
   // =========================================================================
   describe('Archetype 9: Multi-Stage Composite DAG Pipelines', () => {

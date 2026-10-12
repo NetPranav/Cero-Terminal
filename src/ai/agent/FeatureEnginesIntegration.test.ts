@@ -224,11 +224,5 @@ describe('Core Feature Engines Integration Suite', () => {
       const fix2 = StdinHangDetector.suggestNonInteractiveFix('pacman -S neovim');
       expect(fix2?.flag).toBe('--noconfirm');
     });
-
-    it('neutralizes locale on diagnostic commands to ensure uniform parsing', () => {
-      expect(AgentLoop.prefixLocaleNeutral('df -h')).toBe('LC_ALL=C LANG=C df -h');
-      expect(AgentLoop.prefixLocaleNeutral('lscpu')).toBe('LC_ALL=C LANG=C lscpu');
-      expect(AgentLoop.prefixLocaleNeutral('LC_ALL=C free -m')).toBe('LC_ALL=C free -m');
-    });
   });
 });

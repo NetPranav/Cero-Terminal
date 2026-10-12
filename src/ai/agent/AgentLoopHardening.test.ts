@@ -66,27 +66,6 @@ end of file`;
     });
   });
 
-  describe('0.5.15 — Locale-Independent Command Parsing', () => {
-    it('prefixes diagnostic and system inspection commands with LC_ALL=C LANG=C', () => {
-      expect(AgentLoop.prefixLocaleNeutral('df -h')).toBe('LC_ALL=C LANG=C df -h');
-      expect(AgentLoop.prefixLocaleNeutral('free -m')).toBe('LC_ALL=C LANG=C free -m');
-      expect(AgentLoop.prefixLocaleNeutral('lscpu')).toBe('LC_ALL=C LANG=C lscpu');
-      expect(AgentLoop.prefixLocaleNeutral('ps aux')).toBe('LC_ALL=C LANG=C ps aux');
-      expect(AgentLoop.prefixLocaleNeutral('cat /proc/meminfo')).toBe('LC_ALL=C LANG=C cat /proc/meminfo');
-    });
-
-    it('does not double prefix commands that already specify locale', () => {
-      expect(AgentLoop.prefixLocaleNeutral('LC_ALL=C df -h')).toBe('LC_ALL=C df -h');
-      expect(AgentLoop.prefixLocaleNeutral('LANG=en_US.UTF-8 free -m')).toBe('LANG=en_US.UTF-8 free -m');
-    });
-
-    it('does not touch non-diagnostic user commands', () => {
-      expect(AgentLoop.prefixLocaleNeutral('git commit -m "feat: hello"')).toBe('git commit -m "feat: hello"');
-      expect(AgentLoop.prefixLocaleNeutral('npm run build')).toBe('npm run build');
-      expect(AgentLoop.prefixLocaleNeutral('cargo test')).toBe('cargo test');
-    });
-  });
-
   describe('0.5.19 — Large Output Observation Truncation', () => {
     it('preserves small and normal observations under character limit untouched', () => {
       const normal = 'Line 1\nLine 2\nLine 3';

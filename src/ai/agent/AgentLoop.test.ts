@@ -87,29 +87,28 @@ describe('AgentLoop fast-path routing', () => {
 
     // Simulate pending clarification from a multi-project discovery
     (loop as any).pendingClarification = {
-      goal: 'run gazebo',
+      goal: 'run shop',
       plan: {
-        summary: 'Disambiguate project for "gazebo"',
+        summary: 'Disambiguate project for "shop"',
         steps: [],
         phases: [],
-        question: 'Found 2 projects: [1] drone_ws [2] rover_ws',
+        question: 'Found 2 projects: [1] shop_api [2] shop_web',
         discoveredProjects: [
           {
             id: '1',
-            name: 'drone_ws',
-            path: '/home/user/drone_ws',
-            type: 'ros2',
-            setupScript: 'source install/setup.bash',
-            launchTarget: 'ros2 launch drone_ws quad.launch.py',
+            name: 'shop_api',
+            path: 'C:\\code\\shop_api',
+            type: 'python',
+            setupScript: '.\\.venv\\Scripts\\Activate.ps1',
+            launchTarget: 'python app.py',
             confidence: 100
           },
           {
             id: '2',
-            name: 'rover_ws',
-            path: '/home/user/rover_ws',
-            type: 'ros1',
-            setupScript: 'source devel/setup.bash',
-            launchTarget: 'roslaunch rover_ws sim.launch',
+            name: 'shop_web',
+            path: 'C:\\code\\shop_web',
+            type: 'node',
+            launchTarget: 'npm run dev',
             confidence: 90
           }
         ]
@@ -117,30 +116,23 @@ describe('AgentLoop fast-path routing', () => {
     };
 
     // User chooses option 1
-    const result = await loop.run('1', { os: 'linux', cwd: '/home/user' });
+    const result = await loop.run('1', { os: 'windows', cwd: 'C:\\code' });
     expect(result.success).toBe(true);
-    expect(result.cdPath).toBe('/home/user/drone_ws');
+    expect(result.cdPath).toBe('C:\\code\\shop_api');
     expect(result.steps.length).toBe(3);
     expect(result.steps[0].tool).toBe('filesystem.navigate');
     expect(result.steps[1].tool).toBe('shell.execute');
-    expect(result.steps[1].params.command).toBe('source install/setup.bash');
+    expect(result.steps[1].params.command).toBe('.\\.venv\\Scripts\\Activate.ps1');
     expect(result.steps[2].tool).toBe('shell.execute');
-    expect(result.steps[2].params.command).toBe('ros2 launch drone_ws quad.launch.py');
+    expect(result.steps[2].params.command).toBe('python app.py');
   });
 
-  it('routes system service and dotfile rice commands directly via fast-path', () => {
+  it('routes system service commands directly via fast-path', () => {
     const serviceRes = findFastPath('restart postgresql service');
     expect(serviceRes).not.toBeNull();
     expect(serviceRes?.tool).toBe('system.service');
     expect(serviceRes?.params.service).toBe('postgresql');
     expect(serviceRes?.params.action).toBe('restart');
-
-    const dotfileRes = findFastPath('turn off gazebo in hyprland');
-    expect(dotfileRes).not.toBeNull();
-    expect(dotfileRes?.tool).toBe('system.dotfile');
-    expect(dotfileRes?.params.app).toBe('gazebo');
-    expect(dotfileRes?.params.enable).toBe(false);
-    expect(dotfileRes?.params.target).toBe('hyprland');
   });
 
   it('executes user request via learned demonstration pattern without invoking LLM', async () => {
@@ -823,30 +815,6 @@ To push the current branch and set the remote as upstream, use
     });
   });
 
-  describe('sanitizeDesktopAppCommand & application opening', () => {
-    it('rewrites "zen" binary invocations to "zen-browser"', () => {
-      const sanitized = AgentLoop.sanitizeDesktopAppCommand('zen & code /path/to/folder &');
-      expect(sanitized).toBe('zen-browser & code /path/to/folder &');
-    });
-
-    it('prepends hyprctl workspace dispatch when goal specifies a workspace', () => {
-      const sanitized = AgentLoop.sanitizeDesktopAppCommand(
-        'zen-browser & code /path/to/folder &',
-        'open zen browser and /path/to/folder in vscode in 5th workspace'
-      );
-      expect(sanitized).toContain('hyprctl dispatch workspace 5');
-      expect(sanitized).toContain('zen-browser & code /path/to/folder &');
-    });
-
-    it('does not duplicate hyprctl dispatch if already present', () => {
-      const original = '(hyprctl dispatch workspace 5 >/dev/null 2>&1 || true) && zen-browser & code /path/to/folder &';
-      const sanitized = AgentLoop.sanitizeDesktopAppCommand(
-        original,
-        'open zen browser and /path/to/folder in vscode in 5th workspace'
-      );
-      expect(sanitized).toBe(original);
-    });
-  });
 });
 
 
@@ -1362,59 +1330,6 @@ describe('Multi-step chains', () => {
     expect(looksLikeShellCommand('FOO=1 make')).toBe(true);
     expect(looksLikeShellCommand('create a folder called chain-demo here, go into it &&')).toBe(false);
     expect(looksLikeShellCommand('list the files')).toBe(false);
-  });
-});
-
-describe('ROS 2 pipelines', () => {
-  const setup = (rosInstalled: boolean) => {
-    const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
-      getActiveProvider: () => ({ name: 'mock', isAvailable: vi.fn().mockResolvedValue(true), generate: vi.fn() }),
-      getActiveModel: () => ({ modelId: 'mock' }),
-      initialize: vi.fn()
-    } as any);
-    const execute = vi.fn(async (_t: string, params: any) => {
-      if (params.command.includes('/opt/ros')) return rosInstalled ? { success: true, data: { stdout: '/opt/ros\n', code: 0 } } : { success: false, data: { stdout: '', code: 1 } };
-      if (params.command === 'ros2 node list') return { success: true, data: { stdout: '/turtlesim\n/teleop_turtle\n', code: 0 } };
-      return { success: true, data: { stdout: '/turtle1/pose\n', code: 0 } };
-    });
-    (loop as any).toolExecutor = { hasDriver: () => true, execute };
-    return { loop, execute };
-  };
-
-  it('starts every process in its own pane after one confirmation, then checks the graph', async () => {
-    const { AgentLoop: Loop } = await import('./AgentLoop');
-    Loop.ROS_SETTLE_MS = 0;
-    Loop.PANE_STAGGER_MS = 0;
-    const { TerminalWorkspace } = await import('../../domain/terminal/TerminalWorkspace');
-    TerminalWorkspace.resetForTests();
-    const spawner = vi.fn().mockReturnValueOnce('p1').mockReturnValueOnce('p2').mockReturnValueOnce('p3');
-    TerminalWorkspace.getInstance().setSpawner(spawner);
-    const { loop, execute } = setup(true);
-    const handler = vi.fn().mockResolvedValue(true);
-    loop.setAuthorizationHandler(handler);
-
-    const result = await loop.run('run turtlesim, control it with the keyboard and show me the pose', { os: 'linux', cwd: '/home/u/ws', paneId: 'main' });
-
-    expect(result.success).toBe(true);
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler.mock.calls[0][0].parameters.command).toContain('ros2 run turtlesim turtle_teleop_key');
-    expect(spawner.mock.calls.map(c => c[0].title)).toEqual(['turtlesim_node', 'turtle_teleop_key', 'echo /turtle1/pose']);
-    expect(spawner.mock.calls.every(c => c[0].requesterPaneId === 'main')).toBe(true);
-    expect(execute.mock.calls.map(c => c[1].command)).toContain('ros2 node list');
-    expect(result.summary).toContain('3 processes in separate terminals');
-  });
-
-  it('explains when ROS 2 is not installed instead of opening panes that fail', async () => {
-    const { TerminalWorkspace } = await import('../../domain/terminal/TerminalWorkspace');
-    TerminalWorkspace.resetForTests();
-    const spawner = vi.fn();
-    TerminalWorkspace.getInstance().setSpawner(spawner);
-    const { loop } = setup(false);
-    loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
-    const result = await loop.run('run the ros2 talker and listener', { os: 'macos', cwd: '/tmp' });
-    expect(result.success).toBe(false);
-    expect(result.summary).toContain('ROS 2 is not installed');
-    expect(spawner).not.toHaveBeenCalled();
   });
 });
 

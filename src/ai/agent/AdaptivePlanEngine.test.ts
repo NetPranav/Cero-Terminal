@@ -277,86 +277,80 @@ describe('AdaptivePlanEngine — Dynamic Multi-Phase Planning & Execution', () =
     expect(plan.phases[0].status).toBe('completed');
   });
 
-  it('should probe workspaces and formulate disambiguation question when multiple ROS/projects match', async () => {
+  it('should probe workspaces and formulate disambiguation question when multiple projects match', async () => {
     const engine = new AdaptivePlanEngine();
     const mockScanner = {
       readdir: async (dir: string) => {
-        if (dir === '/workspaces') return ['drone_ws', 'rover_ws'];
-        if (dir === '/workspaces/drone_ws') return ['package.xml', 'install', 'src'];
-        if (dir === '/workspaces/drone_ws/src') return ['gazebo_quad.launch.py'];
-        if (dir === '/workspaces/rover_ws') return ['package.xml', 'devel', 'src'];
-        if (dir === '/workspaces/rover_ws/src') return ['rover_gazebo.launch'];
+        if (dir === '/workspaces') return ['shop_web', 'shop_api'];
+        if (dir === '/workspaces/shop_web') return ['package.json'];
+        if (dir === '/workspaces/shop_api') return ['requirements.txt', 'app.py'];
         return [];
       },
       stat: async () => ({ isDirectory: () => true }),
-      readFile: async (p: string) => {
-        if (p.includes('drone_ws')) return '<package><name>quad</name><buildtool_depend>ament_cmake</buildtool_depend></package>';
-        if (p.includes('rover_ws')) return '<package><name>rover</name><buildtool_depend>catkin</buildtool_depend></package>';
-        return '';
-      },
+      readFile: async (p: string) => p.includes('shop_web') ? JSON.stringify({ scripts: { dev: 'vite' } }) : '',
       exists: async () => true
     };
 
     const plan = await engine.probeProjectWorkspaces(
-      'run my gazebo',
-      { os: 'linux', cwd: '/workspaces' },
+      'run my shop',
+      { os: 'windows', cwd: '/workspaces' },
       mockScanner as any
     );
 
     expect(plan).toBeDefined();
     expect(plan?.question).toBeDefined();
-    expect(plan?.question).toContain('Found 2 project workspaces matching "gazebo":');
+    expect(plan?.question).toContain('Found 2 project workspaces matching "shop":');
     expect(plan?.discoveredProjects?.length).toBe(2);
-    expect(plan?.discoveredProjects![0].name).toBe('drone_ws');
-    expect(plan?.discoveredProjects![1].name).toBe('rover_ws');
+    expect(plan?.discoveredProjects![0].name).toBe('shop_web');
+    expect(plan?.discoveredProjects![1].name).toBe('shop_api');
   });
 
-  it('should formulate and execute a 3-phase plan (cd + source + launch) for a chosen ROS 2 workspace', async () => {
+  it('should formulate and execute a 3-phase plan (cd + setup + launch) for a chosen project', async () => {
     const engine = new AdaptivePlanEngine();
     const chosenProject = {
       id: '1',
-      name: 'drone_ws',
-      path: '/home/user/workspaces/drone_ws',
-      type: 'ros2' as const,
-      setupScript: 'source install/setup.bash',
-      launchTarget: 'ros2 launch drone_ws gazebo_quad.launch.py',
+      name: 'shop_api',
+      path: 'C:\\code\\shop_api',
+      type: 'python' as const,
+      setupScript: '.\\.venv\\Scripts\\Activate.ps1',
+      launchTarget: 'python app.py',
       confidence: 100
     };
 
-    const plan = engine.createProjectExecutionPlan(chosenProject, 'gazebo');
+    const plan = engine.createProjectExecutionPlan(chosenProject, 'shop');
 
     expect(plan.phases.length).toBe(3);
     expect(plan.phases[0].id).toBe('1');
-    expect(plan.phases[0].title).toBe('Navigate to workspace: drone_ws');
+    expect(plan.phases[0].title).toBe('Navigate to workspace: shop_api');
     expect(plan.phases[0].tool).toBe('filesystem.navigate');
-    expect(plan.phases[0].params?.path).toBe('/home/user/workspaces/drone_ws');
+    expect(plan.phases[0].params?.path).toBe('C:\\code\\shop_api');
 
     expect(plan.phases[1].id).toBe('2');
-    expect(plan.phases[1].title).toBe('Source environment: source install/setup.bash');
+    expect(plan.phases[1].title).toBe('Source environment: .\\.venv\\Scripts\\Activate.ps1');
     expect(plan.phases[1].tool).toBe('shell.execute');
-    expect(plan.phases[1].params?.command).toBe('source install/setup.bash');
+    expect(plan.phases[1].params?.command).toBe('.\\.venv\\Scripts\\Activate.ps1');
 
     expect(plan.phases[2].id).toBe('3');
-    expect(plan.phases[2].title).toBe('Launch drone_ws: ros2 launch drone_ws gazebo_quad.launch.py');
+    expect(plan.phases[2].title).toBe('Launch shop_api: python app.py');
     expect(plan.phases[2].tool).toBe('shell.execute');
 
     // Execute plan
     const mockToolExecutor = {
       hasDriver: vi.fn().mockReturnValue(true),
-      execute: vi.fn().mockResolvedValue({ success: true, data: { stdout: '[INFO] Launching Gazebo simulator node...' } })
+      execute: vi.fn().mockResolvedValue({ success: true, data: { stdout: 'Running on http://127.0.0.1:5000' } })
     };
 
     const executedPhases: string[] = [];
-    const result = await engine.executePlan('run gazebo', plan, {
-      cwd: '/home/user',
-      os: 'linux',
+    const result = await engine.executePlan('run shop', plan, {
+      cwd: 'C:\\code',
+      os: 'windows',
       toolExecutor: mockToolExecutor,
       onPhaseStart: (p) => executedPhases.push(p.id)
     });
 
     expect(result.success).toBe(true);
     expect(executedPhases).toEqual(['1', '2', '3']);
-    expect(result.cdPath).toBe('/home/user/workspaces/drone_ws');
+    expect(result.cdPath).toBe('C:\\code\\shop_api');
   });
 
   it('should generate a 3-phase plan for system service orchestration', async () => {
@@ -371,19 +365,6 @@ describe('AdaptivePlanEngine — Dynamic Multi-Phase Planning & Execution', () =
     expect(plan.phases[1].tool).toBe('system.service');
     expect(plan.phases[1].params?.action).toBe('restart');
     expect(plan.phases[2].tool).toBe('system.service');
-  });
-
-  it('should generate a safe dotfile rice editing plan for toggling startup applications', async () => {
-    const engine = new AdaptivePlanEngine();
-    const plan = await engine.createPlan('turn off gazebo in hyprland', { os: 'linux', cwd: '/home/user' });
-
-    expect(plan).toBeDefined();
-    expect(plan.summary).toContain('Disable "gazebo" in hyprland rice configuration');
-    expect(plan.phases.length).toBe(1);
-    expect(plan.phases[0].tool).toBe('system.dotfile');
-    expect(plan.phases[0].params?.app).toBe('gazebo');
-    expect(plan.phases[0].params?.enable).toBe(false);
-    expect(plan.phases[0].params?.target).toBe('hyprland');
   });
 
   it('should generate a compound 3-phase plan for project scaffolding and git initialization', async () => {

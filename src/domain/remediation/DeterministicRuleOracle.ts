@@ -2,7 +2,7 @@
  * DeterministicRuleOracle.ts — Battle-Tested CLI Error Remediation Oracle
  * 
  * Ported from the battle-tested architecture of nvbn/thefuck (85,000+ GitHub stars)
- * and tailored specifically for macOS BSD and POSIX terminal workflows.
+ * for POSIX-style terminal workflows (Git Bash, WSL and cross-platform developer tools).
  * 
  * Provides sub-millisecond (<1ms), 100% deterministic command error recovery
  * without calling or waiting for an LLM model.
@@ -86,7 +86,7 @@ export class DeterministicRuleOracle {
     const rawOut = (context.output || '').trim();
     if (!rawCmd && !rawOut) return [];
 
-    const currentOs = (context.os || 'mac').toLowerCase();
+    const currentOs = (context.os || 'windows').toLowerCase();
     const suggestions: RemediationSuggestion[] = [];
     const priorityOf = new Map<RemediationSuggestion, number>();
 
@@ -606,30 +606,6 @@ export class DeterministicRuleOracle {
     });
 
     this.registerRule({
-      id: 'python_pip_break_system_packages',
-      name: 'Python Pip Externally Managed Environment',
-      description: 'Handle Homebrew PEP 668 externally managed Python environment',
-      priority: 18,
-      platforms: ['mac', 'linux'],
-      match: (ctx) => {
-        return (
-          ctx.command.startsWith('pip') &&
-          (/externally-managed-environment/i.test(ctx.output) ||
-           /This environment is externally managed/i.test(ctx.output))
-        );
-      },
-      getRemediation: (ctx) => ({
-        ruleId: 'python_pip_break_system_packages',
-        ruleName: 'Pip Break System Packages',
-        title: 'Install package with --break-system-packages flag',
-        explanation: 'macOS Homebrew Python is protected by PEP 668 external management',
-        fixedCommand: `${ctx.command} --break-system-packages`,
-        confidence: 0.94,
-        autoExecutable: true
-      })
-    });
-
-    this.registerRule({
       id: 'cargo_missing_crate',
       name: 'Cargo Missing Crate',
       description: 'Add missing Rust crate via cargo add',
@@ -676,54 +652,6 @@ export class DeterministicRuleOracle {
         confidence: 0.96,
         autoExecutable: true
       })
-    });
-
-    this.registerRule({
-      id: 'brew_xcode_license',
-      name: 'Homebrew Accept Xcode License',
-      description: 'Accept Xcode / Command Line Tools license agreement',
-      priority: 10,
-      platforms: ['mac'],
-      match: (ctx) => {
-        return /Agreeing to the Xcode\/iOS license requires admin privileges/i.test(ctx.output);
-      },
-      getRemediation: () => ({
-        ruleId: 'brew_xcode_license',
-        ruleName: 'Accept Xcode License',
-        title: 'Accept Xcode license agreement via sudo',
-        explanation: 'Xcode Command Line Tools require license acceptance to compile native binaries',
-        fixedCommand: 'sudo xcodebuild -license accept',
-        confidence: 0.99,
-        requiresElevation: true
-      })
-    });
-
-    this.registerRule({
-      id: 'brew_link_overwrite',
-      name: 'Homebrew Overwrite Conflicting Link',
-      description: 'Overwrite conflicting symlinks during brew link',
-      priority: 15,
-      platforms: ['mac'],
-      match: (ctx) => {
-        return (
-          ctx.command.includes('brew') &&
-          /Error: The `brew link` step did not complete successfully/i.test(ctx.output) &&
-          /brew link --overwrite/i.test(ctx.output)
-        );
-      },
-      getRemediation: (ctx) => {
-        const match = ctx.output.match(/brew link --overwrite\s+([a-zA-Z0-9_\-\.@]+)/i);
-        const formula = match ? match[1] : '';
-        return {
-          ruleId: 'brew_link_overwrite',
-          ruleName: 'Homebrew Overwrite Link',
-          title: `Force overwrite symlinks for "${formula}"`,
-          explanation: `Existing files in Homebrew prefix conflict with ${formula}`,
-          fixedCommand: `brew link --overwrite ${formula}`,
-          confidence: 0.98,
-          autoExecutable: true
-        };
-      }
     });
 
     // -----------------------------------------------------------------------
@@ -918,31 +846,6 @@ export class DeterministicRuleOracle {
           explanation: 'Destination folder does not exist',
           fixedCommand: `mkdir -p "${dest}" && ${ctx.command}`,
           confidence: 0.92
-        };
-      }
-    });
-
-    this.registerRule({
-      id: 'open_file_not_found',
-      name: 'Open Existing File Match',
-      description: 'Check file path when macOS open command fails',
-      priority: 25,
-      platforms: ['mac'],
-      match: (ctx) => {
-        return (
-          ctx.command.startsWith('open ') &&
-          /The file (.*) does not exist/i.test(ctx.output)
-        );
-      },
-      getRemediation: (ctx) => {
-        const file = ctx.command.replace(/^open\s+/, '').trim();
-        return {
-          ruleId: 'open_file_not_found',
-          ruleName: 'Inspect Path',
-          title: `Inspect and verify file path: "${file}"`,
-          explanation: `The specified target path '${file}' does not exist on disk`,
-          fixedCommand: `ls -la "$(dirname "${file}")"`,
-          confidence: 0.85
         };
       }
     });
@@ -1369,30 +1272,6 @@ export class DeterministicRuleOracle {
     // -----------------------------------------------------------------------
 
     this.registerRule({
-      id: 'docker_daemon_not_running',
-      name: 'Start Docker Desktop Daemon',
-      description: 'Launch Docker Desktop app when daemon socket is unreachable',
-      priority: 10,
-      platforms: ['mac'],
-      match: (ctx) => {
-        return (
-          ctx.command.startsWith('docker') &&
-          (/Cannot connect to the Docker daemon at unix:\/\/.*\. Is the docker daemon running\?/i.test(ctx.output) ||
-           /docker: error during connect:.*connection refused/i.test(ctx.output))
-        );
-      },
-      getRemediation: (ctx) => ({
-        ruleId: 'docker_daemon_not_running',
-        ruleName: 'Start Docker Desktop',
-        title: 'Launch Docker Desktop application',
-        explanation: 'Docker engine daemon is not running on macOS',
-        fixedCommand: `open -a Docker && sleep 4 && ${ctx.command}`,
-        confidence: 0.98,
-        autoExecutable: true
-      })
-    });
-
-    this.registerRule({
       id: 'docker_container_stopped',
       name: 'Start Stopped Docker Container',
       description: 'Start container before attempting exec',
@@ -1440,6 +1319,8 @@ export class DeterministicRuleOracle {
       })
     });
 
+    // TODO(4.3): Windows rules (Docker Desktop not running, winget, PowerShell execution policy)
+
     this.registerRule({
       id: 'docker_exec_interactive',
       name: 'Docker Exec Non-TTY Fix',
@@ -1459,260 +1340,6 @@ export class DeterministicRuleOracle {
         fixedCommand: ctx.command.replace(/-it\s+/, '-i '),
         confidence: 0.96,
         autoExecutable: true
-      })
-    });
-
-    // -----------------------------------------------------------------------
-    // 8. MACOS SYSTEM & TOOLCHAIN (5 rules)
-    // -----------------------------------------------------------------------
-
-    this.registerRule({
-      id: 'macos_gatekeeper_quarantine',
-      name: 'Remove macOS Gatekeeper Quarantine',
-      description: 'Remove com.apple.quarantine attribute from downloaded applications',
-      priority: 10,
-      platforms: ['mac'],
-      match: (ctx) => {
-        return (
-          /cannot be opened because Apple cannot check it for malicious software/i.test(ctx.output) ||
-          /is damaged and can't be opened/i.test(ctx.output) ||
-          /developer cannot be verified/i.test(ctx.output)
-        );
-      },
-      getRemediation: (ctx) => {
-        const match = ctx.command.match(/(?:open|run)\s+(?:-a\s+)?([^\s\r\n]+\.app)/i);
-        const target = match ? match[1] : '';
-        const fixed = target
-          ? `xattr -cr "${target}" && ${ctx.command}`
-          : `xattr -cr . && ${ctx.command}`;
-        return {
-          ruleId: 'macos_gatekeeper_quarantine',
-          ruleName: 'Clear Gatekeeper Quarantine',
-          title: 'Clear macOS Gatekeeper quarantine attribute (xattr -cr)',
-          explanation: 'macOS Gatekeeper blocks execution of unnotarized binaries',
-          fixedCommand: fixed,
-          confidence: 0.98,
-          autoExecutable: true
-        };
-      }
-    });
-
-    this.registerRule({
-      id: 'macos_dns_flush',
-      name: 'Flush macOS DNS Cache',
-      description: 'Flush system mDNSResponder DNS resolver cache on network resolution failure',
-      priority: 15,
-      platforms: ['mac'],
-      match: (ctx) => {
-        return (
-          (ctx.command.startsWith('curl ') || ctx.command.startsWith('ping ') || ctx.command.startsWith('ssh ')) &&
-          (/Could not resolve host/i.test(ctx.output) ||
-           /nodename nor servname provided/i.test(ctx.output) ||
-           /Host name lookup failure/i.test(ctx.output))
-        );
-      },
-      getRemediation: () => ({
-        ruleId: 'macos_dns_flush',
-        ruleName: 'Flush macOS DNS Cache',
-        title: 'Flush macOS DNS cache and restart mDNSResponder',
-        explanation: 'Local DNS cache may contain stale or poisoned domain lookups',
-        fixedCommand: 'sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder',
-        confidence: 0.92,
-        requiresElevation: true
-      })
-    });
-
-    this.registerRule({
-      id: 'macos_developer_tools',
-      name: 'Install Xcode Developer Tools',
-      description: 'Trigger xcode-select install when active developer path is invalid',
-      priority: 10,
-      platforms: ['mac'],
-      match: (ctx) => {
-        return /invalid active developer path \(.*CommandLineTools\)/i.test(ctx.output);
-      },
-      getRemediation: () => ({
-        ruleId: 'macos_developer_tools',
-        ruleName: 'Install Xcode Tools',
-        title: 'Install Apple Xcode Command Line Tools',
-        explanation: 'Command Line Tools missing or damaged following macOS system update',
-        fixedCommand: 'xcode-select --install',
-        confidence: 0.99,
-        autoExecutable: true
-      })
-    });
-
-    this.registerRule({
-      id: 'macos_sed_in_place',
-      name: 'macOS BSD Sed In-Place Syntax',
-      description: 'Add empty extension argument for macOS BSD sed -i',
-      priority: 10,
-      platforms: ['mac'],
-      match: (ctx) => {
-        return (
-          ctx.command.startsWith('sed -i ') &&
-          !ctx.command.startsWith("sed -i '' ") &&
-          (/invalid command code/i.test(ctx.output) ||
-           /bad flag in substitute command/i.test(ctx.output) ||
-           ctx.exitCode === 1)
-        );
-      },
-      getRemediation: (ctx) => ({
-        ruleId: 'macos_sed_in_place',
-        ruleName: 'macOS BSD Sed Syntax',
-        title: "Add empty extension '' for macOS BSD sed -i",
-        explanation: "macOS BSD sed requires an explicit backup extension argument like sed -i ''",
-        fixedCommand: ctx.command.replace(/^sed -i\s+/, "sed -i '' "),
-        confidence: 0.99,
-        autoExecutable: true
-      })
-    });
-
-    this.registerRule({
-      id: 'macos_trash_cli',
-      name: 'Safe File Removal via Trash',
-      description: 'Use macOS trash CLI when interactive rm is cancelled',
-      priority: 25,
-      platforms: ['mac'],
-      match: (ctx) => {
-        return (
-          ctx.command.startsWith('rm -i ') &&
-          ctx.exitCode === 1
-        );
-      },
-      getRemediation: (ctx) => {
-        const file = ctx.command.replace(/^rm -i\s+/, '').trim();
-        return {
-          ruleId: 'macos_trash_cli',
-          ruleName: 'Move to Trash',
-          title: `Safely move "${file}" to macOS Trash`,
-          explanation: 'Safer file removal without permanent deletion',
-          fixedCommand: `trash "${file}" 2>/dev/null || rm -rf "${file}"`,
-          confidence: 0.90
-        };
-      }
-    });
-
-    this.registerLinuxAndRosRules();
-  }
-
-  /** ROS 2 and Linux service rules (Linux only). */
-  private registerLinuxAndRosRules(): void {
-    const rerun = (ctx: RuleContext) => (ctx.command ? ` && ${ctx.command}` : '');
-
-    this.registerRule({
-      id: 'ros_not_sourced',
-      name: 'Source ROS 2 Environment',
-      description: 'ROS 2 tools are only on PATH after sourcing /opt/ros/<distro>/setup.bash',
-      priority: 5,
-      platforms: ['linux'],
-      match: (ctx) => /\b(?:ros2|colcon|rosdep|ament_\w+|rviz2|rqt): command not found/i.test(ctx.output)
-        || /No module named '(?:rclpy|rosidl_\w+|ament_\w+|launch_ros)'/.test(ctx.output),
-      getRemediation: (ctx) => ({
-        ruleId: 'ros_not_sourced',
-        ruleName: 'Source ROS 2 Environment',
-        title: 'Source the ROS 2 environment in this shell',
-        explanation: 'ROS 2 commands and Python modules become available only after sourcing the distro setup script',
-        fixedCommand: `source /opt/ros/$(ls /opt/ros | grep -v rolling | tail -n1)/setup.bash${rerun(ctx)}`,
-        confidence: 0.95
-      })
-    });
-
-    this.registerRule({
-      id: 'ros_package_not_found',
-      name: 'Source ROS 2 Workspace Overlay',
-      description: 'A workspace package is not visible until install/setup.bash is sourced',
-      priority: 10,
-      platforms: ['linux'],
-      match: (ctx) => /Package '([^']+)' not found/.test(ctx.output)
-        || /package '([^']+)' not found, searching: /.test(ctx.output),
-      getRemediation: (ctx) => {
-        const pkg = (ctx.output.match(/[Pp]ackage '([^']+)' not found/) || [])[1] || 'the package';
-        return {
-          ruleId: 'ros_package_not_found',
-          ruleName: 'Source ROS 2 Workspace Overlay',
-          title: `Source the workspace overlay so ${pkg} is found`,
-          explanation: `${pkg} is not on the ROS package path: build the workspace (colcon build) and source install/setup.bash`,
-          fixedCommand: `source install/setup.bash${rerun(ctx)}`,
-          confidence: 0.85
-        };
-      }
-    });
-
-    this.registerRule({
-      id: 'ros_rosdep_not_initialized',
-      name: 'Initialize rosdep',
-      description: 'rosdep needs a one-time init and update',
-      priority: 5,
-      platforms: ['linux'],
-      match: (ctx) => /rosdep installation has not been initialized|rosdep init/i.test(ctx.output)
-        && /ERROR|error/.test(ctx.output),
-      getRemediation: () => ({
-        ruleId: 'ros_rosdep_not_initialized',
-        ruleName: 'Initialize rosdep',
-        title: 'Initialize and update rosdep',
-        explanation: 'rosdep has never been initialized on this machine',
-        fixedCommand: 'sudo rosdep init && rosdep update',
-        confidence: 0.95,
-        requiresElevation: true
-      })
-    });
-
-    this.registerRule({
-      id: 'ros_missing_dependencies',
-      name: 'Install Workspace Dependencies with rosdep',
-      description: 'colcon/CMake cannot find a ROS package that rosdep can install',
-      priority: 15,
-      platforms: ['linux'],
-      match: (ctx) => /Could not find a package configuration file provided by "([^"]+)"/.test(ctx.output)
-        || /Failed to find required .* package: '?([\w_]+)'?/i.test(ctx.output),
-      getRemediation: (ctx) => {
-        const dep = (ctx.output.match(/provided by "([^"]+)"/) || [])[1];
-        return {
-          ruleId: 'ros_missing_dependencies',
-          ruleName: 'Install Workspace Dependencies with rosdep',
-          title: dep ? `Install missing dependency ${dep} with rosdep` : 'Install missing workspace dependencies with rosdep',
-          explanation: 'Run from the workspace root; rosdep resolves package.xml dependencies to system packages',
-          fixedCommand: 'rosdep install --from-paths src --ignore-src -r -y',
-          confidence: 0.85,
-          requiresElevation: true
-        };
-      }
-    });
-
-    this.registerRule({
-      id: 'linux_docker_daemon_not_running',
-      name: 'Start Docker Service',
-      description: 'Start the Docker systemd service when its socket is unreachable',
-      priority: 10,
-      platforms: ['linux'],
-      match: (ctx) => /Cannot connect to the Docker daemon at unix:\/\/.*Is the docker daemon running\?/i.test(ctx.output),
-      getRemediation: (ctx) => ({
-        ruleId: 'linux_docker_daemon_not_running',
-        ruleName: 'Start Docker Service',
-        title: 'Start the Docker service',
-        explanation: 'The docker systemd service is not running',
-        fixedCommand: `sudo systemctl start docker${rerun(ctx)}`,
-        confidence: 0.95,
-        requiresElevation: true
-      })
-    });
-
-    this.registerRule({
-      id: 'linux_docker_socket_permission',
-      name: 'Add User to docker Group',
-      description: 'The user cannot access /var/run/docker.sock',
-      priority: 10,
-      platforms: ['linux'],
-      match: (ctx) => /permission denied while trying to connect to the Docker daemon socket/i.test(ctx.output),
-      getRemediation: () => ({
-        ruleId: 'linux_docker_socket_permission',
-        ruleName: 'Add User to docker Group',
-        title: 'Add your user to the docker group (log out and back in afterwards)',
-        explanation: 'Docker socket access requires membership in the docker group',
-        fixedCommand: 'sudo usermod -aG docker "$USER"',
-        confidence: 0.9,
-        requiresElevation: true
       })
     });
   }

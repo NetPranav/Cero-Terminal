@@ -316,7 +316,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
   const activeTabIdRef = useRef(activeTabId);
   activeTabIdRef.current = activeTabId;
 
-  // Panes opened by the agent for long-running commands (servers, `tail -f`, ROS nodes).
+  // Panes opened by the agent for long-running commands (servers, `tail -f`).
   // The first goes beside the requesting pane, later ones stack under it; a tab that already
   // has MAX_PANES_PER_TAB panes gets a new tab instead. Focus stays where the user is typing.
   useEffect(() => {

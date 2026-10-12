@@ -153,12 +153,10 @@ import { isReadOnlyCommandLine, isClearlyMutating } from '../../domain/security/
 import { findInstantAnswers, InstantAnswer } from './InstantAnswers';
 import { planChain, commandForSingleClause, resolveFolder, ChainPlan } from '../../workflows/engine/ChainPlanner';
 import { approveBatch } from '../../domain/security/BatchApproval';
-import { planRosPipeline, RosPipeline } from '../../domain/ros/RosPipelinePlanner';
 import { parseTerminalAction, resolveTarget, describePane, readyForInput, TerminalAction } from '../../domain/terminal/TerminalActions';
 import { TerminalWorkspace, isLongRunningCommand, paneTitleFor } from '../../domain/terminal/TerminalWorkspace';
 import { SessionManager } from '../../domain/SessionManager';
 import { SecurityEngine } from '../../domain/security/SecurityEngine';
-import { chooseRosDistro, withRosEnvironmentForPane } from '../../domain/ros/RosEnvironment';
 import * as fs from 'fs';
 import { SecretRedactor } from '../../domain/security/SecretRedactor';
 import { SystemKnowledgeScanner } from '../../domain/knowledge/SystemKnowledgeScanner';
@@ -200,74 +198,6 @@ const FAST_PATHS: {
   /** Prevent broad regexes from taking ownership of an ambiguous natural-language request. */
   shouldHandle?: (goal: string) => boolean;
 }[] = [
-  // Domain 7: Desktop Applications & UI Automation (7.1 to 7.50)
-  { pattern: /^open\s+visual\s+studio\s+code\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "which code 2>/dev/null || which codium 2>/dev/null", explanation: 'Open visual studio code' }) },
-  { pattern: /^open\s+google\s+chrome\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "which google-chrome-stable 2>/dev/null || which google-chrome 2>/dev/null || which chromium 2>/dev/null || which brave 2>/dev/null || which firefox 2>/dev/null", explanation: 'Open google chrome' }) },
-  { pattern: /^list\s+active\s+desktop\s+windows\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl clients -j 2>/dev/null", explanation: 'List active desktop windows' }) },
-  { pattern: /^focus\s+window\s+firefox\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({window = \"firefox\"})' >/dev/null 2>&1 || hyprctl dispatch focuswindow firefox >/dev/null 2>&1 || true)", explanation: 'Focus window firefox' }) },
-  { pattern: /^move\s+current\s+window\s+to\s+workspace\s+2\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.move({workspace = \"2\"})' >/dev/null 2>&1 || hyprctl dispatch movetoworkspace 2 >/dev/null 2>&1 || true)", explanation: 'Move current window to workspace 2' }) },
-  { pattern: /^toggle\s+window\s+floating\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.float()' >/dev/null 2>&1 || hyprctl dispatch togglefloating >/dev/null 2>&1 || true)", explanation: 'Toggle window floating' }) },
-  { pattern: /^check\s+default\s+web\s+browser\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-settings get default-web-browser 2>/dev/null", explanation: 'Check default web browser' }) },
-  { pattern: /^check\s+default\s+file\s+manager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-mime query default inode/directory 2>/dev/null", explanation: 'Check default file manager' }) },
-  { pattern: /^check\s+default\s+pdf\s+reader\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "xdg-mime query default application/pdf 2>/dev/null", explanation: 'Check default pdf reader' }) },
-  { pattern: /^check\s+current\s+hyprland\s+workspace\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl activeworkspace -j 2>/dev/null", explanation: 'Check current hyprland workspace' }) },
-  { pattern: /^switch\s+to\s+workspace\s+1\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({workspace = \"1\"})' >/dev/null 2>&1 || hyprctl dispatch workspace 1 >/dev/null 2>&1 || true)", explanation: 'Switch to workspace 1' }) },
-  { pattern: /^switch\s+to\s+workspace\s+3\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({workspace = \"3\"})' >/dev/null 2>&1 || hyprctl dispatch workspace 3 >/dev/null 2>&1 || true)", explanation: 'Switch to workspace 3' }) },
-  { pattern: /^switch\s+to\s+workspace\s+5\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.focus({workspace = \"5\"})' >/dev/null 2>&1 || hyprctl dispatch workspace 5 >/dev/null 2>&1 || true)", explanation: 'Switch to workspace 5' }) },
-  { pattern: /^move\s+active\s+window\s+to\s+workspace\s+1\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.move({workspace = \"1\"})' >/dev/null 2>&1 || hyprctl dispatch movetoworkspace 1 >/dev/null 2>&1 || true)", explanation: 'Move active window to workspace 1' }) },
-  { pattern: /^move\s+active\s+window\s+to\s+workspace\s+4\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.move({workspace = \"4\"})' >/dev/null 2>&1 || hyprctl dispatch movetoworkspace 4 >/dev/null 2>&1 || true)", explanation: 'Move active window to workspace 4' }) },
-  { pattern: /^toggle\s+window\s+fullscreen\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.fullscreen()' >/dev/null 2>&1 || hyprctl dispatch fullscreen >/dev/null 2>&1 || true)", explanation: 'Toggle window fullscreen' }) },
-  { pattern: /^toggle\s+window\s+pin\s+state\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.window.pin()' >/dev/null 2>&1 || hyprctl dispatch pin >/dev/null 2>&1 || true)", explanation: 'Toggle window pin state' }) },
-  { pattern: /^swap\s+active\s+window\s+with\s+master\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "(hyprctl dispatch 'hl.dsp.layout({action = \"swapwithmaster\"})' >/dev/null 2>&1 || hyprctl dispatch layoutmsg swapwithmaster >/dev/null 2>&1 || true)", explanation: 'Swap active window with master' }) },
-  { pattern: /^check\s+screen\s+resolution\s+and\s+scale\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl monitors -j 2>/dev/null | jq -r '.[0] | \"\\(.width)x\\(.height)@\\(.refreshRate)Hz scale \\(.scale)\"' 2>/dev/null", explanation: 'Check screen resolution and scale' }) },
-  { pattern: /^increase\s+system\s+volume\s+by\s+5%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "pamixer -i 5 2>/dev/null; echo 'Volume increased confirmation: Audio level stepped up by 5%'", explanation: 'Increase system volume by 5%' }) },
-  { pattern: /^decrease\s+system\s+volume\s+by\s+5%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "pamixer -d 5 2>/dev/null; echo 'Volume decreased confirmation: Audio level stepped down by 5%'", explanation: 'Decrease system volume by 5%' }) },
-  { pattern: /^mute\s+system\s+audio\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "pamixer -t 2>/dev/null; echo 'Audio muted toggle confirmation: Mute toggle state updated'", explanation: 'Mute system audio' }) },
-  { pattern: /^check\s+current\s+system\s+volume\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "VOL=$(pamixer --get-volume 2>/dev/null || wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{print int($2*100)}' || echo '65'); [ -z \"$VOL\" ] || [ \"$VOL\" = \"0\" ] && VOL=65; echo \"${VOL}%\"", explanation: 'Check current system volume' }) },
-  { pattern: /^increase\s+screen\s+brightness\s+by\s+10%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl set +10% 2>/dev/null || light -A 10 2>/dev/null", explanation: 'Increase screen brightness by 10%' }) },
-  { pattern: /^decrease\s+screen\s+brightness\s+by\s+10%\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl set 10%- 2>/dev/null || light -U 10 2>/dev/null", explanation: 'Decrease screen brightness by 10%' }) },
-  { pattern: /^check\s+current\s+screen\s+brightness\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "brightnessctl get 2>/dev/null || light -G 2>/dev/null", explanation: 'Check current screen brightness' }) },
-  { pattern: /^show\s+clipboard\s+text\s+contents\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "printf 'Cero AI Clipboard Buffer Content' | (wl-copy 2>/dev/null || xclip -selection clipboard 2>/dev/null || true); wl-paste 2>/dev/null || xclip -o 2>/dev/null", explanation: 'Show clipboard text contents' }) },
-  { pattern: /^check\s+installed\s+desktop\s+applications\s+list\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "find /usr/share/applications -name '*.desktop' 2>/dev/null | head -10", explanation: 'Check installed desktop applications list' }) },
-
-  // Domain 8: Linux Dotfiles & Rice Management (Hyprland / Waybar) (8.1 to 8.50)
-  { pattern: /^show\s+(?:my\s+)?hyprland\s+autostart\s+apps\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -E 'exec-once|exec\\s*=' ~/.config/hypr/hyprland.conf 2>/dev/null", explanation: 'Show hyprland autostart apps' }) },
-  { pattern: /^check\s+(?:my\s+)?waybar\s+config(?:\s+file)?\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/waybar/config 2>/dev/null || cat ~/.config/waybar/config.jsonc 2>/dev/null", explanation: 'Check waybar config file' }) },
-  { pattern: /^check\s+kitty\s+terminal\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/kitty/kitty.conf 2>/dev/null || echo -e 'font_family JetBrains Mono\\nfont_size 11.0\\nwindow_padding_width 4\\nbackground_opacity 0.9'", explanation: 'Check kitty terminal config' }) },
-  { pattern: /^backup\s+(?:my\s+)?dotfiles\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "touch ~/.config_backup.tar.gz; echo 'Backup archive creation confirmation: Tarball generated in user home (~/.config_backup.tar.gz)'", explanation: 'Backup dotfiles' }) },
-  { pattern: /^reload\s+hyprland\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl reload 2>/dev/null", explanation: 'Reload hyprland config' }) },
-  { pattern: /^check\s+active\s+hyprland\s+monitors\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "hyprctl monitors -j 2>/dev/null", explanation: 'Check active hyprland monitors' }) },
-  { pattern: /^show\s+rofi\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/rofi/config.rasi 2>/dev/null", explanation: 'Show rofi configuration' }) },
-  { pattern: /^check\s+hyprland\s+window\s+border\s+color\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -i 'col.active_border' ~/.config/hypr/hyprland.conf 2>/dev/null", explanation: 'Check hyprland window border color' }) },
-  { pattern: /^check\s+hyprland\s+gap\s+sizes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -E 'gaps_in|gaps_out' ~/.config/hypr/hyprland.conf 2>/dev/null || echo -e 'gaps_in = 5\\ngaps_out = 10'", explanation: 'Check hyprland gap sizes' }) },
-  { pattern: /^check\s+hyprland\s+window\s+rounding\s+radius\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'rounding' ~/.config/hypr/hyprland.conf 2>/dev/null", explanation: 'Check hyprland window rounding radius' }) },
-  { pattern: /^check\s+hyprland\s+blur\s+settings\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -A 5 'blur {' ~/.config/hypr/hyprland.conf 2>/dev/null || echo -e 'blur {\\n    enabled = true\\n    size = 3\\n    passes = 1\\n}'", explanation: 'Check hyprland blur settings' }) },
-  { pattern: /^check\s+alacritty\s+terminal\s+font\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/alacritty/alacritty.toml 2>/dev/null || cat ~/.config/alacritty/alacritty.yml 2>/dev/null || echo -e '[font.normal]\\nfamily = \"JetBrains Mono\"\\nsize = 11.0'", explanation: 'Check alacritty terminal font configuration' }) },
-  { pattern: /^check\s+kitty\s+terminal\s+font\s+size\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'font_size' ~/.config/kitty/kitty.conf 2>/dev/null", explanation: 'Check kitty terminal font size' }) },
-  { pattern: /^check\s+kitty\s+background\s+opacity\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'background_opacity' ~/.config/kitty/kitty.conf 2>/dev/null", explanation: 'Check kitty background opacity' }) },
-  { pattern: /^check\s+tmux\s+prefix\s+keybinding\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -i 'prefix' ~/.tmux.conf 2>/dev/null", explanation: 'Check tmux prefix keybinding' }) },
-  { pattern: /^check\s+neovim\s+init\s+lua\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(cat ~/.config/nvim/init.lua 2>/dev/null | head -15); [ -n \"$OUT\" ] && echo \"$OUT\" || echo -e 'vim.opt.number = true\\nvim.opt.relativenumber = true\\nvim.opt.tabstop = 4'", explanation: 'Check neovim init lua config' }) },
-  { pattern: /^check\s+neovim\s+installed\s+plugins\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ls -1 ~/.local/share/nvim/lazy 2>/dev/null || ls -1 ~/.local/share/nvim/site/pack/packer/start 2>/dev/null || echo -e 'telescope.nvim\\nnvim-treesitter\\ncatppuccin'", explanation: 'Check neovim installed plugins' }) },
-  { pattern: /^check\s+fish\s+shell\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/fish/config.fish 2>/dev/null || echo -e '# Fish default config\\nset -g fish_greeting \"\"\\nfish_vi_key_bindings'", explanation: 'Check fish shell config' }) },
-  { pattern: /^check\s+bashrc\s+aliases\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(grep '^alias ' ~/.bashrc 2>/dev/null | head -10); [ -n \"$OUT\" ] && echo \"$OUT\" || echo -e \"alias ll='ls -alF'\\nalias la='ls -A'\\nalias l='ls -CF'\"", explanation: 'Check bashrc aliases' }) },
-  { pattern: /^add\s+shell\s+alias\s+gs\s+for\s+git\s+status\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "echo \"alias gs='git status' added confirmation: Appended to ~/.bashrc\"", explanation: 'Add shell alias gs for git status' }) },
-  { pattern: /^check\s+current\s+desktop\s+wallpaper\s+path\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/hypr/hyprpaper.conf 2>/dev/null || swww query 2>/dev/null", explanation: 'Check current desktop wallpaper path' }) },
-  { pattern: /^check\s+waybar\s+active\s+modules\s+list\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'modules-' ~/.config/waybar/config 2>/dev/null || grep 'modules-' ~/.config/waybar/config.jsonc 2>/dev/null || echo -e '\"modules-left\": [\"hyprland/workspaces\", \"hyprland/window\"],\\n\"modules-right\": [\"pulseaudio\", \"network\", \"cpu\", \"memory\", \"clock\"]'", explanation: 'Check waybar active modules list' }) },
-  { pattern: /^check\s+dunst\s+notification\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(cat ~/.config/dunst/dunstrc 2>/dev/null | head -15); [ -n \"$OUT\" ] && echo \"$OUT\" || echo -e '[global]\\n    geometry = \"300x5-30+20\"\\n    transparency = 10\\n    font = \"JetBrains Mono 10\"'", explanation: 'Check dunst notification config' }) },
-  { pattern: /^check\s+mako\s+notification\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/mako/config 2>/dev/null || echo -e '# Mako config\\ndefault-timeout=5000\\nborder-radius=8\\nfont=JetBrains Mono 10'", explanation: 'Check mako notification config' }) },
-  { pattern: /^check\s+rofi\s+launcher\s+theme\s+name\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -i '@theme' ~/.config/rofi/config.rasi 2>/dev/null", explanation: 'Check rofi launcher theme name' }) },
-  { pattern: /^check\s+starship\s+prompt\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(cat ~/.config/starship.toml 2>/dev/null | head -15); [ -n \"$OUT\" ] && echo \"$OUT\" || echo -e '[character]\\nsuccess_symbol = \"[➜](bold green)\"\\nerror_symbol = \"[✗](bold red)\"'", explanation: 'Check starship prompt config' }) },
-  { pattern: /^check\s+fastfetch\s+or\s+neofetch\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/fastfetch/config.jsonc 2>/dev/null", explanation: 'Check fastfetch or neofetch config' }) },
-  { pattern: /^list\s+all\s+files\s+in\s+(?:~?\/?\.config\s+directory|~?\/?\.config)\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ls -1 ~/.config | head -15 || echo -e 'hypr\\nwaybar\\nkitty\\nfastfetch\\nrofi'", explanation: 'List all files in ~/.config directory' }) },
-  { pattern: /^check\s+dotfiles\s+git\s+tracking\s+status\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git -C ~/.config status --short 2>/dev/null || echo -e '?? hypr/\\n?? waybar/'", explanation: 'Check dotfiles git tracking status' }) },
-  { pattern: /^check\s+swaylock\s+screen\s+lock\s+config\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/swaylock/config 2>/dev/null || echo -e 'ring-color=bb9af7\\ninside-color=1a1b26\\nkey-hl-color=7aa2f7'", explanation: 'Check swaylock screen lock config' }) },
-  { pattern: /^check\s+wlogout\s+power\s+menu\s+layout\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "cat ~/.config/wlogout/layout 2>/dev/null || echo -e '{\"label\": \"lock\", \"action\": \"swaylock\"}\\n{\"label\": \"logout\", \"action\": \"hyprctl dispatch exit\"}\\n{\"label\": \"shutdown\", \"action\": \"systemctl poweroff\"}\\n{\"label\": \"reboot\", \"action\": \"systemctl reboot\"}'", explanation: 'Check wlogout power menu layout' }) },
-  { pattern: /^check\s+zshrc\s+theme\s+and\s+plugins\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -E 'ZSH_THEME|plugins=' ~/.zshrc 2>/dev/null || echo -e 'ZSH_THEME=\"robbyrussell\"\\nplugins=(git sudo zsh-autosuggestions)'", explanation: 'Check zshrc theme and plugins' }) },
-  { pattern: /^check\s+gtk\s+theme\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'gtk-theme-name' ~/.config/gtk-3.0/settings.ini 2>/dev/null || gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null", explanation: 'Check gtk theme configuration' }) },
-  { pattern: /^check\s+icon\s+theme\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'gtk-icon-theme-name' ~/.config/gtk-3.0/settings.ini 2>/dev/null || gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null", explanation: 'Check icon theme configuration' }) },
-  { pattern: /^check\s+cursor\s+theme\s+and\s+size\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep 'gtk-cursor' ~/.config/gtk-3.0/settings.ini 2>/dev/null || echo -e 'gtk-cursor-theme-name = Bibata-Modern-Classic\\ngtk-cursor-theme-size = 24'", explanation: 'Check cursor theme and size' }) },
-  { pattern: /^check\s+hyprland\s+animations\s+configuration\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "grep -A 5 'animations {' ~/.config/hypr/hyprland.conf 2>/dev/null || echo -e 'animations {\\n    enabled = true\\n    bezier = myBezier, 0.05, 0.9, 0.1, 1.05\\n}'", explanation: 'Check hyprland animations configuration' }) },
-
   { pattern: /^check\s+git\s+conflict\s+markers\s+across\s+all\s+files\s+in\s+repository\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "git diff --check 2>/dev/null", explanation: 'Check git conflict markers' }) },
 
   // Web browser navigation & URL shortcuts (with optional target browser)
@@ -371,7 +301,6 @@ const FAST_PATHS: {
   { pattern: /^check\s+disk\s+usage\s+of\s+current\s+folder\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'du -sh .', explanation: 'Check disk usage of current folder' }) },
   { pattern: /^check\s+disk\s+space\s+on\s+root\s+partition\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'df -h /', explanation: 'Check disk space on root partition' }) },
   { pattern: /^check\s+system\s+architecture\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'uname -m', explanation: 'Check system architecture' }) },
-  { pattern: /^display\s+linux\s+kernel\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'uname -r', explanation: 'Display Linux kernel version' }) },
   { pattern: /^check\s+cpu\s+temperature\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'sensors 2>/dev/null || cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null || echo "CPU Temp: 42°C"', explanation: 'Check CPU temperature' }) },
   { pattern: /^check\s+fan\s+speeds?\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'sensors 2>/dev/null | grep -i fan || echo "Fan: Passive cooling / Fanless"', explanation: 'Check system fan speeds' }) },
   { pattern: /^check\s+ram\s+speed\s+and\s+type\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'sudo -n dmidecode --type memory 2>/dev/null || grep -E "MemTotal|MemFree|MemAvailable" /proc/meminfo', explanation: 'Check RAM speed and type' }) },
@@ -419,7 +348,6 @@ const FAST_PATHS: {
   { pattern: /^kill\s+process\s+on\s+port\s+(\d+)\s*$/i, tool: 'system.kill_process', paramsFn: (m) => ({ port: parseInt(m[1], 10) }) },
   { pattern: /^show\s+process\s+tree\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'pstree 2>/dev/null || ps axjf | head -30', explanation: 'Show process tree' }) },
   { pattern: /^count\s+total\s+running\s+processes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'ps -e | wc -l', explanation: 'Count total running processes' }) },
-  { pattern: /^find\s+pid\s+of\s+hyprland\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: 'pidof Hyprland 2>/dev/null || pgrep -x Hyprland 2>/dev/null || pgrep -i hyprland 2>/dev/null || echo "Hyprland PID: Not currently running"', explanation: 'Find PID of Hyprland' }) },
   { pattern: /^list\s+zombie\s+processes\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ps -eo pid,stat,comm | grep -w 'Z'", explanation: 'List zombie processes' }) },
   { pattern: /^check\s+threads\s+count\s+of\s+process\s+(\d+)\s*$/i, tool: 'shell.execute', paramsFn: (m) => ({ command: `cat /proc/${m[1]}/status | grep -i Threads`, explanation: `Check threads count of process ${m[1]}` }) },
   { pattern: /^find\s+processes\s+consuming\s+more\s+than\s+5%\s+cpu\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "ps -eo pid,pcpu,comm --sort=-pcpu | awk '$2 > 5.0' | head -15", explanation: 'Find processes consuming > 5% CPU' }) },
@@ -604,51 +532,6 @@ const FAST_PATHS: {
   { pattern: /^check\s+make\s+tool\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "make --version 2>/dev/null | head -1", explanation: 'Check make tool version' }) },
   { pattern: /^check\s+docker\s+version\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "docker --version 2>/dev/null", explanation: 'Check docker version' }) },
 
-  // Domain 6: Linux Daemons & Systemd Services (6.1 to 6.50)
-  { pattern: /^check\s+status\s+of\s+bluetooth\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status bluetooth 2>/dev/null", explanation: 'Check status of bluetooth service' }) },
-  { pattern: /^check\s+status\s+of\s+NetworkManager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status NetworkManager 2>/dev/null", explanation: 'Check status of NetworkManager' }) },
-  { pattern: /^is\s+docker\s+daemon\s+running\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl is-active docker 2>/dev/null", explanation: 'Is docker daemon running' }) },
-  { pattern: /^list\s+failed\s+systemd\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --failed 2>/dev/null", explanation: 'List failed systemd services' }) },
-  { pattern: /^list\s+active\s+user\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user list-units --type=service --state=active 2>/dev/null | head -10", explanation: 'List active user services' }) },
-  { pattern: /^check\s+systemd\s+journal\s+errors\s+for\s+today\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl -p 3 -xb 2>/dev/null | head -10", explanation: 'Check systemd journal errors for today' }) },
-  { pattern: /^check\s+ssh\s+service\s+status\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status sshd 2>/dev/null || systemctl status ssh 2>/dev/null", explanation: 'Check ssh service status' }) },
-  { pattern: /^check\s+cron\s+or\s+timer\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-timers 2>/dev/null | head -10", explanation: 'Check cron or timer services' }) },
-  { pattern: /^check\s+status\s+of\s+systemd-resolved\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status systemd-resolved 2>/dev/null", explanation: 'Check status of systemd-resolved' }) },
-  { pattern: /^check\s+status\s+of\s+systemd-timesyncd\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status systemd-timesyncd 2>/dev/null", explanation: 'Check status of systemd-timesyncd' }) },
-  { pattern: /^check\s+status\s+of\s+cron\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status cron 2>/dev/null || systemctl status crond 2>/dev/null", explanation: 'Check status of cron service' }) },
-  { pattern: /^check\s+status\s+of\s+udisks2\s+storage\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status udisks2 2>/dev/null", explanation: 'Check status of udisks2 storage service' }) },
-  { pattern: /^check\s+status\s+of\s+dbus\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status dbus 2>/dev/null", explanation: 'Check status of dbus service' }) },
-  { pattern: /^check\s+status\s+of\s+polkit\s+authorization\s+daemon\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status polkit 2>/dev/null", explanation: 'Check status of polkit authorization daemon' }) },
-  { pattern: /^check\s+status\s+of\s+cups\s+print\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status cups 2>/dev/null", explanation: 'Check status of cups print service' }) },
-  { pattern: /^check\s+status\s+of\s+avahi-daemon\s+mdns\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status avahi-daemon 2>/dev/null", explanation: 'Check status of avahi-daemon mdns service' }) },
-  { pattern: /^check\s+status\s+of\s+firewalld\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status firewalld 2>/dev/null", explanation: 'Check status of firewalld service' }) },
-  { pattern: /^check\s+status\s+of\s+tailscale\s+vpn\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl status tailscaled 2>/dev/null", explanation: 'Check status of tailscale vpn service' }) },
-  { pattern: /^check\s+status\s+of\s+pipewire\s+audio\s+service\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user status pipewire 2>/dev/null", explanation: 'Check status of pipewire audio service' }) },
-  { pattern: /^check\s+status\s+of\s+wireplumber\s+session\s+manager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user status wireplumber 2>/dev/null", explanation: 'Check status of wireplumber session manager' }) },
-  { pattern: /^check\s+status\s+of\s+pulseaudio\s+daemon\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user status pulseaudio 2>/dev/null", explanation: 'Check status of pulseaudio daemon' }) },
-  { pattern: /^list\s+all\s+running\s+systemd\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=service --state=running 2>/dev/null | head -10", explanation: 'List all running systemd services' }) },
-  { pattern: /^list\s+all\s+enabled\s+systemd\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-unit-files --type=service --state=enabled 2>/dev/null | head -10", explanation: 'List all enabled systemd services' }) },
-  { pattern: /^list\s+all\s+disabled\s+systemd\s+services\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-unit-files --type=service --state=disabled 2>/dev/null | head -10", explanation: 'List all disabled systemd services' }) },
-  { pattern: /^check\s+boot\s+performance\s+blame\s+with\s+systemd-analyze\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemd-analyze blame 2>/dev/null | head -5", explanation: 'Check boot performance blame with systemd-analyze' }) },
-  { pattern: /^check\s+total\s+system\s+boot\s+time\s+breakdown\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemd-analyze 2>/dev/null", explanation: 'Check total system boot time breakdown' }) },
-  { pattern: /^check\s+critical\s+chain\s+boot\s+bottleneck\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemd-analyze critical-chain 2>/dev/null | head -5", explanation: 'Check critical chain boot bottleneck' }) },
-  { pattern: /^tail\s+last\s+20\s+lines\s+of\s+system\s+log\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl -n 20 --no-pager 2>/dev/null", explanation: 'Tail last 20 lines of system log' }) },
-  { pattern: /^tail\s+logs\s+for\s+NetworkManager\s+unit\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl -u NetworkManager -n 10 --no-pager 2>/dev/null", explanation: 'Tail logs for NetworkManager unit' }) },
-  { pattern: /^tail\s+logs\s+for\s+bluetooth\s+unit\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl -u bluetooth -n 10 --no-pager 2>/dev/null", explanation: 'Tail logs for bluetooth unit' }) },
-  { pattern: /^show\s+kernel\s+ring\s+buffer\s+dmesg\s+errors\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "OUT=$(dmesg --level=err,warn 2>/dev/null | head -10); [ -n \"$OUT\" ] && echo \"$OUT\"", explanation: 'Show kernel ring buffer dmesg errors' }) },
-  { pattern: /^check\s+systemd\s+default\s+target\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl get-default 2>/dev/null", explanation: 'Check systemd default target' }) },
-  { pattern: /^check\s+if\s+system\s+is\s+degraded\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl is-system-running 2>/dev/null", explanation: 'Check if system is degraded' }) },
-  { pattern: /^show\s+active\s+systemd\s+slices\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=slice 2>/dev/null | head -5", explanation: 'Show active systemd slices' }) },
-  { pattern: /^check\s+status\s+of\s+user\s+systemd\s+manager\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user is-system-running 2>/dev/null", explanation: 'Check status of user systemd manager' }) },
-  { pattern: /^show\s+dependencies\s+of\s+graphical\.target\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-dependencies graphical.target 2>/dev/null | head -10", explanation: 'Show dependencies of graphical.target' }) },
-  { pattern: /^check\s+environment\s+variables\s+of\s+systemd\s+user\s+session\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user show-environment 2>/dev/null | head -5", explanation: 'Check environment variables of systemd user session' }) },
-  { pattern: /^import\s+DISPLAY\s+variable\s+into\s+systemd\s+user\s+session\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl --user import-environment DISPLAY WAYLAND_DISPLAY 2>/dev/null || true; echo 'Environment imported confirmation: Clean exit code 0'", explanation: 'Import DISPLAY variable into systemd user session' }) },
-  { pattern: /^check\s+systemd\s+log\s+disk\s+space\s+usage\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "journalctl --disk-usage 2>/dev/null", explanation: 'Check systemd log disk space usage' }) },
-  { pattern: /^check\s+active\s+systemd\s+mount\s+units\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=mount 2>/dev/null | head -5", explanation: 'Check active systemd mount units' }) },
-  { pattern: /^check\s+active\s+systemd\s+automount\s+units\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=automount 2>/dev/null", explanation: 'Check active systemd automount units' }) },
-  { pattern: /^check\s+systemd\s+socket\s+units\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl list-units --type=socket 2>/dev/null | head -5", explanation: 'Check systemd socket units' }) },
-  { pattern: /^reset\s+failed\s+systemd\s+units\s+state\s*$/i, tool: 'shell.execute', paramsFn: () => ({ command: "systemctl reset-failed 2>/dev/null || true; echo 'Failed units counter reset: Clean exit code 0'", explanation: 'Reset failed systemd units state' }) },
-
   // Generic network checks & port shortcuts
   {
     pattern: /\b(?:what|which|find|tell\s+me|get|show|check|any)\s+(?:a\s+)?ports?\s+(?:is\s+|are\s+)?(?:free|available|open|unused)\b/i,
@@ -758,16 +641,6 @@ const FAST_PATHS: {
     tool: 'system.service',
     paramsFn: (m) => ({ service: m[2].trim(), action: m[1].toLowerCase() })
   },
-  // Dotfile rice autostart toggling (turn on/off, enable/disable in rice/hyprland/i3)
-  {
-    pattern: /^(?:turn\s+(on|off)|enable|disable)\s+([a-z0-9_.-]+)\s+(?:in\s+rice|on\s+startup|in\s+autostart|in\s+(hyprland|i3|sway))\s*$/i,
-    tool: 'system.dotfile',
-    paramsFn: (m) => ({
-      app: m[2].trim(),
-      enable: m[1] === 'on' || m[0].toLowerCase().startsWith('enable'),
-      target: m[3] ? m[3].toLowerCase() : 'hyprland'
-    })
-  }
 ];
 
 /**
@@ -863,7 +736,7 @@ export function requiresExecutionPlan(goal: string): boolean {
  */
 const KNOWN_COMMANDS = new Set(['git', 'npm', 'npx', 'pnpm', 'yarn', 'bun', 'node', 'python', 'python3', 'pip', 'pip3', 'cargo', 'rustc', 'go', 'make', 'cmake',
   'docker', 'kubectl', 'ls', 'cd', 'mkdir', 'touch', 'cp', 'mv', 'rm', 'cat', 'echo', 'printf', 'grep', 'find', 'sed', 'awk', 'curl', 'wget', 'tar', 'unzip',
-  'chmod', 'chown', 'ln', 'code', 'open', 'xdg-open', 'ros2', 'colcon', 'rosdep', 'source', '.', 'export', 'sudo', 'brew', 'apt', 'apt-get', 'dnf', 'pacman',
+  'chmod', 'chown', 'ln', 'code', 'open', 'xdg-open', 'source', '.', 'export', 'sudo', 'brew', 'apt', 'apt-get', 'dnf', 'pacman',
   'systemctl', 'journalctl', 'tail', 'head', 'wc', 'sort', 'uniq', 'du', 'df', 'ps', 'kill', 'pkill', 'lsof', 'ssh', 'scp', 'rsync', 'pwd', 'env', 'which',
   'test', '[', 'if', 'for', 'while', 'ffmpeg', 'jq', 'yq', 'uv', 'poetry', 'deno', 'java', 'mvn', 'gradle', 'dotnet', 'flutter', 'rails', 'php', 'composer',
   'top', 'htop', 'btop', 'watch', 'less', 'more', 'vim', 'vi', 'nvim', 'nano', 'emacs', 'man', 'ping', 'traceroute', 'tmux', 'screen', 'htop', 'ncdu',
@@ -888,14 +761,6 @@ function cdCommand(target: string): string {
   if (target === '~') return 'cd "$HOME"';
   if (target.startsWith('~/')) return `cd "$HOME/${target.slice(2).replace(/(["\\$`])/g, '\\$1')}"`;
   return `cd '${target.replace(/'/g, `'\\''`)}'`;
-}
-
-/** A long-running command as typed into a pane: ROS commands get the setup script for the pane's shell (Linux). */
-function paneCommand(command: string, os: string): string {
-  if (os !== 'linux') return command;
-  const profile = SystemKnowledgeScanner.getInstance().getProfile();
-  const distro = chooseRosDistro(profile?.ros?.distros || [], profile?.ros?.activeDistro);
-  return withRosEnvironmentForPane(command, profile?.shells?.defaultShell || '/bin/bash', distro);
 }
 
 /**
@@ -1212,51 +1077,6 @@ export class AgentLoop {
   public static readonly OBSERVATION_HEAD_LINES = 60;
   public static readonly OBSERVATION_TAIL_LINES = 20;
 
-  public static readonly DIAGNOSTIC_COMMAND_REGEX = /^(?:sudo\s+)?(?:df|free|lscpu|lshw|lspci|lsusb|ip|uname|ps|uptime|lsblk|top|vmstat|netstat|ss|iostat|mpstat|systemd-analyze|systemctl|journalctl|iw|nmcli|iwconfig|ifconfig|route|cat\s+\/proc|cat\s+\/sys|hexdump|dmesg|timedatectl|localectl|hostnamectl)\b/;
-
-  /**
-   * Sanitizes desktop application binary invocations and prepends workspace switching dispatchers
-   * (e.g. rewriting "zen" -> "zen-browser", dispatching Hyprland workspace).
-   */
-  public static sanitizeDesktopAppCommand(command: string, originalGoal?: string): string {
-    if (!command || typeof command !== 'string') return command;
-    let result = command;
-
-    // Rewrite 'zen' binary to 'zen-browser' on Linux where zen package is named zen-browser
-    result = result.replace(/(^|[;&|]\s*)zen(\s+[^;&|]*|$)/g, (match, prefix, rest) => {
-      return `${prefix}zen-browser${rest}`;
-    });
-
-    // If user prompt specified a target workspace, ensure Hyprland / Sway / i3 / KDE / XFCE / wmctrl switches to it
-    if (originalGoal && !/hyprctl\s+dispatch\s+workspace|hl\.dsp\.focus|swaymsg|i3-msg|setCurrentDesktop|wmctrl\s+-s|xdotool/i.test(result)) {
-      const wsMatch = originalGoal.match(/(?:in|on)\s+(\d+)(?:st|nd|rd|th)?\s+workspace/i);
-      if (wsMatch) {
-        const wsNum = wsMatch[1];
-        const zeroIdx = Math.max(0, parseInt(wsNum, 10) - 1);
-        const dispatcher = `(hyprctl dispatch 'hl.dsp.focus({workspace = "${wsNum}"})' >/dev/null 2>&1 || hyprctl dispatch workspace ${wsNum} >/dev/null 2>&1 || swaymsg workspace number ${wsNum} >/dev/null 2>&1 || i3-msg workspace number ${wsNum} >/dev/null 2>&1 || qdbus org.kde.KWin /KWin setCurrentDesktop ${wsNum} >/dev/null 2>&1 || wmctrl -s ${zeroIdx} >/dev/null 2>&1 || xdotool set_desktop ${zeroIdx} >/dev/null 2>&1 || true)`;
-        result = `${dispatcher} ; ${result}`;
-      }
-    }
-
-    return result;
-  }
-
-  /**
-   * Prefixes diagnostic and system parsing commands with LC_ALL=C LANG=C
-   * to guarantee standard English/POSIX output formatting across all user locales (Phase 0.5, Item 15).
-   */
-  public static prefixLocaleNeutral(command: string): string {
-    if (!command || typeof command !== 'string') return command;
-    const trimmed = command.trim();
-    if (trimmed.startsWith('LC_ALL=') || trimmed.startsWith('LANG=')) {
-      return command;
-    }
-    if (AgentLoop.DIAGNOSTIC_COMMAND_REGEX.test(trimmed)) {
-      return `LC_ALL=C LANG=C ${trimmed}`;
-    }
-    return command;
-  }
-
   /**
    * Truncates large tool observation text (head 60 lines + tail 20 lines)
    * to protect local LLM context window (8192 tokens) from overflow (Phase 0.5, Item 19).
@@ -1370,7 +1190,7 @@ export class AgentLoop {
     const title = paneTitleFor(command);
     try {
       ({ paneId } = workspace.spawn({
-        command: paneCommand(command, context.os),
+        command,
         cwd: context.cwd,
         title,
         requesterPaneId: context.paneId,
@@ -1921,10 +1741,6 @@ export class AgentLoop {
       const handled = await this.runTerminalAction(terminalAction, context);
       if (handled) return handled;
     }
-
-    // ROS 2 pipelines: every node, launch file and topic monitor in its own terminal
-    const rosPlan = planRosPipeline(cleaned || goal);
-    if (rosPlan) return await this.runRosPipeline(goal, rosPlan, context);
 
     // "do this, then that": a planned chain with the folder carried between steps
     const chain = planChain(cleaned || goal, chainOs(context.os));
@@ -2494,7 +2310,7 @@ export class AgentLoop {
     try {
       const title = paneTitleFor(command);
       const { paneId, reused } = TerminalWorkspace.getInstance().spawn({
-        command: paneCommand(command, context.os),
+        command,
         cwd: context.cwd,
         title,
         requesterPaneId: context.paneId
@@ -2813,7 +2629,7 @@ export class AgentLoop {
       }
       try {
         const { paneId } = workspace.spawn({
-          command: command ? paneCommand(command, context.os) : undefined,
+          command: command || undefined,
           cwd,
           title: command ? paneTitleFor(command) : undefined,
           requesterPaneId: context.paneId,
@@ -2911,63 +2727,6 @@ export class AgentLoop {
     // The last line is the new prompt
     const printed = out.slice(0, -1).slice(-15);
     return done(`Ran \`${command}\` in ${describePane(pane)}.${printed.length ? `\n\n${printed.join('\n')}` : ' It printed nothing.'}`);
-  }
-
-  /** How long ROS nodes get to come up before the node/topic lists are checked */
-  public static ROS_SETTLE_MS = 4000;
-  /** Gap between starting consecutive panes (a launch file before the nodes that use it) */
-  public static PANE_STAGGER_MS = 700;
-
-  /**
-   * Start a ROS 2 pipeline: check ROS is installed, one confirmation for every process, each
-   * in its own pane, then confirm the graph with `ros2 node list` / `ros2 topic list`.
-   */
-  private async runRosPipeline(goal: string, plan: RosPipeline, context: AgentRunContext): Promise<AgentResult> {
-    const probe = await this.toolExecutor.execute('shell.execute', { command: 'ls -d /opt/ros 2>/dev/null || which ros2', explanation: 'Check for ROS 2' }, context.cwd, this.authorizationHandler);
-    const installed = probe.success && (typeof probe.data?.code !== 'number' || probe.data.code === 0)
-      && typeof probe.data?.stdout === 'string' && probe.data.stdout.trim().length > 0;
-    if (!installed) {
-      const summary = `ROS 2 is not installed on this computer (no /opt/ros and no ros2 command). Install ROS 2 (Jazzy on Ubuntu 24.04, Humble on 22.04), then ask again: ${plan.panes.map(p => `\`${p}\``).join(', ')} would each start in their own terminal.`;
-      this.emit({ type: 'error', message: summary });
-      return { success: false, summary, steps: [{ tool: 'shell.execute', params: { command: 'which ros2' }, result: probe }] };
-    }
-
-    const batch = await approveBatch(plan.panes, `Start ${plan.summary}: ${goal}`, this.authorizationHandler);
-    if (!batch.approved) {
-      const summary = 'Not run: you declined the ROS 2 pipeline. Nothing was started.';
-      this.emit({ type: 'tool_done', message: `✗ ${summary}` });
-      return { success: false, summary, steps: [], declined: true };
-    }
-
-    const steps: AgentResult['steps'] = [];
-    for (let i = 0; i < plan.panes.length; i++) {
-      const command = plan.panes[i];
-      this.emit({ type: 'tool_start', message: `Starting ${command}` });
-      const result = await this.runInPane(command, 'ROS 2 pipeline', context, true);
-      steps.push({ tool: 'terminal.spawn', params: { command }, result });
-      if (!result.success) {
-        const summary = `Could not start \`${command}\`: ${result.error}`;
-        this.emit({ type: 'error', message: summary });
-        return { success: false, summary, steps };
-      }
-      this.emit({ type: 'tool_done', message: `✓ ${result.data.stdout}` });
-      if (i < plan.panes.length - 1 && AgentLoop.PANE_STAGGER_MS > 0) await new Promise(r => setTimeout(r, AgentLoop.PANE_STAGGER_MS));
-    }
-
-    if (AgentLoop.ROS_SETTLE_MS > 0) {
-      this.emit({ type: 'thinking', message: 'Waiting for the nodes to come up...' });
-      await new Promise(r => setTimeout(r, AgentLoop.ROS_SETTLE_MS));
-    }
-    for (const check of plan.checks) {
-      this.emit({ type: 'tool_start', message: check });
-      const result = await this.toolExecutor.execute('shell.execute', { command: check, explanation: 'Check the ROS 2 graph' }, context.cwd, this.authorizationHandler);
-      steps.push({ tool: 'shell.execute', params: { command: check }, result });
-      this.emit({ type: 'tool_done', message: `✓ ${check}`, data: result.data });
-    }
-
-    const summary = `Started ${plan.summary}. Each runs in its own terminal; press Ctrl+C in a pane to stop it.`;
-    this.emit({ type: 'done', message: summary });
-    return { success: true, summary, steps };
   }
 
   /** One model call for one clause of a chain; null unless it yields a real shell command. */
@@ -4914,8 +4673,6 @@ export class AgentLoop {
           }
 
           if (toolId === 'shell.execute' && params?.command) {
-            // Sanitize desktop application binaries & workspace dispatchers
-            params.command = AgentLoop.sanitizeDesktopAppCommand(params.command, goal);
             // No terminal behind this step: a program that asks questions gets its non-interactive form
             params.command = nonInteractiveForm(params.command);
 
@@ -4926,8 +4683,7 @@ export class AgentLoop {
             // "... but keep the originals": gzip/xz/bzip2 delete them unless told -k
             params.command = keepOriginals(params.command, goal);
 
-            // Prefix diagnostic commands with LC_ALL=C LANG=C (Phase 0.5, Item 15)
-            params.command = AgentLoop.prefixLocaleNeutral(params.command);
+            // TODO(4.2): Windows output is localized too (netsh, systeminfo); parse by structure, not English labels
 
             // Check if command is missing non-interactive flags (Phase 0.5, Item 18)
             const nonInteractiveFix = StdinHangDetector.suggestNonInteractiveFix(params.command);
@@ -5716,17 +5472,6 @@ User request: ${goal}`;
       }
     }
 
-    // Dotfile Rice and Autostart
-    if (hasWord(lower, 'rice') || hasWord(lower, 'autostart') || hasWord(lower, 'hyprland') || hasWord(lower, 'i3')) {
-      const toggleMatch = lower.match(/(?:turn\s+(on|off)|enable|disable)\s+([a-z0-9_.-]+)/i);
-      if (toggleMatch) {
-        const enable = toggleMatch[1] === 'on' || hasWord(lower, 'enable');
-        const app = toggleMatch[2].trim();
-        const target = hasWord(lower, 'i3') ? 'i3' : hasWord(lower, 'sway') ? 'sway' : 'hyprland';
-        return { tool: 'system.dotfile', params: { app, enable, target } };
-      }
-    }
-
     // System Operations
     if (hasWord(lower, 'lock') && (hasWord(lower, 'mac') || hasWord(lower, 'screen') || hasWord(lower, 'laptop') || hasWord(lower, 'computer'))) {
       return { tool: 'system.lock', params: {} };
@@ -5933,7 +5678,6 @@ User request: ${goal}`;
         return '✓ System info retrieved';
       }
       case 'system.service': return `✓ Service ${params.service} ${params.action} completed`;
-      case 'system.dotfile': return `✓ Dotfile autostart for ${params.app} ${params.enable !== false ? 'enabled' : 'disabled'}`;
       case 'network.ports':
         if (result.data?.stdout) {
           return result.data.stdout.trim();
@@ -5958,7 +5702,6 @@ User request: ${goal}`;
     }
     const names: Record<string, string> = {
       'system.service': 'Managing system service...',
-      'system.dotfile': 'Updating dotfile configuration...',
       'network.bluetooth.on': 'Turning on Bluetooth...',
       'network.bluetooth.off': 'Turning off Bluetooth...',
       'network.bluetooth.connect': 'Connecting Bluetooth device...',

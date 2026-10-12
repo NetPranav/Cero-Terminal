@@ -1,7 +1,7 @@
 /**
  * Cero — Workspace Registry
  *
- * Scans, indexes, and caches developer workspaces (ROS 1/2, Node, Python, Rust, Docker)
+ * Scans, indexes, and caches developer workspaces (Node, Python, Rust, Docker)
  * across local filesystem roots to provide sub-millisecond workspace navigation.
  */
 
@@ -132,8 +132,7 @@ try:
             ptype, conf, desc, script = 'generic', 60, 'Directory', None
             try:
                 sub = set(os.listdir(p))
-                if 'package.xml' in sub: ptype, conf, desc, script = 'ros2', 95, 'ROS 2 Workspace Package', 'source install/setup.bash'
-                elif 'Cargo.toml' in sub: ptype, conf, desc, script = 'rust', 92, 'Rust Project (Cargo)', 'cargo build'
+                if 'Cargo.toml' in sub: ptype, conf, desc, script = 'rust', 92, 'Rust Project (Cargo)', 'cargo build'
                 elif 'package.json' in sub: ptype, conf, desc, script = 'node', 90, 'Node.js / Web Project', 'npm start'
                 elif 'pyproject.toml' in sub or 'requirements.txt' in sub: ptype, conf, desc, script = 'python', 85, 'Python Environment', 'python3 -m venv .venv && source .venv/bin/activate'
                 elif 'docker-compose.yml' in sub or 'Dockerfile' in sub: ptype, conf, desc, script = 'docker', 80, 'Docker Container', 'docker compose up -d'
