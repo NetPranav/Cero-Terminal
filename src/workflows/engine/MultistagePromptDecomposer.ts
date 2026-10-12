@@ -272,9 +272,7 @@ export class MultistagePromptDecomposer {
       if_precondition_true: s.if_precondition_true,
       if_precondition_false: s.if_precondition_false,
       platformCommands: s.platformCommands || {
-        linux: CrossPlatformCommandAdapter.getInstance().translateCommand(s.inferredCommand, 'linux'),
-        macos: CrossPlatformCommandAdapter.getInstance().translateCommand(s.inferredCommand, 'macos'),
-        windows: CrossPlatformCommandAdapter.getInstance().translateCommand(s.inferredCommand, 'windows')
+        windows: CrossPlatformCommandAdapter.getInstance().translateCommand(s.inferredCommand)
       }
     }));
 

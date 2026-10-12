@@ -273,7 +273,7 @@ describe('DeterministicReplayEngine — terminal semantics', () => {
       ? { code: 0, stdout: `${cwd}/proj\n`, stderr: '' }
       : { code: 0, stdout: '', stderr: '' });
     const result = await DeterministicReplayEngine.getInstance().replay(wf([
-      { command: 'mkdir -p proj' },
+      { command: 'git init proj' },
       { command: 'cd proj' },
       { command: 'pwd > where.txt' },
       { command: 'cd sub && make' },
@@ -282,7 +282,7 @@ describe('DeterministicReplayEngine — terminal semantics', () => {
 
     expect(result.success).toBe(true);
     expect(executor.mock.calls.map(c => [c[0], c[1]])).toEqual([
-      ['mkdir -p proj', '/tmp/wf'],
+      ['git init proj', '/tmp/wf'],
       ["cd 'proj' && pwd", '/tmp/wf'],
       ['pwd > where.txt', '/tmp/wf/proj'],
       ['cd sub && make', '/tmp/wf/proj'],
@@ -308,11 +308,11 @@ describe('DeterministicReplayEngine — terminal semantics', () => {
     const executor = vi.fn(async () => ({ code: 0, stdout: '', stderr: '' }));
     const handler = vi.fn().mockResolvedValue(false);
     const result = await DeterministicReplayEngine.getInstance().replay(wf([
-      { command: 'mkdir -p out' },
-      { command: 'touch out/a.txt' },
+      { command: 'git init out' },
+      { command: 'npm install' },
     ]), { executor, autoApprove: true, authorizationHandler: handler, cwd: '/tmp' });
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler.mock.calls[0][0].parameters.command).toBe('1. mkdir -p out\n2. touch out/a.txt');
+    expect(handler.mock.calls[0][0].parameters.command).toBe('1. git init out\n2. npm install');
     expect(result.success).toBe(false);
     expect(executor).not.toHaveBeenCalled();
   });

@@ -1,24 +1,15 @@
 /**
- * CrossPlatformCommandAdapter.ts — OS-Agnostic Workflow Command & Execution Adapter
+ * CrossPlatformCommandAdapter.ts — workflow command adapter for Windows.
  *
- * Normalizes shell commands, paths, and process invocations across:
- * - Linux (Debian/Ubuntu, Arch, Fedora, Alpine)
- * - macOS (Darwin)
- * - Windows (PowerShell & CMD)
- *
- * Enables zero-token saved workflows created on any platform to execute seamlessly
- * across all supported desktop operating systems.
+ * Saved workflows may come from Linux or macOS. A step's `platformCommands.windows` variant wins;
+ * otherwise common POSIX idioms in the step command are translated to PowerShell / cmd equivalents.
  */
 
-import { getPlatform, Platform } from '../../shared/platform';
 import { WorkflowStepDefinition } from '../models/WorkflowTypes';
 import { invoke } from '@tauri-apps/api/core';
 
-export type LinuxDistroFamily = 'debian' | 'arch' | 'fedora' | 'alpine' | 'generic';
-
 export class CrossPlatformCommandAdapter {
   private static instance?: CrossPlatformCommandAdapter;
-  private distroFamily: LinuxDistroFamily = 'generic';
 
   public static getInstance(): CrossPlatformCommandAdapter {
     if (!CrossPlatformCommandAdapter.instance) {
@@ -27,107 +18,38 @@ export class CrossPlatformCommandAdapter {
     return CrossPlatformCommandAdapter.instance;
   }
 
-  constructor() {
-    this.detectLinuxDistro();
-  }
-
   /**
-   * Best-effort detection of the Linux distro family in Node / browser runtime.
+   * The PowerShell executable and arguments that run a command, optionally in a working directory.
    */
-  private detectLinuxDistro(): void {
-    if (typeof process === 'undefined' || process.platform !== 'linux') {
-      return;
-    }
-
-    try {
-      if (typeof navigator !== 'undefined' && navigator.userAgent) {
-        const ua = navigator.userAgent.toLowerCase();
-        if (ua.includes('ubuntu') || ua.includes('debian')) this.distroFamily = 'debian';
-        else if (ua.includes('arch') || ua.includes('manjaro')) this.distroFamily = 'arch';
-        else if (ua.includes('fedora') || ua.includes('redhat')) this.distroFamily = 'fedora';
-        else if (ua.includes('alpine')) this.distroFamily = 'alpine';
-      }
-    } catch {
-      // Non-fatal
-    }
-  }
-
-  public getDistroFamily(): LinuxDistroFamily {
-    return this.distroFamily;
-  }
-
-  public setDistroFamily(family: LinuxDistroFamily): void {
-    this.distroFamily = family;
-  }
-
-  /**
-   * Resolves the proper shell executable and arguments for the current operating system.
-   */
-  public getShellInvocation(
-    command: string,
-    cwd?: string,
-    platform: Platform = getPlatform()
-  ): { command: string; args: string[] } {
+  public getShellInvocation(command: string, cwd?: string): { command: string; args: string[] } {
     const fullCmd = cwd
-      ? (platform === 'windows' ? `Set-Location -LiteralPath '${cwd.replace(/'/g, "''")}'; ${command}` : `cd '${cwd.replace(/'/g, `'\\''`)}' && ${command}`)
+      ? `Set-Location -LiteralPath '${cwd.replace(/'/g, "''")}'; ${command}`
       : command;
-
-    if (platform === 'windows') {
-      return {
-        command: 'powershell.exe',
-        args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', fullCmd]
-      };
-    }
-
     return {
-      command: 'sh',
-      args: ['-c', fullCmd]
+      command: 'powershell.exe',
+      args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', fullCmd]
     };
   }
 
   /**
-   * Resolves the appropriate command to execute for a workflow step.
-   * Prioritizes explicit platform variants (`platformCommands[targetPlatform]`),
-   * falling back to automatic command translation.
+   * The command to execute for a workflow step: the explicit Windows variant when the step has one,
+   * otherwise the step command translated to Windows.
    */
-  public resolveStepCommand(
-    step: WorkflowStepDefinition,
-    targetPlatform: Platform = getPlatform()
-  ): string {
-    // 1. Check for explicit platform override
-    if (step.platformCommands) {
-      const explicit = step.platformCommands[targetPlatform];
-      if (explicit && explicit.trim()) {
-        return explicit.trim();
-      }
-      if (targetPlatform === 'linux' && step.platformCommands.distroOverrides) {
-        const distroOverride = step.platformCommands.distroOverrides[this.distroFamily];
-        if (distroOverride && distroOverride.trim()) {
-          return distroOverride.trim();
-        }
-      }
+  public resolveStepCommand(step: WorkflowStepDefinition): string {
+    const explicit = step.platformCommands?.windows;
+    if (explicit && explicit.trim()) {
+      return explicit.trim();
     }
-
-    // 2. Fall back to automated cross-platform command translation
-    return this.translateCommand(step.command, targetPlatform);
+    return this.translateCommand(step.command);
   }
 
   /**
-   * Translates common POSIX or platform-specific idioms into the target OS equivalent.
+   * Translates common POSIX idioms into their Windows equivalents.
    */
-  public translateCommand(cmd: string, targetPlatform: Platform = getPlatform()): string {
+  public translateCommand(cmd: string): string {
     const trimmed = cmd.trim();
     if (!trimmed) return trimmed;
-
-    if (targetPlatform === 'windows') {
-      return this.translateToWindows(trimmed);
-    }
-
-    if (targetPlatform === 'macos') {
-      return this.translateToMac(trimmed);
-    }
-
-    return this.translateToLinux(trimmed);
+    return this.translateToWindows(trimmed);
   }
 
   /**
@@ -196,72 +118,17 @@ export class CrossPlatformCommandAdapter {
   }
 
   /**
-   * Translates Linux or Windows commands into macOS syntax.
-   */
-  private translateToMac(cmd: string): string {
-    let result = cmd;
-
-    // 1. Linux open -> macOS open
-    result = result.replace(/\bxdg-open\s+/gi, 'open ');
-
-    // 2. Windows where -> which
-    result = result.replace(/\bwhere\.exe\s+/gi, 'which ');
-
-    // 3. Linux package managers -> Homebrew
-    result = result.replace(
-      /\b(?:sudo\s+)?(?:apt-get\s+install|apt\s+install|pacman\s+-S|dnf\s+install)(?:\s+(?:-y|--noconfirm))?\s+([a-zA-Z0-9_\-]+)/gi,
-      (_match, pkg) => `brew install ${pkg}`
-    );
-
-    return result;
-  }
-
-  /**
-   * Translates macOS or Windows commands into Linux syntax.
-   */
-  private translateToLinux(cmd: string): string {
-    let result = cmd;
-
-    // 1. macOS open -> xdg-open
-    result = result.replace(/\bopen\s+(https?:\/\/[^\s]+|[^\s]+\.[a-zA-Z0-9]+)/gi, 'xdg-open $1');
-
-    // 2. Windows where -> which
-    result = result.replace(/\bwhere\.exe\s+/gi, 'which ');
-
-    // 3. Translate Homebrew or generic install to distro-specific manager
-    const pkgMatch = result.match(/\b(?:brew\s+install|winget\s+install)\s+([a-zA-Z0-9_\-]+)/i);
-    if (pkgMatch && pkgMatch[1]) {
-      const pkg = pkgMatch[1];
-      if (this.distroFamily === 'arch') {
-        result = `sudo pacman -S --noconfirm ${pkg}`;
-      } else if (this.distroFamily === 'fedora') {
-        result = `sudo dnf install -y ${pkg}`;
-      } else if (this.distroFamily === 'alpine') {
-        result = `apk add ${pkg}`;
-      } else {
-        // Default to debian/ubuntu
-        result = `sudo apt-get install -y ${pkg}`;
-      }
-    }
-
-    return result;
-  }
-
-  /**
-   * Cross-platform check if a binary exists in PATH.
+   * Check if a binary exists in PATH.
    */
   public async checkBinaryExists(
     binary: string,
-    executor?: (cmd: string) => Promise<{ code: number }>,
-    platform: Platform = getPlatform()
+    executor?: (cmd: string) => Promise<{ code: number }>
   ): Promise<boolean> {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
       return true;
     }
 
-    const testCmd = platform === 'windows'
-      ? `where.exe '${binary.replace(/'/g, "''")}' >NUL 2>&1`
-      : `command -v '${binary.replace(/'/g, `'\\''`)}' >/dev/null 2>&1 || which '${binary.replace(/'/g, `'\\''`)}' >/dev/null 2>&1`;
+    const testCmd = `where.exe '${binary.replace(/'/g, "''")}' >NUL 2>&1`;
 
     try {
       if (executor) {
@@ -269,7 +136,7 @@ export class CrossPlatformCommandAdapter {
         return res.code === 0;
       }
 
-      const invocation = this.getShellInvocation(testCmd, undefined, platform);
+      const invocation = this.getShellInvocation(testCmd);
       const res = await invoke<{ code: number }>('execute_command', {
         command: invocation.command,
         args: invocation.args
@@ -281,20 +148,17 @@ export class CrossPlatformCommandAdapter {
   }
 
   /**
-   * Cross-platform check if a path exists.
+   * Check if a path exists.
    */
   public async checkPathExists(
     pathToCheck: string,
-    executor?: (cmd: string) => Promise<{ code: number }>,
-    platform: Platform = getPlatform()
+    executor?: (cmd: string) => Promise<{ code: number }>
   ): Promise<boolean> {
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
       return true;
     }
 
-    const testCmd = platform === 'windows'
-      ? `if (Test-Path -LiteralPath '${pathToCheck.replace(/'/g, "''")}') { exit 0 } else { exit 1 }`
-      : `test -e '${pathToCheck.replace(/'/g, `'\\''`)}'`;
+    const testCmd = `if (Test-Path -LiteralPath '${pathToCheck.replace(/'/g, "''")}') { exit 0 } else { exit 1 }`;
 
     try {
       if (executor) {
@@ -302,7 +166,7 @@ export class CrossPlatformCommandAdapter {
         return res.code === 0;
       }
 
-      const invocation = this.getShellInvocation(testCmd, undefined, platform);
+      const invocation = this.getShellInvocation(testCmd);
       const res = await invoke<{ code: number }>('execute_command', {
         command: invocation.command,
         args: invocation.args

@@ -31,7 +31,7 @@ import { CommandSafetyGuardian } from '../domain/security/CommandSafetyGuardian'
 import { PtyStateTracker } from '../domain/terminal/PtyStateTracker';
 import { PromptNavigationEngine, BufferLineInfo } from '../domain/terminal/PromptNavigationEngine';
 import { ShellAdapter } from '../domain/shell/ShellAdapter';
-import { isLinux, getPlatform } from '../shared/platform';
+import { getPlatform } from '../shared/platform';
 import { 
   Wrench, 
   Play, 
@@ -309,7 +309,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
     } else if (agentLoopRef.current) {
       PromptProgressManager.getInstance().startPrompt(`Auto-Heal: ${rem.actionTitle}`);
       try {
-        const res = await agentLoopRef.current.run(`fix error: ${rem.actionTitle}`, { os: getPlatform() === 'linux' ? 'linux' : 'mac', cwd: currentPath || '~' });
+        const res = await agentLoopRef.current.run(`fix error: ${rem.actionTitle}`, { os: getPlatform(), cwd: currentPath || '~' });
         PromptProgressManager.getInstance().completePrompt(res.success, res.summary);
       } catch (err: any) {
         PromptProgressManager.getInstance().completePrompt(false, err?.message);
@@ -1550,7 +1550,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ paneId, isFocused, s
                 currentInput: commandText,
                 cwd: currentPath || '~',
                 cursorPosition: commandText.length,
-                os: getPlatform() === 'linux' ? 'linux' : 'macos'
+                os: getPlatform()
               });
               // The user may have typed, pasted or moved while suggestions were computed
               if (!ghostText.isCurrent(epoch)) return;

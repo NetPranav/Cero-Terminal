@@ -4,36 +4,33 @@ import { ShellAdapter } from './ShellAdapter';
 describe('ShellAdapter', () => {
   const adapter = ShellAdapter.getInstance();
 
-  it('detects user default login shell from SHELL environment path', () => {
-    expect(adapter.detectLoginShell('/bin/zsh').id).toBe('zsh');
-    expect(adapter.detectLoginShell('/opt/homebrew/bin/bash').id).toBe('bash');
-    expect(adapter.detectLoginShell('/usr/local/bin/fish').id).toBe('fish');
-    expect(adapter.detectLoginShell('/usr/bin/fish').id).toBe('fish');
-    expect(adapter.detectLoginShell('/opt/homebrew/bin/nu').id).toBe('nushell');
-    expect(adapter.detectLoginShell('/usr/local/bin/pwsh').id).toBe('powershell');
-    const expectedDefault = process.platform === 'linux' ? 'bash' : 'zsh';
-    expect(adapter.detectLoginShell(undefined).id).toBe(expectedDefault);
+  it('detects the default shell from its path, and falls back to PowerShell', () => {
+    expect(adapter.detectLoginShell('powershell.exe').id).toBe('powershell');
+    expect(adapter.detectLoginShell('C:\\Program Files\\PowerShell\\7\\pwsh.exe').id).toBe('powershell');
+    expect(adapter.detectLoginShell('C:\\Program Files\\Git\\bin\\bash.exe').id).toBe('bash');
+    expect(adapter.detectLoginShell('C:\\Program Files\\nu\\bin\\nu.exe').id).toBe('nushell');
+    expect(adapter.detectLoginShell('C:\\tools\\menu.exe').id).toBe('powershell');
+    expect(adapter.detectLoginShell(undefined).id).toBe('powershell');
   });
 
-  it('retrieves accurate shell configuration paths and flags', () => {
-    const zsh = adapter.getProfile('zsh');
-    expect(zsh.configFilePath).toBe('.zshrc');
-    expect(zsh.loginFlag).toBe('-l');
-    expect(zsh.supportsTrueColor).toBe(true);
+  it('retrieves shell paths and flags', () => {
+    const ps = adapter.getProfile('powershell');
+    expect(ps.defaultPath).toBe('powershell.exe');
+    expect(ps.supportsTrueColor).toBe(true);
 
     const bash = adapter.getProfile('bash');
     expect(bash.loginFlag).toBe('--login');
     expect(bash.configFilePath).toBe('.bashrc');
   });
 
-  it('builds interactive login shell execution flags correctly', () => {
-    const fish = adapter.getProfile('fish');
-    const args = adapter.buildSpawnArgs(fish, true);
+  it('builds interactive login flags for bash only', () => {
+    const args = adapter.buildSpawnArgs(adapter.getProfile('bash'), true);
     expect(args).toContain('--login');
     expect(args).toContain('-i');
+    expect(adapter.buildSpawnArgs(adapter.getProfile('powershell'), false)).toEqual([]);
   });
 
-  it('generates standard macOS desktop terminal environment variables', () => {
+  it('generates the terminal environment variables', () => {
     const env = adapter.getTerminalEnvironment({ CUSTOM_VAR: 'test' });
     expect(env.TERM).toBe('xterm-256color');
     expect(env.COLORTERM).toBe('truecolor');

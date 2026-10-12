@@ -468,6 +468,7 @@ export class DeterministicReplayEngine {
       }
 
       // Execute Step (a pure `cd` is checked with pwd so the new folder is exact)
+      // TODO(4.7): PowerShell 5.1 has no `&&`; resolve the folder with `Set-Location …; (Get-Location).Path`
       const commandToRun = isPureCd ? `${cdTo(cdTarget!)} && pwd` : expandedCommand;
       let execOutput: { code: number; stdout: string; stderr: string };
       try {

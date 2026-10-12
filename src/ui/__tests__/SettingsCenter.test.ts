@@ -65,7 +65,6 @@ describe('Cero Settings Center & Multi-Tab Configuration Architecture', () => {
     const status = await installer.checkStatus();
     expect(status).toBeDefined();
     expect(typeof status.cliInstalled).toBe('boolean');
-    expect(typeof status.finderEnabled).toBe('boolean');
     expect(typeof status.vscodeConfigured).toBe('boolean');
     expect(typeof status.cursorConfigured).toBe('boolean');
   });

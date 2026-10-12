@@ -370,8 +370,7 @@ export class DiskWorkflowStorage {
 
     // 1. Actions document (.flow format)
     if (Array.isArray(raw.actions)) {
-      const os = getPlatform() === 'linux' ? 'linux' : getPlatform() === 'windows' ? 'windows' : 'macos';
-      const parsedFlow = flowToWorkflow(raw, defaultName || raw.metadata?.name || 'unnamed-workflow', os);
+      const parsedFlow = flowToWorkflow(raw, defaultName || raw.metadata?.name || 'unnamed-workflow', getPlatform());
       if (parsedFlow) {
         return parsedFlow;
       }

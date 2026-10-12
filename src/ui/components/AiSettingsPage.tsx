@@ -35,8 +35,7 @@ import { ModelRecommendationEngine, TierRecommendationResult } from '../../ai/ma
 import { CloudApiProvider, CloudServiceId, CloudKeyConfig, CLOUD_CATALOG } from '../../ai/provider/CloudApiProvider';
 import { readGhostAcceptRight, GHOST_ACCEPT_RIGHT_KEY } from '../../presentation/ghostPrefs';
 import { ModelManager, ActiveModelInfo } from '../../ai/management/ModelManager';
-import { InstallerService, IntegrationStatus } from '../../domain/integration/InstallerService';
-import { isLinux } from '../../shared/platform';
+import { InstallerService, IntegrationStatus, NOT_AVAILABLE_ON_WINDOWS } from '../../domain/integration/InstallerService';
 
 export type SettingsTabId = 'ai' | 'integrations' | 'appearance' | 'general';
 
@@ -135,7 +134,6 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
   // Desktop Integrations State
   const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus>({
     cliInstalled: false,
-    finderEnabled: false,
     vscodeConfigured: false,
     cursorConfigured: false,
   });
@@ -240,25 +238,13 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
     setIntegrationLoading(false);
   };
 
-  const handleEnableFinder = async () => {
-    setIntegrationLoading(true);
-    try {
-      const res = await installer.enableFinderIntegration();
-      if (res.success) setIntegrationMessage(isLinux() ? '✓ Linux File Manager scripts registered!' : '✓ Finder Quick Actions registered!');
-      else setIntegrationMessage(formatIntegrationError(res.error));
-    } catch (err: any) {
-      setIntegrationMessage(formatIntegrationError(err));
-    }
-    await refreshIntegrations();
-    setIntegrationLoading(false);
-  };
-
   const handleConfigureIdes = async () => {
     setIntegrationLoading(true);
     try {
-      await installer.configureVsCodeIntegration();
-      await installer.configureCursorIntegration();
-      setIntegrationMessage('✓ VS Code and Cursor integrated terminal profiles configured!');
+      const vs = await installer.configureVsCodeIntegration();
+      const cursor = await installer.configureCursorIntegration();
+      if (vs.success || cursor.success) setIntegrationMessage('✓ VS Code and Cursor integrated terminal profiles configured!');
+      else setIntegrationMessage(formatIntegrationError(vs.error || cursor.error));
     } catch (err: any) {
       setIntegrationMessage(formatIntegrationError(err));
     }
@@ -270,12 +256,14 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
     setIntegrationLoading(true);
     setIntegrationMessage('Configuring desktop integrations...');
     try {
-      await installer.installCli();
-      await installer.enableFinderIntegration();
-      await installer.configureVsCodeIntegration();
-      await installer.configureCursorIntegration();
+      const results = [
+        await installer.installCli(),
+        await installer.configureVsCodeIntegration(),
+        await installer.configureCursorIntegration(),
+      ];
       await refreshIntegrations();
-      setIntegrationMessage('✓ All desktop integrations successfully configured!');
+      const failed = results.find(r => !r.success);
+      setIntegrationMessage(failed ? formatIntegrationError(failed.error) : '✓ All desktop integrations successfully configured!');
     } catch (err: any) {
       setIntegrationMessage(formatIntegrationError(err));
     } finally {
@@ -1565,7 +1553,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                   Native Desktop & Shell Integrations
                 </div>
                 <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', lineHeight: 1.45 }}>
-                  Integrate Cero deeply with your operating system, terminal launchers, file managers, and IDEs.
+                  Integrate Cero with your terminal launchers and IDEs.
                 </div>
               </div>
 
@@ -1694,7 +1682,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                     borderRadius: '5px',
                     overflow: 'hidden'
                   }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isLinux() ? '~/.local/bin/cero' : '/usr/local/bin/cero'}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{NOT_AVAILABLE_ON_WINDOWS}</span>
                     <span>•</span>
                     <span style={{ color: 'rgba(255, 255, 255, 0.75)', flexShrink: 0 }}>User Space</span>
                   </div>
@@ -1717,89 +1705,6 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                     }}
                   >
                     {integrationStatus.cliInstalled ? 'Reinstall' : 'Install'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Box 2: File Manager Context Actions */}
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                gap: '12px',
-                padding: '18px 20px',
-                backgroundColor: 'rgba(255, 255, 255, 0.025)',
-                border: '1px solid rgba(255, 255, 255, 0.09)',
-                borderRadius: '12px',
-                minHeight: '200px',
-                boxSizing: 'border-box'
-              }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                    <div style={{
-                      width: '30px',
-                      height: '30px',
-                      borderRadius: '7px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#ffffff',
-                      flexShrink: 0
-                    }}>
-                      <Folder size={15} />
-                    </div>
-                    <div style={{ fontWeight: 600, fontSize: '13.5px', color: '#ffffff', lineHeight: 1.3 }}>
-                      {isLinux() ? 'Linux File Manager Scripts' : 'Finder Quick Actions'}
-                    </div>
-                  </div>
-
-                  <div style={{ fontSize: '11.8px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: 1.5 }}>
-                    {isLinux()
-                      ? 'Adds "Open in Cero" to right-click context menus in Nautilus, Nemo, and Caja, plus XDG .desktop application directory registration.'
-                      : 'Registers a native macOS Finder service workflow allowing you to right-click any folder or directory and immediately open Cero.'}
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '10px',
-                    color: 'rgba(255, 255, 255, 0.5)',
-                    fontFamily: 'ui-monospace, monospace',
-                    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                    padding: '4px 8px',
-                    borderRadius: '5px',
-                    overflow: 'hidden'
-                  }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {isLinux() ? '~/.local/share/nautilus/scripts' : '~/Library/Services'}
-                    </span>
-                    <span>•</span>
-                    <span style={{ color: 'rgba(255, 255, 255, 0.75)', flexShrink: 0 }}>Context Menu</span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleEnableFinder}
-                    disabled={integrationLoading}
-                    style={{
-                      padding: '5px 14px',
-                      borderRadius: '6px',
-                      border: integrationStatus.finderEnabled ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid rgba(255, 255, 255, 0.18)',
-                      backgroundColor: integrationStatus.finderEnabled ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.04)',
-                      color: integrationStatus.finderEnabled ? '#ffffff' : 'rgba(255, 255, 255, 0.9)',
-                      fontSize: '11.5px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                      flexShrink: 0
-                    }}
-                  >
-                    {integrationStatus.finderEnabled ? 'Enabled' : 'Enable'}
                   </button>
                 </div>
               </div>
@@ -1857,7 +1762,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                     overflow: 'hidden'
                   }}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {isLinux() ? '~/.config/Code/User' : 'Application Support/Code'}
+                      {NOT_AVAILABLE_ON_WINDOWS}
                     </span>
                     <span>•</span>
                     <span style={{ color: 'rgba(255, 255, 255, 0.75)', flexShrink: 0 }}>IDE Profile</span>
@@ -1898,7 +1803,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
             }}>
               <Info size={16} style={{ color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px', flexShrink: 0 }} />
               <div style={{ fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: 1.5 }}>
-                <strong style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Zero Root Privileges Required:</strong> All Cero integrations write strictly to standard user-space directories (<code style={{ color: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.07)', padding: '1px 4px', borderRadius: '3px' }}>~/.local/bin</code>, <code style={{ color: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.07)', padding: '1px 4px', borderRadius: '3px' }}>~/.local/share/nautilus/scripts</code>, and <code style={{ color: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.07)', padding: '1px 4px', borderRadius: '3px' }}>~/.config/Code/User</code>). No root or sudo credentials are ever requested or modified.
+                <strong style={{ color: 'rgba(255, 255, 255, 0.9)' }}>No Administrator Rights Required:</strong> Cero integrations only change your own user settings. Administrator rights are never requested.
               </div>
             </div>
           </div>
@@ -2405,7 +2310,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                   gap: '3px'
                 }}>
                   <span style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.45)', textTransform: 'uppercase' }}>Target Platform</span>
-                  <span style={{ fontWeight: 500, color: '#ffffff' }}>{isLinux() ? 'Linux (XDG / Freedesktop Standard)' : 'macOS (Darwin / Cocoa)'}</span>
+                  <span style={{ fontWeight: 500, color: '#ffffff' }}>Windows</span>
                 </div>
 
                 <div style={{
@@ -2419,7 +2324,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                 }}>
                   <span style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.45)', textTransform: 'uppercase' }}>Active Shell</span>
                   <span style={{ fontWeight: 500, color: '#ffffff', fontFamily: 'monospace' }}>
-                    {typeof process !== 'undefined' && process.env?.SHELL ? process.env.SHELL : '/bin/bash'}
+                    powershell.exe
                   </span>
                 </div>
 
@@ -2434,7 +2339,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                 }}>
                   <span style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.45)', textTransform: 'uppercase' }}>Configuration Directory</span>
                   <span style={{ fontWeight: 500, color: '#ffffff', fontFamily: 'monospace' }}>
-                    {isLinux() ? '~/.config/cero/' : '~/Library/Application Support/Cero/'}
+                    {'%USERPROFILE%\\.cero\\'}
                   </span>
                 </div>
 
@@ -2449,7 +2354,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                 }}>
                   <span style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.45)', textTransform: 'uppercase' }}>CLI Launcher Target</span>
                   <span style={{ fontWeight: 500, color: '#ffffff', fontFamily: 'monospace' }}>
-                    {isLinux() ? '~/.local/bin/cero' : '/usr/local/bin/cero'}
+                    {NOT_AVAILABLE_ON_WINDOWS}
                   </span>
                 </div>
               </div>

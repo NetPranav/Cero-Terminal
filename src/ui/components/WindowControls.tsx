@@ -1,9 +1,8 @@
 /**
- * WindowControls.tsx — minimize, maximize and close inside the tab bar on Windows and Linux.
+ * WindowControls.tsx — minimize, maximize and close inside the tab bar.
  *
- * The app has no separate title bar on any OS. macOS keeps its native traffic lights, overlaid on
- * the tab bar's left inset; Windows and Linux have no native frame (lib.rs), so these buttons sit
- * at the right end of the tab bar, where those systems put them.
+ * The app has no native frame (tauri.conf.json `decorations: false`), so these buttons sit at the
+ * right end of the tab bar, where Windows puts them.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -63,10 +62,10 @@ export const WindowControls: React.FC = () => {
 
 /**
  * The top strip of a full-screen view (Settings, onboarding). It replaces the tab bar while the view
- * is open: drag to move the window, room for the macOS traffic lights, window controls elsewhere.
+ * is open: drag to move the window, window controls at the right.
  */
-export const WindowTitleStrip: React.FC<{ isMac: boolean }> = ({ isMac }) => (
+export const WindowTitleStrip: React.FC = () => (
   <div className="window-title-strip" data-tauri-drag-region>
-    {!isMac && <WindowControls />}
+    <WindowControls />
   </div>
 );

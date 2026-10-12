@@ -185,7 +185,7 @@ export class ErrorWatchService {
     // Diagnose the error with the few lines around it, never the older buffer: an earlier
     // error must not be "fixed" again when an unrelated line arrives
     const cwd = watch.kind === 'file' ? dirname(watch.target) : '~';
-    const os = getPlatform() === 'macos' ? 'mac' : 'linux';
+    const os = getPlatform();
     const oracle = DeterministicRuleOracle.getInstance();
     const around = lines.slice(Math.max(previous + 1, index - 5), index + 3).join('\n');
     const suggestion = oracle.diagnose({ command: '', output: errorLine, cwd, os })

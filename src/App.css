@@ -48,7 +48,7 @@ body {
   -webkit-user-select: none;
 }
 
-/* Apple macOS style capsule/pill header bar with traffic-light inset and drag region */
+/* Tab bar, which is also the title bar: drag region, window controls at the right end */
 .tabs-bar {
   display: flex;
   background-color: var(--cero-bg, rgba(16, 18, 24, 0.9));
@@ -61,14 +61,9 @@ body {
   user-select: none;
   -webkit-user-select: none;
   z-index: 200;
-  padding: 0 10px 0 78px; /* Inset clears native macOS traffic lights */
+  padding: 0 10px 0 12px;
   color: var(--cero-fg, #ffffff);
   -webkit-app-region: drag; /* Allows moving the window by dragging the tabs bar */
-}
-
-/* On Linux or non-macOS, start tabs cleanly on the left edge */
-.tabs-bar.platform-linux {
-  padding: 0 10px 0 12px;
 }
 
 .tabs-track {
@@ -413,7 +408,7 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* Native macOS window dragging and interactive region management */
+/* Window dragging and interactive region management */
 .window-drag-region {
   -webkit-app-region: drag;
 }
@@ -447,7 +442,7 @@ input, textarea, select, pre, code, .terminal-selectable {
   -webkit-user-select: text !important;
 }
 
-/* Sleek minimalist scrollbars matching macOS system style */
+/* Sleek minimalist scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -467,7 +462,7 @@ input, textarea, select, pre, code, .terminal-selectable {
 }
 
 
-/* Windows and Linux window controls at the right end of the tab bar (no native title bar) */
+/* Window controls at the right end of the tab bar (no native title bar) */
 .window-controls {
   display: flex;
   align-items: stretch;

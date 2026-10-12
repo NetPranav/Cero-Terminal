@@ -11,36 +11,27 @@ describe('CrossPlatformCommandAdapter', () => {
 
   describe('Shell Invocation', () => {
     it('should generate powershell invocation on Windows', () => {
-      const inv = adapter.getShellInvocation('echo hello', undefined, 'windows');
+      const inv = adapter.getShellInvocation('echo hello', undefined);
       expect(inv.command).toBe('powershell.exe');
       expect(inv.args).toEqual(['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', 'echo hello']);
     });
 
     it('should generate powershell invocation with cwd on Windows', () => {
-      const inv = adapter.getShellInvocation('npm test', 'C:\\projects\\app', 'windows');
+      const inv = adapter.getShellInvocation('npm test', 'C:\\projects\\app');
       expect(inv.command).toBe('powershell.exe');
       expect(inv.args[inv.args.length - 1]).toContain('Set-Location');
     });
 
-    it('should generate sh invocation on Linux and macOS', () => {
-      const linuxInv = adapter.getShellInvocation('echo hello', undefined, 'linux');
-      expect(linuxInv.command).toBe('sh');
-      expect(linuxInv.args).toEqual(['-c', 'echo hello']);
-
-      const macInv = adapter.getShellInvocation('echo hello', '/tmp', 'macos');
-      expect(macInv.command).toBe('sh');
-      expect(macInv.args).toEqual(['-c', "cd '/tmp' && echo hello"]);
-
-      // a folder is data: nothing inside it is expanded or run
-      const evil = adapter.getShellInvocation('echo hi', '/tmp/$(touch pwned)`id`\'x', 'macos');
-      expect(evil.args[1]).toBe("cd '/tmp/$(touch pwned)`id`'\\''x' && echo hi");
-      expect(adapter.getShellInvocation('echo hi', "C:\\it's", 'windows').args.join(' ')).toContain("Set-Location -LiteralPath 'C:\\it''s'");
+    it('quotes the folder as data, so nothing inside it runs', () => {
+      expect(adapter.getShellInvocation('echo hi', "C:\\it's").args.join(' ')).toContain("Set-Location -LiteralPath 'C:\\it''s'");
+      const evil = adapter.getShellInvocation('echo hi', "C:\\x'; Remove-Item C:\\ -Recurse; '");
+      expect(evil.args[4]).toBe("Set-Location -LiteralPath 'C:\\x''; Remove-Item C:\\ -Recurse; '''; echo hi");
     });
   });
 
   describe('POSIX to Windows Command Translation', () => {
     it('should translate rm -rf to PowerShell Remove-Item', () => {
-      const res = adapter.translateCommand('rm -rf ./build', 'windows');
+      const res = adapter.translateCommand('rm -rf ./build');
       expect(res).toContain('Remove-Item');
       expect(res).toContain('-Recurse');
       expect(res).toContain('-Force');
@@ -48,71 +39,39 @@ describe('CrossPlatformCommandAdapter', () => {
     });
 
     it('should translate mkdir -p to PowerShell New-Item', () => {
-      const res = adapter.translateCommand('mkdir -p ./logs/archive', 'windows');
+      const res = adapter.translateCommand('mkdir -p ./logs/archive');
       expect(res).toContain('New-Item');
       expect(res).toContain('-ItemType Directory');
       expect(res).toContain('./logs/archive');
     });
 
     it('should translate which and command -v to where.exe', () => {
-      const res1 = adapter.translateCommand('which node', 'windows');
+      const res1 = adapter.translateCommand('which node');
       expect(res1).toBe('where.exe node');
 
-      const res2 = adapter.translateCommand('command -v cargo', 'windows');
+      const res2 = adapter.translateCommand('command -v cargo');
       expect(res2).toBe('where.exe cargo');
     });
 
     it('should translate null redirects on Windows', () => {
-      const res1 = adapter.translateCommand('echo test >/dev/null 2>&1', 'windows');
+      const res1 = adapter.translateCommand('echo test >/dev/null 2>&1');
       expect(res1).toContain('>NUL 2>&1');
 
-      const res2 = adapter.translateCommand('cat file 2>/dev/null', 'windows');
+      const res2 = adapter.translateCommand('cat file 2>/dev/null');
       expect(res2).toContain('2>NUL');
     });
 
     it('should translate open / xdg-open to start on Windows', () => {
-      const res = adapter.translateCommand('xdg-open https://github.com', 'windows');
+      const res = adapter.translateCommand('xdg-open https://github.com');
       expect(res).toContain('start "" https://github.com');
     });
 
     it('should translate package managers to winget on Windows', () => {
-      const res1 = adapter.translateCommand('sudo apt-get install -y nginx', 'windows');
+      const res1 = adapter.translateCommand('sudo apt-get install -y nginx');
       expect(res1).toContain('winget install nginx');
 
-      const res2 = adapter.translateCommand('brew install ripgrep', 'windows');
+      const res2 = adapter.translateCommand('brew install ripgrep');
       expect(res2).toContain('winget install ripgrep');
-    });
-  });
-
-  describe('POSIX to macOS Command Translation', () => {
-    it('should translate xdg-open to open on macOS', () => {
-      const res = adapter.translateCommand('xdg-open https://github.com', 'macos');
-      expect(res).toBe('open https://github.com');
-    });
-
-    it('should translate apt-get to brew on macOS', () => {
-      const res = adapter.translateCommand('sudo apt-get install -y node', 'macos');
-      expect(res).toBe('brew install node');
-    });
-  });
-
-  describe('Linux Distro Package Management Translation', () => {
-    it('should translate brew install to apt on Debian/Ubuntu family', () => {
-      adapter.setDistroFamily('debian');
-      const res = adapter.translateCommand('brew install curl', 'linux');
-      expect(res).toBe('sudo apt-get install -y curl');
-    });
-
-    it('should translate brew install to pacman on Arch family', () => {
-      adapter.setDistroFamily('arch');
-      const res = adapter.translateCommand('brew install curl', 'linux');
-      expect(res).toBe('sudo pacman -S --noconfirm curl');
-    });
-
-    it('should translate brew install to dnf on Fedora family', () => {
-      adapter.setDistroFamily('fedora');
-      const res = adapter.translateCommand('brew install curl', 'linux');
-      expect(res).toBe('sudo dnf install -y curl');
     });
   });
 
@@ -128,8 +87,7 @@ describe('CrossPlatformCommandAdapter', () => {
         }
       };
 
-      expect(adapter.resolveStepCommand(step, 'macos')).toBe('open https://example.com');
-      expect(adapter.resolveStepCommand(step, 'windows')).toBe('start "" "https://example.com"');
+      expect(adapter.resolveStepCommand(step)).toBe('start "" "https://example.com"');
     });
 
     it('should fall back to translation when explicit platform variant is not specified', () => {
@@ -139,7 +97,7 @@ describe('CrossPlatformCommandAdapter', () => {
         command: 'rm -rf ./dist'
       };
 
-      const winRes = adapter.resolveStepCommand(step, 'windows');
+      const winRes = adapter.resolveStepCommand(step);
       expect(winRes).toContain('Remove-Item');
       expect(winRes).toContain('./dist');
     });

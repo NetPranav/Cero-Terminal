@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { InstallerService, IntegrationStatus } from '../../domain/integration/InstallerService';
-import { Terminal, Folder, Code2, Check, ExternalLink, Cpu, Download, CheckCircle2, Sparkles, AlertCircle, X, ArrowRight, GitBranch, Layers } from 'lucide-react';
-import { isLinux, isMacOS } from '../../shared/platform';
+import { Terminal, Code2, Check, ExternalLink, Cpu, Download, CheckCircle2, Sparkles, AlertCircle, X, ArrowRight, GitBranch, Layers } from 'lucide-react';
+import { NOT_AVAILABLE_ON_WINDOWS } from '../../domain/integration/InstallerService';
 import { WindowTitleStrip } from './WindowControls';
 import { EmbeddedEngineManager, DownloadProgress } from '../../ai/models/EmbeddedEngineManager';
 import { STARTER_WORKFLOWS, getRecommendedStarterWorkflowIds, getAllStarterWorkflowIds } from '../../workflows/templates/StarterWorkflows';
@@ -16,7 +16,6 @@ interface InstallerWizardProps {
 export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClose, onSelectUiMode }) => {
   const [status, setStatus] = useState<IntegrationStatus>({
     cliInstalled: false,
-    finderEnabled: false,
     vscodeConfigured: false,
     cursorConfigured: false,
   });
@@ -149,13 +148,9 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
 
   const handleInstallAll = async () => {
     setLoading(true);
-    setMessage('Configuring desktop integrations and workflows...');
+    setMessage('Configuring starter workflows...');
     try {
-      await installer.installCli();
-      await installer.enableFinderIntegration();
-      await installer.configureVsCodeIntegration();
-      await installer.configureCursorIntegration();
-      await refreshStatus();
+      // TODO(3.8): also install the command line launcher and IDE profiles once they exist on Windows
 
       // Configure starter workflows and purge test stubs
       const storage = DiskWorkflowStorage.getInstance();
@@ -166,7 +161,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
         await storage.initializeStarterWorkflows(selectedWorkflows, false);
       }
 
-      setMessage('✓ All desktop integrations and starter workflows successfully configured!');
+      setMessage('✓ Starter workflows configured!');
       localStorage.setItem('cero_onboarded', 'true');
       setTimeout(() => {
         onClose();
@@ -182,15 +177,6 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
     setLoading(true);
     const res = await installer.installCli();
     if (res.success) setMessage('✓ CLI launcher installed!');
-    else setMessage(`Error: ${res.error}`);
-    await refreshStatus();
-    setLoading(false);
-  };
-
-  const handleEnableFinder = async () => {
-    setLoading(true);
-    const res = await installer.enableFinderIntegration();
-    if (res.success) setMessage(isLinux() ? '✓ Linux File Manager scripts registered!' : '✓ Finder Quick Actions registered!');
     else setMessage(`Error: ${res.error}`);
     await refreshStatus();
     setLoading(false);
@@ -229,13 +215,13 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
       fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif',
       color: '#ffffff'
     }}>
-      <WindowTitleStrip isMac={isMacOS()} />
+      <WindowTitleStrip />
       {/* Top Application Header Bar */}
       <div
         className="window-drag-region"
         style={{
           height: '40px',
-          padding: isLinux() ? '0 24px' : '0 24px 0 78px',
+          padding: '0 24px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -519,13 +505,8 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
 
                 {/* Description */}
                 <div style={{ fontSize: '11.8px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: 1.5 }}>
-                  Installs a user-space launcher into your PATH. Enables launching Cero from any terminal prompt, bash/zsh script, or application launcher (Rofi, Wofi, dmenu) via <code style={{ fontSize: '11px', color: '#ffffff', background: 'rgba(255, 255, 255, 0.08)', padding: '2px 5px', borderRadius: '3px' }}>cero &lt;path&gt;</code>.
+                  Installs a launcher into your PATH, so Cero opens from any terminal prompt or script via <code style={{ fontSize: '11px', color: '#ffffff', background: 'rgba(255, 255, 255, 0.08)', padding: '2px 5px', borderRadius: '3px' }}>cero &lt;path&gt;</code>.
                 </div>
-                {status.localBinInPath === false && (
-                  <div style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '4px', fontStyle: 'italic' }}>
-                    Note: Add ~/.local/bin to your PATH in ~/.bashrc or ~/.zshrc
-                  </div>
-                )}
               </div>
 
               {/* Bottom Row: Path badge on left, Action Button on right */}
@@ -542,7 +523,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
                   borderRadius: '5px',
                   overflow: 'hidden'
                 }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isLinux() ? '~/.local/bin/cero' : '/usr/local/bin/cero'}</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{NOT_AVAILABLE_ON_WINDOWS}</span>
                   <span>•</span>
                   <span style={{ color: 'rgba(255, 255, 255, 0.75)', flexShrink: 0 }}>User Space</span>
                 </div>
@@ -564,88 +545,6 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
                   }}
                 >
                   {status.cliInstalled ? '✓ Installed' : 'Install'}
-                </button>
-              </div>
-            </div>
-
-            {/* Box 2: File Manager Actions */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              gap: '12px',
-              padding: '18px 20px',
-              backgroundColor: 'rgba(255, 255, 255, 0.025)',
-              border: '1px solid rgba(255, 255, 255, 0.09)',
-              borderRadius: '12px',
-              minHeight: '180px',
-              minWidth: 0,
-              boxSizing: 'border-box'
-            }}>
-              <div>
-                {/* Header: Icon + Title */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                  <div style={{
-                    width: '30px',
-                    height: '30px',
-                    borderRadius: '7px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff',
-                    flexShrink: 0
-                  }}>
-                    <Folder size={15} />
-                  </div>
-                  <div style={{ fontWeight: 600, fontSize: '13.5px', color: '#ffffff', lineHeight: 1.3 }}>
-                    {isLinux() ? 'Linux Desktop / File Manager Actions' : 'Desktop / File Manager Actions'}
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div style={{ fontSize: '11.8px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: 1.5 }}>
-                  Registers desktop context menu actions with your graphical file manager (GNOME Nautilus, Nemo, Dolphin, Thunar). Right-click any folder or desktop workspace to spawn Cero there.
-                </div>
-              </div>
-
-              {/* Bottom Row: Path badge on left, Action Button on right */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '10px',
-                  color: 'rgba(255, 255, 255, 0.5)',
-                  fontFamily: 'ui-monospace, monospace',
-                  backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                  padding: '4px 8px',
-                  borderRadius: '5px',
-                  overflow: 'hidden'
-                }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isLinux() ? 'Nautilus • Dolphin • Thunar' : '~/Library/Services/'}</span>
-                  <span>•</span>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.75)', flexShrink: 0 }}>Context Action</span>
-                </div>
-
-                <button
-                  onClick={handleEnableFinder}
-                  disabled={loading || status.finderEnabled}
-                  style={{
-                    padding: '5px 14px',
-                    borderRadius: '6px',
-                    border: status.finderEnabled ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid rgba(255, 255, 255, 0.18)',
-                    backgroundColor: status.finderEnabled ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.04)',
-                    color: status.finderEnabled ? '#ffffff' : 'rgba(255, 255, 255, 0.9)',
-                    fontSize: '11.5px',
-                    fontWeight: 600,
-                    cursor: status.finderEnabled ? 'default' : 'pointer',
-                    transition: 'all 0.15s ease',
-                    flexShrink: 0
-                  }}
-                >
-                  {status.finderEnabled ? '✓ Enabled' : 'Enable'}
                 </button>
               </div>
             </div>

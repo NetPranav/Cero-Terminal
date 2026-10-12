@@ -149,8 +149,7 @@ export const WorkflowManagerDrawer: React.FC<WorkflowManagerDrawerProps> = ({
       }
 
       if (!content.trim()) return;
-      const os = getPlatform() === 'linux' ? 'linux' : getPlatform() === 'windows' ? 'windows' : 'macos';
-      const wf = parseWorkflowFile(content, fileName, os);
+      const wf = parseWorkflowFile(content, fileName, getPlatform());
       if (!wf) {
         showToast('Invalid .flow file format', 'error');
         return;

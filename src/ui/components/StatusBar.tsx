@@ -14,7 +14,7 @@ import {
   ListOrdered
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { isLinux, getShortcutModifier } from '../../shared/platform';
+import { getShortcutModifier } from '../../shared/platform';
 import { EmbeddedEngineManager, EmbeddedStatus } from '../../ai/models/EmbeddedEngineManager';
 import { ModelManager, type ActiveModelInfo } from '../../ai/management/ModelManager';
 import { CloudApiProvider, CLOUD_CATALOG } from '../../ai/provider/CloudApiProvider';
@@ -51,7 +51,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   currentProfile = 'Developer',
   highlightHelp = false
 }) => {
-  const displayShell = currentShell || (isLinux() ? 'bash' : 'zsh');
+  const displayShell = currentShell || 'powershell';
   const [queueCount, setQueueCount] = useState<number>(() => PromptQueue.getInstance().size());
   const [queuePaused, setQueuePaused] = useState<boolean>(() => PromptQueue.getInstance().isPaused());
   const [hasRunningTask, setHasRunningTask] = useState<boolean>(() => PromptQueue.getInstance().getRunningItem() !== null);

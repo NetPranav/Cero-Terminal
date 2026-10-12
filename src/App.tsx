@@ -14,10 +14,8 @@ import { KeyboardShortcutsModal } from "./ui/components/KeyboardShortcutsModal";
 import { QueuePanel } from "./ui/components/QueuePanel";
 import { ZenModeHelpCallout } from "./ui/components/ZenModeHelpCallout";
 import { AuditLogger } from "./domain/security/AuditLogger";
-import { DotfileSyncEngine } from "./domain/rice/DotfileSyncEngine";
 import { EmbeddedEngineManager } from "./ai/models/EmbeddedEngineManager";
 import { SystemKnowledgeScanner } from "./domain/knowledge/SystemKnowledgeScanner";
-import { FileAssociationPrompt } from "./ui/components/FileAssociationPrompt";
 import { invoke } from "@tauri-apps/api/core";
 import { 
   Terminal, 
@@ -37,7 +35,7 @@ import {
   Search,
   Code2 
 } from "lucide-react";
-import { isLinux, isMacOS, getShortcutModifier, formatShortcut } from "./shared/platform";
+import { getShortcutModifier, formatShortcut } from "./shared/platform";
 import { WindowControls, WindowTitleStrip } from "./ui/components/WindowControls";
 import { changeDirectoryLine, hasControlChars } from "./utils/shellQuote";
 import { TerminalWorkspace, MAX_PANES_PER_TAB } from "./domain/terminal/TerminalWorkspace";
@@ -215,19 +213,8 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
     }
     return !localStorage.getItem('cero_onboarded');
   });
-  const [detectedShell, setDetectedShell] = useState<string>(() => isLinux() ? 'bash' : 'zsh');
+  const [detectedShell, setDetectedShell] = useState<string>('powershell');
   const [showQueuePanel, setShowQueuePanel] = useState<boolean>(false);
-  const [showAssociationPrompt, setShowAssociationPrompt] = useState<boolean>(false);
-
-  useEffect(() => {
-    invoke<{ is_appimage: boolean; decision: string }>('get_association_status')
-      .then(status => {
-        if (status?.is_appimage && status?.decision === 'pending') {
-          setShowAssociationPrompt(true);
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     const handleOpenQueue = () => setShowQueuePanel(true);
@@ -247,7 +234,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
           setDetectedShell(name);
         }
       } catch {
-        setDetectedShell(isLinux() ? 'bash' : 'zsh');
+        setDetectedShell('powershell');
       }
     };
     detect();
@@ -1061,9 +1048,8 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
         }
       }}
     >
-      {/* The tab bar is the title bar: drag it to move the window, double-click to maximize. macOS
-          overlays its traffic lights on the left inset; Windows and Linux get WindowControls. */}
-      <div className={`tabs-bar window-drag-region ${isMacOS() ? '' : 'platform-linux'}`} data-tauri-drag-region>
+      {/* The tab bar is the title bar: drag it to move the window, double-click to maximize. */}
+      <div className="tabs-bar window-drag-region" data-tauri-drag-region>
         <div className="tabs-track" data-tauri-drag-region>
           {tabs.map((tab) => {
             const isActive = activeTabId === tab.id;
@@ -1209,7 +1195,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
                     { type: 'divider' },
                     { label: 'AI Command Palette & Prompt', icon: <Sparkles size={12} />, shortcut: formatShortcut('p', true), action: () => setCommandPaletteOpen(true) },
                     { label: 'Zero-Trust AI Security & Profile', icon: <ShieldCheck size={12} />, shortcut: formatShortcut(','), action: () => setShowAiSettings(true) },
-                    { label: isLinux() ? 'Linux Integration & Setup Wizard...' : 'macOS Integration & Setup Wizard...', icon: <Compass size={12} />, shortcut: formatShortcut('i'), action: () => setShowWizard(true) },
+                    { label: 'Integration & Setup Wizard...', icon: <Compass size={12} />, shortcut: formatShortcut('i'), action: () => setShowWizard(true) },
                     { type: 'divider' },
                     { label: 'Close Pane / Tab', icon: <Trash2 size={12} />, shortcut: formatShortcut('w'), action: () => {
                       if (activeTab && activeTab.rootPane.type === 'split') closePane(activeTerminal.id);
@@ -1278,7 +1264,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
             </button>
           </div>
         )}
-        {!isMacOS() && <WindowControls />}
+        <WindowControls />
       </div>
 
       {/* Classic Minimalist Workspace Appearance Modal */}
@@ -1547,7 +1533,6 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
           { id: 'plugin_marketplace', name: 'Plugin Marketplace (Cmd+Shift+X)', description: 'Browse and hot-reload community extensions, tools, and themes' },
           { id: 'open_onboarding', name: 'Welcome: Setup & Onboarding Wizard', description: 'Re-run initial terminal experience setup, mode selection, and system integrations' },
           { id: 'export_audit_log', name: 'Export Cryptographic Audit Log', description: 'Generate SOC 2 / ISO 27001 tamper-evident signed audit trail' },
-          { id: 'export_rice_profile', name: 'Export Rice & AI Profile', description: 'Backup custom themes, aliases, and learned AI patterns' }
         ]}
         onExecuteCapability={async (id) => {
           if (id === 'open_settings') {
@@ -1584,18 +1569,12 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
               await navigator.clipboard.writeText(report);
               alert('Cryptographic tamper-evident audit report copied to clipboard!');
             }
-          } else if (id === 'export_rice_profile') {
-            const bundle = DotfileSyncEngine.getInstance().exportBundle(selectedThemeId, transparency, blurLevel);
-            if (navigator.clipboard) {
-              await navigator.clipboard.writeText(bundle);
-              alert('Cero Rice & AI Profile copied to clipboard!');
-            }
           }
         }}
       />
       {showAiSettings && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: '#090b10', display: 'flex', flexDirection: 'column' }}>
-          <WindowTitleStrip isMac={isMacOS()} />
+          <WindowTitleStrip />
           <div style={{ flex: 1, minHeight: 0 }}>
           <Suspense fallback={null}>
           <AiSettingsPage 
@@ -1634,9 +1613,6 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
           localStorage.setItem('cero_zen_tip_shown', 'true');
         }}
       />
-      {showAssociationPrompt && (
-        <FileAssociationPrompt onComplete={() => setShowAssociationPrompt(false)} />
-      )}
     </div>
   );
 }
