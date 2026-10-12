@@ -9,17 +9,11 @@ import { clearCatalogCache } from '../../domain/system/AppCatalog';
 import { TerminalWorkspace } from '../../domain/terminal/TerminalWorkspace';
 import type { PathProbe } from '../../domain/system/PathResolver';
 
-/** The .desktop entries on the machine the issue was reported from */
-const DESKTOP = [
-  '/usr/share/applications/code.desktop:Name=Visual Studio Code',
-  '/usr/share/applications/code.desktop:GenericName=Text Editor',
-  '/usr/share/applications/code.desktop:Exec=code %F',
-  '/usr/share/applications/code.desktop:Keywords=vscode;',
-  '/usr/share/applications/zen.desktop:Name=Zen Browser',
-  '/usr/share/applications/zen.desktop:Exec=/opt/zen-browser-bin/zen-bin %u',
-  '/usr/share/applications/zen.desktop:GenericName=Web Browser',
-  '/usr/share/applications/zen.desktop:Keywords=Internet;WWW;Browser;Web;Explorer;',
-].join('\n');
+/** Get-StartApps output, as listCommands() prints it */
+const START_APPS = [
+  '"Visual Studio Code","Microsoft.VisualStudioCode"',
+  '"Zen Browser","Zen.Browser"',
+].join('\r\n');
 
 /** create-next-app's first question, as it is drawn when stdin is closed (it then exits 0) */
 const NEXT_MENU = '\x1b[?25l\x1b[36m?\x1b[39m \x1b[1mWould you like to use the recommended Next.js defaults?\x1b[22m \x1b[90m›\x1b[39m \x1b[90m- Use arrow-keys. Return to submit.\x1b[39m\n❯   Yes, use recommended defaults\n    No, customize settings\n';
@@ -58,8 +52,8 @@ describe('several actions in one request (open folder + app, scaffold + editor +
   /** What each command should answer, checked in order; default is success with no output */
   let answers: Array<[RegExp, any]>;
   const commands = () => execute.mock.calls.map(c => String(c[1]?.command ?? ''));
-  const zenLaunches = () => commands().filter(c => /gtk-launch 'zen'|zen-bin/.test(c));
-  const editorLaunches = () => commands().filter(c => /(?:^|\s|\()code\s+(?!--)/.test(c) && !/command -v code >\/dev\/null 2>&1$/.test(c) && !/pgrep/.test(c));
+  const zenLaunches = () => commands().filter(c => /shell:AppsFolder\\Zen\.Browser/.test(c));
+  const editorLaunches = () => commands().filter(c => /^Start-Process -FilePath 'code'/.test(c) || (/(?:^|\s|\()code\s+(?!--)/.test(c) && !/command -v code >\/dev\/null 2>&1$/.test(c) && !/pgrep/.test(c)));
 
   beforeEach(() => {
     home = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-multi-'));
@@ -78,7 +72,7 @@ describe('several actions in one request (open folder + app, scaffold + editor +
     answers = [];
     execute = vi.fn(async (_tool: string, params: any) => {
       const cmd = String(params?.command ?? '');
-      if (/grep -H -E/.test(cmd)) return { success: true, data: { stdout: cmd.includes('/usr/share/applications') ? DESKTOP : '', code: 0 } };
+      if (/Get-StartApps/.test(cmd)) return { success: true, data: { stdout: START_APPS, code: 0 } };
       for (const [re, answer] of answers) if (re.test(cmd)) return typeof answer === 'function' ? answer(cmd) : answer;
       return { success: true, data: { stdout: '', stderr: '', code: 0 } };
     });
@@ -137,7 +131,7 @@ describe('several actions in one request (open folder + app, scaffold + editor +
     const cmds = commands();
     const create = cmds.findIndex(c => c === 'npx --yes create-next-app@latest cero-test --yes');
     const code = cmds.findIndex(c => c === 'code cero-test');
-    const zen = cmds.findIndex(c => /gtk-launch 'zen'/.test(c));
+    const zen = cmds.findIndex(c => /shell:AppsFolder\\Zen\.Browser/.test(c));
     expect(create).toBeGreaterThanOrEqual(0);
     expect(code).toBeGreaterThan(create);
     expect(zen).toBeGreaterThan(code);

@@ -68,7 +68,7 @@ describe('Opening existing folders on a real directory tree (issues 6 and 7)', (
   let execute: ReturnType<typeof vi.fn>;
   let generate: ReturnType<typeof vi.fn>;
   const mk = (...dirs: string[]) => dirs.forEach(d => fs.mkdirSync(path.join(home, d), { recursive: true }));
-  const editorLaunches = () => execute.mock.calls.map(c => String(c[1]?.command)).filter(c => /setsid -f (?:code|flatpak run com\.visualstudio\.code)\b/.test(c));
+  const editorLaunches = () => execute.mock.calls.map(c => String(c[1]?.command)).filter(c => /^Start-Process -FilePath 'code'/.test(c));
 
   beforeEach(() => {
     home = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-realfs-'));
@@ -180,7 +180,7 @@ describe('Opening existing folders on a real directory tree (issues 6 and 7)', (
     mk('padhai_in_linux/Projects/gitBrain', 'elsewhere');
     const r = await loop.run('open gitBrain from /padhai_in_linux/Projects in a new vscode window', ctx());
     expect(r.success).toBe(true);
-    expect(editorLaunches()[0]).toContain(`setsid -f code -n '${path.join(home, 'padhai_in_linux/Projects/gitBrain')}'`);
+    expect(editorLaunches()[0]).toContain(`-ArgumentList '-n','${path.join(home, 'padhai_in_linux/Projects/gitBrain')}'`);
   });
 
   it('a folder that really is not there: reports where it looked and creates nothing', async () => {
@@ -208,19 +208,15 @@ describe('Opening an app with an imperfect name (issue 7)', () => {
   let tmp: string;
   let loop: AgentLoop;
   let execute: ReturnType<typeof vi.fn>;
+  // Get-StartApps output, as listCommands() prints it
   const listing = [
-    '/usr/share/applications/code.desktop:Name=Visual Studio Code',
-    '/usr/share/applications/code.desktop:Exec=/usr/share/code/code %F',
-    '/usr/share/applications/chromium.desktop:Name=Chromium Web Browser',
-    '/usr/share/applications/chromium.desktop:Exec=chromium %U',
-    '/usr/share/applications/google-chrome.desktop:Name=Google Chrome',
-    '/usr/share/applications/google-chrome.desktop:Exec=/usr/bin/google-chrome-stable %U',
-    '/usr/share/applications/firefox.desktop:Name=Firefox',
-    '/usr/share/applications/firefox.desktop:Exec=firefox %u',
-    '/usr/share/applications/spotify.desktop:Name=Spotify',
-    '/usr/share/applications/spotify.desktop:Exec=spotify %U',
-  ].join('\n');
-  const ctx = { os: 'linux', cwd: '/home/me' };
+    '"Visual Studio Code","Microsoft.VisualStudioCode"',
+    '"Chromium Web Browser","Chromium.F2KQ5B6G7J"',
+    '"Google Chrome","Chrome"',
+    '"Firefox","308046B0AF4A39CB"',
+    '"Spotify","SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"',
+  ].join('\r\n');
+  const ctx = { os: 'windows', cwd: 'C:\\Users\\me' };
 
   beforeEach(async () => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-appnames-'));
@@ -233,8 +229,7 @@ describe('Opening an app with an imperfect name (issue 7)', () => {
       initialize: vi.fn(),
     } as any);
     execute = vi.fn().mockImplementation(async (_t: string, p: any) => {
-      if (/grep -H/.test(p.command) && p.command.includes('/usr/share/applications') && !p.command.includes('/usr/local')) return { success: true, data: { stdout: listing } };
-      if (/^command -v/.test(p.command)) return { success: false, error: 'not found' };
+      if (/Get-StartApps/.test(p.command)) return { success: true, data: { stdout: listing } };
       return { success: true, data: { stdout: '', code: 0 } };
     });
     (loop as any).toolExecutor = { hasDriver: () => true, execute };
@@ -244,17 +239,17 @@ describe('Opening an app with an imperfect name (issue 7)', () => {
     AliasStore.getInstance().setFile(undefined);
     fs.rmSync(tmp, { recursive: true, force: true });
   });
-  const launched = () => execute.mock.calls.map(c => String(c[1]?.command)).filter(c => /gtk-launch/.test(c));
+  const launched = () => execute.mock.calls.map(c => String(c[1]?.command)).filter(c => /^Start-Process 'shell:AppsFolder/.test(c));
 
   it('exact and equivalent spellings launch the right app without asking', async () => {
-    for (const [spoken, desktop] of [['spotify', 'spotify'], ['vscode', 'code'], ['VS Code', 'code'], ['visual studio code', 'code'], ['fire fox', 'firefox'], ['chrome', 'google-chrome']] as const) {
+    for (const [spoken, appId] of [['spotify', 'SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify'], ['vscode', 'Microsoft.VisualStudioCode'], ['VS Code', 'Microsoft.VisualStudioCode'], ['visual studio code', 'Microsoft.VisualStudioCode'], ['fire fox', '308046B0AF4A39CB'], ['chrome', 'Chrome']] as const) {
       execute.mockClear();
       const asked: string[] = [];
       setChoiceHandlerForTests(async q => { asked.push(q.title); return { index: 0 }; });
       const r = await loop.run(`open ${spoken}`, ctx);
       expect(r.success, spoken).toBe(true);
       expect(asked, spoken).toEqual([]);
-      expect(launched()[0], spoken).toContain(`gtk-launch '${desktop}'`);
+      expect(launched()[0], spoken).toBe(`Start-Process 'shell:AppsFolder\\${appId}'`);
     }
   });
 
@@ -300,7 +295,7 @@ describe('Opening an app with an imperfect name (issue 7)', () => {
     setChoiceHandlerForTests(async () => ({ index: 1 }));
     const picked = await loop.run('open chrom', ctx);
     expect(picked.success).toBe(true);
-    expect(launched()[0]).toContain("gtk-launch 'google-chrome'");
+    expect(launched()[0]).toBe("Start-Process 'shell:AppsFolder\\Chrome'");
   });
 
   it('an app that does not exist is reported and nothing is launched or installed', async () => {
@@ -308,6 +303,6 @@ describe('Opening an app with an imperfect name (issue 7)', () => {
     expect(r.success).toBe(false);
     expect(r.summary).toContain('No app called "quuxzzy" is installed');
     expect(launched()).toEqual([]);
-    expect(execute.mock.calls.some(c => /apt|pacman|dnf|brew|install/.test(String(c[1]?.command)))).toBe(false);
+    expect(execute.mock.calls.some(c => /winget|scoop|choco|install/.test(String(c[1]?.command)))).toBe(false);
   });
 });

@@ -1,27 +1,23 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import { parseDesktopEntries, parseMacApps, parseWindowsStartApps, resolveApp, launchCommand, loadCatalog, clearCatalogCache } from './AppCatalog';
+import { parseWindowsStartApps, resolveApp, launchCommand, loadCatalog, clearCatalogCache, type AppEntry } from './AppCatalog';
 
-const sample = fs.readFileSync(path.join(__dirname, '__fixtures__', 'desktop-grep.txt'), 'utf8');
-const apps = parseDesktopEntries(sample);
+// Shape of `Get-StartApps | ForEach-Object { '"' + $_.Name + '","' + $_.AppID + '"' }`
+const sample = [
+  '"Visual Studio Code","Microsoft.VisualStudioCode"',
+  '"File Explorer","Microsoft.Windows.Explorer"',
+  '"Google Chrome","Chrome"',
+  '"Chromium","Chromium.F2KQ5B6G7J"',
+  '"Firefox","308046B0AF4A39CB"',
+  '"Notepad","Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"',
+].join('\r\n');
+const apps = parseWindowsStartApps(sample);
 
 describe('AppCatalog parsing', () => {
-  it('reads names, drops NoDisplay and field codes, notes Flatpak', () => {
-    const names = apps.map(a => a.name);
-    expect(names).toContain('Visual Studio Code');
-    expect(names).not.toContain('Hidden Helper');
-    const code = apps.find(a => a.name === 'Visual Studio Code')!;
-    expect(code.launch).toMatchObject({ kind: 'desktop', value: 'code', exec: '/usr/share/code/code --unity-launch' });
-    expect(code.aliases).toContain('Text Editor');
-    expect(apps.find(a => a.launch.value === 'org.mozilla.firefox')!.source).toBe('flatpak');
-    expect(apps.find(a => a.launch.value === 'org.mozilla.firefox')!.launch.exec).toBe('/usr/bin/flatpak run --branch=stable org.mozilla.firefox');
-  });
-
-  it('reads mac and Windows listings', () => {
-    expect(parseMacApps('Safari.app\nVisual Studio Code.app\nnotes.txt\n').map(a => a.name)).toEqual(['Safari', 'Visual Studio Code']);
-    const win = parseWindowsStartApps('"Notepad","Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"\n"Visual Studio Code","Microsoft.VisualStudioCode"\n');
-    expect(win[0]).toMatchObject({ name: 'Notepad', launch: { kind: 'appid' } });
+  it('reads Get-StartApps lines, skipping headers and separators', () => {
+    expect(apps.map(a => a.name)).toEqual(['Visual Studio Code', 'File Explorer', 'Google Chrome', 'Chromium', 'Firefox', 'Notepad']);
+    expect(apps[5]).toMatchObject({ name: 'Notepad', launch: { kind: 'appid', value: 'Microsoft.WindowsNotepad_8wekyb3d8bbwe!App' }, source: 'start-menu' });
+    const columns = parseWindowsStartApps('Name                AppID\n----                -----\nCalculator          Microsoft.WindowsCalculator_8wekyb3d8bbwe!App\n');
+    expect(columns).toEqual([{ name: 'Calculator', aliases: [], launch: { kind: 'appid', value: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App' }, source: 'start-menu' }]);
   });
 });
 
@@ -31,21 +27,16 @@ describe('resolveApp', () => {
     expect(r.type).toBe('found');
     if (r.type === 'found') expect(r.app.name).toBe('Visual Studio Code');
   });
-  it('"vscode" works through the keywords and aliases too', () => {
+  it('"vscode" works through the aliases too', () => {
     expect(resolveApp('vscode', apps).type).toBe('found');
-  });
-  it('"the file manager" finds Files', () => {
-    const r = resolveApp('file manager', apps);
-    expect(r.type).toBe('found');
-    if (r.type === 'found') expect(r.app.name).toBe('Files');
   });
   it('a typo asks', () => {
     const r = resolveApp('crome', apps);
     expect(r.type).toBe('choose');
-    if (r.type === 'choose') expect(r.candidates[0].app.name).toMatch(/Chromium/);
   });
   it('the same app from two sources asks which', () => {
-    const r = resolveApp('firefox', apps);
+    const twice: AppEntry[] = [...apps, { name: 'Firefox', aliases: [], launch: { kind: 'exec', value: 'C:\\Tools\\firefox\\firefox.exe' }, source: 'portable' }];
+    const r = resolveApp('firefox', twice);
     expect(r.type).toBe('choose');
     if (r.type === 'choose') expect(r.reason).toBe('several');
   });
@@ -55,12 +46,10 @@ describe('resolveApp', () => {
 });
 
 describe('launchCommand', () => {
-  const code = apps.find(a => a.name === 'Visual Studio Code')!;
-  it('uses the right launcher for each OS', () => {
-    expect(launchCommand(code, 'linux')).toContain("gtk-launch 'code'");
-    expect(launchCommand(code, 'linux')).toContain('setsid -f /usr/share/code/code --unity-launch');
-    expect(launchCommand({ ...code, launch: { kind: 'bundle', value: 'x' } }, 'macos')).toBe("open -a 'Visual Studio Code'");
-    expect(launchCommand({ name: 'Notepad', aliases: [], source: 's', launch: { kind: 'appid', value: 'Microsoft.Notepad!App' } }, 'windows')).toBe("Start-Process 'shell:AppsFolder\\Microsoft.Notepad!App'");
+  it('starts Start-menu apps through shell:AppsFolder and programs by path', () => {
+    expect(launchCommand(apps[5], 'windows')).toBe("Start-Process 'shell:AppsFolder\\Microsoft.WindowsNotepad_8wekyb3d8bbwe!App'");
+    expect(launchCommand({ name: 'Tool', aliases: [], source: 'portable', launch: { kind: 'exec', value: "C:\\it's\\tool.exe" } }, 'windows'))
+      .toBe("Start-Process -FilePath 'C:\\it''s\\tool.exe'");
   });
 });
 
@@ -69,15 +58,15 @@ describe('loadCatalog', () => {
   it('lists once and reuses the answer for five minutes', async () => {
     let calls = 0;
     const run = async () => { calls++; return sample; };
-    const a = await loadCatalog('linux', run, 1000);
+    const a = await loadCatalog('windows', run, 1000);
     const callsAfterFirst = calls;
-    const b = await loadCatalog('linux', run, 1000 + 60_000);
+    const b = await loadCatalog('windows', run, 1000 + 60_000);
     expect(b).toBe(a);
     expect(calls).toBe(callsAfterFirst);
-    await loadCatalog('linux', run, 1000 + 6 * 60_000);
+    await loadCatalog('windows', run, 1000 + 6 * 60_000);
     expect(calls).toBeGreaterThan(callsAfterFirst);
   });
   it('a failing listing gives an empty list instead of throwing', async () => {
-    expect(await loadCatalog('linux', async () => { throw new Error('no'); })).toEqual([]);
+    expect(await loadCatalog('windows', async () => { throw new Error('no'); })).toEqual([]);
   });
 });

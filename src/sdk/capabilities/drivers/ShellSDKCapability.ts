@@ -25,7 +25,7 @@ export const DEFAULT_SHELL_TIMEOUT_MS = 5 * 60 * 1000;
 export class ShellSDKCapability extends BaseCapabilityDriver<ShellDriverInput, any> {
   readonly capabilityId = 'shell.execute';
   readonly name = 'Arbitrary Shell Execution Driver';
-  readonly supportedPlatforms: Platform[] = ['macos', 'windows', 'linux'];
+  readonly supportedPlatforms: Platform[] = ['windows'];
 
   private runningRunId?: string;
 

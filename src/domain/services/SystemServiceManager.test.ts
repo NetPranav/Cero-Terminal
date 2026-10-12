@@ -1,71 +1,40 @@
 import { describe, it, expect } from 'vitest';
 import { SystemServiceManager } from './SystemServiceManager';
 
-describe('SystemServiceManager — Cross-Platform System Services Driver', () => {
-  it('generates correct systemctl command for Linux system-level service', () => {
-    const cmd = SystemServiceManager.getCommand('restart', 'docker', { os: 'linux', userScope: false });
-    expect(cmd.command).toBe('sudo');
-    expect(cmd.args).toEqual(['systemctl', 'restart', 'docker']);
-    expect(cmd.requiresSudo).toBe(true);
-    expect(cmd.fullCommand).toBe('sudo systemctl restart docker');
+describe('SystemServiceManager (Windows services)', () => {
+  it('generates PowerShell service cmdlets', () => {
+    const enable = SystemServiceManager.getCommand('enable', 'wuauserv');
+    expect(enable.command).toBe('powershell');
+    expect(enable.fullCommand).toContain('Set-Service -Name "wuauserv" -StartupType Automatic');
+    expect(enable.requiresSudo).toBe(true);
+
+    const restart = SystemServiceManager.getCommand('restart', 'Spooler');
+    expect(restart.args).toEqual(['-Command', 'Restart-Service -Name "Spooler"']);
+    expect(restart.requiresSudo).toBe(false);
+
+    expect(SystemServiceManager.getCommand('status', 'Spooler').args[1]).toBe('Get-Service -Name "Spooler" | Format-List');
   });
 
-  it('generates correct systemctl --user command for Linux user-level service', () => {
-    const cmd = SystemServiceManager.getCommand('start', 'pipewire', { os: 'linux', userScope: true });
-    expect(cmd.command).toBe('systemctl');
-    expect(cmd.args).toEqual(['--user', 'start', 'pipewire']);
-    expect(cmd.requiresSudo).toBe(false);
-    expect(cmd.fullCommand).toBe('systemctl --user start pipewire');
-  });
-
-  it('generates correct brew services command for macOS developer services', () => {
-    const cmd = SystemServiceManager.getCommand('start', 'postgresql', { os: 'macos' });
-    expect(cmd.command).toBe('brew');
-    expect(cmd.args).toEqual(['services', 'start', 'postgresql']);
-    expect(cmd.fullCommand).toBe('brew services start postgresql');
-  });
-
-  it('generates correct launchctl command for native macOS services', () => {
-    const cmd = SystemServiceManager.getCommand('stop', 'com.apple.bluetoothd', { os: 'macos' });
-    expect(cmd.command).toBe('launchctl');
-    expect(cmd.args).toEqual(['stop', 'com.apple.bluetoothd']);
-  });
-
-  it('generates correct PowerShell cmdlets for Windows Services', () => {
-    const cmd = SystemServiceManager.getCommand('enable', 'wuauserv', { os: 'windows' });
-    expect(cmd.command).toBe('powershell');
-    expect(cmd.fullCommand).toContain('Set-Service -Name "wuauserv" -StartupType Automatic');
-    expect(cmd.requiresSudo).toBe(true);
-  });
-
-  it('parses Linux systemctl status output correctly', () => {
-    const sampleOutput = `
-● bluetooth.service - Bluetooth service
-     Loaded: loaded (/lib/systemd/system/bluetooth.service; enabled; vendor preset: enabled)
-     Active: active (running) since Thu 2026-09-03 10:00:00 UTC; 2h ago
-   Main PID: 1234 (bluetoothd)
-     Status: "Running"
-    `;
-
-    const parsed = SystemServiceManager.parseStatus(sampleOutput, 'linux', 'bluetooth');
+  it('parses Get-Service output', () => {
+    const running = `
+Name                : Spooler
+DisplayName         : Print Spooler
+Status              : Running
+StartType           : Automatic
+`;
+    const parsed = SystemServiceManager.parseStatus(running, 'Spooler');
     expect(parsed.active).toBe(true);
     expect(parsed.enabled).toBe(true);
-    expect(parsed.pid).toBe(1234);
-    expect(parsed.state).toBe('active');
-    expect(parsed.description).toBe('Bluetooth service');
-  });
+    expect(parsed.state).toBe('Running');
 
-  it('parses inactive systemctl status output correctly', () => {
-    const sampleOutput = `
-○ nginx.service - A high performance web server and a reverse proxy server
-     Loaded: loaded (/lib/systemd/system/nginx.service; disabled; vendor preset: enabled)
-     Active: inactive (dead)
-    `;
-
-    const parsed = SystemServiceManager.parseStatus(sampleOutput, 'linux', 'nginx');
-    expect(parsed.active).toBe(false);
-    expect(parsed.enabled).toBe(false);
-    expect(parsed.pid).toBeUndefined();
-    expect(parsed.state).toBe('inactive');
+    const stopped = `
+Name                : wuauserv
+Status              : Stopped
+StartType           : Disabled
+`;
+    const p2 = SystemServiceManager.parseStatus(stopped, 'wuauserv');
+    expect(p2.active).toBe(false);
+    expect(p2.enabled).toBe(false);
+    expect(p2.state).toBe('Stopped');
   });
 });

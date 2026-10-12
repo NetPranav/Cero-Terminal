@@ -25,7 +25,7 @@ export interface DockerDriverInput {
 export class DockerCapability extends BaseCapabilityDriver<DockerDriverInput, any> {
   readonly capabilityId: string;
   readonly name = 'Docker & Compose Container Runtime Driver';
-  readonly supportedPlatforms: Platform[] = ['macos', 'windows', 'linux'];
+  readonly supportedPlatforms: Platform[] = ['windows'];
 
   constructor(customId: string = 'docker.ps') {
     super();

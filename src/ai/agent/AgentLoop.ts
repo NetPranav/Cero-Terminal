@@ -22,7 +22,7 @@ import { parseSystemAction, commandFor, suggestionsFor, TOPIC_NAMES, type System
 import { parseQuitRequest, listRunningCommand, parseRunning, matchRunning, quitCommand, type QuitRequest, type RunningItem } from '../../domain/system/AppControl';
 import { parseFlowCreateRequest, draftFlow, serializeFlow, describeDraft, draftNeedsTerminal, type FlowCreateRequest, type FlowDraft } from '../../workflows/flow/FlowAuthoring';
 import { parseModelReply } from './ModelReply';
-import { parseAdviceRequest, snapshotScript, parseSnapshot, adviseFrom, formatAdvice } from '../../domain/system/SystemAdvisor';
+import { parseAdviceRequest } from '../../domain/system/SystemAdvisor';
 import { parseAppStatus, findRunningApp, describeStatus } from '../../domain/system/AppStatus';
 import { rankNames } from '../../domain/system/NameMatch';
 import { fixTypos } from './TypoFix';
@@ -67,7 +67,7 @@ import { parseOpenRequest, type OpenRequest } from '../../domain/system/OpenRequ
 import { resolvePath, type PathProbe, type Resolution } from '../../domain/system/PathResolver';
 import { resolveAppProbe } from '../../domain/system/appPathProbe';
 import { openCommand, osOf } from '../../domain/system/OpenInApp';
-import { posixQuote } from '../../utils/shellQuote';
+import { posixQuote, powershellQuote } from '../../utils/shellQuote';
 import { AliasStore } from '../../domain/system/AliasStore';
 import { loadCatalog, resolveApp, launchCommand, type AppEntry } from '../../domain/system/AppCatalog';
 import { parseGitAction, type GitActionRequest } from '../../domain/git/GitActionParser';
@@ -1709,11 +1709,7 @@ export class AgentLoop {
     // Instant deterministic answers for the most common inspection questions. They run before
     // any provider probe, so "check battery" never waits for a model. A failure (e.g. `ss` not
     // installed) falls through to the model.
-    const profileOs = SystemKnowledgeScanner.getInstance().getProfile()?.os;
-    const instants = findInstantAnswers(cleaned || goal, context.os, {
-      environment: profileOs?.desktopEnvironment,
-      session: profileOs?.sessionType
-    });
+    const instants = findInstantAnswers(cleaned || goal);
     if (instants) {
       // Each part of "battery and uptime" answered in turn; any failure hands the whole
       // request to the model, a decline ends it
@@ -2949,28 +2945,20 @@ export class AgentLoop {
   }
 
   /**
-   * A system setting on this OS. Reads and settings pages run without a dialog; changes go through
+   * A Windows system setting. Reads and settings pages run without a dialog; changes go through
    * the confirmation policy. When a change cannot be made here, its settings page opens instead.
-   * Null leaves the request to the capability drivers (macOS Wi-Fi/Bluetooth, battery on macOS and
-   * Linux), which already handle them.
+   * Null leaves the request to the model.
    */
   private async runSystemAction(action: SystemAction, context: AgentRunContext): Promise<AgentResult | null> {
-    const os = /^win/i.test(context.os) ? 'windows' : /^(?:mac|darwin)/i.test(context.os) ? 'macos' : 'linux';
-    // The macOS Bluetooth permission prompt appears now, when Bluetooth is first asked about, not at launch
-    if (os === 'macos' && action.kind === 'bluetooth') {
-      try { const { invoke } = await import('@tauri-apps/api/core'); await invoke('request_bluetooth_access'); } catch { /* outside the app */ }
-    }
-    // Wi-Fi is fully deterministic here (exact networksetup commands, no model: the older path took the model
-    // 15 seconds and once invented a password). Bluetooth on or off keeps its existing driver on macOS.
-    if (os === 'macos' && action.kind === 'bluetooth' && (action.op === 'on' || action.op === 'off')) return null;
-    if (os !== 'windows' && action.kind === 'battery') return null;
+    // Fully deterministic here (exact commands, no model: an older path took the model 15 seconds and
+    // once invented a Wi-Fi password)
     if (action.kind === 'suggest') {
-      const options = suggestionsFor(action.topic, os);
+      const options = suggestionsFor(action.topic);
       const summary = `Did you mean one of these ${TOPIC_NAMES[action.topic]} requests?\n${options.map(o => `  > ${o}`).join('\n')}`;
       this.emit({ type: 'done', message: summary });
       return { success: true, summary, steps: [] };
     }
-    const cmd = commandFor(action, os);
+    const cmd = commandFor(action);
     if (!cmd) return null;
     const steps: { tool: string; params: any; result: ToolExecutionResult }[] = [];
     const run = async (c: SystemCommand, authorize: AgentAuthorizationHandler | undefined) => {
@@ -3006,7 +2994,7 @@ export class AgentLoop {
 
   /** "close port N": look up who listens on exactly that port, ask, stop it normally, verify */
   private async runClosePort(req: PortRequest, context: AgentRunContext): Promise<AgentResult> {
-    const os = /^win/i.test(context.os) ? 'windows' : /^(?:mac|darwin)/i.test(context.os) ? 'macos' : 'linux';
+    const os = osOf(context.os);
     const steps: AgentResult['steps'] = [];
     const finish = (success: boolean, summary: string, extra: Partial<AgentResult> = {}): AgentResult => {
       this.emit({ type: success ? 'done' : 'error', message: summary });
@@ -3156,19 +3144,13 @@ export class AgentLoop {
     }
   }
 
-  /** Read-only look at this computer's memory, disk, caches, project folders and processes, then advice built from it */
-  private async runSystemAdvice(focus: 'performance' | 'storage' | 'general', context: AgentRunContext): Promise<AgentResult | null> {
-    const os = osOf(context.os);
-    this.emit({ type: 'tool_start', message: 'Looking at this computer: memory, storage, caches, project folders, running apps. macOS may ask to let Cero look in Downloads or similar folders; choose Don\'t Allow to skip them.' });
-    const params = { command: snapshotScript(), explanation: 'Read memory, disk, caches, node_modules sizes and running processes (read-only)' };
-    const result = context.signal
-      ? await this.toolExecutor.execute('shell.execute', params, context.cwd, async () => true, undefined, context.signal)
-      : await this.toolExecutor.execute('shell.execute', params, context.cwd, async () => true);
-    const out = typeof result?.data?.stdout === 'string' ? result.data.stdout : '';
-    if (!out.includes('##ram')) return null;                             // could not read: let the normal path answer
-    const summary = formatAdvice(adviseFrom(parseSnapshot(out, os === 'macos' ? 'macos' : 'linux'), focus));
-    this.emit({ type: 'done', message: summary });
-    return { success: true, summary, steps: [{ tool: 'shell.execute', params, result }] };
+  /**
+   * Read-only look at this computer's memory, disk, caches, project folders and processes, then advice built from it.
+   * TODO(3.7): a Windows snapshot (Get-CimInstance, Get-PSDrive, Get-Process); snapshotScript() is POSIX sh, so
+   * until then the request goes to the model.
+   */
+  private async runSystemAdvice(_focus: 'performance' | 'storage' | 'general', _context: AgentRunContext): Promise<AgentResult | null> {
+    return null;
   }
 
   /** Is this app running? Lists what really runs, matches the name loosely, and says which real app it matched. */
@@ -3262,24 +3244,7 @@ export class AgentLoop {
       }
     }
 
-    // 4. a program that is not on the PATH
-    if (/command not found|not recognized as an internal or external command|is not recognized as the name of a cmdlet/i.test(text) && os !== 'windows' && !(goal && this.tryHeuristicFallback(goal, context))) {
-      const wanted = first;
-      const list = await this.toolExecutor.execute('shell.execute', { command: 'IFS=:; for d in $PATH; do ls -1 "$d" 2>/dev/null; done | sort -u', explanation: 'List programs on the PATH' }, context.cwd, async () => true);
-      const names = String(list?.data?.stdout ?? '').split('\n').map(n => n.trim()).filter(Boolean);
-      const ranked = rankNames(wanted, names, n => n, { min: 44, limit: 4 });
-      if (ranked.length) {
-        const answer = await askChoice({
-          title: `"${wanted}" is not installed. Did you mean "${ranked[0].item}"?`,
-          options: [...ranked.slice(0, 3).map(r => ({ label: r.item })), { label: 'No, none of these' }],
-        });
-        if (answer && 'index' in answer && answer.index < Math.min(3, ranked.length)) {
-          const fixed = `${ranked[answer.index].item}${command.trim().slice(wanted.length)}`;
-          const again = await this.runShellStep(fixed, fixed, context, out => out || '(done)');
-          return { ...again, steps: [...steps, ...again.steps] };
-        }
-      }
-    }
+    // TODO(4.3): a program that is not on the PATH: offer close names from Get-Command -CommandType Application
     return null;
   }
 
@@ -3569,8 +3534,6 @@ export class AgentLoop {
    * Deterministic route for launching desktop applications (Task 3.5).
    */
   private async runAppLaunch(req: AppLaunchRequest, context: AgentRunContext): Promise<AgentResult> {
-    const isMac = !context.os || context.os.toLowerCase().includes('darwin') || context.os.toLowerCase().includes('mac');
-    const isWin = isWindowsName(context.os);
     const auth = this.authorizationHandler || (async () => true);
     const os = osOf(context.os);
     const flowAction = { type: 'app', app: req.app };
@@ -3606,7 +3569,7 @@ export class AgentLoop {
             ? await askChoice({ title: `I could not find "${req.app}". Did you mean "${shownList[0].app.name}"?`, options: [{ label: 'Yes, open it' }, { label: 'No' }, { label: 'Cancel' }] })
             : await askChoice({
               title: `I found ${shownList.length} apps that could be "${req.app}". Which one?`,
-              options: [...shownList.map(c => ({ label: c.app.name, detail: c.app.source !== 'desktop' ? `from ${c.app.source}` : undefined })), { label: 'None of these' }],
+              options: [...shownList.map(c => ({ label: c.app.name, detail: c.app.source !== 'start-menu' ? `from ${c.app.source}` : undefined })), { label: 'None of these' }],
             });
           if (answer === undefined) {
             return finishApp(false, `"${req.app}" could mean ${shownList.map(c => c.app.name).join(', ')}. Say the exact name. Nothing was started.`, [], { awaitingInput: true });
@@ -3621,13 +3584,8 @@ export class AgentLoop {
           }
           aliases.remember(req.app, 'app', picked.name);
         } else {
-          // not in the list: on Linux a plain program on the PATH may still exist
-          const exe = (req.executable || req.app).split('||')[0].trim();
-          if (os === 'linux' && /^[\w.+-]+$/.test(exe)) {
-            const probe = await this.toolExecutor.execute('shell.execute', { command: `command -v ${exe}`, explanation: `Check ${exe} exists` }, context.cwd, async () => true);
-            if (probe?.success && String(probe.data?.stdout || '').trim()) command = `setsid -f ${exe} >/dev/null 2>&1`;
-          }
-          if (!command) return finishApp(false, `No app called "${req.app}" is installed on this computer, so nothing was started. Say the exact name, or ask me to install it.`);
+          // TODO(3.7): an app missing from the Start menu may still be on the PATH (Get-Command)
+          return finishApp(false, `No app called "${req.app}" is installed on this computer, so nothing was started. Say the exact name, or ask me to install it.`);
         }
       }
       if (picked && !command) command = launchCommand(picked, os);
@@ -3635,9 +3593,8 @@ export class AgentLoop {
 
     let cmd = command ?? '';
     if (!cmd) {
-      if (isMac) cmd = `open -a "${req.executable || req.app}" &`;
-      else if (isWin) cmd = `start "" "${req.executable || req.app}"`;
-      else cmd = `${req.executable || req.app} &`;
+      // PowerShell's `start` is Start-Process, so the cmd.exe form `start "" app` would pass an empty -FilePath
+      cmd = `Start-Process -FilePath ${powershellQuote(req.executable || req.app)}`;
     }
 
     const explanation = `Launch ${req.app}`;
@@ -3876,7 +3833,7 @@ export class AgentLoop {
    * a bare "stop <word>" that is not a running app.
    */
   private async runQuitApp(req: QuitRequest, context: AgentRunContext): Promise<AgentResult | null> {
-    const os = /^win/i.test(context.os) ? 'windows' : /^(?:mac|darwin)/i.test(context.os) ? 'macos' : 'linux';
+    const os = osOf(context.os);
     const steps: AgentResult['steps'] = [];
     const list = async (): Promise<RunningItem[] | null> => {
       const params = { command: listRunningCommand(os), explanation: 'List running apps' };

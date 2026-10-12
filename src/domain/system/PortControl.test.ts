@@ -23,23 +23,20 @@ describe('parsePortRequest', () => {
 });
 
 describe('listeners', () => {
-  it('reads lsof output by exact port, one entry per process', () => {
-    const out = 'p63988\ncPython\np63988\ncPython\np1200\ncnode\n';
-    expect(parseListeners(out, 'macos')).toEqual([{ pid: 63988, name: 'Python' }, { pid: 1200, name: 'node' }]);
-    expect(describeListeners(parseListeners(out, 'linux'))).toBe('Python (PID 63988), node (PID 1200)');
-    expect(parseListeners('', 'macos')).toEqual([]);
+  it('reads Get-NetTCPConnection output by exact port, one entry per process', () => {
+    const out = '63988\tpython\r\n63988\tpython\r\n1200\tnode\r\n';
+    expect(parseListeners(out, 'windows')).toEqual([{ pid: 63988, name: 'python' }, { pid: 1200, name: 'node' }]);
+    expect(describeListeners(parseListeners(out, 'windows'))).toBe('python (PID 63988), node (PID 1200)');
+    expect(parseListeners('', 'windows')).toEqual([]);
+    expect(parseListeners('4321\t\r\n', 'windows')).toEqual([{ pid: 4321, name: 'process' }]);
   });
 
-  it('uses the exact port in the lookup and reads Windows output', () => {
-    expect(listListenersCommand(8765, 'macos')).toBe('lsof -nP -iTCP:8765 -sTCP:LISTEN -Fpc 2>/dev/null || true');
+  it('uses the exact port in the lookup', () => {
     expect(listListenersCommand(8765, 'windows')).toContain('-LocalPort 8765 -State Listen');
-    expect(parseListeners('4321\tpython\r\n', 'windows')).toEqual([{ pid: 4321, name: 'python' }]);
   });
 
   it('asks the program to exit; force only when asked', () => {
     const l = [{ pid: 10, name: 'a' }, { pid: 20, name: 'b' }];
-    expect(stopCommand(l, 'macos', false)).toBe('kill 10 20');
-    expect(stopCommand(l, 'linux', true)).toBe('kill -9 10 20');
     expect(stopCommand(l, 'windows', false)).toBe('Stop-Process -Id 10,20 -ErrorAction Stop');
     expect(stopCommand(l, 'windows', true)).toBe('Stop-Process -Id 10,20 -Force -ErrorAction Stop');
   });

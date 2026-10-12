@@ -146,20 +146,20 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
       const ytRes = await browserDriver.search('AI agent coding', 'youtube');
       expect(ytRes.success).toBe(true);
       expect(ytRes.data?.url).toContain('youtube.com');
-      expect(ytRes.commandExecuted).toContain('open');
+      expect(ytRes.commandExecuted).toContain('browser.search');
 
       const ghRes = await browserDriver.search('Cero terminal', 'github');
       expect(ghRes.data?.url).toContain('github.com/search');
     });
 
-    it('should target specific browser with -a when appName is provided', async () => {
+    it('should target a specific browser when appName is provided', async () => {
       const browserDriver = new BrowserCapability('browser.navigate');
       const res = await browserDriver.execute({ url: 'youtube.com', appName: 'Safari' });
 
       expect(res.success).toBe(true);
       expect(res.data?.url).toBe('https://youtube.com');
       expect(res.data?.browser).toBe('Safari');
-      expect(res.commandExecuted).toBe('open -a "Safari" "https://youtube.com"');
+      expect(res.commandExecuted).toBe('browser.navigate Safari "https://youtube.com"');
     });
 
     it('should resolve browser aliases (e.g., chrome -> Google Chrome)', async () => {
@@ -168,7 +168,7 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
 
       expect(res.success).toBe(true);
       expect(res.data?.browser).toBe('Google Chrome');
-      expect(res.commandExecuted).toBe('open -a "Google Chrome" "https://github.com"');
+      expect(res.commandExecuted).toBe('browser.navigate Google Chrome "https://github.com"');
     });
   });
 
@@ -179,7 +179,7 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
       const scanRes = await wifiDriver.scan();
       expect(scanRes.success).toBe(true);
       expect(Array.isArray(scanRes.data?.networks)).toBe(true);
-      expect(scanRes.commandExecuted).toContain('airport');
+      expect(scanRes.commandExecuted).toBe('wifi.scan');
 
       const connectRes = await wifiDriver.connect('Home-WiFi-5G', 'secretPass');
       expect(connectRes.success).toBe(true);
@@ -199,40 +199,20 @@ describe('Capability SDK — End-to-End Concrete Execution Drivers', () => {
       const btDriver = new BluetoothCapability('network.bluetooth.list');
       const listRes = await btDriver.list();
       expect(listRes.success).toBe(true);
-      expect(listRes.commandExecuted).toBe('system_profiler SPBluetoothDataType');
+      expect(listRes.commandExecuted).toBe('bluetooth.list');
       expect(listRes.data?.devices.length).toBeGreaterThan(0);
 
       const onRes = await btDriver.turnOn();
       expect(onRes.success).toBe(true);
-      expect(onRes.commandExecuted).toContain('blueutil -p 1');
+      expect(onRes.commandExecuted).toBe('bluetooth.on');
 
       const offRes = await btDriver.turnOff();
       expect(offRes.success).toBe(true);
-      expect(offRes.commandExecuted).toContain('blueutil -p 0');
+      expect(offRes.commandExecuted).toBe('bluetooth.off');
 
       const connectRes = await btDriver.connect('AirPods Pro');
       expect(connectRes.success).toBe(true);
       expect(connectRes.data?.device).toBe('AirPods Pro');
-    });
-
-    it('should gracefully handle missing blueutil binary on stock macOS by falling back to Bluetooth Settings', async () => {
-      BluetoothCapability.mockBlueutilMissing = true;
-      try {
-        const btDriver = new BluetoothCapability('network.bluetooth.on');
-        const onRes = await btDriver.turnOn();
-        expect(onRes.success).toBe(true);
-        expect((onRes.data as any)?.fallback).toBe('settings');
-        expect((onRes.data as any)?.openedSettings).toBe(true);
-        expect(onRes.commandExecuted).toContain('x-apple.systempreferences:com.apple.BluetoothSettings');
-
-        const connectRes = await btDriver.connect('Soundcore Space One');
-        expect(connectRes.success).toBe(true);
-        expect((connectRes.data as any)?.fallback).toBe('settings');
-        expect((connectRes.data as any)?.openedSettings).toBe(true);
-        expect(connectRes.commandExecuted).toContain('x-apple.systempreferences:com.apple.BluetoothSettings');
-      } finally {
-        BluetoothCapability.mockBlueutilMissing = false;
-      }
     });
 
     it('should connect to peripherals even when queries include accessory nouns (Issue 8 / GitHub #6)', async () => {

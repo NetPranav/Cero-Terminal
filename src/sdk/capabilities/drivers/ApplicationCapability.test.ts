@@ -5,7 +5,7 @@ describe('ApplicationCapability — Multi-Distribution Linux Package Management'
   it('instantiates the application driver properly', () => {
     const appCap = new ApplicationCapability('application.install');
     expect(appCap.name).toContain('Desktop Application Launch & Management Driver');
-    expect(appCap.supportedPlatforms).toContain('linux');
+    expect(appCap.supportedPlatforms).toContain('windows');
   });
 
   it('handles mock execution for install operation in test environment', async () => {

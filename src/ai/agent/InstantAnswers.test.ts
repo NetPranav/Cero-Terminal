@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { findInstantAnswer, findInstantAnswers } from './InstantAnswers';
+import { findInstantAnswer, findInstantAnswers, instantRuleFor } from './InstantAnswers';
 import { isReadOnlyCommandLine } from '../../domain/security/ReadOnlyCommandPolicy';
-import { ShellAstParser } from '../../domain/security/ShellAstParser';
 
 describe('InstantAnswers', () => {
   it.each([
@@ -23,9 +22,13 @@ describe('InstantAnswers', () => {
     ['uptime', 'uptime'],
     ['what is my kernel version', 'kernel'],
     ['which distro am i using', 'distro'],
-  ])('answers "%s" instantly (%s)', (goal, id) => {
-    const answer = findInstantAnswer(goal, 'linux');
-    expect(answer?.id).toBe(id);
+    ["what's eating my RAM", 'top-process'],
+    ['who is using all my cpu', 'top-process'],
+    ['how full is my disk', 'disk'],
+    ["what's listening", 'listening-ports'],
+    ["what's listening on which ports", 'listening-ports'],
+  ])('recognises "%s" (%s)', (goal, id) => {
+    expect(instantRuleFor(goal)).toBe(id);
   });
 
   it.each([
@@ -39,37 +42,13 @@ describe('InstantAnswers', () => {
     'install htop',
     'what is using port 99999999',
   ])('leaves "%s" to the model', (goal) => {
-    expect(findInstantAnswer(goal, 'linux')).toBeNull();
+    expect(instantRuleFor(goal)).toBeNull();
+    expect(findInstantAnswer(goal)).toBeNull();
   });
 
-  it.each([
-    ["what's eating my RAM", 'top-process'],
-    ['who is using all my cpu', 'top-process'],
-    ['how full is my disk', 'disk'],
-    ["what's listening", 'listening-ports'],
-    ["what's listening on which ports", 'listening-ports'],
-  ])('understands the everyday phrasing "%s" (%s)', (goal, id) => {
-    expect(findInstantAnswer(goal, 'linux')?.id).toBe(id);
-    expect(findInstantAnswer(goal, 'macos')?.id).toBe(id);
-  });
-
-  it('answers on macOS with macOS commands and not on Windows', () => {
-    expect(findInstantAnswer('check battery', 'macos')).toMatchObject({ command: 'pmset -g batt', tool: 'system.battery' });
-    expect(findInstantAnswer('what ports are open', 'macos')?.command).toContain('lsof');
-    expect(findInstantAnswer('what is using port 3000', 'mac')?.command).toBe('lsof -nP -iTCP:3000 -sTCP:LISTEN');
-    expect(findInstantAnswer('what os version am i on', 'macos')?.command).toContain('sw_vers');
-    expect(findInstantAnswer('check battery', 'windows')).toBeNull();
-  });
-
-  it('every macOS instant command is valid, read-only shell', () => {
-    const goals = ['check battery', 'disk usage', 'memory usage', "what's eating my ram", 'show listening ports',
-      'what is using port 3000', "what's my ip", 'uptime', 'kernel version', 'which os am i using'];
-    for (const goal of goals) {
-      const answer = findInstantAnswer(goal, 'macos')!;
-      expect(answer, goal).not.toBeNull();
-      expect(ShellAstParser.validateSyntax(answer.command).valid, answer.command).toBe(true);
-      const verdict = isReadOnlyCommandLine(answer.command);
-      expect(verdict.readOnly, `${answer.command}: ${verdict.reason}`).toBe(true);
+  it('has no Windows command yet for the system rules, so the model answers them (TODO 4.3)', () => {
+    for (const goal of ['check battery', 'disk usage', 'memory usage', 'show listening ports', "what's my ip", 'uptime']) {
+      expect(findInstantAnswer(goal), goal).toBeNull();
     }
   });
 
@@ -80,34 +59,14 @@ describe('InstantAnswers', () => {
     'what did the last commit change?',
     'which files changed in the latest commit in this repo',
   ])('answers "%s" with git show --stat', (goal) => {
-    const answer = findInstantAnswer(goal, 'macos');
+    const answer = findInstantAnswer(goal);
     expect(answer?.id).toBe('last-commit');
     expect(isReadOnlyCommandLine(answer!.command).readOnly).toBe(true);
-    expect(findInstantAnswer(goal, 'linux')?.id).toBe('last-commit');
   });
 
-  it('takes macOS screenshots with screencapture', () => {
-    expect(findInstantAnswer('take a screenshot', 'macos')?.command).toContain('screencapture -x');
-    expect(findInstantAnswer('take a region screenshot', 'macos')?.command).toContain('screencapture -i');
-  });
-
-  it('every instant command is valid, read-only shell (runs without a consent prompt)', () => {
-    const goals = ['check battery', 'disk usage', 'memory usage', 'which process is using the most cpu',
-      'show listening ports', 'what is using port 3000', "what's my ip", 'uptime', 'kernel version', 'which distro am i using'];
-    for (const goal of goals) {
-      const answer = findInstantAnswer(goal, 'linux')!;
-      expect(ShellAstParser.validateSyntax(answer.command).valid, answer.command).toBe(true);
-      const verdict = isReadOnlyCommandLine(answer.command);
-      expect(verdict.readOnly, `${answer.command}: ${verdict.reason}`).toBe(true);
-    }
-  });
-
-  it('answers each part of a multi-part question when every part has an instant answer', () => {
-    expect(findInstantAnswers("what's my battery and uptime", 'macos')?.map(a => a.id)).toEqual(['battery', 'uptime']);
-    expect(findInstantAnswers('check disk, memory and uptime', 'linux')?.map(a => a.id)).toEqual(['disk', 'memory', 'uptime']);
-    expect(findInstantAnswers('check battery', 'linux')?.map(a => a.id)).toEqual(['battery']);
-    // One part without an instant answer: the model handles the whole request
-    expect(findInstantAnswers('check battery and install htop', 'linux')).toBeNull();
+  it('answers a multi-part question only when every part has an instant answer', () => {
+    expect(findInstantAnswers('what changed in the last commit')?.map(a => a.id)).toEqual(['last-commit']);
+    expect(findInstantAnswers('check battery and install htop')).toBeNull();
+    expect(findInstantAnswers('check disk, memory and uptime')).toBeNull();
   });
 });
-

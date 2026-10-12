@@ -20,25 +20,25 @@ export interface OpenRequest {
 }
 
 /** Editors people open folders in, and the command line each one installs (lower case keys) */
-export const EDITORS: Record<string, { app: string; cli: string; macApp: string; flatpak?: string }> = {
-  'code': { app: 'Visual Studio Code', cli: 'code', macApp: 'Visual Studio Code', flatpak: 'com.visualstudio.code' },
-  'vscode': { app: 'Visual Studio Code', cli: 'code', macApp: 'Visual Studio Code', flatpak: 'com.visualstudio.code' },
-  'vs code': { app: 'Visual Studio Code', cli: 'code', macApp: 'Visual Studio Code', flatpak: 'com.visualstudio.code' },
-  'visual studio code': { app: 'Visual Studio Code', cli: 'code', macApp: 'Visual Studio Code', flatpak: 'com.visualstudio.code' },
-  'vscodium': { app: 'VSCodium', cli: 'codium', macApp: 'VSCodium', flatpak: 'com.vscodium.codium' },
-  'codium': { app: 'VSCodium', cli: 'codium', macApp: 'VSCodium', flatpak: 'com.vscodium.codium' },
-  'cursor': { app: 'Cursor', cli: 'cursor', macApp: 'Cursor' },
-  'windsurf': { app: 'Windsurf', cli: 'windsurf', macApp: 'Windsurf' },
-  'zed': { app: 'Zed', cli: 'zed', macApp: 'Zed', flatpak: 'dev.zed.Zed' },
-  'sublime': { app: 'Sublime Text', cli: 'subl', macApp: 'Sublime Text' },
-  'sublime text': { app: 'Sublime Text', cli: 'subl', macApp: 'Sublime Text' },
-  'subl': { app: 'Sublime Text', cli: 'subl', macApp: 'Sublime Text' },
-  'intellij': { app: 'IntelliJ IDEA', cli: 'idea', macApp: 'IntelliJ IDEA' },
-  'idea': { app: 'IntelliJ IDEA', cli: 'idea', macApp: 'IntelliJ IDEA' },
-  'pycharm': { app: 'PyCharm', cli: 'pycharm', macApp: 'PyCharm' },
-  'webstorm': { app: 'WebStorm', cli: 'webstorm', macApp: 'WebStorm' },
-  'clion': { app: 'CLion', cli: 'clion', macApp: 'CLion' },
-  'android studio': { app: 'Android Studio', cli: 'studio', macApp: 'Android Studio' },
+export const EDITORS: Record<string, { app: string; cli: string }> = {
+  'code': { app: 'Visual Studio Code', cli: 'code' },
+  'vscode': { app: 'Visual Studio Code', cli: 'code' },
+  'vs code': { app: 'Visual Studio Code', cli: 'code' },
+  'visual studio code': { app: 'Visual Studio Code', cli: 'code' },
+  'vscodium': { app: 'VSCodium', cli: 'codium' },
+  'codium': { app: 'VSCodium', cli: 'codium' },
+  'cursor': { app: 'Cursor', cli: 'cursor' },
+  'windsurf': { app: 'Windsurf', cli: 'windsurf' },
+  'zed': { app: 'Zed', cli: 'zed' },
+  'sublime': { app: 'Sublime Text', cli: 'subl' },
+  'sublime text': { app: 'Sublime Text', cli: 'subl' },
+  'subl': { app: 'Sublime Text', cli: 'subl' },
+  'intellij': { app: 'IntelliJ IDEA', cli: 'idea' },
+  'idea': { app: 'IntelliJ IDEA', cli: 'idea' },
+  'pycharm': { app: 'PyCharm', cli: 'pycharm' },
+  'webstorm': { app: 'WebStorm', cli: 'webstorm' },
+  'clion': { app: 'CLion', cli: 'clion' },
+  'android studio': { app: 'Android Studio', cli: 'studio' },
 };
 
 export const editorFor = (name: string | undefined) => (name ? EDITORS[name.trim().toLowerCase().replace(/\s+/g, ' ')] : undefined);

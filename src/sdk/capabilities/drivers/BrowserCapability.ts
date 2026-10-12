@@ -28,7 +28,7 @@ export interface BrowserInput {
 export class BrowserCapability extends BaseCapabilityDriver<BrowserInput, any> {
   readonly capabilityId: string;
   readonly name = 'System Default Web Browser Driver';
-  readonly supportedPlatforms: Platform[] = ['macos', 'windows', 'linux'];
+  readonly supportedPlatforms: Platform[] = ['windows'];
 
   constructor(customId: string = 'browser.navigate') {
     super();
@@ -75,7 +75,7 @@ export class BrowserCapability extends BaseCapabilityDriver<BrowserInput, any> {
       if (!u.startsWith('http://') && !u.startsWith('https://')) u = `https://${u}`;
       targetUrl = u;
     }
-    // Only web pages: `open` would also launch apps and documents, and xdg-open many other schemes
+    // Only web pages: a generic opener would also launch apps, documents and other schemes
     if (!/^https?:\/\/[^\s'"`\\]+$/i.test(targetUrl)) {
       return { success: false, error: { code: 'INVALID_URL', message: 'Only http and https links can be opened in a browser' } };
     }
@@ -94,8 +94,8 @@ export class BrowserCapability extends BaseCapabilityDriver<BrowserInput, any> {
     // Automated test & mock runtime environments
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
       const commandExecuted = resolvedBrowser
-        ? `open -a "${resolvedBrowser}" "${targetUrl}"`
-        : `open "${targetUrl}"`;
+        ? `browser.${op} ${resolvedBrowser} "${targetUrl}"`
+        : `browser.${op} "${targetUrl}"`;
 
       switch (op) {
         case 'navigate':
@@ -124,39 +124,8 @@ export class BrowserCapability extends BaseCapabilityDriver<BrowserInput, any> {
 
     try {
       if (op === 'navigate' || op === 'search' || op === 'new_tab') {
-        const platform = this.detectPlatform();
-        let command = 'open';
-        let cmdArgs = resolvedBrowser ? ['-a', resolvedBrowser, targetUrl] : [targetUrl];
-
-        if (platform === 'linux') {
-          if (resolvedBrowser) {
-            command = 'sh';
-            cmdArgs = ['-c', 'if which -- "$1" >/dev/null 2>&1; then "$1" "$2" >/dev/null 2>&1 & else xdg-open "$2"; fi', 'sh', resolvedBrowser.toLowerCase(), targetUrl];
-          } else {
-            command = 'xdg-open';
-            cmdArgs = [targetUrl];
-          }
-        }
-
-        const commandExecuted = platform === 'linux'
-          ? (resolvedBrowser ? `${resolvedBrowser} "${targetUrl}"` : `xdg-open "${targetUrl}"`)
-          : (resolvedBrowser ? `open -a "${resolvedBrowser}" "${targetUrl}"` : `open "${targetUrl}"`);
-
-        const output = await invoke<{ code: number; stderr?: string; stdout?: string }>('execute_command', {
-          command,
-          args: cmdArgs
-        });
-
-        if (output.code === 0) {
-          return {
-            success: true,
-            data: { url: targetUrl, ...(resolvedBrowser ? { browser: resolvedBrowser } : {}) },
-            commandExecuted,
-            rollbackPayload: { url: targetUrl }
-          };
-        } else {
-          return { success: false, error: { code: 'BROWSER_FAILED', message: output.stderr || 'Failed to launch browser URL' } };
-        }
+        // TODO(3.7): open the URL on Windows (the default browser, or Start-Process msedge/chrome/firefox)
+        return { success: false, error: { code: 'NOT_AVAILABLE', message: 'Opening a browser is not available on Windows yet' } };
       }
 
       // Diagnostic / read-only browser tools fallback to system query

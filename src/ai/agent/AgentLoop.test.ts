@@ -958,7 +958,7 @@ describe('Provider resolution', () => {
 });
 
 describe('Instant answers run before any model call', () => {
-  it('answers "which process is using the most cpu" without touching the provider', async () => {
+  it('answers "what changed in the last commit" without touching the provider', async () => {
     const generate = vi.fn();
     const isAvailable = vi.fn().mockResolvedValue(true);
     const loop = new AgentLoop({ toolIndex: { has: () => false, getAll: () => [] } } as any, {
@@ -966,19 +966,18 @@ describe('Instant answers run before any model call', () => {
       getActiveModel: () => ({ modelId: 'mock' }),
       initialize: vi.fn()
     } as any);
-    const execute = vi.fn().mockResolvedValue({ success: true, data: { stdout: '  PID %CPU %MEM COMMAND\n 4242 96.0  3.1 cc1plus', code: 0 } });
+    const execute = vi.fn().mockResolvedValue({ success: true, data: { stdout: 'a1b2c3d Fix the parser\n src/parser.ts | 4 ++--', code: 0 } });
     (loop as any).toolExecutor = { hasDriver: () => true, execute };
 
-    const result = await loop.run('which process is using the most cpu', { os: 'linux', cwd: '/home/u' });
+    const result = await loop.run('what changed in the last commit', { os: 'windows', cwd: 'C:\\Users\\u\\repo' });
 
     expect(result.success).toBe(true);
-    expect(result.summary).toContain('cc1plus');
+    expect(result.summary).toContain('src/parser.ts');
     expect(generate).not.toHaveBeenCalled();
     expect(isAvailable).not.toHaveBeenCalled();
     expect(result.metrics?.modelCalls).toBe(0);
-    // Structured driver (formatted table) with the shell command as the fallback description
-    expect(execute.mock.calls[0][0]).toBe('system.processes');
-    expect(execute.mock.calls[0][1]).toEqual({ sort: 'cpu', count: 5 });
+    expect(execute.mock.calls[0][0]).toBe('shell.execute');
+    expect(execute.mock.calls[0][1].command).toContain('git --no-pager show --stat');
   });
 
   it('finishes an app launch without a summary call', async () => {
@@ -1036,12 +1035,12 @@ describe('Explaining and exporting what happened', () => {
     } as any);
     (loop as any).toolExecutor = {
       hasDriver: () => true,
-      execute: vi.fn().mockResolvedValue({ success: true, data: { stdout: '  PID %CPU\n 42 99 cc1plus', code: 0 } })
+      execute: vi.fn().mockResolvedValue({ success: true, data: { stdout: 'a1b2c3d Fix the parser\n src/parser.ts | 4 ++--', code: 0 } })
     };
-    await loop.run('which process is using the most cpu', { os: 'linux', cwd: '/home/u' });
-    const why = await loop.run('why', { os: 'linux', cwd: '/home/u' });
+    await loop.run('what changed in the last commit', { os: 'windows', cwd: 'C:\\Users\\u\\repo' });
+    const why = await loop.run('why', { os: 'windows', cwd: 'C:\\Users\\u\\repo' });
     expect(why.summary).toContain('answered without the model');
-    expect(why.summary).toContain('system.processes');
+    expect(why.summary).toContain('git');
     expect(why.summary).toContain('succeeded');
   });
 
@@ -1448,7 +1447,7 @@ describe('App actions win over folder navigation', () => {
 describe('Quitting an app the user names', () => {
   const setup = (lists: string[]) => {
     const execute = vi.fn(async (_tool: string, params: any, _cwd: string, authorize?: any) => {
-      if (/^ps /.test(params.command)) return { success: true, data: { stdout: lists.shift() ?? '', code: 0 } };
+      if (/MainWindowHandle/.test(params.command)) return { success: true, data: { stdout: lists.shift() ?? '', code: 0 } };
       if (authorize && !(await authorize({ capabilityId: 'shell.execute', parameters: params }))) return { success: false, errorCode: 'USER_CANCELLED' };
       return { success: true, data: { stdout: '', code: 0 } };
     });
@@ -1461,17 +1460,21 @@ describe('Quitting an app the user names', () => {
     (loop as any).toolExecutor = { hasDriver: () => true, execute };
     return { loop, execute, generate };
   };
-  const RUNNING = '/Applications/Claude.app/Contents/MacOS/Claude\n/Users/me/.local/bin/claude\n/Applications/Safari.app/Contents/MacOS/Safari';
-  const AFTER = '/Users/me/.local/bin/claude\n/Applications/Safari.app/Contents/MacOS/Safari';
+  // listRunningCommand() output: A = app with a window, P = other process
+  const RUNNING = 'A\tClaude\r\nP\tclaude\r\nA\tmsedge\r\nP\tsvchost';
+  const AFTER = 'P\tclaude\r\nA\tmsedge\r\nP\tsvchost';
 
   it('looks up the running app first and quits "Claude" by its real name', async () => {
     const { loop, execute, generate } = setup([RUNNING, AFTER]);
     const handler = vi.fn().mockResolvedValue(true);
     loop.setAuthorizationHandler(handler);
-    const r = await loop.run('terminate or stop the claude application', { os: 'macos', cwd: '/tmp' });
+    const r = await loop.run('terminate or stop the claude application', { os: 'windows', cwd: 'C:\\Users\\me' });
     const commands = execute.mock.calls.map(c => c[1].command);
-    expect(commands).toEqual(['ps -axo comm=', `osascript -e 'quit app "Claude"'`, 'ps -axo comm=']);
-    expect(commands.some(c => /pkill|killall/.test(c))).toBe(false);
+    expect(commands).toHaveLength(3);
+    expect(commands[0]).toContain('MainWindowHandle');
+    expect(commands[1]).toBe(`Get-Process -Name 'Claude' -ErrorAction Stop | ForEach-Object { [void]$_.CloseMainWindow() }`);
+    expect(commands[2]).toContain('MainWindowHandle');
+    expect(commands.some(c => /Stop-Process/.test(c))).toBe(false);
     expect(handler).toHaveBeenCalledTimes(1);
     expect(r).toMatchObject({ success: true, summary: 'Quit Claude.' });
     expect(generate).not.toHaveBeenCalled();
@@ -1480,20 +1483,20 @@ describe('Quitting an app the user names', () => {
   it('says so, and closes nothing, when no running app has that name', async () => {
     const { loop, execute } = setup([RUNNING]);
     loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
-    const r = await loop.run('quit the safary app', { os: 'macos', cwd: '/tmp' });
+    const r = await loop.run('quit the clade app', { os: 'windows', cwd: 'C:\\Users\\me' });
     expect(execute).toHaveBeenCalledTimes(1);
     expect(r.success).toBe(false);
-    expect(r.summary).toContain('No running app is called "safary". Nothing was closed. Running now with a similar name: Safari.');
+    expect(r.summary).toContain('No running app is called "clade". Nothing was closed. Running now with a similar name: Claude.');
   });
 
   it('reports an app that did not quit, and a declined quit changes nothing', async () => {
     const stuck = setup([RUNNING, RUNNING]);
     stuck.loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
-    const r = await stuck.loop.run('quit claude', { os: 'macos', cwd: '/tmp' });
+    const r = await stuck.loop.run('quit claude', { os: 'windows', cwd: 'C:\\Users\\me' });
     expect(r.summary).toContain('Claude is still running (it may be asking to save your work). Say "force quit Claude"');
     const declined = setup([RUNNING]);
     declined.loop.setAuthorizationHandler(vi.fn().mockResolvedValue(false));
-    const d = await declined.loop.run('quit claude', { os: 'macos', cwd: '/tmp' });
+    const d = await declined.loop.run('quit claude', { os: 'windows', cwd: 'C:\\Users\\me' });
     expect(d).toMatchObject({ success: false, declined: true });
   });
 });
@@ -1593,7 +1596,7 @@ describe('Making a workflow from plain steps', () => {
 describe('Closing a port', () => {
   const setup = (lists: string[]) => {
     const execute = vi.fn(async (_tool: string, params: any, _cwd: string, authorize?: any) => {
-      if (/^lsof /.test(params.command)) return { success: true, data: { stdout: lists.shift() ?? '', code: 0 } };
+      if (/Get-NetTCPConnection/.test(params.command)) return { success: true, data: { stdout: lists.shift() ?? '', code: 0 } };
       if (authorize && !(await authorize({ capabilityId: 'shell.execute', parameters: params }))) return { success: false, errorCode: 'USER_CANCELLED' };
       return { success: true, data: { stdout: '', code: 0 } };
     });
@@ -1606,53 +1609,56 @@ describe('Closing a port', () => {
     (loop as any).toolExecutor = { hasDriver: () => true, execute };
     return { loop, execute, generate };
   };
-  const LISTENING = 'p63988\ncPython\n';
+  const LISTENING = '63988\tpython\r\n';
 
   it('looks up the exact port, asks with the process named, stops it normally and checks it is free', async () => {
     const { loop, execute, generate } = setup([LISTENING, '']);
     const handler = vi.fn().mockResolvedValue(true);
     loop.setAuthorizationHandler(handler);
-    const r = await loop.run('close port 8765', { os: 'macos', cwd: '/tmp' });
-    expect(execute.mock.calls.map(c => c[1].command)).toEqual([
-      'lsof -nP -iTCP:8765 -sTCP:LISTEN -Fpc 2>/dev/null || true', 'kill 63988', 'lsof -nP -iTCP:8765 -sTCP:LISTEN -Fpc 2>/dev/null || true',
-    ]);
+    const r = await loop.run('close port 8765', { os: 'windows', cwd: 'C:\\Users\\me' });
+    const commands = execute.mock.calls.map(c => c[1].command);
+    expect(commands).toHaveLength(3);
+    expect(commands[0]).toContain('Get-NetTCPConnection -LocalPort 8765 -State Listen');
+    expect(commands[1]).toBe('Stop-Process -Id 63988 -ErrorAction Stop');
+    expect(commands[2]).toBe(commands[0]);
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler.mock.calls[0][0].parameters.explanation).toBe('Stop Python (PID 63988), listening on port 8765');
-    expect(r).toMatchObject({ success: true, summary: 'Port 8765 is free. Stopped Python (PID 63988).' });
+    expect(handler.mock.calls[0][0].parameters.explanation).toBe('Stop python (PID 63988), listening on port 8765');
+    expect(r).toMatchObject({ success: true, summary: 'Port 8765 is free. Stopped python (PID 63988).' });
     expect(generate).not.toHaveBeenCalled();
   });
 
   it('says so when nothing listens, and offers a forced stop only when the program stays', async () => {
     const free = setup(['']);
     free.loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
-    const r = await free.loop.run('free up port 3000', { os: 'linux', cwd: '/tmp' });
+    const r = await free.loop.run('free up port 3000', { os: 'windows', cwd: 'C:\\Users\\me' });
     expect(r).toMatchObject({ success: true, summary: 'Port 3000 is already free: nothing is listening on it.' });
     expect(free.execute).toHaveBeenCalledTimes(1);
 
     const stuck = setup([LISTENING, LISTENING]);
     stuck.loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
-    const s = await stuck.loop.run('close port 8765', { os: 'macos', cwd: '/tmp' });
+    const s = await stuck.loop.run('close port 8765', { os: 'windows', cwd: 'C:\\Users\\me' });
     expect(s.success).toBe(false);
-    expect(s.summary).toContain('still in use by Python (PID 63988)');
+    expect(s.summary).toContain('still in use by python (PID 63988)');
     expect(s.summary).toContain('say "force close port 8765"');
   });
 
-  it('a declined request stops nothing, and "force" is the only way to kill -9', async () => {
+  it('a declined request stops nothing, and "force" is the only way to -Force', async () => {
     const declined = setup([LISTENING]);
     declined.loop.setAuthorizationHandler(vi.fn().mockResolvedValue(false));
-    const d = await declined.loop.run('close port 8765', { os: 'macos', cwd: '/tmp' });
+    const d = await declined.loop.run('close port 8765', { os: 'windows', cwd: 'C:\\Users\\me' });
     expect(d).toMatchObject({ success: false, declined: true });
-    expect(declined.execute.mock.calls.map(c => c[1].command)).toEqual(['lsof -nP -iTCP:8765 -sTCP:LISTEN -Fpc 2>/dev/null || true', 'kill 63988']);
+    expect(declined.execute.mock.calls.map(c => c[1].command)[1]).toBe('Stop-Process -Id 63988 -ErrorAction Stop');
+    expect(declined.execute).toHaveBeenCalledTimes(2);
 
     const forced = setup([LISTENING, '']);
     forced.loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
-    await forced.loop.run('force close port 8765', { os: 'macos', cwd: '/tmp' });
-    expect(forced.execute.mock.calls[1][1].command).toBe('kill -9 63988');
+    await forced.loop.run('force close port 8765', { os: 'windows', cwd: 'C:\\Users\\me' });
+    expect(forced.execute.mock.calls[1][1].command).toBe('Stop-Process -Id 63988 -Force -ErrorAction Stop');
   });
 });
 
 describe('Joining a Wi-Fi network', () => {
-  it('uses the exact quoted command on macOS instead of asking the model (which invented a password)', async () => {
+  it('uses the exact quoted netsh command instead of asking the model (which invented a password)', async () => {
     const execute = vi.fn(async (_t: string, params: any, _c: string, authorize?: any) => {
       if (authorize && !(await authorize({ capabilityId: 'shell.execute', parameters: params }))) return { success: false, errorCode: 'USER_CANCELLED' };
       return { success: true, data: { stdout: '', code: 0 } };
@@ -1665,18 +1671,17 @@ describe('Joining a Wi-Fi network', () => {
     (loop as any).toolExecutor = { hasDriver: () => true, execute };
     const handler = vi.fn().mockResolvedValue(false);
     loop.setAuthorizationHandler(handler);
-    const r = await loop.run('connect to wifi Demo Network', { os: 'macos', cwd: '/tmp' });
+    const r = await loop.run('connect to wifi Demo Network', { os: 'windows', cwd: 'C:\\Users\\me' });
     expect(generate).not.toHaveBeenCalled();
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler.mock.calls[0][0].parameters.command).toContain(`networksetup -setairportnetwork`);
-    expect(handler.mock.calls[0][0].parameters.command).toContain(`'Demo Network'`);
+    expect(handler.mock.calls[0][0].parameters.command).toBe(`netsh wlan connect name='Demo Network'`);
     expect(handler.mock.calls[0][0].parameters.command).not.toMatch(/password/i);
     expect(r).toMatchObject({ success: false, declined: true });
   });
 });
 
-describe('Turning Wi-Fi on and off on macOS', () => {
-  it('runs the exact networksetup command after approval, without calling the model', async () => {
+describe('Turning Wi-Fi on and off', () => {
+  it('runs the Windows Radio API script after approval, without calling the model', async () => {
     const commands: string[] = [];
     const execute = vi.fn(async (_t: string, params: any, _c: string, authorize?: any) => {
       commands.push(params.command);
@@ -1690,11 +1695,11 @@ describe('Turning Wi-Fi on and off on macOS', () => {
     } as any);
     (loop as any).toolExecutor = { hasDriver: () => true, execute };
     loop.setAuthorizationHandler(vi.fn().mockResolvedValue(true));
-    const off = await loop.run('turn wifi off', { os: 'macos', cwd: '/tmp' });
+    const off = await loop.run('turn wifi off', { os: 'windows', cwd: 'C:\\Users\\me' });
     expect(off).toMatchObject({ success: true, summary: 'Wi-Fi is off.' });
-    expect(commands[0]).toContain('networksetup -setairportpower');
-    expect(commands[0]).toMatch(/ off$/);
-    const on = await loop.run('turn wifi on', { os: 'macos', cwd: '/tmp' });
+    expect(commands[0]).toContain("$_.Kind -eq 'WiFi'");
+    expect(commands[0]).toContain("SetStateAsync('Off')");
+    const on = await loop.run('turn wifi on', { os: 'windows', cwd: 'C:\\Users\\me' });
     expect(on.summary).toBe('Wi-Fi is on.');
     expect(generate).not.toHaveBeenCalled();
   });

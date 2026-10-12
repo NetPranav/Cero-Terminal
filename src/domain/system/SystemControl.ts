@@ -1,18 +1,15 @@
 /**
- * SystemControl.ts — system settings by request, on macOS, Windows and Linux.
+ * SystemControl.ts — system settings by request, on Windows.
  *
  * "turn off bluetooth", "set brightness to 60", "mute", "dark mode on", "connect to wifi Home",
- * "open display settings", "lock the screen". Parsed without the model and turned into the native
- * command for this OS. Windows uses the Windows Radio API for Wi-Fi and Bluetooth (no admin rights
- * needed), WMI for brightness, the Core Audio API for volume, the registry for dark mode and
- * ms-settings: pages. When a change is not possible (an external monitor has no brightness control,
+ * "open display settings", "lock the screen". Parsed without the model and turned into a PowerShell
+ * command: the Windows Radio API for Wi-Fi and Bluetooth (no admin rights needed), WMI for
+ * brightness, the Core Audio API for volume, the registry for dark mode and ms-settings: pages. When a change is not possible (an external monitor has no brightness control,
  * a desktop has no Wi-Fi radio), the matching settings page opens instead.
  *
  * A request that names a setting but not what to do with it ("bluetooth", "my display") gets
- * "Did you mean ...?" suggestions, built only from what this OS can actually do.
+ * "Did you mean ...?" suggestions, built only from what Windows can actually do.
  */
-
-export type SystemOs = 'macos' | 'linux' | 'windows';
 
 export type SystemTopic =
   | 'wifi' | 'bluetooth' | 'brightness' | 'volume' | 'appearance' | 'battery' | 'lock'
@@ -36,7 +33,7 @@ export type SystemAction =
 export interface SystemCommand {
   /** What the user sees in progress and in the confirmation */
   title: string;
-  /** Shell command for this OS (PowerShell on Windows) */
+  /** PowerShell command */
   command: string;
   /** Changes something (goes through the confirmation policy); reads and page opens do not */
   changes: boolean;
@@ -161,18 +158,8 @@ export function parseSystemAction(goal: string): SystemAction | null {
   return isBareMention(t, topic) ? { kind: 'suggest', topic } : null;
 }
 
-// ---- commands per OS ------------------------------------------------------------------------
+// ---- commands -------------------------------------------------------------------------------
 
-const MAC_PAGES: Record<SystemTopic, string> = {
-  wifi: 'com.apple.wifi-settings-extension', bluetooth: 'com.apple.BluetoothSettings', brightness: 'com.apple.Displays-Settings.extension',
-  display: 'com.apple.Displays-Settings.extension', volume: 'com.apple.Sound-Settings.extension', sound: 'com.apple.Sound-Settings.extension',
-  appearance: 'com.apple.Appearance-Settings.extension', battery: 'com.apple.Battery-Settings.extension', power: 'com.apple.Battery-Settings.extension',
-  network: 'com.apple.Network-Settings.extension', notifications: 'com.apple.Notifications-Settings.extension', keyboard: 'com.apple.Keyboard-Settings.extension',
-  mouse: 'com.apple.Trackpad-Settings.extension', printers: 'com.apple.Print-Scan-Settings.extension', privacy: 'com.apple.settings.PrivacySecurity.extension',
-  datetime: 'com.apple.Date-Time-Settings.extension', users: 'com.apple.Users-Groups-Settings.extension', updates: 'com.apple.Software-Update-Settings.extension',
-  storage: 'com.apple.settings.Storage', wallpaper: 'com.apple.Wallpaper-Settings.extension', accessibility: 'com.apple.Accessibility-Settings.extension',
-  lock: 'com.apple.Lock-Screen-Settings.extension',
-};
 const WIN_PAGES: Record<SystemTopic, string> = {
   wifi: 'ms-settings:network-wifi', bluetooth: 'ms-settings:bluetooth', brightness: 'ms-settings:display', display: 'ms-settings:display',
   volume: 'ms-settings:sound', sound: 'ms-settings:sound', appearance: 'ms-settings:colors', battery: 'ms-settings:batterysaver',
@@ -181,16 +168,6 @@ const WIN_PAGES: Record<SystemTopic, string> = {
   users: 'ms-settings:otherusers', updates: 'ms-settings:windowsupdate', storage: 'ms-settings:storagesense', wallpaper: 'ms-settings:personalization-background',
   accessibility: 'ms-settings:easeofaccess', lock: 'ms-settings:lockscreen',
 };
-/** [GNOME panel, KDE module] */
-const LINUX_PAGES: Record<SystemTopic, [string, string]> = {
-  wifi: ['wifi', 'kcm_networkmanagement'], bluetooth: ['bluetooth', 'kcm_bluetooth'], brightness: ['display', 'kcm_kscreen'], display: ['display', 'kcm_kscreen'],
-  volume: ['sound', 'kcm_pulseaudio'], sound: ['sound', 'kcm_pulseaudio'], appearance: ['background', 'kcm_colors'], battery: ['power', 'kcm_powerdevilprofilesconfig'],
-  power: ['power', 'kcm_powerdevilprofilesconfig'], network: ['network', 'kcm_networkmanagement'], notifications: ['notifications', 'kcm_notifications'],
-  keyboard: ['keyboard', 'kcm_keyboard'], mouse: ['mouse', 'kcm_mouse'], printers: ['printers', 'kcm_printer_manager'], privacy: ['privacy', 'kcm_access'],
-  datetime: ['datetime', 'kcm_clock'], users: ['users', 'kcm_users'], updates: ['info-overview', 'kcm_about-distro'], storage: ['info-overview', 'kcm_about-distro'],
-  wallpaper: ['background', 'kcm_wallpaper'], accessibility: ['universal-access', 'kcm_access'], lock: ['privacy', 'kcm_screenlocker'],
-};
-
 export const TOPIC_NAMES: Record<SystemTopic, string> = {
   wifi: 'Wi-Fi', bluetooth: 'Bluetooth', brightness: 'Display', display: 'Display', volume: 'Sound', sound: 'Sound', appearance: 'Appearance',
   battery: 'Battery', power: 'Power', network: 'Network', notifications: 'Notifications', keyboard: 'Keyboard', mouse: 'Mouse and trackpad',
@@ -198,13 +175,9 @@ export const TOPIC_NAMES: Record<SystemTopic, string> = {
   wallpaper: 'Wallpaper', accessibility: 'Accessibility', lock: 'Lock screen',
 };
 
-function settingsPage(topic: SystemTopic, os: SystemOs): SystemCommand {
+function settingsPage(topic: SystemTopic): SystemCommand {
   const name = TOPIC_NAMES[topic];
-  const command = os === 'windows'
-    ? `Start-Process '${WIN_PAGES[topic]}'`
-    : os === 'macos'
-      ? `open 'x-apple.systempreferences:${MAC_PAGES[topic]}'`
-      : `(command -v gnome-control-center >/dev/null 2>&1 && setsid -f gnome-control-center ${LINUX_PAGES[topic][0]} >/dev/null 2>&1) || (command -v systemsettings >/dev/null 2>&1 && setsid -f systemsettings ${LINUX_PAGES[topic][1]} >/dev/null 2>&1) || (command -v kcmshell6 >/dev/null 2>&1 && setsid -f kcmshell6 ${LINUX_PAGES[topic][1]} >/dev/null 2>&1) || (command -v kcmshell5 >/dev/null 2>&1 && setsid -f kcmshell5 ${LINUX_PAGES[topic][1]} >/dev/null 2>&1)`;
+  const command = `Start-Process '${WIN_PAGES[topic]}'`;
   return { title: `Open ${name} settings`, command, changes: false, done: () => `Opened ${name} settings.` };
 }
 
@@ -246,14 +219,8 @@ public class CeroAudio {
 const WIN_BRIGHTNESS_GET = '$b = Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness -ErrorAction Stop | Select-Object -First 1; if (-not $b) { throw "This display does not support brightness control from Windows" }';
 const winBrightnessSet = (expr: string) => `${WIN_BRIGHTNESS_GET}; $level = [int][Math]::Max(0, [Math]::Min(100, ${expr})); $m = Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods -ErrorAction Stop | Select-Object -First 1; Invoke-CimMethod -InputObject $m -MethodName WmiSetBrightness -Arguments @{ Timeout = [uint32]1; Brightness = [byte]$level } | Out-Null; "Brightness: $level%"`;
 
-const LINUX_VOLUME = (wp: string, pa: string, am: string) => `if command -v wpctl >/dev/null 2>&1; then ${wp}; elif command -v pactl >/dev/null 2>&1; then ${pa}; elif command -v amixer >/dev/null 2>&1; then ${am}; else echo "No volume control found (wpctl, pactl or amixer)" >&2; false; fi`;
-const LINUX_BRIGHT = (bctl: string, gnome: string) => `if command -v brightnessctl >/dev/null 2>&1; then ${bctl}; elif command -v gdbus >/dev/null 2>&1; then ${gnome}; else echo "No brightness control found (install brightnessctl)" >&2; false; fi`;
-const GNOME_BRIGHT_SET = (n: string) => `gdbus call --session --dest org.gnome.SettingsDaemon.Power --object-path /org/gnome/SettingsDaemon/Power --method org.freedesktop.DBus.Properties.Set org.gnome.SettingsDaemon.Power.Screen Brightness "<int32 ${n}>" >/dev/null && echo "Brightness: ${n}%"`;
-
-export function commandFor(action: SystemAction, os: SystemOs): SystemCommand | null {
-  const page = (topic: SystemTopic) => settingsPage(topic, os);
-  const win = os === 'windows';
-  const mac = os === 'macos';
+export function commandFor(action: SystemAction): SystemCommand | null {
+  const page = (topic: SystemTopic) => settingsPage(topic);
   switch (action.kind) {
     case 'settings':
       return page(action.topic);
@@ -262,25 +229,19 @@ export function commandFor(action: SystemAction, os: SystemOs): SystemCommand | 
     case 'lock':
       return {
         title: 'Lock the screen', changes: false, done: () => 'Screen locked.',
-        command: win ? 'rundll32.exe user32.dll,LockWorkStation'
-          : mac ? 'pmset displaysleepnow'
-            : 'loginctl lock-session 2>/dev/null || xdg-screensaver lock',
+        command: 'rundll32.exe user32.dll,LockWorkStation',
       };
     case 'battery':
       return {
         title: 'Battery status', changes: false, done: (out) => out.trim() || 'No battery found (desktop or AC-only system).',
-        command: win ? "Get-CimInstance Win32_Battery | ForEach-Object { 'Battery: ' + $_.EstimatedChargeRemaining + '% (' + $(if ($_.BatteryStatus -eq 2) { 'charging or plugged in' } else { 'on battery' }) + ')' }"
-          : mac ? 'pmset -g batt'
-            : 'for b in /sys/class/power_supply/BAT*; do [ -d "$b" ] && echo "$(basename "$b"): $(cat "$b/capacity")% ($(cat "$b/status"))"; done',
+        command: "Get-CimInstance Win32_Battery | ForEach-Object { 'Battery: ' + $_.EstimatedChargeRemaining + '% (' + $(if ($_.BatteryStatus -eq 2) { 'charging or plugged in' } else { 'on battery' }) + ')' }",
       };
     case 'appearance': {
       const dark = action.op === 'dark';
       const value = dark ? 0 : 1;
       return {
         title: `Switch to ${dark ? 'dark' : 'light'} mode`, changes: true, fallback: page('appearance'), done: () => `Switched to ${dark ? 'dark' : 'light'} mode.`,
-        command: win ? `Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize' -Name AppsUseLightTheme -Value ${value}; Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize' -Name SystemUsesLightTheme -Value ${value}`
-          : mac ? `osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to ${dark}'`
-            : `if command -v gsettings >/dev/null 2>&1 && gsettings list-keys org.gnome.desktop.interface | grep -q color-scheme; then gsettings set org.gnome.desktop.interface color-scheme ${dark ? "'prefer-dark'" : "'default'"}; gsettings set org.gnome.desktop.interface gtk-theme ${dark ? "'Adwaita-dark'" : "'Adwaita'"}; elif command -v plasma-apply-colorscheme >/dev/null 2>&1; then plasma-apply-colorscheme ${dark ? 'BreezeDark' : 'BreezeLight'}; else echo "No supported desktop for switching the theme" >&2; false; fi`,
+        command: `Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize' -Name AppsUseLightTheme -Value ${value}; Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize' -Name SystemUsesLightTheme -Value ${value}`,
       };
     }
     case 'wifi': {
@@ -288,68 +249,51 @@ export function commandFor(action: SystemAction, os: SystemOs): SystemCommand | 
         const ssid = action.network.replace(/["`$\\]/g, '');
         return {
           title: `Connect to Wi-Fi "${ssid}"`, changes: true, fallback: page('wifi'), done: (out) => out.trim() || `Connecting to "${ssid}".`,
-          command: win ? `netsh wlan connect name='${ssid.replace(/'/g, "''")}'`
-            : mac ? `networksetup -setairportnetwork "$(networksetup -listallhardwareports | awk '/Wi-Fi|AirPort/{getline; print $2; exit}')" '${ssid.replace(/'/g, `'\\''`)}'`
-              : `nmcli device wifi connect '${ssid.replace(/'/g, `'\\''`)}'`,
+          command: `netsh wlan connect name='${ssid.replace(/'/g, "''")}'`,
         };
       }
       if (action.op === 'status') {
         return {
-          title: 'Wi-Fi status', changes: false,
-          done: (out) => out.trim().replace('<redacted>', 'hidden by macOS (allow Location Services for Cero to see it)'),
-          command: win ? "netsh wlan show interfaces | Select-String -Pattern '^\\s+(State|SSID|Signal|Radio type)\\s' | ForEach-Object { $_.Line.Trim() }"
-            : mac ? `dev=$(networksetup -listallhardwareports | awk '/Wi-Fi|AirPort/{getline; print $2; exit}'); networksetup -getairportpower "$dev"; ipconfig getsummary "$dev" 2>/dev/null | awk -F' : ' '/ SSID/{print "Network: " $2}'`
-              : 'nmcli radio wifi | sed "s/^/Wi-Fi radio: /"; nmcli -t -f active,ssid,signal dev wifi | awk -F: \'$1=="yes"{print "Network: " $2 " (" $3 "%)"}\'',
+          title: 'Wi-Fi status', changes: false, done: (out) => out.trim(),
+          command: "netsh wlan show interfaces | Select-String -Pattern '^\\s+(State|SSID|Signal|Radio type)\\s' | ForEach-Object { $_.Line.Trim() }",
         };
       }
       if (action.op === 'scan') {
         return {
           title: 'Nearby Wi-Fi networks', changes: false, done: (out) => out.trim() || 'No Wi-Fi networks found.',
-          command: win ? "netsh wlan show networks mode=bssid | Select-String -Pattern '^SSID|Signal' | ForEach-Object { $_.Line.Trim() }"
-            : mac ? `system_profiler SPAirPortDataType 2>/dev/null | awk '/Other Local Wi-Fi Networks:/{f=1; next} f && /^ {12}[^ ].*:$/{sub(/^ +/, ""); sub(/:$/, ""); print}' | head -20`
-              : 'nmcli -f SSID,SIGNAL,SECURITY dev wifi list',
+          command: "netsh wlan show networks mode=bssid | Select-String -Pattern '^SSID|Signal' | ForEach-Object { $_.Line.Trim() }",
         };
       }
       const on = action.op === 'on';
       return {
         title: `Turn Wi-Fi ${action.op}`, changes: true, fallback: page('wifi'), done: () => `Wi-Fi is ${action.op}.`,
-        command: win ? winRadio('WiFi', on ? 'On' : 'Off')
-          : mac ? `networksetup -setairportpower "$(networksetup -listallhardwareports | awk '/Wi-Fi|AirPort/{getline; print $2; exit}')" ${action.op}`
-            : `nmcli radio wifi ${action.op}`,
+        command: winRadio('WiFi', on ? 'On' : 'Off'),
       };
     }
     case 'bluetooth': {
       if (action.op === 'devices') {
         return {
           title: 'Bluetooth devices', changes: false, done: (out) => out.trim() || 'No paired Bluetooth devices.',
-          command: win ? "Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -and $_.FriendlyName -notmatch 'Enumerator|Adapter|Radio|Transport|Service|Protocol|RFCOMM|LE Generic|Wireless Bluetooth|Intel|Realtek|Qualcomm|MediaTek' } | ForEach-Object { $_.FriendlyName + ' (' + $_.Status + ')' }"
-            : mac ? `system_profiler SPBluetoothDataType 2>/dev/null | awk '/^ {6}(Connected|Not Connected):/{s=$0; sub(/^ +/, "", s); sub(/:$/, "", s); next} /^ {6}[^ ]/{s=""} s != "" && /^ {10}[^ ].*:$/{n=$0; sub(/^ +/, "", n); sub(/:$/, "", n); if (!seen[n]++) print n " (" s ")"}'`
-              : 'bluetoothctl devices Paired 2>/dev/null || bluetoothctl paired-devices',
+          command: "Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -and $_.FriendlyName -notmatch 'Enumerator|Adapter|Radio|Transport|Service|Protocol|RFCOMM|LE Generic|Wireless Bluetooth|Intel|Realtek|Qualcomm|MediaTek' } | ForEach-Object { $_.FriendlyName + ' (' + $_.Status + ')' }",
         };
       }
       if (action.op === 'status') {
         return {
           title: 'Bluetooth status', changes: false, done: (out) => out.trim(),
-          command: win ? winRadio('Bluetooth')
-            : mac ? `system_profiler SPBluetoothDataType 2>/dev/null | awk -F': ' '/State:/{print "Bluetooth: " $2; exit}'`
-              : "bluetoothctl show | awk -F': ' '/Powered/{print \"Bluetooth powered: \" $2}'",
+          command: winRadio('Bluetooth'),
         };
       }
       const on = action.op === 'on';
       return {
         title: `Turn Bluetooth ${action.op}`, changes: true, fallback: page('bluetooth'), done: () => `Bluetooth is ${action.op}.`,
-        command: win ? winRadio('Bluetooth', on ? 'On' : 'Off')
-          : mac ? `command -v blueutil >/dev/null 2>&1 && blueutil -p ${on ? 1 : 0} || { echo "blueutil is not installed (brew install blueutil)" >&2; false; }`
-            : `bluetoothctl power ${action.op} | grep -q succeeded || rfkill ${on ? 'unblock' : 'block'} bluetooth`,
+        command: winRadio('Bluetooth', on ? 'On' : 'Off'),
       };
     }
     case 'brightness': {
       if (action.op === 'get') {
         return {
           title: 'Screen brightness', changes: false, done: (out) => out.trim(),
-          command: win ? `${WIN_BRIGHTNESS_GET}; "Brightness: $($b.CurrentBrightness)%"`
-            : mac ? `command -v brightness >/dev/null 2>&1 && brightness -l | awk '/brightness/{printf "Brightness: %d%%\\n", $NF*100; exit}' || { echo "Install the brightness tool to read it: brew install brightness" >&2; false; }`
-              : LINUX_BRIGHT(`echo "Brightness: $(( $(brightnessctl get) * 100 / $(brightnessctl max) ))%"`, `gdbus call --session --dest org.gnome.SettingsDaemon.Power --object-path /org/gnome/SettingsDaemon/Power --method org.freedesktop.DBus.Properties.Get org.gnome.SettingsDaemon.Power.Screen Brightness | tr -dc '0-9' | sed 's/^/Brightness: /; s/$/%/'`),
+          command: `${WIN_BRIGHTNESS_GET}; "Brightness: $($b.CurrentBrightness)%"`,
         };
       }
       const level = action.op === 'set' ? action.level : undefined;
@@ -357,13 +301,7 @@ export function commandFor(action: SystemAction, os: SystemOs): SystemCommand | 
       const title = level !== undefined ? `Set brightness to ${level}%` : `Turn brightness ${action.op}`;
       return {
         title, changes: true, fallback: page('display'), done: (out) => out.trim() || `${title}.`,
-        command: win ? winBrightnessSet(level !== undefined ? String(level) : `$b.CurrentBrightness + (${step})`)
-          : mac ? (level !== undefined
-            ? `command -v brightness >/dev/null 2>&1 && brightness ${(level / 100).toFixed(2)} && echo "Brightness: ${level}%" || { echo "Install the brightness tool for exact levels: brew install brightness" >&2; false; }`
-            : `osascript -e 'tell application "System Events" to key code ${step > 0 ? 144 : 145}' && osascript -e 'tell application "System Events" to key code ${step > 0 ? 144 : 145}'`)
-            : LINUX_BRIGHT(
-              level !== undefined ? `brightnessctl set ${level}% >/dev/null && echo "Brightness: ${level}%"` : `brightnessctl set ${Math.abs(step)}%${step > 0 ? '+' : '-'} >/dev/null && echo "Brightness: $(( $(brightnessctl get) * 100 / $(brightnessctl max) ))%"`,
-              level !== undefined ? GNOME_BRIGHT_SET(String(level)) : `cur=$(gdbus call --session --dest org.gnome.SettingsDaemon.Power --object-path /org/gnome/SettingsDaemon/Power --method org.freedesktop.DBus.Properties.Get org.gnome.SettingsDaemon.Power.Screen Brightness | tr -dc '0-9'); new=$((cur ${step > 0 ? '+' : '-'} ${Math.abs(step)})); ${GNOME_BRIGHT_SET('$new')}`),
+        command: winBrightnessSet(level !== undefined ? String(level) : `$b.CurrentBrightness + (${step})`),
       };
     }
     case 'volume': {
@@ -371,9 +309,7 @@ export function commandFor(action: SystemAction, os: SystemOs): SystemCommand | 
       if (op === 'get') {
         return {
           title: 'Volume', changes: false, done: (out) => out.trim(),
-          command: win ? `${WIN_AUDIO}; 'Volume: ' + [int]([CeroAudio]::Volume * 100) + '%' + $(if ([CeroAudio]::Mute) { ' (muted)' } else { '' })`
-            : mac ? `osascript -e 'set s to get volume settings' -e 'if output muted of s then return "Volume: " & (output volume of s) & "% (muted)"' -e 'return "Volume: " & (output volume of s) & "%"'`
-              : LINUX_VOLUME('wpctl get-volume @DEFAULT_AUDIO_SINK@', 'pactl get-sink-volume @DEFAULT_SINK@ | head -1', "amixer get Master | grep -o '[0-9]*%' | head -1"),
+          command: `${WIN_AUDIO}; 'Volume: ' + [int]([CeroAudio]::Volume * 100) + '%' + $(if ([CeroAudio]::Mute) { ' (muted)' } else { '' })`,
         };
       }
       const level = op === 'set' ? action.level : undefined;
@@ -382,18 +318,9 @@ export function commandFor(action: SystemAction, os: SystemOs): SystemCommand | 
         : op === 'mute' ? '[CeroAudio]::Mute = $true'
           : op === 'unmute' ? '[CeroAudio]::Mute = $false'
             : `[CeroAudio]::Volume = [Math]::Max(0, [Math]::Min(1, [CeroAudio]::Volume ${op === 'up' ? '+' : '-'} 0.1))`;
-      const macCmd = level !== undefined ? `osascript -e 'set volume output volume ${level} without output muted'`
-        : op === 'mute' ? `osascript -e 'set volume output muted true'`
-          : op === 'unmute' ? `osascript -e 'set volume output muted false'`
-            : `osascript -e 'set volume output volume ((output volume of (get volume settings)) ${op === 'up' ? '+' : '-'} 10)'`;
-      const linuxCmd = level !== undefined
-        ? LINUX_VOLUME(`wpctl set-mute @DEFAULT_AUDIO_SINK@ 0; wpctl set-volume @DEFAULT_AUDIO_SINK@ ${level}%`, `pactl set-sink-mute @DEFAULT_SINK@ 0; pactl set-sink-volume @DEFAULT_SINK@ ${level}%`, `amixer -q set Master ${level}% unmute`)
-        : op === 'mute' ? LINUX_VOLUME('wpctl set-mute @DEFAULT_AUDIO_SINK@ 1', 'pactl set-sink-mute @DEFAULT_SINK@ 1', 'amixer -q set Master mute')
-          : op === 'unmute' ? LINUX_VOLUME('wpctl set-mute @DEFAULT_AUDIO_SINK@ 0', 'pactl set-sink-mute @DEFAULT_SINK@ 0', 'amixer -q set Master unmute')
-            : LINUX_VOLUME(`wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 10%${op === 'up' ? '+' : '-'}`, `pactl set-sink-volume @DEFAULT_SINK@ ${op === 'up' ? '+' : '-'}10%`, `amixer -q set Master 10%${op === 'up' ? '+' : '-'}`);
       return {
         title, changes: true, fallback: page('sound'), done: () => `${title.replace(/^Turn volume (up|down)$/, 'Volume turned $1')}.`,
-        command: win ? `${WIN_AUDIO}; ${winCmd}` : mac ? macCmd : linuxCmd,
+        command: `${WIN_AUDIO}; ${winCmd}`,
       };
     }
   }
@@ -401,14 +328,14 @@ export function commandFor(action: SystemAction, os: SystemOs): SystemCommand | 
 
 // ---- "Did you mean ...?" ---------------------------------------------------------------------
 
-/** Requests that work on this OS for a topic, as the user would type them */
-export function suggestionsFor(topic: SystemTopic, os: SystemOs): string[] {
+/** Requests that work on Windows for a topic, as the user would type them */
+export function suggestionsFor(topic: SystemTopic): string[] {
   const name = TOPIC_NAMES[topic];
   const open = `open ${name.toLowerCase()} settings`;
   switch (topic) {
     case 'wifi': return ['turn wifi off', 'turn wifi on', 'show wifi status', 'list nearby wifi networks', 'connect to wifi <network name>', open];
     case 'bluetooth': return ['turn bluetooth off', 'turn bluetooth on', 'is bluetooth on?', 'list bluetooth devices', open];
-    case 'brightness': return ['set brightness to 70%', 'increase brightness', 'decrease brightness', ...(os === 'macos' ? [] : ['what is the brightness?']), 'open display settings'];
+    case 'brightness': return ['set brightness to 70%', 'increase brightness', 'decrease brightness', 'what is the brightness?', 'open display settings'];
     case 'volume': case 'sound': return ['set volume to 50%', 'volume up', 'volume down', 'mute', 'unmute', 'what is the volume?', 'open sound settings'];
     case 'appearance': return ['turn on dark mode', 'switch to light mode', 'open appearance settings'];
     case 'battery': return ['battery status', 'open battery settings'];
@@ -416,12 +343,12 @@ export function suggestionsFor(topic: SystemTopic, os: SystemOs): string[] {
   }
 }
 
-/** Autocomplete for a request being typed: matching suggestions for this OS */
-export function completeSystemRequest(prefix: string, os: SystemOs): string[] {
+/** Autocomplete for a request being typed: matching suggestions */
+export function completeSystemRequest(prefix: string): string[] {
   const p = prefix.trim().toLowerCase();
   if (p.length < 2) return [];
   const all = new Set<string>();
-  for (const [topic] of TOPIC_WORDS) for (const s of suggestionsFor(topic, os)) all.add(s);
+  for (const [topic] of TOPIC_WORDS) for (const s of suggestionsFor(topic)) all.add(s);
   all.add('lock the screen');
   return [...all].filter(s => s.startsWith(p) || s.split(' ').some(w => w.startsWith(p) && p.length >= 3)).slice(0, 6);
 }

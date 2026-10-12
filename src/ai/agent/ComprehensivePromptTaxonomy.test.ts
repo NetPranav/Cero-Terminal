@@ -110,15 +110,14 @@ describe('Comprehensive Prompt Taxonomy & Feature Routing Test Suite', () => {
   // Uses exact fast-path patterns from the routing table
   // =========================================================================
   describe('Archetype 2: System Diagnostics & Hardware Inspections', () => {
-    it('routes battery queries to system.battery capability', async () => {
-      const res = await agent.run('what is my battery level', { os: 'linux', cwd: '/home/test' });
+    it('routes battery queries to the Windows battery reading, without the model', async () => {
+      const res = await agent.run('what is my battery level', { os: 'windows', cwd: 'C:\\Users\\test' });
       expect(res.success).toBe(true);
-      // Assert tool name and cwd; 4th arg is undefined in fast-path (no authorization context)
       expect(mockToolExecutor.execute).toHaveBeenCalledWith(
-        'system.battery',
-        {},
-        '/home/test',
-        undefined
+        'shell.execute',
+        expect.objectContaining({ command: expect.stringContaining('Win32_Battery') }),
+        'C:\\Users\\test',
+        expect.any(Function)
       );
     });
 

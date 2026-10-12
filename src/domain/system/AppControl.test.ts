@@ -30,58 +30,47 @@ describe('parseQuitRequest', () => {
   });
 });
 
-const MAC_PS = [
-  '/sbin/launchd',
-  '/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder',
-  '/Applications/Claude.app/Contents/MacOS/Claude',
-  '/Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer)',
-  '/Applications/Antigravity IDE.app/Contents/MacOS/Electron',
-  '/System/Applications/Journal.app/Contents/PlugIns/JournalWidgets.appex/Contents/MacOS/JournalWidgets',
-  '/Applications/Safari.app/Contents/MacOS/Safari',
-  '/Users/me/.local/bin/claude',
-  '/private/tmp/claude-501/x/Cero.app/Contents/MacOS/cero-terminal',
-  'node',
-].join('\n');
+// Shape of listRunningCommand(): "A<tab>name" for apps with a window, "P<tab>name" for other processes
+const WIN_PS = [
+  'P\tsvchost',
+  'A\tClaude',
+  'P\tclaude',
+  'A\tAntigravity IDE',
+  'A\tmsedge',
+  'P\tmsedge',
+  'P\tnode',
+].join('\r\n');
 
 describe('running apps', () => {
-  it('reads app bundles on macOS, not their helpers, widgets or system agents', () => {
-    const running = parseRunning(MAC_PS, 'macos');
-    expect(running.filter(r => r.app).map(r => r.name).sort()).toEqual(['Antigravity IDE', 'Cero', 'Claude', 'Safari']);
+  it('reads apps with a window and other processes, keeping both when they share a name', () => {
+    const running = parseRunning(WIN_PS, 'windows');
+    expect(running.filter(r => r.app).map(r => r.name).sort()).toEqual(['Antigravity IDE', 'Claude', 'msedge']);
     expect(running.find(r => r.name === 'claude')).toEqual({ name: 'claude', app: false });
-    expect(running.some(r => /Helper|Journal|Finder/.test(r.name))).toBe(false);
+    expect(listRunningCommand('windows')).toContain('MainWindowHandle');
   });
 
   it('finds "claude" as the Claude app, ignoring case, and never the CLI when an app matches', () => {
-    const running = parseRunning(MAC_PS, 'macos');
+    const running = parseRunning(WIN_PS, 'windows');
     expect(matchRunning('claude', running, true)).toEqual({ kind: 'one', item: { name: 'Claude', app: true } });
     expect(matchRunning('claude', running, false)).toEqual({ kind: 'one', item: { name: 'Claude', app: true } });
     expect(matchRunning('antigravity', running, true)).toMatchObject({ kind: 'one', item: { name: 'Antigravity IDE' } });
+    expect(matchRunning('edge', running, true)).toMatchObject({ kind: 'one', item: { name: 'msedge', app: true } });
   });
 
   it('says what is close when nothing matches, and asks when several do', () => {
-    const running = parseRunning(MAC_PS, 'macos');
-    const none = matchRunning('safary', running, true);
+    const running = parseRunning(WIN_PS, 'windows');
+    const none = matchRunning('clade', running, true);
     expect(none.kind).toBe('none');
-    expect(none.kind === 'none' && none.closest.map(c => c.name)).toContain('Safari');
+    expect(none.kind === 'none' && none.closest.map(c => c.name)).toContain('Claude');
     const many = matchRunning('code', [{ name: 'Visual Studio Code', app: true }, { name: 'Code', app: true }], true);
     expect(many.kind).toBe('many');
-  });
-
-  it('reads Windows windows and processes, and Linux processes', () => {
-    const win = parseRunning('A\tChrome\nP\tchrome\nA\tClaude\nP\tsvchost', 'windows');
-    expect(matchRunning('claude', win, true)).toMatchObject({ kind: 'one', item: { name: 'Claude', app: true } });
-    const linux = parseRunning('systemd\nfirefox\nclaude\n', 'linux');
-    expect(matchRunning('Firefox', linux, false)).toMatchObject({ kind: 'one', item: { name: 'firefox' } });
-    expect(listRunningCommand('linux')).toBe('ps -eo comm=');
   });
 });
 
 describe('quitCommand', () => {
-  it('quits the exact app the normal way, and a forced quit touches only that bundle', () => {
-    expect(quitCommand({ name: 'Claude', app: true }, 'macos', false)).toBe(`osascript -e 'quit app "Claude"'`);
-    expect(quitCommand({ name: 'Antigravity IDE', app: true }, 'macos', true)).toBe(`pkill -9 -f -- '/Antigravity IDE\\.app/Contents/'`);
-    expect(quitCommand({ name: 'firefox', app: false }, 'linux', false)).toBe(`pkill -x -- 'firefox'`);
-    expect(quitCommand({ name: 'Claude', app: true }, 'windows', false)).toContain(`Get-Process -Name 'Claude'`);
+  it('asks an app to close its window, and force-stops only by exact name', () => {
+    expect(quitCommand({ name: 'Claude', app: true }, 'windows', false)).toBe(`Get-Process -Name 'Claude' -ErrorAction Stop | ForEach-Object { [void]$_.CloseMainWindow() }`);
+    expect(quitCommand({ name: 'Claude', app: true }, 'windows', true)).toBe(`Stop-Process -Name 'Claude' -Force -ErrorAction Stop`);
     expect(quitCommand({ name: "O'Brien", app: false }, 'windows', true)).toBe(`Stop-Process -Name 'O''Brien' -Force -ErrorAction Stop`);
   });
 });

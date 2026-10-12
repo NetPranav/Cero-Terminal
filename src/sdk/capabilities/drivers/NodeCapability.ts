@@ -23,7 +23,7 @@ export interface NodeDriverInput {
 export class NodeCapability extends BaseCapabilityDriver<NodeDriverInput, any> {
   readonly capabilityId: string;
   readonly name = 'Node & Modern Javascript Ecosystem Runtime Driver';
-  readonly supportedPlatforms: Platform[] = ['macos', 'windows', 'linux'];
+  readonly supportedPlatforms: Platform[] = ['windows'];
 
   constructor(customId: string = 'node.npm_install') {
     super();

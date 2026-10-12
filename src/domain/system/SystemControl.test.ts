@@ -54,36 +54,31 @@ const ACTIONS: SystemAction[] = [
 ];
 
 describe('commandFor', () => {
-  it('has a command on every OS for every action, and changes have a settings page to fall back to', () => {
-    for (const os of ['macos', 'linux', 'windows'] as const) {
-      for (const action of ACTIONS) {
-        const cmd = commandFor(action, os)!;
-        expect(cmd.command, `${os} ${JSON.stringify(action)}`).toBeTruthy();
-        if (cmd.changes && action.kind !== 'lock') expect(cmd.fallback, `${os} ${JSON.stringify(action)}`).toBeDefined();
-      }
+  it('has a command for every action, and changes have a settings page to fall back to', () => {
+    for (const action of ACTIONS) {
+      const cmd = commandFor(action)!;
+      expect(cmd.command, JSON.stringify(action)).toBeTruthy();
+      if (cmd.changes && action.kind !== 'lock') expect(cmd.fallback, JSON.stringify(action)).toBeDefined();
     }
   });
 
   it('uses native Windows APIs, no admin rights, and ms-settings pages', () => {
-    expect(commandFor({ kind: 'bluetooth', op: 'off' }, 'windows')!.command).toContain("SetStateAsync('Off')");
-    expect(commandFor({ kind: 'wifi', op: 'on' }, 'windows')!.command).toContain("$_.Kind -eq 'WiFi'");
-    expect(commandFor({ kind: 'brightness', op: 'set', level: 60 }, 'windows')!.command).toContain('WmiSetBrightness');
-    expect(commandFor({ kind: 'volume', op: 'mute' }, 'windows')!.command).toContain('[CeroAudio]::Mute = $true');
-    expect(commandFor({ kind: 'settings', topic: 'updates' }, 'windows')!.command).toBe("Start-Process 'ms-settings:windowsupdate'");
-    expect(commandFor({ kind: 'settings', topic: 'bluetooth' }, 'macos')!.command).toBe("open 'x-apple.systempreferences:com.apple.BluetoothSettings'");
-    expect(commandFor({ kind: 'settings', topic: 'bluetooth' }, 'linux')!.command).toMatch(/gnome-control-center bluetooth.*systemsettings kcm_bluetooth/);
+    expect(commandFor({ kind: 'bluetooth', op: 'off' })!.command).toContain("SetStateAsync('Off')");
+    expect(commandFor({ kind: 'wifi', op: 'on' })!.command).toContain("$_.Kind -eq 'WiFi'");
+    expect(commandFor({ kind: 'brightness', op: 'set', level: 60 })!.command).toContain('WmiSetBrightness');
+    expect(commandFor({ kind: 'volume', op: 'mute' })!.command).toContain('[CeroAudio]::Mute = $true');
+    expect(commandFor({ kind: 'settings', topic: 'updates' })!.command).toBe("Start-Process 'ms-settings:windowsupdate'");
   });
 
   it('quotes network names', () => {
-    expect(commandFor({ kind: 'wifi', op: 'connect', network: "Cafe O'Hara" }, 'windows')!.command).toBe("netsh wlan connect name='Cafe O''Hara'");
-    expect(commandFor({ kind: 'wifi', op: 'connect', network: "Cafe O'Hara" }, 'linux')!.command).toBe("nmcli device wifi connect 'Cafe O'\\''Hara'");
+    expect(commandFor({ kind: 'wifi', op: 'connect', network: "Cafe O'Hara" })!.command).toBe("netsh wlan connect name='Cafe O''Hara'");
   });
 
   // On the Windows CI runner: every generated script must parse in Windows PowerShell
   // One PowerShell process parses them all (starting one per script exceeds the test timeout)
   it.skipIf(process.platform !== 'win32')('every Windows command parses in PowerShell', () => {
     const scripts = ACTIONS.flatMap(action => {
-      const cmd = commandFor(action, 'windows')!;
+      const cmd = commandFor(action)!;
       return [cmd.command, cmd.fallback?.command].filter(Boolean).map(script => ({ name: JSON.stringify(action), script }));
     });
     const check = '$failed = 0; foreach ($item in ([Console]::In.ReadToEnd() | ConvertFrom-Json)) { $errors = $null; '
@@ -96,11 +91,11 @@ describe('commandFor', () => {
 });
 
 describe('suggestions', () => {
-  it('suggests what this OS can do, and completes typed requests', () => {
-    expect(suggestionsFor('bluetooth', 'windows')).toContain('turn bluetooth off');
-    expect(suggestionsFor('brightness', 'macos')).not.toContain('what is the brightness?');
-    expect(completeSystemRequest('turn blu', 'linux')).toEqual(['turn bluetooth off', 'turn bluetooth on']);
-    expect(completeSystemRequest('mu', 'windows')).toContain('mute');
+  it('suggests what Windows can do, and completes typed requests', () => {
+    expect(suggestionsFor('bluetooth')).toContain('turn bluetooth off');
+    expect(suggestionsFor('brightness')).toContain('what is the brightness?');
+    expect(completeSystemRequest('turn blu')).toEqual(['turn bluetooth off', 'turn bluetooth on']);
+    expect(completeSystemRequest('mu')).toContain('mute');
   });
 });
 

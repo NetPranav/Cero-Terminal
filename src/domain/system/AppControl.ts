@@ -13,7 +13,7 @@
 
 import { editDistance } from './NameMatch';
 
-export type AppOs = 'macos' | 'linux' | 'windows';
+export type AppOs = 'windows';
 
 export interface QuitRequest {
   /** What the user called it: "claude", "vs code", "google chrome" */
@@ -70,16 +70,12 @@ function build(rawName: string, verb: string, text: string, ifRunning: boolean):
 // ---- what is running ------------------------------------------------------------------------
 
 /** A read-only command that lists running apps and processes */
-export function listRunningCommand(os: AppOs): string {
-  if (os === 'windows') {
-    return "Get-Process | ForEach-Object { $(if ($_.MainWindowHandle -ne 0) { 'A' } else { 'P' }) + [char]9 + $_.ProcessName }";
-  }
-  return os === 'macos' ? 'ps -axo comm=' : 'ps -eo comm=';
+export function listRunningCommand(_os: AppOs): string {
+  return "Get-Process | ForEach-Object { $(if ($_.MainWindowHandle -ne 0) { 'A' } else { 'P' }) + [char]9 + $_.ProcessName }";
 }
 
-const MAC_SYSTEM = /^\/(?:System\/Library|Library|usr|sbin|bin)\//;
-
-export function parseRunning(stdout: string, os: AppOs): RunningItem[] {
+/** Lines of "A<tab>name" (an app with a window) or "P<tab>name" (any other process) */
+export function parseRunning(stdout: string, _os: AppOs): RunningItem[] {
   const seen = new Map<string, RunningItem>();
   // An app and a command-line tool may share a name ("Claude" and "claude"): both are kept
   const add = (name: string, app: boolean) => {
@@ -89,20 +85,8 @@ export function parseRunning(stdout: string, os: AppOs): RunningItem[] {
   for (const raw of stdout.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line) continue;
-    if (os === 'windows') {
-      const [kind, name] = line.split('\t');
-      if (name) add(name.trim(), kind === 'A');
-      continue;
-    }
-    if (os === 'macos') {
-      // The main executable of an app bundle: /Applications/Claude.app/Contents/MacOS/Claude
-      // (helpers live deeper: .../Claude.app/Contents/Frameworks/Claude Helper.app/...)
-      const main = line.match(/^((?:(?!\.app\/).)*?)\/([^/]+)\.app\/Contents\/MacOS\/[^/]+$/);
-      if (main && !MAC_SYSTEM.test(line)) { add(main[2], true); continue; }
-      if (/\.app\//.test(line)) continue; // helpers, widgets and system agents
-    }
-    const base = line.split('/').pop()!.trim();
-    if (base && !/^\[.*\]$/.test(base)) add(base, false);
+    const [kind, name] = line.split('\t');
+    if (name) add(name.trim(), kind === 'A');
   }
   return [...seen.values()];
 }
@@ -154,22 +138,11 @@ const distance = editDistance;
 
 // ---- quitting -------------------------------------------------------------------------------
 
-const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 const psq = (s: string) => `'${s.replace(/'/g, "''")}'`;
-const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** The command that quits exactly this app or process */
-export function quitCommand(item: RunningItem, os: AppOs, force: boolean): string {
-  if (os === 'windows') {
-    return item.app && !force
-      ? `Get-Process -Name ${psq(item.name)} -ErrorAction Stop | ForEach-Object { [void]$_.CloseMainWindow() }`
-      : `Stop-Process -Name ${psq(item.name)} -Force -ErrorAction Stop`;
-  }
-  if (os === 'macos' && item.app) {
-    // Quit through the app (it may ask to save); a forced quit ends every process of that bundle only
-    return force
-      ? `pkill -9 -f -- ${sq(`/${escapeRegex(item.name)}\\.app/Contents/`)}`
-      : `osascript -e ${sq(`quit app "${item.name.replace(/["\\]/g, '')}"`)}`;
-  }
-  return `pkill ${force ? '-9 ' : ''}-x -- ${sq(item.name)}`;
+export function quitCommand(item: RunningItem, _os: AppOs, force: boolean): string {
+  return item.app && !force
+    ? `Get-Process -Name ${psq(item.name)} -ErrorAction Stop | ForEach-Object { [void]$_.CloseMainWindow() }`
+    : `Stop-Process -Name ${psq(item.name)} -Force -ErrorAction Stop`;
 }

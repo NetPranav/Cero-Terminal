@@ -36,7 +36,7 @@ export interface FsDriverInput {
 export class FilesystemSDKCapability extends BaseCapabilityDriver<FsDriverInput, any> {
   readonly capabilityId: string;
   readonly name = 'Native Filesystem Driver';
-  readonly supportedPlatforms: Platform[] = ['macos', 'windows', 'linux'];
+  readonly supportedPlatforms: Platform[] = ['windows'];
 
   constructor(customId: string = 'filesystem.read') {
     super();

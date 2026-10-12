@@ -23,7 +23,7 @@ export interface NetDriverInput {
 export class NetworkingCapability extends BaseCapabilityDriver<NetDriverInput, any> {
   readonly capabilityId: string;
   readonly name = 'Native Network Probing & Diagnostic Driver';
-  readonly supportedPlatforms: Platform[] = ['macos', 'windows', 'linux'];
+  readonly supportedPlatforms: Platform[] = ['windows'];
 
   constructor(customId: string = 'network.ping') {
     super();

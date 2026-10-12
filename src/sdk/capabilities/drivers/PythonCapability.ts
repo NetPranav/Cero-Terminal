@@ -24,7 +24,7 @@ export interface PythonDriverInput {
 export class PythonCapability extends BaseCapabilityDriver<PythonDriverInput, any> {
   readonly capabilityId: string;
   readonly name = 'Python 3 Data & Virtual Environment Runtime Driver';
-  readonly supportedPlatforms: Platform[] = ['macos', 'windows', 'linux'];
+  readonly supportedPlatforms: Platform[] = ['windows'];
 
   constructor(customId: string = 'python.run_script') {
     super();

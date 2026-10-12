@@ -64,7 +64,7 @@ describe('Opening a folder by name', () => {
     const r = await loop.run('Please open a folder named gitBrains in VS Code. This folder is inside /padhai_in_linux/Projects/', ctx);
     expect(r.success).toBe(true);
     expect(generate).not.toHaveBeenCalled();
-    const opened = commands().filter(c => /setsid -f code/.test(c));
+    const opened = commands().filter(c => /Start-Process -FilePath 'code'/.test(c));
     expect(opened).toHaveLength(1);
     expect(opened[0]).toContain("'/home/me/padhai_in_linux/Projects/gitbrains'");
     expect(commands().some(c => /mkdir|touch|New-Item/.test(c))).toBe(false);
@@ -106,7 +106,7 @@ describe('Opening a folder by name', () => {
     const r = await loop.run('open the folder gitbarins in code', ctx);
     expect(asked[0].title).toBe('I could not find "gitbarins". Did you mean "gitBrains" in ~/Projects?');
     expect(r.success).toBe(false);
-    expect(commands().some(c => /setsid -f code/.test(c))).toBe(false);
+    expect(commands().some(c => /Start-Process -FilePath 'code'/.test(c))).toBe(false);
   });
 
   it('a folder that does not exist is reported with where it looked, and nothing is created', async () => {
@@ -130,16 +130,8 @@ describe('Opening a folder by name', () => {
   it('create only when asked to', async () => {
     loop.setPathProbe(fakeProbe(['/home/me/Projects']));
     const r = await loop.run('open the folder newapp inside ~/Projects in code, create it if missing', ctx);
-    expect(commands()[0]).toContain("mkdir -p '/home/me/Projects/newapp'");
+    expect(commands()[0]).toContain("New-Item -ItemType Directory -Force -Path '/home/me/Projects/newapp'");
     expect(r.success).toBe(true);
-  });
-
-  it('falls back when the editor command is not installed', async () => {
-    loop.setPathProbe(fakeProbe(['/home/me/Projects/gitBrains']));
-    execute.mockImplementation(async (_t: string, p: any) => (/^command -v code/.test(p.command) ? { success: false, error: 'not found' } : { success: true, data: { stdout: '', code: 0 } }));
-    const r = await loop.run('open the folder gitBrains in code', ctx);
-    expect(r.success).toBe(true);
-    expect(commands().some(c => c.includes('flatpak run com.visualstudio.code'))).toBe(true);
   });
 });
 
@@ -147,17 +139,13 @@ describe('Opening an app by name', () => {
   let tmp: string;
   let loop: AgentLoop;
   let execute: ReturnType<typeof vi.fn>;
+  // Get-StartApps output, as listCommands() prints it
   const listing = [
-    '/usr/share/applications/code.desktop:Name=Visual Studio Code',
-    '/usr/share/applications/code.desktop:Exec=/usr/share/code/code %F',
-    '/usr/share/applications/chromium.desktop:Name=Chromium Web Browser',
-    '/usr/share/applications/chromium.desktop:Exec=chromium %U',
-    '/usr/share/applications/firefox.desktop:Name=Firefox',
-    '/usr/share/applications/firefox.desktop:Exec=firefox %u',
-    '/var/lib/flatpak/exports/share/applications/org.mozilla.firefox.desktop:Name=Firefox',
-    '/var/lib/flatpak/exports/share/applications/org.mozilla.firefox.desktop:Exec=flatpak run org.mozilla.firefox',
-  ].join('\n');
-  const ctx = { os: 'linux', cwd: '/home/me' };
+    '"Visual Studio Code","Microsoft.VisualStudioCode"',
+    '"Chromium Web Browser","Chromium.F2KQ5B6G7J"',
+    '"Firefox","308046B0AF4A39CB"',
+  ].join('\r\n');
+  const ctx = { os: 'windows', cwd: 'C:\\Users\\me' };
 
   beforeEach(async () => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cero-app-'));
@@ -170,8 +158,7 @@ describe('Opening an app by name', () => {
       initialize: vi.fn(),
     } as any);
     execute = vi.fn().mockImplementation(async (_t: string, p: any) => {
-      if (/grep -H/.test(p.command) && p.command.includes('/usr/share/applications') && !p.command.includes('/usr/local')) return { success: true, data: { stdout: listing } };
-      if (/^command -v/.test(p.command)) return { success: false, error: 'not found' };
+      if (/Get-StartApps/.test(p.command)) return { success: true, data: { stdout: listing } };
       return { success: true, data: { stdout: '', code: 0 } };
     });
     (loop as any).toolExecutor = { hasDriver: () => true, execute };
@@ -181,12 +168,12 @@ describe('Opening an app by name', () => {
     AliasStore.getInstance().setFile(undefined);
     fs.rmSync(tmp, { recursive: true, force: true });
   });
-  const launched = () => execute.mock.calls.map(c => c[1]?.command as string).filter(c => /gtk-launch/.test(c));
+  const launched = () => execute.mock.calls.map(c => c[1]?.command as string).filter(c => /Start-Process 'shell:AppsFolder/.test(c));
 
-  it('"open vs code" launches the real desktop entry', async () => {
+  it('"open vs code" launches the real Start-menu app', async () => {
     const r = await loop.run('open vs code', ctx);
     expect(r.success).toBe(true);
-    expect(launched()[0]).toContain("gtk-launch 'code'");
+    expect(launched()[0]).toBe("Start-Process 'shell:AppsFolder\\Microsoft.VisualStudioCode'");
   });
 
   it('a misspelled app asks "did you mean"', async () => {
@@ -202,17 +189,6 @@ describe('Opening an app by name', () => {
     expect(r.success).toBe(false);
     expect(r.summary).toContain('No app called "nonexistentapp" is installed');
     expect(launched()).toEqual([]);
-  });
-
-  it('two copies of an app (deb and Flatpak) ask which one, then remember', async () => {
-    const asked: any[] = [];
-    setChoiceHandlerForTests(async q => { asked.push(q); return { index: 0 }; });
-    await loop.run('open firefox', ctx);
-    expect(asked).toHaveLength(1);
-    expect(asked[0].options.at(-1).label).toBe('None of these');
-    asked.length = 0;
-    await loop.run('open firefox', ctx);
-    expect(asked).toEqual([]);
   });
 });
 

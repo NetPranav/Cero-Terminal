@@ -27,7 +27,7 @@ export interface GitDriverInput {
 export class GitCapability extends BaseCapabilityDriver<GitDriverInput, any> {
   readonly capabilityId: string;
   readonly name = 'Native Git Repository Version Control Driver';
-  readonly supportedPlatforms: Platform[] = ['macos', 'windows', 'linux'];
+  readonly supportedPlatforms: Platform[] = ['windows'];
 
   constructor(customId: string = 'git.status') {
     super();

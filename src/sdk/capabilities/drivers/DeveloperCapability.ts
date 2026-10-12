@@ -25,7 +25,7 @@ export interface DevDriverInput {
 export class DeveloperCapability extends BaseCapabilityDriver<DevDriverInput, any> {
   readonly capabilityId: string;
   readonly name = 'Developer IDE & Workspace Tooling Driver';
-  readonly supportedPlatforms: Platform[] = ['macos', 'windows', 'linux'];
+  readonly supportedPlatforms: Platform[] = ['windows'];
 
   constructor(customId: string = 'developer.vscode') {
     super();
@@ -120,13 +120,10 @@ export class DeveloperCapability extends BaseCapabilityDriver<DevDriverInput, an
       const finalCmdStr = scaffoldCmds.join(' && ');
       
       try {
-        const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('windows');
-        const shell = isWindows ? 'cmd' : 'zsh';
-        const shellArgs = isWindows ? ['/c', finalCmdStr] : ['-l', '-c', finalCmdStr];
-        
+        // TODO(3.7): the scaffold steps above are POSIX (mkdir -p, source venv/bin/activate); give them Windows forms
         const output = await invoke<{ code: number; stdout: string; stderr: string }>('execute_command', {
-          command: shell,
-          args: shellArgs
+          command: 'cmd',
+          args: ['/c', finalCmdStr]
         });
         
         if (output.code === 0) {
@@ -143,50 +140,34 @@ export class DeveloperCapability extends BaseCapabilityDriver<DevDriverInput, an
       }
     }
 
+    const notYet = (what: string): CapabilityExecutionResult<any> =>
+      ({ success: false, error: { code: 'NOT_AVAILABLE', message: `${what} is not available on Windows yet` } });
+
     try {
-      let cmd = 'open';
+      let cmd: string;
       let args: string[] = [];
 
       switch (op) {
+        // TODO(3.7): `code` and `cursor` are .cmd shims on Windows, which CreateProcess does not find by name
         case 'vscode':
-          if ((_context.platform || this.detectPlatform()) === 'macos') {
-            cmd = 'open';
-            args = ['-a', 'Visual Studio Code', targetPath];
-          } else {
-            cmd = 'code';
-            args = [targetPath];
-          }
-          break;
-
-        case 'cursor':
-          if ((_context.platform || this.detectPlatform()) === 'macos') {
-            cmd = 'open';
-            args = ['-a', 'Cursor', targetPath];
-          } else {
-            cmd = 'cursor';
-            args = [targetPath];
-          }
-          break;
-
-        case 'xcode':
-          cmd = 'xed';
+          cmd = 'code';
           args = [targetPath];
           break;
 
-        case 'android_studio':
-          cmd = 'open';
-          args = ['-a', 'Android Studio', targetPath];
+        case 'cursor':
+          cmd = 'cursor';
+          args = [targetPath];
           break;
 
+        case 'xcode':
+          return notYet('Xcode');
+
+        // TODO(3.7): Android Studio (studio64.exe) and a terminal window (wt.exe / powershell.exe) on Windows
+        case 'android_studio':
+          return notYet('Opening Android Studio');
+
         case 'terminal':
-          if (this.detectPlatform() === 'macos') {
-            cmd = 'open';
-            args = ['-a', 'Terminal', targetPath];
-          } else {
-            cmd = 'x-terminal-emulator';
-            args = ['--working-directory', targetPath];
-          }
-          break;
+          return notYet('Opening a terminal window');
 
         case 'ssh':
           cmd = 'ssh';
@@ -201,7 +182,7 @@ export class DeveloperCapability extends BaseCapabilityDriver<DevDriverInput, an
           break;
 
         default:
-          args = [op];
+          return notYet(`Opening ${op}`);
       }
 
       const output = await invoke<{ code: number; stdout: string; stderr: string }>('execute_command', {
