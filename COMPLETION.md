@@ -40,7 +40,7 @@ This file tracks progress on [ROADMAP.md](ROADMAP.md). The numbers match the roa
 | [x] | 0.1 | Branch strategy (`windows` branch in worktree `../Cero-windows`) | 2026-10-12 | | Recorded in ROADMAP "Branches and folders" |
 | [x] | 0.2 | Audit of existing Windows work (`origin/windows`, `v2.2.0-windows`, `cfg(windows)` code, CI) | 2026-10-12 | | Findings are in the ROADMAP "Starting point" section |
 | [ ] | 0.3 | Windows development and test environment (VM or PC, toolchain, `cargo xwin`) | | | Linux side done 2026-10-12: `cargo xwin check` passes. Still open: a Windows PC or VM where `npm run tauri dev` starts. Setup notes below the table |
-| [ ] | 0.4 | Green baseline (fix `escapeKey.test.ts`, root `check:triple` green) | | `1de1eb8` | Fix committed on `windows` only (Node 22 ignores a bare `true` capture flag on remove). Open: CI result after push, and the same fix on `linux-v2-update` |
+| [ ] | 0.4 | Green baseline (fix `escapeKey.test.ts`, root `check:triple` green) | | `1de1eb8` | Fix committed on `windows` only (Node 22 ignores a bare `true` capture flag on remove). `npm run check:triple` is green on Linux since `a0e419e`. Open: CI result after push, and the same fix on `linux-v2-update` |
 | [ ] | 0.5 | Definition of done and test matrix | | | |
 
 **Linux cross-check setup (0.3).** The machine has Arch's system Rust (no rustup), so a user-space toolchain was added
@@ -54,6 +54,8 @@ without touching the system one:
   `PATH="$HOME/.local/share/cero-win-tools:$HOME/.cargo/bin:$PATH" cargo xwin check --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml`.
   The first run downloads the Windows SDK and CRT into the cargo-xwin cache.
 - CI runs Node 22; this machine has Node 26. For CI-only test failures, run Vitest with a Node 22 binary.
+- Since 1.4 step 6, `npm run check:triple` does this: `npm run check:rust` runs `cargo xwin check` on Linux and
+  `cargo check` on Windows (`scripts/check-rust.mjs`). `scripts/windows/check-triple.ps1` is the PowerShell version.
 
 ## Phase 1: Bring the windows branch up to date
 - [ ] **Phase 1 complete**
@@ -63,9 +65,25 @@ without touching the system one:
 | [x] | 1.1 | Archive the early port (tag `windows-legacy`) | 2026-10-12 | | Tag pushed to origin |
 | [x] | 1.2 | Worktree for the Windows branch (`../Cero-windows`) | 2026-10-12 | | |
 | [x] | 1.3 | Merge `linux-v2-update` into `windows` (one time only) | 2026-10-12 | `0342a4f` | Pushed (`4631b4e..1ed7fe6`); 2600 tests, build, cargo check passed on Linux; CI result to be checked |
-| [ ] | 1.4 | Make the branch Windows-only (remove Linux and macOS code, 9 steps) | | | In progress: steps 1-3 done (`a2b58d7` Rust source, `03f5ce8` Cargo, `af7926a` tauri.conf.json). Next: step 4 (TypeScript, 132 source + 81 test files). Native `cargo check` no longer works on Linux, so `check:triple` needs step 6 |
+| [ ] | 1.4 | Make the branch Windows-only (remove Linux and macOS code, 9 steps) | | `7dd555b` | All nine steps committed 2026-10-13: 1 `a2b58d7`, 2 `03f5ce8`, 3 `af7926a`, 4 in five parts `9e3b762` `060c3d2` `789c916` `15a49a5` `87fa05c`, 5 `062ee46`, 6 `a0e419e`, 7 `9e1c009`, 8 `0c12f54`, 9 `7dd555b`. `npm run check:triple` passes on Linux (cargo xwin). Open: the Windows CI run after the push. Removed features are listed below the table |
 | [ ] | 1.5 | Porting Linux changes (`LINUX_PORT_LOG.md`, cherry-pick / port / skip routine) | | | |
 | [ ] | 1.6 | Feature parity matrix | | | |
+
+**Removed or stubbed in 1.4 (input for the 1.6 matrix).** Stubs answer "not available on Windows yet" and carry a
+`TODO(<subphase>)`.
+- Removed (Linux or macOS only): the ROS environment, the Hyprland/dotfile "rice" helpers, systemd service watching
+  (2.8 replaces it), Finder/Nautilus integrations, the AppImage file-association prompt, Linux desktop and systemd fast
+  paths, macOS rules in the deterministic oracle (and the brew typo rule), macOS/POSIX tldr pages, the macOS Spotlight
+  search, the `developer.xcode` tool, SystemAdvisor ("improve my computer", POSIX snapshot; 3.7 ports it),
+  ProcessPortManager (unused; PortControl covers ports), MacSystemParsers, DesktopCommands, InputDaemonProbe,
+  the FileAssociationPrompt, the MLX fine-tuning script (4.6), the headless stress harness (POSIX pty relay), and the
+  Linux/macOS packaging, release and sync scripts.
+- Stubbed until a Windows version exists: the system drivers for Wi-Fi, Bluetooth radio, brightness, volume, dark mode,
+  battery, lock and settings pages (3.7), the installer service (3.8), the system knowledge scan (4.1), the tldr
+  Windows recipes (4.5), the Shadow-PTY sandbox and its platform rewrites (4.3), Reflexion and Dream-State self-play
+  (PowerShell templates written, sandbox still POSIX: 4.6), and the legacy `src/sdk/<domain>` modules (decide in 3.7).
+- Still POSIX and marked: most `FAST_PATHS` shell entries in `AgentLoop.ts` (4.3), the workflow decomposer's step
+  preconditions (4.7), WorkspaceRegistry's project scanner (3.7), and the benchmark prompt set (4.6).
 
 ## Phase 2: Rust backend for Windows
 - [ ] **Phase 2 complete**
