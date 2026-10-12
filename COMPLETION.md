@@ -63,7 +63,7 @@ without touching the system one:
 | [x] | 1.1 | Archive the early port (tag `windows-legacy`) | 2026-10-12 | | Tag pushed to origin |
 | [x] | 1.2 | Worktree for the Windows branch (`../Cero-windows`) | 2026-10-12 | | |
 | [x] | 1.3 | Merge `linux-v2-update` into `windows` (one time only) | 2026-10-12 | `0342a4f` | Pushed (`4631b4e..1ed7fe6`); 2600 tests, build, cargo check passed on Linux; CI result to be checked |
-| [ ] | 1.4 | Make the branch Windows-only (remove Linux and macOS code, 9 steps) | | | Needs `cargo xwin` (0.3) first |
+| [ ] | 1.4 | Make the branch Windows-only (remove Linux and macOS code, 9 steps) | | | In progress: steps 1-3 done (`a2b58d7` Rust source, `03f5ce8` Cargo, `af7926a` tauri.conf.json). Next: step 4 (TypeScript, 132 source + 81 test files). Native `cargo check` no longer works on Linux, so `check:triple` needs step 6 |
 | [ ] | 1.5 | Porting Linux changes (`LINUX_PORT_LOG.md`, cherry-pick / port / skip routine) | | | |
 | [ ] | 1.6 | Feature parity matrix | | | |
 
