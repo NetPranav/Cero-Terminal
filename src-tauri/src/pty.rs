@@ -342,15 +342,18 @@ pub fn spawn_pty(
     Ok(started.session_id)
 }
 
+/// Type into a session. Used by the smoke test; `write_pty` is the command for the webview.
+pub fn write_session(sessions: &Sessions, session_id: &str, data: &str) -> Result<(), String> {
+    let mut sessions = lock(sessions);
+    match sessions.get_mut(session_id) {
+        Some(session) => session.writer.write_all(data.as_bytes()).map_err(|e| e.to_string()),
+        None => Err("Session not found".to_string()),
+    }
+}
+
 #[tauri::command]
 pub fn write_pty(state: State<'_, PtyState>, session_id: String, data: String) -> Result<(), String> {
-    let mut sessions = lock(&state.sessions);
-    if let Some(session) = sessions.get_mut(&session_id) {
-        session.writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
-        Ok(())
-    } else {
-        Err("Session not found".to_string())
-    }
+    write_session(&state.sessions, &session_id, &data)
 }
 
 #[tauri::command]

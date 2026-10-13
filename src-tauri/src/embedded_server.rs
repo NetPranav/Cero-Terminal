@@ -115,6 +115,11 @@ fn find_llama_server_binary() -> Option<PathBuf> {
     candidates.into_iter().find(|p| p.exists() && p.is_file())
 }
 
+/// Whether any llama-server binary can be found (used by the smoke test and the status command).
+pub fn engine_binary_found() -> bool {
+    find_llama_server_binary().is_some()
+}
+
 /// Where llama-server's stderr goes, so a failed start (bad flag, missing library, model load
 /// error) can be diagnosed instead of silently disappearing.
 pub fn llama_server_log_path() -> Option<PathBuf> {

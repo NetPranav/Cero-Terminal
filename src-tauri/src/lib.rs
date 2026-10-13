@@ -18,6 +18,8 @@ mod path_search;
 mod secret_chunks;
 mod search_rules;
 mod secrets;
+mod smoke;
+mod smoke_text;
 mod service_watch;
 mod legacy_migration;
 mod file_association;
@@ -30,8 +32,11 @@ pub fn run() {
     legacy_migration::migrate_legacy_data();
     logger::init();
     logger::log_info("BOOT", "Initializing Cero runtime");
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+    let smoke_mode = smoke::requested();
+    let mut builder = tauri::Builder::default();
+    // A smoke run must not hand over to a Cero that is already open (it would end at once with a false pass)
+    if !smoke_mode {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             use tauri::Emitter;
             logger::log_info("SINGLE_INSTANCE", &format!("Second instance launched with argv: {:?}", argv));
             let flow_files = launch::filter_flow_argv(&argv);
@@ -41,15 +46,21 @@ pub fn run() {
             } else {
                 launch::show_main(app);
             }
-        }))
-        .setup(|app| {
+        }));
+    }
+    builder
+        .setup(move |app| {
             logger::log_info("SETUP", "Initializing core application services");
             process_cmds::ensure_private_data_dir();
             file_association::ensure_registered(app.handle());
             // A previous instance that crashed or was killed can leave its model server running
             std::thread::spawn(|| embedded_server::reap_orphaned_server(8847));
             // The window starts hidden: shown now, unless the app was opened to run a .flow file
-            launch::show_unless_flow(app.handle());
+            if smoke_mode {
+                smoke::spawn(app.handle().clone());
+            } else {
+                launch::show_unless_flow(app.handle());
+            }
 
             use tauri::Manager;
             if let Some(main_win) = app.get_webview_window("main") {
