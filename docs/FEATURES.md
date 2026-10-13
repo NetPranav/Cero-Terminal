@@ -17,7 +17,7 @@ What the 2.2.3 app does. Things described elsewhere that are not built yet are i
 
 ## Models
 - Built-in `llama-server` (llama.cpp build pinned in `EmbeddedEngineManager.ts`) with a Qwen model downloaded on first
-  use: 0.5B, 1.5B, 3B (default) or Qwen3 4B. GPU through Vulkan, CUDA or Metal where available, CPU otherwise.
+  use: 0.5B, 1.5B, 3B (default) or Qwen3 4B. GPU through Vulkan where a Vulkan driver is installed (AMD, Intel, NVIDIA), CPU otherwise; ARM64 uses the CPU build.
 - Decisions are deterministic (temperature 0, fixed seed, no prompt cache) and every action is checked before it runs.
 - Providers: built-in, Ollama, or an API (OpenAI, Anthropic, Groq, DeepSeek, OpenRouter, custom OpenAI-compatible).
   One shared place sets sampling and parsing for all of them. The choice survives restarts.
@@ -45,13 +45,14 @@ What the 2.2.3 app does. Things described elsewhere that are not built yet are i
 - Secrets are redacted before logs are written; downloads are verified by SHA-256.
 
 ## System knowledge
-At startup Cero reads installed apps, developer tools, hardware, mounts, network, services and the desktop session into
-`~/.cero/knowledge/system_profile.json`, so "open my browser" or "how much disk is free" need no probing.
+Not available on Windows yet (roadmap 4.1). The plan: at startup Cero reads installed apps, developer tools,
+hardware, drives, network and services (PowerShell and CIM) into `%USERPROFILE%\.cero\knowledge\system_profile.json`,
+so "open my browser" or "how much disk is free" need no probing.
 
 ## Desktop integration (Settings, Desktop Integrations)
-`cero` command in `~/.local/bin`, file-manager "Open in Cero" (Nautilus, Nemo, Caja, Dolphin, Thunar), VS Code and
-Cursor terminal profiles, `.flow` file type and icon. Everything is user-space; no root needed.
-See [integrations/](integrations/cli.md).
+The `cero` command, VS Code and Cursor terminal profiles and the `.flow` file type. The `cero` launcher script exists
+(see [integrations/](integrations/cli.md)); installing it and the IDE profiles from Settings is not available on
+Windows yet (roadmap 3.8), and the `.flow` file association comes with 2.6 and 6.2.
 
 ## Look
 Matte grayscale, no emoji, full-screen Settings and onboarding. See [ui.md](ui.md) and [THEMES.md](THEMES.md).

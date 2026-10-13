@@ -18,7 +18,7 @@ This file tracks progress on [ROADMAP.md](ROADMAP.md). The numbers match the roa
 | Phase | Title | Subphases done | Status |
 |---|---|---|---|
 | 0 | Groundwork and baseline | 2 / 5 | In progress |
-| 1 | Bring the windows branch up to date | 4 / 6 | In progress |
+| 1 | Bring the windows branch up to date | 5 / 6 | In progress |
 | 2 | Rust backend for Windows | 0 / 10 | Not started |
 | 3 | Frontend platform layer | 0 / 8 | Not started |
 | 4 | AI agent and security for Windows | 0 / 7 | Not started |
@@ -28,7 +28,7 @@ This file tracks progress on [ROADMAP.md](ROADMAP.md). The numbers match the roa
 | 8 | Verification on real Windows | 0 / 8 | Not started |
 | 9 | Documentation and release | 0 / 3 | Not started |
 | 10 | After release (optional) | 0 / 4 | Not started |
-| **Total** | | **6 / 67** | |
+| **Total** | | **7 / 67** | |
 
 ---
 
@@ -67,7 +67,7 @@ without touching the system one:
 | [x] | 1.3 | Merge `linux-v2-update` into `windows` (one time only) | 2026-10-12 | `0342a4f` | Pushed (`4631b4e..1ed7fe6`); 2600 tests, build, cargo check passed on Linux; CI result to be checked |
 | [ ] | 1.4 | Make the branch Windows-only (remove Linux and macOS code, 9 steps) | | `7dd555b` | All nine steps committed 2026-10-13: 1 `a2b58d7`, 2 `03f5ce8`, 3 `af7926a`, 4 in five parts `9e3b762` `060c3d2` `789c916` `15a49a5` `87fa05c`, 5 `062ee46`, 6 `a0e419e`, 7 `9e1c009`, 8 `0c12f54`, 9 `7dd555b`. `npm run check:triple` passes on Linux (cargo xwin). Open: the Windows CI run after the push. Removed features are listed below the table |
 | [x] | 1.5 | Porting Linux changes (`LINUX_PORT_LOG.md`, cherry-pick / port / skip routine) | 2026-10-13 | | Log starts at `77fd178`; first review covered the one new Linux commit (`2b1b561`, the escapeKey fix, which started on `windows`) |
-| [ ] | 1.6 | Feature parity matrix | | | |
+| [x] | 1.6 | Feature parity matrix | 2026-10-13 | | `docs/windows/FEATURE_MATRIX.md`: every `docs/FEATURES.md` feature plus the 1.4 removals; nothing verified on Windows yet. FEATURES.md and the integration docs now describe Windows |
 
 **Removed or stubbed in 1.4 (input for the 1.6 matrix).** Stubs answer "not available on Windows yet" and carry a
 `TODO(<subphase>)`.

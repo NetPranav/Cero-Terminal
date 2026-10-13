@@ -1521,7 +1521,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
         onClose={() => setCommandPaletteOpen(false)} 
         capabilities={[
           { id: 'open_settings', name: 'Open Settings Center (Ctrl+,)', description: 'Configure AI models, desktop integrations, terminal experience, and preferences' },
-          { id: 'open_desktop_integrations', name: 'Settings: Desktop Integrations & CLI', description: 'Configure terminal launcher in PATH, Linux file manager scripts, and IDE profiles' },
+          { id: 'open_desktop_integrations', name: 'Settings: Desktop Integrations & CLI', description: 'Configure the cero command line launcher and IDE terminal profiles' },
           { id: 'open_terminal_experience', name: 'Settings: Terminal Experience (Zen vs Visual Mode)', description: 'Switch between distraction-free Zen mode and persistent Visual controls' },
           { id: 'open_general_settings', name: 'Settings: General & Setup Diagnostics', description: 'Shell detection, config storage, system platform details, and onboarding launcher' },
           { id: 'toggle_ui_mode', name: `Toggle UI Mode (Current: ${uiMode === 'zen' ? 'Zen Mode' : 'Visual Mode'})`, description: 'Switch between minimal hover-reveal controls and always-on visual buttons' },

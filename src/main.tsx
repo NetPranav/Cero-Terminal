@@ -49,7 +49,7 @@ async function bootstrap() {
   }
 }
 
-/** .flow files in the launch arguments or handed over by the OS (macOS "Open"), as local paths */
+/** .flow files in the launch arguments or handed over by the OS (Explorer "Open with"), as local paths */
 async function takeLaunchFlowFiles(): Promise<string[]> {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
