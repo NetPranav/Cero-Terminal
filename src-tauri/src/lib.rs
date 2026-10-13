@@ -16,6 +16,7 @@ mod launch;
 mod path_search;
 mod secret_chunks;
 mod secrets;
+mod service_watch;
 mod legacy_migration;
 mod file_association;
 pub mod logger;

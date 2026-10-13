@@ -1,5 +1,5 @@
 /**
- * ErrorWatchService.ts — continuous error detection on log files and systemd units (`>watch`).
+ * ErrorWatchService.ts — continuous error detection on log files and Windows services (`>watch`).
  *
  * The Rust tailer streams new lines; this service keeps a little context per watch, finds lines
  * that look like errors, asks the deterministic rule oracle for a fix, and then follows

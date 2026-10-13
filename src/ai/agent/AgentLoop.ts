@@ -160,6 +160,7 @@ import * as fs from 'fs';
 import { SecretRedactor } from '../../domain/security/SecretRedactor';
 import { SystemKnowledgeScanner } from '../../domain/knowledge/SystemKnowledgeScanner';
 import { ErrorWatchService } from '../../domain/watch/ErrorWatchService';
+import { isWatchFileTarget, resolveWatchPath } from '../../domain/watch/watchPath';
 import { AutoRemediationPolicy, AutoRemediationMode } from '../../domain/remediation/AutoRemediationPolicy';
 import { WorkflowRecorder } from '../../workflows/engine/WorkflowRecorder';
 import { DeterministicReplayEngine } from '../../workflows/engine/DeterministicReplayEngine';
@@ -2118,11 +2119,9 @@ export class AgentLoop {
       }
     }
 
-    m = text.match(/^watch\s+(?:file\s+|log\s+)?((?:~|\.{1,2})?\/\S+|[\w.-]+\.(?:log|txt|out|err|jsonl?))$/i);
-    if (m) {
-      const raw = m[1];
-      const base = context.cwd && context.cwd !== '~' ? context.cwd : '~';
-      const path = raw.startsWith('/') || raw.startsWith('~') ? raw : `${base.replace(/\/+$/, '')}/${raw.replace(/^\.\//, '')}`;
+    m = text.match(/^watch\s+(?:file\s+|log\s+)?(\S+)$/i);
+    if (m && isWatchFileTarget(m[1])) {
+      const path = resolveWatchPath(m[1], context.cwd);
       try {
         const w = await watcher.watchFile(path, this.ownerId);
         return done(`Watching ${w.target} (watch #${w.id}). New errors will show up here; mode: ${AutoRemediationPolicy.getMode()}.`);

@@ -1014,6 +1014,27 @@ describe('Watch commands', () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
+  it('watches files given with Windows paths and a Windows working folder', async () => {
+    const { ErrorWatchService } = await import('../../domain/watch/ErrorWatchService');
+    const watcher = ErrorWatchService.getInstance();
+    const fileSpy = vi.spyOn(watcher, 'watchFile').mockResolvedValue({ id: 9, kind: 'file', target: 'x' });
+    const serviceSpy = vi.spyOn(watcher, 'watchService').mockResolvedValue({ id: 10, kind: 'service', target: 'Spooler' });
+    const { loop, generate } = makeLoop();
+
+    await loop.run('watch C:\\logs\\app.log', { os: 'windows', cwd: 'C:\\Users\\me' });
+    expect(fileSpy).toHaveBeenLastCalledWith('C:\\logs\\app.log', loop.ownerId);
+
+    await loop.run('watch build.log', { os: 'windows', cwd: 'C:\\Users\\me\\app' });
+    expect(fileSpy).toHaveBeenLastCalledWith('C:\\Users\\me\\app\\build.log', loop.ownerId);
+
+    await loop.run('watch file .\\logs\\x.log', { os: 'windows', cwd: 'C:\\Users\\me\\app' });
+    expect(fileSpy).toHaveBeenLastCalledWith('C:\\Users\\me\\app\\logs\\x.log', loop.ownerId);
+
+    await loop.run('watch service Spooler', { os: 'windows', cwd: 'C:\\Users\\me' });
+    expect(serviceSpy).toHaveBeenLastCalledWith('Spooler', false, loop.ownerId);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
   it('sets the remediation mode', async () => {
     const { AutoRemediationPolicy } = await import('../../domain/remediation/AutoRemediationPolicy');
     const { loop } = makeLoop();
