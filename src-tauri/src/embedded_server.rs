@@ -103,7 +103,11 @@ fn find_llama_server_binary() -> Option<PathBuf> {
         }
     }
 
-    // TODO(2.5): also look in the places Windows installs llama.cpp and Ollama (winget, %LOCALAPPDATA%\Programs)
+    // winget puts a link to the program here, and the llama.cpp releases are often unzipped under Programs
+    if let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+        candidates.push(local.join("Microsoft").join("WinGet").join("Links").join(LLAMA_SERVER));
+        candidates.push(local.join("Programs").join("llama.cpp").join(LLAMA_SERVER));
+    }
     if let Some(on_path) = find_on_path(LLAMA_SERVER) {
         candidates.push(on_path);
     }
@@ -220,7 +224,8 @@ pub fn start_embedded_llm(
     gpu_layers: Option<i32>,
 ) -> Result<bool, String> {
     let bin_path = find_llama_server_binary().ok_or_else(|| {
-        "llama-server binary not found in ~/.cero/engine, ~/.cero/bin, next to Cero, or on PATH".to_string()
+        let engine_dir = cero_engine_dir().map(|d| d.display().to_string()).unwrap_or_else(|| "%USERPROFILE%\\.cero\\engine".to_string());
+        crate::engine_support::engine_missing_message(&engine_dir)
     })?;
 
     let model_file = find_model_file(model_path).ok_or_else(|| {
@@ -277,9 +282,10 @@ pub fn start_embedded_llm(
         cmd.current_dir(bin_dir);
     }
 
-    let child = cmd
-        .spawn()
-        .map_err(|e| format!("Failed to spawn llama-server at {}: {}", bin_path.display(), e))?;
+    let child = cmd.spawn().map_err(|e| {
+        let engine_dir = bin_path.parent().map(|d| d.display().to_string()).unwrap_or_default();
+        crate::engine_support::spawn_failure_message(&bin_path.display().to_string(), &engine_dir, e.raw_os_error(), &e.to_string())
+    })?;
 
     // The server dies with Cero even when Cero is killed and cannot clean up (the job closes with the process)
     if let Some(job) = crate::job::app_job() {
@@ -548,6 +554,24 @@ mod tests {
     }
 
     #[test]
+    fn the_tcp_table_names_the_process_that_listens_on_a_port() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        assert_eq!(listener_pid(port), Some(std::process::id()));
+        drop(listener);
+        assert_eq!(listener_pid(port), None, "a closed port has no listener");
+    }
+
+    #[test]
+    fn a_listener_that_is_not_cero_s_server_is_left_alone() {
+        // This test process listens on the port; it is not a llama-server under ~/.cero, so reaping must not end it
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        reap_orphaned_server(port);
+        assert_eq!(listener_pid(port), Some(std::process::id()));
+    }
+
+    #[test]
     fn lora_adapters_are_never_used_as_base_models() {
         assert!(is_lora_adapter(std::path::Path::new("/m/cero_lora.gguf")));
         assert!(is_lora_adapter(std::path::Path::new("/m/cero_mlx_LoRA.gguf")));
@@ -565,6 +589,10 @@ mod tests {
         assert!(joined.contains("-c 8192") || joined.contains("-c 12288"));
         assert!(joined.contains("--cache-reuse 256"));
         assert!(joined.contains("--port 8847"));
+        // Loopback only: a server on 0.0.0.0 makes Windows Defender Firewall ask whether to allow it
+        let host = args.iter().position(|a| a == "--host").expect("--host is set");
+        assert_eq!(args[host + 1], "127.0.0.1");
+        assert!(!joined.contains("0.0.0.0"));
         assert!(!joined.contains("--lora"));
 
         let with_lora = build_server_args("/models/m.gguf", 8847, "0", Some("/models/a.gguf"));
@@ -654,6 +682,58 @@ mod tests {
     }
 }
 
-/// TODO(2.5): stop a llama-server left on Cero's port by an instance that did not exit cleanly.
-/// Windows needs its own lookup (the owning process of the port, then its image path), not `lsof`.
-pub fn reap_orphaned_server(_port: u16) {}
+/// The process id that listens on `127.0.0.1:port` (or on every address), from the TCP table of the system.
+fn listener_pid(port: u16) -> Option<u32> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        GetExtendedTcpTable, MIB_TCPTABLE_OWNER_PID, TCP_TABLE_OWNER_PID_LISTENER,
+    };
+    const AF_INET: u32 = 2;
+    const ERROR_INSUFFICIENT_BUFFER: u32 = 122;
+
+    // A u32 buffer keeps the table 4-byte aligned, as the structure needs
+    let mut buffer: Vec<u32> = vec![0; 256];
+    for _ in 0..4 {
+        let mut size = (buffer.len() * 4) as u32;
+        let status = unsafe {
+            GetExtendedTcpTable(buffer.as_mut_ptr().cast(), &mut size, 0, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0)
+        };
+        if status == ERROR_INSUFFICIENT_BUFFER {
+            buffer = vec![0; (size as usize + 3) / 4 + 16];
+            continue;
+        }
+        if status != 0 {
+            return None;
+        }
+        let table = buffer.as_ptr().cast::<MIB_TCPTABLE_OWNER_PID>();
+        let rows = unsafe { std::slice::from_raw_parts((*table).table.as_ptr(), (*table).dwNumEntries as usize) };
+        return rows
+            .iter()
+            // The port is stored in network byte order in the low 16 bits
+            .find(|row| u16::from_be((row.dwLocalPort & 0xffff) as u16) == port)
+            .map(|row| row.dwOwningPid);
+    }
+    None
+}
+
+/// Stop a llama-server that an earlier Cero left on the port (it crashed or was killed before the app job could end
+/// the server). Only a `llama-server.exe` that lives under `%USERPROFILE%\.cero` is ended: anything else on the port
+/// is not ours.
+pub fn reap_orphaned_server(port: u16) {
+    let Some(pid) = listener_pid(port) else { return };
+    let Some(cero_dir) = get_home_dir().map(|home| home.join(".cero").display().to_string()) else { return };
+
+    let mut sys = sysinfo::System::new();
+    sys.refresh_processes_specifics(
+        sysinfo::ProcessesToUpdate::Some(&[sysinfo::Pid::from_u32(pid)]),
+        true,
+        sysinfo::ProcessRefreshKind::nothing().with_exe(sysinfo::UpdateKind::Always),
+    );
+    let Some(process) = sys.process(sysinfo::Pid::from_u32(pid)) else { return };
+    let image = process.exe().map(|p| p.display().to_string()).unwrap_or_default();
+    if crate::engine_support::is_cero_engine_image(&image, &cero_dir) {
+        crate::logger::log_warn("LLM", &format!("Stopping orphaned llama-server (pid {}) on port {}", pid, port));
+        process.kill();
+    } else {
+        crate::logger::log_info("LLM", &format!("Port {} is used by pid {} ({}), which is not Cero's server; left alone", port, pid, image));
+    }
+}

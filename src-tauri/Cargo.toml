@@ -45,6 +45,7 @@ sha2 = "0.10"
 tauri-plugin-single-instance = "2.5.2"
 keyring = { version = "3", default-features = false, features = ["windows-native"] }
 winreg = "0.55"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",

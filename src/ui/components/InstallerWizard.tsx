@@ -79,7 +79,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ isOpen, onClos
         setModelDownloaded(true);
         setMessage(engineReady
           ? `✓ Local AI model (${EmbeddedEngineManager.RECOMMENDED_MODEL.displayName}) and engine are ready.`
-          : 'Model downloaded. The llama.cpp engine could not be installed automatically; install llama-server from your package manager.');
+          : `Model downloaded. The llama.cpp engine could not be installed. ${EmbeddedEngineManager.getInstance().getLastInstallError() ?? 'Put llama-server.exe on your PATH and try again.'}`);
       } else {
         setModelError('Download failed or was interrupted.');
       }

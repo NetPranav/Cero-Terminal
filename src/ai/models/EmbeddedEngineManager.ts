@@ -190,6 +190,7 @@ export interface InferenceQueueStatus {
 }
 
 export class EmbeddedEngineManager {
+  private lastInstallError: string | null = null;
   private static instance: EmbeddedEngineManager;
 
   public static readonly TIER_STORAGE_KEY = 'cero_embedded_model_tier';
@@ -856,18 +857,32 @@ export class EmbeddedEngineManager {
       // assume x64
     }
     const vulkan = await invoke<boolean>('check_path_exists', { path: 'C:\\Windows\\System32\\vulkan-1.dll' }).catch(() => false);
+    this.lastInstallError = null;
     const asset = selectEngineAsset('windows', machine, Boolean(vulkan));
-    if (!asset) return false;
+    if (!asset) {
+      this.lastInstallError = 'No llama.cpp build is available for this processor.';
+      return false;
+    }
     const archive = `engine/.download/${asset.fileName}`;
     const downloaded = await this.nativeDownload(asset.url, archive, asset.sha256, asset.sizeBytes, undefined, maxRetries);
-    if (!downloaded) return false;
+    if (!downloaded) {
+      this.lastInstallError = 'The llama.cpp engine download failed or its checksum did not match.';
+      return false;
+    }
     try {
       await invoke<string>('install_cero_engine', { relativeArchive: archive });
       return true;
     } catch (err) {
       console.warn('[EmbeddedEngineManager] Engine unpack failed:', err);
+      // The backend explains antivirus removals and extraction problems in plain words
+      this.lastInstallError = typeof err === 'string' ? err : (err as Error)?.message || 'The llama.cpp engine could not be unpacked.';
       return false;
     }
+  }
+
+  /** Why the last engine install failed, in words for the user; null after a success. */
+  public getLastInstallError(): string | null {
+    return this.lastInstallError;
   }
 
   /** Last lines llama-server wrote to ~/.cero/logs/llama-server.log (why a start failed). */

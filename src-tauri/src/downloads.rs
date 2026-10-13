@@ -3,7 +3,7 @@
 //! The installer used `sh -c "curl ... && mv ..."`, `uname` and `ln -s`, none of which exist on
 //! Windows. This module streams the file over HTTPS (resuming a partial download), checks the
 //! SHA-256 before moving it into place, reports progress, and unpacks engine archives with the
-//! system `tar` (built into macOS, Linux and Windows 10 and later), without symlinks.
+//! system `tar` (built into Windows 10 1803 and later; a built-in zip extractor is the fallback).
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -166,20 +166,63 @@ fn find_dir_with(root: &Path, binary: &str, depth: u32) -> Option<PathBuf> {
     dirs.into_iter().find_map(|d| find_dir_with(&d, binary, depth - 1))
 }
 
-/// Unpack an archive into `engine_dir`/current: extract to a scratch folder with the system tar,
-/// then move the folder that contains `binary` into place (replacing an older engine).
+/// Unpack a `.zip` without any program: every entry goes through `safe_zip_entry_path`, so `\` separators work and
+/// nothing can be written outside `dest`.
+fn extract_zip(archive: &Path, dest: &Path) -> Result<(), String> {
+    let file = std::fs::File::open(archive).map_err(|e| format!("{}: {}", archive.display(), e))?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("not a valid zip archive: {}", e))?;
+    for index in 0..zip.len() {
+        let mut entry = zip.by_index(index).map_err(|e| e.to_string())?;
+        let name = entry.name().to_string();
+        let Some(parts) = crate::engine_support::safe_zip_entry_path(&name) else {
+            // "./" and "/" style entries name no file; anything else is an attempt to leave the folder
+            if name.trim_matches(|c| c == '/' || c == '\\' || c == '.').is_empty() {
+                continue;
+            }
+            return Err(format!("the archive contains an unsafe path: {}", name));
+        };
+        let mut target = dest.to_path_buf();
+        target.extend(parts);
+        if entry.is_dir() {
+            std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+            continue;
+        }
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let mut out = std::fs::File::create(&target).map_err(|e| format!("{}: {}", target.display(), e))?;
+        std::io::copy(&mut entry, &mut out).map_err(|e| format!("{}: {}", target.display(), e))?;
+    }
+    Ok(())
+}
+
+/// Extract with the `tar.exe` that ships with Windows 10 1803 and later; a `.zip` falls back to the built-in
+/// extractor when `tar` is missing or fails.
+fn extract_archive(archive: &Path, scratch: &Path) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    let mut tar = std::process::Command::new("tar");
+    tar.arg("-xf").arg(archive).arg("-C").arg(scratch)
+        .creation_flags(crate::embedded_server::CREATE_NO_WINDOW);
+    let tar_error = match tar.output() {
+        Ok(out) if out.status.success() => return Ok(()),
+        Ok(out) => format!("tar failed: {}", String::from_utf8_lossy(&out.stderr).trim()),
+        Err(e) => format!("could not run tar: {}", e),
+    };
+    let is_zip = archive.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("zip"));
+    if !is_zip {
+        return Err(tar_error);
+    }
+    crate::logger::log_warn("ENGINE", &format!("{}; extracting the zip without tar", tar_error));
+    extract_zip(archive, scratch).map_err(|e| format!("{} (and the built-in extractor: {})", tar_error, e))
+}
+
+/// Unpack an archive into `engine_dir`/current: extract to a scratch folder, then move the folder that contains
+/// `binary` into place (replacing an older engine).
 pub fn install_engine_archive(archive: &Path, engine_dir: &Path, binary: &str) -> Result<PathBuf, String> {
     let scratch = engine_dir.join(".extract");
     let _ = std::fs::remove_dir_all(&scratch);
     std::fs::create_dir_all(&scratch).map_err(|e| e.to_string())?;
-    use std::os::windows::process::CommandExt;
-    let mut tar = std::process::Command::new("tar");
-    tar.arg("-xf").arg(archive).arg("-C").arg(&scratch)
-        .creation_flags(crate::embedded_server::CREATE_NO_WINDOW);
-    let out = tar.output().map_err(|e| format!("could not run tar: {}", e))?;
-    if !out.status.success() {
-        return Err(format!("tar failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
-    }
+    extract_archive(archive, &scratch)?;
     let found = find_dir_with(&scratch, binary, 3).ok_or_else(|| format!("{} not found in the archive", binary))?;
     let current = engine_dir.join("current");
     // An older install may be a symlink or a directory
@@ -203,6 +246,11 @@ pub fn install_cero_engine(relative_archive: String) -> Result<String, String> {
     let binary = "llama-server.exe";
     let installed = install_engine_archive(&archive, &engine_dir, binary)?;
     let _ = std::fs::remove_file(&archive);
+    // Antivirus scans a new executable in the background and may remove it a moment later
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    if !installed.is_file() {
+        return Err(crate::engine_support::antivirus_message(&engine_dir.display().to_string()));
+    }
     Ok(installed.display().to_string())
 }
 
@@ -247,6 +295,54 @@ mod tests {
         assert!(engine.join("current").join("libggml.so").is_file());
         assert!(!engine.join("current").join("old").exists());
         assert!(!engine.join(".extract").exists());
+    }
+
+    fn write_zip(path: &Path, entries: &[(&str, &[u8])]) {
+        use std::io::Write;
+        let mut writer = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
+        for (name, data) in entries {
+            writer.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+            writer.write_all(data).unwrap();
+        }
+        writer.finish().unwrap();
+    }
+
+    #[test]
+    fn the_builtin_extractor_unpacks_a_zip_with_backslash_paths() {
+        let dir = temp_dir("zip-ok");
+        let archive = dir.join("engine.zip");
+        write_zip(&archive, &[("llama-b1/llama-server.exe", b"bin"), ("llama-b1\\ggml.dll", b"dll")]);
+        let out = dir.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        extract_zip(&archive, &out).unwrap();
+        assert_eq!(std::fs::read(out.join("llama-b1").join("llama-server.exe")).unwrap(), b"bin");
+        assert_eq!(std::fs::read(out.join("llama-b1").join("ggml.dll")).unwrap(), b"dll");
+    }
+
+    #[test]
+    fn the_builtin_extractor_refuses_paths_that_leave_the_folder() {
+        let dir = temp_dir("zip-bad");
+        let archive = dir.join("evil.zip");
+        write_zip(&archive, &[("..\\..\\escaped.dll", b"x")]);
+        let out = dir.join("a").join("b");
+        std::fs::create_dir_all(&out).unwrap();
+        let err = extract_zip(&archive, &out).unwrap_err();
+        assert!(err.contains("unsafe path"), "{err}");
+        assert!(!dir.join("escaped.dll").exists());
+    }
+
+    #[test]
+    fn a_zip_installs_even_when_tar_cannot_read_it() {
+        // A file named .zip that tar rejects but the built-in extractor reads is not constructible portably; this
+        // checks the whole install path on a valid zip, whichever extractor ends up doing the work
+        let dir = temp_dir("zip-install");
+        let archive = dir.join("engine.zip");
+        write_zip(&archive, &[("llama-b1/llama-server.exe", b"bin"), ("llama-b1/ggml.dll", b"dll")]);
+        let engine = dir.join("engine");
+        std::fs::create_dir_all(&engine).unwrap();
+        let installed = install_engine_archive(&archive, &engine, "llama-server.exe").unwrap();
+        assert_eq!(installed, engine.join("current").join("llama-server.exe"));
+        assert!(engine.join("current").join("ggml.dll").is_file());
     }
 
     #[tokio::test]
