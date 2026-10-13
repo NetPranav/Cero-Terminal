@@ -9,6 +9,8 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crate::process_cmds::expand_tilde;
+use crate::search_rules as rules;
+use std::os::windows::fs::MetadataExt;
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct FoundPath {
@@ -17,52 +19,8 @@ pub struct FoundPath {
     pub is_dir: bool,
 }
 
-const SKIP_DIRS: &[&str] = &[
-    "node_modules", ".git", ".cache", "target", "dist", "build", ".venv", "__pycache__", "Library", "AppData",
-    "proc", "sys", "dev", "snap",
-];
-/// Folders macOS asks permission for the first time an app looks inside. A search that starts at the home folder
-/// does not go into them (searching one directly, or naming it, still does).
-const PROTECTED_UNDER_HOME: &[&str] = &["Desktop", "Documents", "Downloads", "Movies", "Music", "Pictures", "Public"];
 const MAX_VISITED: usize = 20_000;
 const MAX_TIME: Duration = Duration::from_secs(2);
-
-fn compact(s: &str) -> String {
-    s.chars().filter(|c| c.is_alphanumeric()).flat_map(|c| c.to_lowercase()).collect()
-}
-
-fn edit_distance(a: &[char], b: &[char]) -> usize {
-    let mut prev: Vec<usize> = (0..=b.len()).collect();
-    for i in 1..=a.len() {
-        let mut cur = vec![i; b.len() + 1];
-        for j in 1..=b.len() {
-            let cost = if a[i - 1] == b[j - 1] { 0 } else { 1 };
-            cur[j] = (prev[j] + 1).min(cur[j - 1] + 1).min(prev[j - 1] + cost);
-        }
-        prev = cur;
-    }
-    prev[b.len()]
-}
-
-/// Could `name` be what `query` meant? Deliberately loose: substring of the compact names, or within 3 edits.
-fn could_match(query: &str, name: &str) -> bool {
-    if query.is_empty() {
-        return true;
-    }
-    let q = compact(query);
-    let n = compact(name);
-    if q.is_empty() || n.is_empty() {
-        return false;
-    }
-    if n.contains(&q) || q.contains(&n) && n.len() >= 3 {
-        return true;
-    }
-    let (qc, nc): (Vec<char>, Vec<char>) = (q.chars().collect(), n.chars().collect());
-    if (qc.len() as isize - nc.len() as isize).abs() > 3 {
-        return false;
-    }
-    edit_distance(&qc, &nc) <= 3
-}
 
 /// kind: "dir", "file" or "any". Returns at most `limit * 10` loose candidates.
 pub fn search(query: &str, roots: &[String], kind: &str, max_depth: u32, limit: u32) -> Vec<FoundPath> {
@@ -73,7 +31,6 @@ pub fn search(query: &str, roots: &[String], kind: &str, max_depth: u32, limit: 
     let mut seen: HashSet<PathBuf> = HashSet::new();
     let mut visited = 0usize;
 
-    let home: Option<PathBuf> = crate::home::home_dir();
     let mut queue: VecDeque<(PathBuf, u32)> = VecDeque::new();
     for root in roots {
         let p = expand_tilde(root);
@@ -100,17 +57,21 @@ pub fn search(query: &str, roots: &[String], kind: &str, max_depth: u32, limit: 
             }
             let name = entry.file_name().to_string_lossy().to_string();
             let Ok(file_type) = entry.file_type() else { continue };
-            // never follow a symlink into a folder: it may loop or leave the tree
-            let is_dir = file_type.is_dir();
-            if file_type.is_symlink() && !entry.path().is_file() && !entry.path().is_dir() {
+            // DirEntry::metadata does not follow links, so these are the attributes of the entry itself
+            let attributes = entry.metadata().map(|m| m.file_attributes()).unwrap_or(0);
+            // a junction or symbolic link to a folder (`Application Data`, `My Documents`) may loop or leave the
+            // tree: it is neither listed nor entered
+            if rules::is_linked_directory(attributes) {
                 continue;
             }
-            let hidden = name.starts_with('.');
+            let is_dir = file_type.is_dir();
+            // a link to a file that no longer exists
+            if file_type.is_symlink() && !entry.path().is_file() {
+                continue;
+            }
+            let hidden = rules::is_hidden(&name, attributes);
             if is_dir {
-                if SKIP_DIRS.contains(&name.as_str()) || (hidden && !want_hidden) {
-                    continue;
-                }
-                if depth == 0 && home.as_ref().map_or(false, |h| *h == dir) && PROTECTED_UNDER_HOME.contains(&name.as_str()) {
+                if rules::skip_directory(&name, dir.parent().is_none()) || (hidden && !want_hidden) {
                     continue;
                 }
                 queue.push_back((entry.path(), depth + 1));
@@ -122,7 +83,7 @@ pub fn search(query: &str, roots: &[String], kind: &str, max_depth: u32, limit: 
                 "file" => !is_dir && !file_type.is_dir(),
                 _ => true,
             };
-            if kind_ok && could_match(query, &name) {
+            if kind_ok && rules::could_match(query, &name) {
                 out.push(FoundPath { path: entry.path().to_string_lossy().to_string(), name, is_dir });
                 if out.len() >= cap {
                     break;
@@ -192,9 +153,44 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
+    /// `mklink /J` makes a junction without administrator rights
+    fn junction(link: &std::path::Path, target: &std::path::Path) {
+        let status = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .stdout(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success(), "mklink /J failed");
+    }
+
     #[test]
-    fn loose_matching_accepts_typos_not_nonsense() {
-        assert!(could_match("gitbarins", "gitbrains"));
-        assert!(!could_match("zzzzzz", "gitbrains"));
+    fn a_junction_that_points_back_up_the_tree_is_neither_followed_nor_listed() {
+        let root = tree();
+        // like `Application Data` -> its own parent: following it would repeat the whole tree forever
+        junction(&root.join("Projects").join("gitbrains-loop"), &root);
+        let started = Instant::now();
+        let found = search("gitbrains", &[root.to_string_lossy().to_string()], "dir", 8, 50);
+        assert!(started.elapsed() < Duration::from_secs(3), "the search did not stop: {:?}", started.elapsed());
+        assert!(!found.iter().any(|f| f.path.contains("gitbrains-loop")), "{found:?}");
+        // each real folder is found once
+        let real = found.iter().filter(|f| f.path.ends_with("Projects\\gitbrains")).count();
+        assert_eq!(real, 1, "{found:?}");
+        let _ = std::process::Command::new("cmd").args(["/C", "rmdir"]).arg(root.join("Projects").join("gitbrains-loop")).status();
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn matching_ignores_case_and_windows_system_folders_are_left_out() {
+        let root = std::env::temp_dir().join(format!("cero-find-sys-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        for d in ["Work/MyProject", "$Recycle.Bin/myproject", "AppData/Local/Temp/myproject"] {
+            fs::create_dir_all(root.join(d)).unwrap();
+        }
+        let found = search("MYPROJECT", &[root.to_string_lossy().to_string()], "dir", 6, 20);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].path.ends_with("Work\\MyProject"));
+        let _ = fs::remove_dir_all(&root);
     }
 }

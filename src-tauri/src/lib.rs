@@ -4,6 +4,7 @@ mod engine_support;
 mod file_uri;
 mod home;
 mod job;
+mod log_rotation;
 mod osc;
 mod shell;
 mod shell_list;
@@ -15,6 +16,7 @@ mod downloads;
 mod launch;
 mod path_search;
 mod secret_chunks;
+mod search_rules;
 mod secrets;
 mod service_watch;
 mod legacy_migration;
@@ -50,11 +52,6 @@ pub fn run() {
             launch::show_unless_flow(app.handle());
 
             use tauri::Manager;
-            // No separate title bar: Cero draws its own window controls in the tab bar, so the
-            // native frame is removed here.
-            if let Some(main_win) = app.get_webview_window("main") {
-                let _ = main_win.set_decorations(false);
-            }
             if let Some(main_win) = app.get_webview_window("main") {
                 match main_win.url() {
                     Ok(url) => {

@@ -152,6 +152,30 @@ mod tests {
     }
 
     #[test]
+    fn a_home_folder_with_non_ascii_characters_and_spaces_migrates() {
+        let home = temp_home("unicode").join("Üser ñame 用户");
+        fs::create_dir_all(home.join(".sentinel/models")).unwrap();
+        fs::write(home.join(".sentinel/models/sentinel_lora.gguf"), "x").unwrap();
+        assert!(migrate_home(&home).unwrap());
+        assert!(home.join(".cero/models/cero_lora.gguf").exists());
+        let _ = fs::remove_dir_all(home.parent().unwrap());
+    }
+
+    #[test]
+    fn the_webview2_data_folder_follows_the_new_bundle_id() {
+        // %LOCALAPPDATA%\org.sentinel.terminal\EBWebView holds the WebView2 profile (local storage, cookies)
+        let root = temp_home("webview2");
+        fs::create_dir_all(root.join("org.sentinel.terminal").join("EBWebView").join("Default").join("Local Storage")).unwrap();
+        fs::write(root.join("org.sentinel.terminal").join("EBWebView").join("Default").join("Local Storage").join("leveldb"), "kept").unwrap();
+        assert_eq!(migrate_app_data(&[root.clone()]), 1);
+        assert_eq!(
+            fs::read_to_string(root.join("org.cero.terminal").join("EBWebView").join("Default").join("Local Storage").join("leveldb")).unwrap(),
+            "kept"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn running_twice_is_harmless() {
         let home = temp_home("twice");
         fs::create_dir_all(home.join(".sentinel")).unwrap();

@@ -1,6 +1,34 @@
+//! Diagnostic logging. Everything at INFO and above goes to `%USERPROFILE%\.cero\logs\cero.log` (rotated at 2 MB, three
+//! old files kept), because a release build has no console. With `--debug` (or `CERO_DEBUG=1`) the lines are also
+//! printed to the console that started Cero, and DEBUG lines are written too.
+
+use crate::log_rotation::RotatingLog;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 static IS_DEBUG: AtomicBool = AtomicBool::new(false);
+
+const LOG_FILE: &str = "cero.log";
+const LOG_MAX_BYTES: u64 = 2 * 1024 * 1024;
+const LOG_KEEP: usize = 3;
+
+fn file_log() -> Option<&'static Mutex<RotatingLog>> {
+    static LOG: OnceLock<Option<Mutex<RotatingLog>>> = OnceLock::new();
+    LOG.get_or_init(|| {
+        crate::home::home_dir().map(|home| {
+            Mutex::new(RotatingLog::new(&home.join(".cero").join("logs"), LOG_FILE, LOG_MAX_BYTES, LOG_KEEP))
+        })
+    })
+    .as_ref()
+}
+
+fn write_to_file(line: &str) {
+    if let Some(log) = file_log() {
+        if let Ok(mut log) = log.lock() {
+            let _ = log.write_line(line);
+        }
+    }
+}
 
 /// Initialize the diagnostic logger by inspecting command-line flags and environment variables.
 pub fn init() {
@@ -24,6 +52,10 @@ pub fn init() {
     IS_DEBUG.store(debug_enabled, Ordering::SeqCst);
 
     if debug_enabled {
+        // A release build has no console of its own; print into the one that started it (cmd, PowerShell)
+        unsafe {
+            windows_sys::Win32::System::Console::AttachConsole(windows_sys::Win32::System::Console::ATTACH_PARENT_PROCESS);
+        }
         let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
         eprintln!("================================================================================");
         eprintln!("[{}] [SYSTEM] Cero Diagnostic Logging ACTIVE (PID: {})", now, std::process::id());
@@ -40,16 +72,18 @@ pub fn is_debug() -> bool {
 /// Format and write a structured log entry to stdout or stderr.
 pub fn log(level: &str, tag: &str, message: &str) {
     let is_err = level.eq_ignore_ascii_case("ERROR");
-    if !is_debug() && !is_err {
+    let is_debug_line = level.eq_ignore_ascii_case("DEBUG");
+    if is_debug_line && !is_debug() {
         return;
     }
 
     let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
     let line = format!("[{}] [{:<5}] [{}] {}", now, level.to_uppercase(), tag.to_uppercase(), message);
+    write_to_file(&line);
 
     if is_err {
         eprintln!("{}", line);
-    } else {
+    } else if is_debug() {
         println!("{}", line);
     }
 }
