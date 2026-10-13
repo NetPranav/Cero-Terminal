@@ -1,6 +1,7 @@
 mod home;
 mod osc;
 mod shell;
+mod shell_list;
 mod pty;
 mod process_cmds;
 mod embedded_server;
@@ -83,6 +84,7 @@ pub fn run() {
             pty::kill_pty,
             pty::get_pty_cwd,
             pty::get_default_shell,
+            shell_list::list_available_shells,
             process_cmds::list_processes,
             process_cmds::kill_process,
             process_cmds::get_system_stats,

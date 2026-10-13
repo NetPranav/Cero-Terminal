@@ -232,6 +232,129 @@ pub const SESSION_ENV: [(&str, &str); 5] = [
     ("CERO_TERMINAL", "1"),
 ];
 
+/// One shell Settings can offer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShellInfo {
+    /// Stable id: `pwsh`, `powershell`, `cmd`, `gitbash` or `wsl:<distribution>`
+    pub id: String,
+    pub name: String,
+    pub path: String,
+    /// Arguments that must go with `path` (`-d <distribution>` for WSL)
+    pub args: Vec<String>,
+    pub version: Option<String>,
+}
+
+/// What the machine reports besides the files on the `PATH`.
+#[derive(Debug, Clone, Default)]
+pub struct Discovery {
+    /// `InstallPath` from `HKLM\SOFTWARE\GitForWindows` (or `HKCU`)
+    pub git_install_path: Option<String>,
+    /// `CurrentVersion` from the same key
+    pub git_version: Option<String>,
+    /// Names printed by `wsl.exe -l -q`
+    pub wsl_distros: Vec<String>,
+}
+
+/// `7` for `...\PowerShell\7\pwsh.exe`, `7.4.6.0` for the Store package folder.
+fn pwsh_version(path: &str) -> Option<String> {
+    let lower = path.to_ascii_lowercase();
+    if let Some(at) = lower.find("microsoft.powershell_") {
+        let rest = &path[at + "microsoft.powershell_".len()..];
+        let version = rest.split('_').next()?;
+        return (!version.is_empty()).then(|| version.to_string());
+    }
+    let at = lower.find("\\powershell\\")?;
+    let rest = &path[at + "\\powershell\\".len()..];
+    let folder = rest.split('\\').next()?;
+    (folder.chars().next()?.is_ascii_digit()).then(|| folder.to_string())
+}
+
+/// The shells installed on this machine, in the order Settings shows them: PowerShell 7, Windows PowerShell, cmd,
+/// Git Bash, then one entry per WSL distribution.
+pub fn list_shells(env: &ResolveEnv, exists: &dyn Fn(&str) -> bool, found: &Discovery) -> Vec<ShellInfo> {
+    let mut out: Vec<ShellInfo> = Vec::new();
+
+    if let Some(path) = find_on_path("pwsh", env, exists) {
+        out.push(ShellInfo {
+            id: "pwsh".into(),
+            name: "PowerShell 7".into(),
+            version: pwsh_version(&path),
+            path,
+            args: vec![],
+        });
+    }
+
+    let windows_powershell = join(&env.system_dir(), r"System32\WindowsPowerShell\v1.0\powershell.exe");
+    if exists(&windows_powershell) {
+        out.push(ShellInfo {
+            id: "powershell".into(),
+            name: "Windows PowerShell".into(),
+            path: windows_powershell,
+            args: vec![],
+            version: Some("5.1".into()),
+        });
+    }
+
+    let comspec = env.comspec.trim().trim_matches('"').to_string();
+    let cmd = if !comspec.is_empty() && exists(&comspec) {
+        Some(comspec)
+    } else {
+        let default = join(&env.system_dir(), r"System32\cmd.exe");
+        exists(&default).then_some(default)
+    };
+    if let Some(path) = cmd {
+        out.push(ShellInfo { id: "cmd".into(), name: "Command Prompt".into(), path, args: vec![], version: None });
+    }
+
+    let git_candidates = found
+        .git_install_path
+        .iter()
+        .map(|dir| join(dir, r"bin\bash.exe"))
+        .chain([r"C:\Program Files\Git\bin\bash.exe".to_string(), r"C:\Program Files (x86)\Git\bin\bash.exe".to_string()]);
+    if let Some(path) = git_candidates.into_iter().find(|candidate| exists(candidate)) {
+        out.push(ShellInfo {
+            id: "gitbash".into(),
+            name: "Git Bash".into(),
+            path,
+            args: vec![],
+            version: found.git_version.clone(),
+        });
+    }
+
+    let wsl = join(&env.system_dir(), r"System32\wsl.exe");
+    if exists(&wsl) {
+        for distro in &found.wsl_distros {
+            out.push(ShellInfo {
+                id: format!("wsl:{distro}"),
+                name: format!("WSL: {distro}"),
+                path: wsl.clone(),
+                args: vec!["-d".into(), distro.clone()],
+                version: None,
+            });
+        }
+    }
+    out
+}
+
+/// Decode what `wsl.exe -l -q` prints: UTF-16LE (usually with a byte order mark), one distribution per line. The
+/// Docker Desktop helper distributions are not shells and are left out.
+pub fn decode_wsl_list(bytes: &[u8]) -> Vec<String> {
+    let units: Vec<u16> = bytes.chunks_exact(2).map(|pair| u16::from_le_bytes([pair[0], pair[1]])).collect();
+    let text = String::from_utf16_lossy(&units);
+    // Without installed distributions wsl.exe prints an explanation instead of a list
+    let lower = text.to_ascii_lowercase();
+    if lower.contains("windows subsystem for linux") || lower.contains("wsl.exe") {
+        return Vec::new();
+    }
+    text.trim_start_matches('\u{feff}')
+        .lines()
+        .map(|line| line.trim().trim_matches('\0').trim())
+        .filter(|line| !line.is_empty())
+        .filter(|line| !line.eq_ignore_ascii_case("docker-desktop") && !line.eq_ignore_ascii_case("docker-desktop-data"))
+        .map(str::to_string)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -434,5 +557,101 @@ mod tests {
         for banned in ["LANG", "LC_ALL", "PATH"] {
             assert!(!names.contains(&banned));
         }
+    }
+
+    fn all_installed() -> impl Fn(&str) -> bool {
+        disk(&[
+            PWSH,
+            WINPS,
+            CMD,
+            r"C:\Program Files\Git\bin\bash.exe",
+            r"C:\Windows\System32\wsl.exe",
+        ])
+    }
+
+    #[test]
+    fn lists_every_installed_shell_in_settings_order() {
+        let found = Discovery {
+            git_install_path: Some(r"C:\Program Files\Git".into()),
+            git_version: Some("2.45.1".into()),
+            wsl_distros: vec!["Ubuntu".into(), "Debian".into()],
+        };
+        let list = list_shells(&env(), &all_installed(), &found);
+        let ids: Vec<&str> = list.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, vec!["pwsh", "powershell", "cmd", "gitbash", "wsl:Ubuntu", "wsl:Debian"]);
+        assert_eq!(list[0].version.as_deref(), Some("7"));
+        assert_eq!(list[1].version.as_deref(), Some("5.1"));
+        assert_eq!(list[3].version.as_deref(), Some("2.45.1"));
+        assert_eq!(list[4].path, r"C:\Windows\System32\wsl.exe");
+        assert_eq!(list[4].args, vec!["-d", "Ubuntu"]);
+        assert_eq!(list[4].name, "WSL: Ubuntu");
+    }
+
+    #[test]
+    fn missing_shells_are_not_listed() {
+        let list = list_shells(&env(), &disk(&[CMD]), &Discovery::default());
+        assert_eq!(list.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(), vec!["cmd"]);
+    }
+
+    #[test]
+    fn wsl_distributions_need_wsl_exe() {
+        let found = Discovery { wsl_distros: vec!["Ubuntu".into()], ..Discovery::default() };
+        assert!(list_shells(&env(), &disk(&[CMD]), &found).iter().all(|s| !s.id.starts_with("wsl")));
+    }
+
+    #[test]
+    fn git_bash_is_found_at_the_registry_path_first() {
+        let custom = r"D:\Tools\Git\bin\bash.exe";
+        let found = Discovery { git_install_path: Some(r"D:\Tools\Git\".into()), ..Discovery::default() };
+        let list = list_shells(&env(), &disk(&[custom, r"C:\Program Files\Git\bin\bash.exe"]), &found);
+        assert_eq!(list.iter().find(|s| s.id == "gitbash").unwrap().path, custom);
+    }
+
+    #[test]
+    fn the_system32_bash_launcher_is_not_git_bash() {
+        let list = list_shells(&env(), &disk(&[r"C:\Windows\System32\bash.exe"]), &Discovery::default());
+        assert!(list.iter().all(|s| s.id != "gitbash"));
+    }
+
+    #[test]
+    fn pwsh_version_comes_from_the_install_folder() {
+        assert_eq!(pwsh_version(r"C:\Program Files\PowerShell\7\pwsh.exe").as_deref(), Some("7"));
+        assert_eq!(pwsh_version(r"C:\Program Files\PowerShell\7-preview\pwsh.exe").as_deref(), Some("7-preview"));
+        assert_eq!(
+            pwsh_version(r"C:\Program Files\WindowsApps\Microsoft.PowerShell_7.4.6.0_x64__8wekyb3d8bbwe\pwsh.exe").as_deref(),
+            Some("7.4.6.0")
+        );
+        assert_eq!(pwsh_version(r"C:\Tools\pwsh.exe"), None);
+    }
+
+    fn utf16le(text: &str, bom: bool) -> Vec<u8> {
+        let mut out = Vec::new();
+        if bom {
+            out.extend([0xff, 0xfe]);
+        }
+        for unit in text.encode_utf16() {
+            out.extend(unit.to_le_bytes());
+        }
+        out
+    }
+
+    #[test]
+    fn wsl_list_is_decoded_from_utf16() {
+        assert_eq!(decode_wsl_list(&utf16le("Ubuntu\r\nDebian\r\n", true)), vec!["Ubuntu", "Debian"]);
+        assert_eq!(decode_wsl_list(&utf16le("Ubuntu-22.04\r\n", false)), vec!["Ubuntu-22.04"]);
+    }
+
+    #[test]
+    fn wsl_without_distributions_prints_a_message_that_is_not_a_list() {
+        let message = "Windows Subsystem for Linux has no installed distributions.\r\nUse 'wsl.exe --list --online' to list available distributions\r\n";
+        assert!(decode_wsl_list(&utf16le(message, true)).is_empty());
+    }
+
+    #[test]
+    fn wsl_list_skips_docker_helpers_blank_lines_and_junk() {
+        let text = "\r\nUbuntu\r\ndocker-desktop\r\n\r\ndocker-desktop-data\r\n";
+        assert_eq!(decode_wsl_list(&utf16le(text, true)), vec!["Ubuntu"]);
+        assert!(decode_wsl_list(&[]).is_empty());
+        assert!(decode_wsl_list(&[0x41]).is_empty(), "an odd trailing byte is ignored");
     }
 }
