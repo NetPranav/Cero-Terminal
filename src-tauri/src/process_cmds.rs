@@ -1,11 +1,19 @@
 use sysinfo::{System, Signal, ProcessesToUpdate};
 use serde::Serialize;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::collections::{HashMap, HashSet};
+use crate::job::Job;
 
 pub struct SystemState(pub Mutex<System>);
 
-static RUNNING: OnceLock<Mutex<HashMap<String, u32>>> = OnceLock::new();
+/// A command that is running: its process and the job that holds its whole process tree.
+#[derive(Clone)]
+struct RunningCommand {
+    pid: u32,
+    job: Option<Arc<Job>>,
+}
+
+static RUNNING: OnceLock<Mutex<HashMap<String, RunningCommand>>> = OnceLock::new();
 static CANCELLED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 struct RunningGuard {
@@ -13,10 +21,10 @@ struct RunningGuard {
 }
 
 impl RunningGuard {
-    fn new(run_id: Option<String>, pid: Option<u32>) -> Self {
+    fn new(run_id: Option<String>, pid: Option<u32>, job: Option<Arc<Job>>) -> Self {
         if let (Some(ref id), Some(pid)) = (&run_id, pid) {
             if let Ok(mut map) = RUNNING.get_or_init(Default::default).lock() {
-                map.insert(id.clone(), pid);
+                map.insert(id.clone(), RunningCommand { pid, job });
             }
         }
         Self { run_id }
@@ -36,45 +44,60 @@ impl Drop for RunningGuard {
     }
 }
 
-fn kill_group(pid: u32) {
-    // TODO(2.4): replace taskkill with a Job Object so the whole tree dies with no helper process
+/// End a command and everything it started: the job when there is one, `taskkill /T /F` when the process could not
+/// be put in a job (or the job could not be ended).
+fn kill_group(run: &RunningCommand) {
+    if let Some(job) = &run.job {
+        if job.terminate().is_ok() {
+            return;
+        }
+    }
+    taskkill_tree(run.pid);
+}
+
+fn taskkill_tree(pid: u32) {
+    use std::os::windows::process::CommandExt;
     let _ = std::process::Command::new("taskkill")
         .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .creation_flags(crate::embedded_server::CREATE_NO_WINDOW)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .spawn();
 }
 
 #[tauri::command]
 pub async fn cancel_command(run_id: String) -> Result<bool, String> {
     if run_id == "*" {
-        let pids: Vec<(String, u32)> = RUNNING
+        let runs: Vec<(String, RunningCommand)> = RUNNING
             .get_or_init(Default::default)
             .lock()
             .map_err(|e| e.to_string())?
             .iter()
-            .map(|(k, v)| (k.clone(), *v))
+            .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
         if let Ok(mut set) = CANCELLED.get_or_init(Default::default).lock() {
-            for (k, _) in &pids {
+            for (k, _) in &runs {
                 set.insert(k.clone());
             }
         }
-        for (_, pid) in pids {
-            kill_group(pid);
+        for (_, run) in &runs {
+            kill_group(run);
         }
         return Ok(true);
     }
-    let pid = RUNNING
+    let run = RUNNING
         .get_or_init(Default::default)
         .lock()
         .map_err(|e| e.to_string())?
         .get(&run_id)
-        .copied();
-    match pid {
-        Some(pid) => {
+        .cloned();
+    match run {
+        Some(run) => {
             if let Ok(mut set) = CANCELLED.get_or_init(Default::default).lock() {
                 set.insert(run_id);
             }
-            kill_group(pid);
+            kill_group(&run);
             Ok(true)
         }
         None => Ok(false),
@@ -167,17 +190,12 @@ const PIPE_DRAIN_GRACE_MS: u64 = 250;
 /// Exit code reported for a command killed by the timeout (same convention as coreutils `timeout`).
 pub const TIMEOUT_EXIT_CODE: i32 = 124;
 
+/// `~`, `~\x`, `~/x`, `%USERPROFILE%\x` and `$env:USERPROFILE\x` (any case) name the user's home folder.
 pub fn expand_tilde(path: &str) -> std::path::PathBuf {
-    if path == "~" {
-        if let Some(home) = crate::home::home_dir() {
-            return home;
-        }
-    } else if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\")) {
-        if let Some(home) = crate::home::home_dir() {
-            return home.join(rest);
-        }
+    match crate::home::home_dir() {
+        Some(home) => crate::home::expand_home_forms(path, &home),
+        None => std::path::PathBuf::from(path),
     }
-    std::path::PathBuf::from(path)
 }
 
 fn resolve_working_dir(cwd: Option<String>) -> Option<std::path::PathBuf> {
@@ -209,10 +227,23 @@ where
     }
 }
 
-/// Kill the command. TODO(2.4): kill the whole tree through a Job Object; until then only the
-/// direct child dies, so grandchildren can outlive a timeout.
-async fn kill_process_tree(child: &mut tokio::process::Child, _pid: Option<u32>) {
-    let _ = child.kill().await;
+/// Kill the command and its whole tree, then reap the direct child.
+async fn kill_process_tree(child: &mut tokio::process::Child, pid: Option<u32>, job: &Option<Arc<Job>>) {
+    let ended = job.as_ref().map(|job| job.terminate().is_ok()).unwrap_or(false);
+    if !ended {
+        if let Some(pid) = pid {
+            taskkill_tree(pid);
+        }
+        let _ = child.start_kill();
+    }
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), child.wait()).await;
+}
+
+/// Put the process in a job of its own, when the system allows it. Without a job the caller falls back to `taskkill`.
+fn job_for(child: &tokio::process::Child) -> Option<Arc<Job>> {
+    let job = Job::new().ok()?;
+    job.assign(child.raw_handle()?).ok()?;
+    Some(Arc::new(job))
 }
 
 /// Runs a command without a terminal: stdin is closed so prompts fail fast instead of hanging,
@@ -225,7 +256,6 @@ pub async fn run_command(
     run_id: Option<String>,
 ) -> Result<CommandOutput, String> {
     use std::process::Stdio;
-    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     let mut process = tokio::process::Command::new(&command);
@@ -244,7 +274,11 @@ pub async fn run_command(
         .spawn()
         .map_err(|e| format!("Failed to execute {}: {}", command, e))?;
     let pid = child.id();
-    let _guard = RunningGuard::new(run_id.clone(), pid);
+    let job = job_for(&child);
+    if job.is_none() {
+        crate::logger::log_warn("EXEC", &format!("{} could not be put in a job object; cancel falls back to taskkill", command));
+    }
+    let _guard = RunningGuard::new(run_id.clone(), pid, job.clone());
 
     let stdout_buf = Arc::new(Mutex::new(Vec::new()));
     let stderr_buf = Arc::new(Mutex::new(Vec::new()));
@@ -257,12 +291,25 @@ pub async fn run_command(
             Ok(result) => Some(result.map_err(|e| e.to_string())?),
             Err(_) => {
                 timed_out = true;
-                kill_process_tree(&mut child, pid).await;
+                kill_process_tree(&mut child, pid, &job).await;
                 None
             }
         },
         None => Some(child.wait().await.map_err(|e| e.to_string())?),
     };
+
+    // The command finished by itself: programs it started on purpose (an editor, a dev server) keep running
+    if !timed_out {
+        let cancelled_now = run_id
+            .as_ref()
+            .and_then(|id| CANCELLED.get_or_init(Default::default).lock().ok().map(|set| set.contains(id)))
+            .unwrap_or(false);
+        if !cancelled_now {
+            if let Some(job) = &job {
+                job.release();
+            }
+        }
+    }
 
     let _ = tokio::time::timeout(Duration::from_millis(PIPE_DRAIN_GRACE_MS), async {
         let _ = (&mut stdout_task).await;
@@ -270,8 +317,8 @@ pub async fn run_command(
     })
     .await;
 
-    let stdout = String::from_utf8_lossy(&stdout_buf.lock().map_err(|e| e.to_string())?).into_owned();
-    let mut stderr = String::from_utf8_lossy(&stderr_buf.lock().map_err(|e| e.to_string())?).into_owned();
+    let stdout = crate::encoding::decode_output(&stdout_buf.lock().map_err(|e| e.to_string())?);
+    let mut stderr = crate::encoding::decode_output(&stderr_buf.lock().map_err(|e| e.to_string())?);
     if timed_out {
         if !stderr.is_empty() && !stderr.ends_with('\n') {
             stderr.push('\n');
@@ -496,6 +543,177 @@ mod tests {
         assert!(resolve_in_cero("learning\\deficits.jsonl").is_ok());
     }
 
-    // TODO(2.4): port the run_command tests (output and exit code, timeout, cancel, closed stdin)
-    // to cmd.exe and PowerShell, including a grandchild process that must die with its parent.
+}
+
+/// `run_command` against real processes. Each test pings its own 127.0.0.x address, so its processes can be told
+/// apart from the other tests' (they run in parallel).
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    fn ping_pids(ip: &str) -> Vec<sysinfo::Pid> {
+        let mut sys = System::new();
+        sys.refresh_processes_specifics(ProcessesToUpdate::All, true, sysinfo::ProcessRefreshKind::everything());
+        sys.processes()
+            .iter()
+            .filter(|(_, p)| {
+                p.name().to_string_lossy().to_ascii_lowercase().starts_with("ping")
+                    && p.cmd().iter().any(|arg| arg.to_string_lossy().contains(ip))
+            })
+            .map(|(pid, _)| *pid)
+            .collect()
+    }
+
+    fn kill_pings(ip: &str) {
+        let mut sys = System::new();
+        sys.refresh_processes_specifics(ProcessesToUpdate::All, true, sysinfo::ProcessRefreshKind::everything());
+        for pid in ping_pids(ip) {
+            if let Some(process) = sys.process(pid) {
+                process.kill();
+            }
+        }
+    }
+
+    async fn no_pings_within(ip: &str, secs: u64) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(secs);
+        while Instant::now() < deadline {
+            if ping_pids(ip).is_empty() {
+                return true;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        false
+    }
+
+    async fn run(args: &[&str], timeout_ms: Option<u64>, run_id: Option<&str>) -> CommandOutput {
+        run_command(
+            "cmd".to_string(),
+            args.iter().map(|a| a.to_string()).collect(),
+            None,
+            timeout_ms,
+            run_id.map(str::to_string),
+        )
+        .await
+        .expect("cmd starts")
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn captures_output_and_exit_code() {
+        let out = run(&["/c", "echo hello& exit 3"], None, None).await;
+        assert!(out.stdout.contains("hello"), "stdout: {:?}", out.stdout);
+        assert_eq!(out.code, 3);
+        assert!(!out.timed_out && !out.cancelled);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn stderr_is_captured_separately() {
+        let out = run(&["/c", "echo to-stderr 1>&2"], None, None).await;
+        assert!(out.stderr.contains("to-stderr"), "stderr: {:?}", out.stderr);
+        assert!(!out.stdout.contains("to-stderr"));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn timeout_kills_the_whole_tree() {
+        let ip = "127.0.0.71";
+        let started = Instant::now();
+        // ping is a grandchild: this test -> cmd -> cmd -> ping
+        let out = run(&["/c", "cmd /c ping -n 30 127.0.0.71 > nul"], Some(1000), None).await;
+        assert!(out.timed_out, "should have timed out");
+        assert_eq!(out.code, TIMEOUT_EXIT_CODE);
+        assert!(started.elapsed() < Duration::from_secs(8), "took {:?}", started.elapsed());
+        let gone = no_pings_within(ip, 3).await;
+        kill_pings(ip);
+        assert!(gone, "the grandchild ping outlived the timeout");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_background_child_holding_stdout_does_not_block_the_caller() {
+        let ip = "127.0.0.72";
+        let started = Instant::now();
+        let out = run(&["/c", "start /b ping -n 30 127.0.0.72 & echo done"], None, None).await;
+        let elapsed = started.elapsed();
+        let still_running = !ping_pids(ip).is_empty();
+        kill_pings(ip);
+        assert!(out.stdout.contains("done"), "stdout: {:?}", out.stdout);
+        assert!(elapsed < Duration::from_secs(5), "waited {:?} for the background child", elapsed);
+        assert!(still_running, "a program the command started on purpose must outlive it");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn stdin_is_closed_so_prompts_do_not_hang() {
+        // sort reads standard input until it ends; with a closed stdin it returns at once
+        let out = run(&["/c", "sort"], Some(8000), None).await;
+        assert!(!out.timed_out, "sort waited for input");
+        assert_eq!(out.code, 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn cancel_stops_the_process() {
+        let id = "test-cancel-stop";
+        let runner = tokio::spawn(async move { run(&["/c", "ping -n 30 127.0.0.73 > nul"], None, Some(id)).await });
+        tokio::time::sleep(Duration::from_millis(800)).await;
+        assert!(cancel_command(id.to_string()).await.unwrap(), "the run was known");
+        let started = Instant::now();
+        let out = runner.await.unwrap();
+        assert!(out.cancelled);
+        assert_eq!(out.code, 130);
+        assert!(started.elapsed() < Duration::from_secs(5));
+        kill_pings("127.0.0.73");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn cancel_kills_grandchildren() {
+        let id = "test-cancel-tree";
+        let ip = "127.0.0.74";
+        let runner = tokio::spawn(async move { run(&["/c", "cmd /c start /b ping -n 30 127.0.0.74 > nul & ping -n 30 127.0.0.74 > nul"], None, Some(id)).await });
+        // wait until both pings run
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while ping_pids(ip).len() < 2 && Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        assert!(cancel_command(id.to_string()).await.unwrap());
+        let out = runner.await.unwrap();
+        let gone = no_pings_within(ip, 3).await;
+        kill_pings(ip);
+        assert!(out.cancelled);
+        assert!(gone, "grandchildren survived the cancel");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn cancelling_one_run_leaves_the_other_running() {
+        let (a, b) = ("test-iso-a", "test-iso-b");
+        let first = tokio::spawn(async move { run(&["/c", "ping -n 4 127.0.0.75 > nul & echo first-done"], None, Some(a)).await });
+        let second = tokio::spawn(async move { run(&["/c", "ping -n 30 127.0.0.76 > nul"], None, Some(b)).await });
+        tokio::time::sleep(Duration::from_millis(800)).await;
+        assert!(cancel_command(b.to_string()).await.unwrap());
+        assert!(second.await.unwrap().cancelled);
+        let first = first.await.unwrap();
+        assert!(!first.cancelled, "cancelling another run must not stop this one");
+        assert!(first.stdout.contains("first-done"), "stdout: {:?}", first.stdout);
+        kill_pings("127.0.0.76");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn cancelling_an_unknown_run_reports_false() {
+        assert!(!cancel_command("no-such-run".to_string()).await.unwrap());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn utf8_output_from_powershell_arrives_intact() {
+        let out = run_command(
+            "powershell".to_string(),
+            vec![
+                "-NoProfile".to_string(),
+                "-Command".to_string(),
+                "[Console]::OutputEncoding = [Text.UTF8Encoding]::new(); Write-Output ([string][char]0x00e9 + [char]0x2713)".to_string(),
+            ],
+            None,
+            Some(30_000),
+            None,
+        )
+        .await
+        .expect("powershell starts");
+        assert!(out.stdout.contains("\u{e9}\u{2713}"), "stdout: {:?}", out.stdout);
+    }
 }

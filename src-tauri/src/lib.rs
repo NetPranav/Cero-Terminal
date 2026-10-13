@@ -1,4 +1,6 @@
+mod encoding;
 mod home;
+mod job;
 mod osc;
 mod shell;
 mod shell_list;

@@ -277,11 +277,17 @@ pub fn start_embedded_llm(
         cmd.current_dir(bin_dir);
     }
 
-    // TODO(2.5): put the server in a Job Object with kill-on-close, so it dies with Cero even after a crash
-
     let child = cmd
         .spawn()
         .map_err(|e| format!("Failed to spawn llama-server at {}: {}", bin_path.display(), e))?;
+
+    // The server dies with Cero even when Cero is killed and cannot clean up (the job closes with the process)
+    if let Some(job) = crate::job::app_job() {
+        use std::os::windows::io::AsRawHandle;
+        if let Err(e) = job.assign(child.as_raw_handle()) {
+            crate::logger::log_warn("LLM", &format!("llama-server could not be put in the app job: {}", e));
+        }
+    }
 
     crate::logger::log_info("LLM", &format!("Spawned llama-server (pid: {}) on port {}", child.id(), state.port));
 
