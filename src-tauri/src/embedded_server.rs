@@ -62,10 +62,7 @@ pub struct EmbeddedLlmStatus {
 }
 
 fn get_home_dir() -> Option<PathBuf> {
-    std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .ok()
-        .map(PathBuf::from)
+    crate::home::home_dir()
 }
 
 /// Directory the in-app installer extracts the full llama.cpp release bundle into. Modern

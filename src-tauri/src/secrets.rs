@@ -11,8 +11,8 @@ use std::path::PathBuf;
 const FILE_NAME: &str = "secrets.json";
 
 fn secrets_file() -> Result<PathBuf, String> {
-    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).map_err(|e| e.to_string())?;
-    Ok(PathBuf::from(home).join(".cero").join(FILE_NAME))
+    let home = crate::home::home_dir().ok_or_else(|| "home directory not found".to_string())?;
+    Ok(home.join(".cero").join(FILE_NAME))
 }
 
 fn read_map(path: &PathBuf) -> BTreeMap<String, String> {

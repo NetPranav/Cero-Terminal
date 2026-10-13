@@ -6,6 +6,19 @@ export interface PtyOutputEvent {
   data: number[]; // Sent as array of u8 from Rust
 }
 
+/** Sent by the backend when the shell that was asked for could not be started and another one was used */
+export interface PtyFallbackEvent {
+  session_id: string;
+  requested: string;
+  used: string;
+  reason: string;
+}
+
+/** The line printed in the terminal when a fallback shell was started */
+export function fallbackNotice(event: PtyFallbackEvent): string {
+  return `\r\n[Cero] Could not start ${event.requested} (${event.reason}). Started ${event.used} instead.\r\n`;
+}
+
 /** `replay` is true for buffered history re-sent to a remounted pane (not new output) */
 export type TerminalOutputCallback = (data: Uint8Array, replay?: boolean) => void;
 
@@ -38,6 +51,11 @@ export class SessionManager {
       if (callbacks) {
         callbacks.forEach(cb => cb(u8Data));
       }
+    });
+
+    await listen<PtyFallbackEvent>('pty-fallback', (event) => {
+      // Recorded and shown: the pane may not be listening yet when the session starts
+      this.recordOutput(event.payload.session_id, fallbackNotice(event.payload), true);
     });
 
     await listen<string>('pty-exit', (event) => {
@@ -84,8 +102,9 @@ export class SessionManager {
       args: args || null, 
       env: env || null 
     });
-    this.outputListeners.set(sessionId, []);
-    this.sessionBuffers.set(sessionId, []);
+    // Output can arrive before the id does (the first prompt, a fallback notice); keep it
+    if (!this.outputListeners.has(sessionId)) this.outputListeners.set(sessionId, []);
+    if (!this.sessionBuffers.has(sessionId)) this.sessionBuffers.set(sessionId, []);
     return sessionId;
   }
 

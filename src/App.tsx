@@ -7,6 +7,7 @@ import { StatusBar } from "./ui/components/StatusBar";
 import { ThemeManager } from "./ui/theme/ThemeManager";
 import type { SettingsTabId } from "./ui/components/AiSettingsPage";
 import { SessionManager } from "./domain/SessionManager";
+import { shellDisplayName } from './domain/shell/shellName';
 import { UrlSchemeHandler } from "./domain/integration/UrlSchemeHandler";
 import { SessionPersistenceEngine } from "./domain/session/SessionPersistenceEngine";
 import { HistorySearchModal } from "./ui/components/HistorySearchModal";
@@ -230,8 +231,7 @@ export function App({ initialPath, initialFlowFiles }: AppProps = {}) {
       try {
         const shell = await invoke<string>('get_default_shell');
         if (shell) {
-          const name = shell.split('/').pop()?.replace(/^-/, '') || 'bash';
-          setDetectedShell(name);
+          setDetectedShell(shellDisplayName(shell));
         }
       } catch {
         setDetectedShell('powershell');

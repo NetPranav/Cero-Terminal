@@ -83,7 +83,7 @@ pub fn migrate_app_data(roots: &[std::path::PathBuf]) -> usize {
 }
 
 pub fn migrate_legacy_data() {
-    let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) else { return };
+    let Some(home) = crate::home::home_dir_string() else { return };
     // do the moves first and write the log after: logging can create ~/.cero, and the move needs it not to exist yet
     let moved_home = migrate_home(Path::new(&home));
     let copied = migrate_app_data(&app_data_roots());

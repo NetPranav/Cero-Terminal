@@ -1,3 +1,5 @@
+mod home;
+mod shell;
 mod pty;
 mod process_cmds;
 mod embedded_server;

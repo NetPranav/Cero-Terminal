@@ -169,12 +169,12 @@ pub const TIMEOUT_EXIT_CODE: i32 = 124;
 
 pub fn expand_tilde(path: &str) -> std::path::PathBuf {
     if path == "~" {
-        if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
-            return std::path::PathBuf::from(home);
+        if let Some(home) = crate::home::home_dir() {
+            return home;
         }
     } else if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\")) {
-        if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
-            return std::path::PathBuf::from(home).join(rest);
+        if let Some(home) = crate::home::home_dir() {
+            return home.join(rest);
         }
     }
     std::path::PathBuf::from(path)
@@ -185,11 +185,7 @@ fn resolve_working_dir(cwd: Option<String>) -> Option<std::path::PathBuf> {
         .map(|path| expand_tilde(&path))
         .and_then(|p| if p.is_dir() { Some(p) } else { None })
         .or_else(|| {
-            std::env::var("HOME")
-                .or_else(|_| std::env::var("USERPROFILE"))
-                .ok()
-                .map(std::path::PathBuf::from)
-                .filter(|p| p.is_dir())
+            crate::home::home_dir().filter(|p| p.is_dir())
         })
 }
 
@@ -364,10 +360,7 @@ pub fn check_path_exists(path: String) -> bool {
 
 /// ~/.cero, where every learning store lives.
 fn cero_dir() -> Option<std::path::PathBuf> {
-    std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .ok()
-        .map(|home| std::path::PathBuf::from(home).join(".cero"))
+    crate::home::home_dir().map(|home| home.join(".cero"))
 }
 
 /// ~/.cero holds the audit log, session transcripts and learning data.
@@ -404,7 +397,7 @@ const SNAPSHOT_MAX_TOTAL_BYTES: u64 = 32 * 1024 * 1024;
 /// the webview's synchronous `fs` shim can serve the learning stores.
 #[tauri::command]
 pub fn cero_store_snapshot() -> Result<CeroStoreSnapshot, String> {
-    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).map_err(|e| e.to_string())?;
+    let home = crate::home::home_dir_string().ok_or_else(|| "home directory not found".to_string())?;
     let root = std::path::PathBuf::from(&home).join(".cero");
     let mut files = std::collections::HashMap::new();
     let mut total: u64 = 0;
@@ -478,12 +471,13 @@ mod tests {
 
     #[test]
     fn test_expand_tilde() {
-        let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).unwrap();
+        let home = crate::home::home_dir().unwrap();
         let expanded = expand_tilde("~");
-        assert_eq!(expanded.to_str().unwrap(), home);
+        assert_eq!(expanded, home);
 
         let expanded_sub = expand_tilde("~/test_dir");
-        assert_eq!(expanded_sub, std::path::PathBuf::from(&home).join("test_dir"));
+        assert_eq!(expanded_sub, home.join("test_dir"));
+        assert_eq!(expand_tilde("~\\test_dir"), home.join("test_dir"));
 
         let regular = expand_tilde("/tmp");
         assert_eq!(regular.to_str().unwrap(), "/tmp");

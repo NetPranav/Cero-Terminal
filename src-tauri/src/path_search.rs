@@ -73,7 +73,7 @@ pub fn search(query: &str, roots: &[String], kind: &str, max_depth: u32, limit: 
     let mut seen: HashSet<PathBuf> = HashSet::new();
     let mut visited = 0usize;
 
-    let home: Option<PathBuf> = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok().map(PathBuf::from);
+    let home: Option<PathBuf> = crate::home::home_dir();
     let mut queue: VecDeque<(PathBuf, u32)> = VecDeque::new();
     for root in roots {
         let p = expand_tilde(root);
