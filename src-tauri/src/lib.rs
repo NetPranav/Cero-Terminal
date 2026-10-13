@@ -1,4 +1,5 @@
 mod home;
+mod osc;
 mod shell;
 mod pty;
 mod process_cmds;

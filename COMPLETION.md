@@ -91,7 +91,7 @@ without touching the system one:
 | Done | # | Subphase | Date | Commit | Notes |
 |---|---|---|---|---|---|
 | [ ] | 2.1 | PTY on ConPTY: shell resolution, arguments, exit detection, kill, fallback | | | Code written 2026-10-13: `shell.rs` (order pwsh, Windows PowerShell, `%ComSpec%`; `PATHEXT` walk; args per shell; 22 tests, run on Linux), `home.rs` (`USERPROFILE` before `HOME`, used everywhere), `pty.rs` (fallback with `pty-fallback` notice, waiter thread for `pty-exit` within 2 s, kill, no `LANG`/`LC_ALL`/`-l`), 11 `#[cfg(windows)]` PTY tests (cmd, PowerShell, pwsh, Git Bash, UTF-8, exit, kill, resize, fallback, home). Open: those tests have only been compiled (`cargo xwin check --tests`), not run; they need `windows-latest` CI and a real PC. Job Objects are 2.4, the integration scripts 3.3 |
-| [ ] | 2.2 | Shell working directory through OSC 9;9 / OSC 7 | | | |
+| [ ] | 2.2 | Shell working directory through OSC 9;9 / OSC 7 | | | Rust side written 2026-10-13: `osc.rs` scanner (OSC 9;9 and OSC 7, split reads, UNC and POSIX forms; 13 tests, run on Linux) feeds a per-session folder in `pty.rs`; `get_pty_cwd` returns it (the start folder until the first report). Open: the shells must send the reports (`cero.ps1`, `cero.cmd`, bash: 3.3) and the four-shell check on a real PC; one `cfg(windows)` test sets a cmd `PROMPT` and is only compiled so far |
 | [ ] | 2.3 | Shell discovery command (`list_available_shells`) | | | |
 | [ ] | 2.4 | Process execution and cleanup (Job Objects, encoding, ported tests) | | | |
 | [ ] | 2.5 | Embedded model server (engine asset choice, extraction, parent death, orphan reaping) | | | |

@@ -1,3 +1,4 @@
+use crate::osc::CwdScanner;
 use crate::shell::{self, ResolveEnv};
 use portable_pty::{Child, ChildKiller, CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
 use serde::Serialize;
@@ -30,8 +31,11 @@ pub struct PtySession {
     writer: Box<dyn Write + Send>,
     /// Ends the shell without the `Child` handle, which the waiter thread holds while it blocks
     killer: Box<dyn ChildKiller + Send + Sync>,
-    /// Shell process id, used to read its working directory
+    /// Shell process id (read by the tests)
+    #[allow(dead_code)]
     pid: Option<u32>,
+    /// Last working directory the shell reported (OSC 9;9 or OSC 7, see `osc.rs`)
+    cwd: Arc<Mutex<Option<String>>>,
 }
 
 pub type Sessions = Arc<Mutex<HashMap<String, PtySession>>>;
@@ -224,6 +228,7 @@ pub fn start_session(sessions: &Sessions, sink: Arc<dyn PtySink>, req: &SpawnReq
     let mut child = opened.child;
     let pid = child.process_id();
 
+    let cwd: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(working_dir(req.cwd.clone()).map(|p| p.to_string_lossy().into_owned())));
     lock(sessions).insert(
         session_id.clone(),
         PtySession {
@@ -231,6 +236,7 @@ pub fn start_session(sessions: &Sessions, sink: Arc<dyn PtySink>, req: &SpawnReq
             writer,
             killer: child.clone_killer(),
             pid,
+            cwd: cwd.clone(),
         },
     );
 
@@ -238,13 +244,19 @@ pub fn start_session(sessions: &Sessions, sink: Arc<dyn PtySink>, req: &SpawnReq
     let (reader_done_tx, reader_done_rx) = mpsc::channel::<()>();
 
     {
-        let (sessions, sink, done, id) = (sessions.clone(), sink.clone(), done.clone(), session_id.clone());
+        let (sessions, sink, done, id, cwd) = (sessions.clone(), sink.clone(), done.clone(), session_id.clone(), cwd);
         std::thread::spawn(move || {
             let mut buf = [0u8; 4096];
+            let mut scanner = CwdScanner::default();
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => break,
-                    Ok(n) => sink.output(&id, &buf[..n]),
+                    Ok(n) => {
+                        if let Some(path) = scanner.feed(&buf[..n]) {
+                            *lock(&cwd) = Some(path);
+                        }
+                        sink.output(&id, &buf[..n]);
+                    }
                 }
             }
             let _ = reader_done_tx.send(());
@@ -375,21 +387,13 @@ pub fn get_default_shell() -> String {
         .unwrap_or_else(|| "powershell.exe".to_string())
 }
 
-/// Current working directory of the session's shell, read from the OS (not guessed from
-/// typed `cd` commands, which miss aliases, `pushd`, `z` and compound lines).
+/// Current working directory of the session's shell: the last folder the shell reported through OSC 9;9 or OSC 7
+/// (shell integration, roadmap 3.3), or the folder the session was started in until the first report. `None` for
+/// an unknown session.
 #[tauri::command]
 pub fn get_pty_cwd(state: State<'_, PtyState>, session_id: String) -> Result<Option<String>, String> {
-    let pid = {
-        let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
-        sessions.get(&session_id).and_then(|s| s.pid)
-    };
-    Ok(pid.and_then(process_cwd))
-}
-
-/// TODO(2.2): read the shell's working directory on Windows (OSC 9;9 / OSC 7 from the shell
-/// integration scripts, with a process-based fallback). Until then there is no value.
-pub fn process_cwd(_pid: u32) -> Option<String> {
-    None
+    let sessions = lock(&state.sessions);
+    Ok(sessions.get(&session_id).and_then(|s| lock(&s.cwd).clone()))
 }
 
 #[cfg(all(test, windows))]
@@ -628,6 +632,28 @@ mod tests {
         let text = h.text();
         let at = text.rfind("Columns:").expect("mode con prints Columns");
         assert!(text[at..].split_whitespace().nth(1) == Some("100"), "output: {}", &text[at..]);
+        h.write(&s.session_id, "exit\r\n");
+    }
+
+    #[test]
+    fn the_folder_the_shell_reports_becomes_the_session_folder() {
+        let h = harness();
+        let s = h.start(Some("cmd.exe"));
+        let cwd_of = |id: &str| lock(&h.sessions).get(id).and_then(|x| lock(&x.cwd).clone());
+        // Before any report: the folder the session started in
+        assert_eq!(cwd_of(&s.session_id).map(|p| p.to_ascii_lowercase()), crate::home::home_dir_string().map(|p| p.to_ascii_lowercase()));
+
+        // cmd reports through its prompt: ESC ] 9;9; $P ESC \
+        h.write(&s.session_id, "prompt $e]9;9;$P$e\\$P$G\r\n");
+        h.write(&s.session_id, "cd /d C:\\Windows\r\n");
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            if cwd_of(&s.session_id).as_deref().map(|p| p.eq_ignore_ascii_case("C:\\Windows")) == Some(true) {
+                break;
+            }
+            assert!(Instant::now() < deadline, "folder never reported; now {:?}; output {}", cwd_of(&s.session_id), h.text());
+            std::thread::sleep(Duration::from_millis(50));
+        }
         h.write(&s.session_id, "exit\r\n");
     }
 
