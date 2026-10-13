@@ -1,5 +1,5 @@
 /**
- * SecretStore.ts: API keys in the operating system keychain, not in browser storage.
+ * SecretStore.ts: API keys in Windows Credential Manager, not in browser storage.
  *
  * The Tauri commands do the real work (Windows Credential Manager). Every method reports failure
  * instead of guessing, so a caller never deletes the old
@@ -10,7 +10,7 @@ export interface SecretBackend {
   set(service: string, key: string, value: string): Promise<void>;
   get(service: string, key: string): Promise<string | null>;
   delete(service: string, key: string): Promise<void>;
-  /** "keychain" or "file" */
+  /** "keychain" (Windows Credential Manager) */
   kind(): Promise<string>;
 }
 

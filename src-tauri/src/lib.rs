@@ -14,6 +14,7 @@ mod watcher;
 mod downloads;
 mod launch;
 mod path_search;
+mod secret_chunks;
 mod secrets;
 mod legacy_migration;
 mod file_association;

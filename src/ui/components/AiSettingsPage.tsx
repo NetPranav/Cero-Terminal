@@ -909,8 +909,8 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                 {secretKind && (
                   <span style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.4)' }}>
                     {secretKind === 'keychain'
-                      ? 'Stored in your operating system keychain.'
-                      : 'No system keychain here: the key is kept in a private file (~/.cero/secrets.json) that only your account can read.'}
+                      ? 'Stored in Windows Credential Manager.'
+                      : 'Stored in the system keychain.'}
                   </span>
                 )}
               </div>
