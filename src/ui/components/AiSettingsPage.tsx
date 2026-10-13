@@ -36,6 +36,7 @@ import { CloudApiProvider, CloudServiceId, CloudKeyConfig, CLOUD_CATALOG } from 
 import { readGhostAcceptRight, GHOST_ACCEPT_RIGHT_KEY } from '../../presentation/ghostPrefs';
 import { ModelManager, ActiveModelInfo } from '../../ai/management/ModelManager';
 import { InstallerService, IntegrationStatus, NOT_AVAILABLE_ON_WINDOWS } from '../../domain/integration/InstallerService';
+import { AssociationStatus, describeAssociation, isAssociationToggleLocked } from '../../domain/integration/fileAssociation';
 
 export type SettingsTabId = 'ai' | 'integrations' | 'appearance' | 'general';
 
@@ -89,13 +90,6 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
     } catch {}
   };
 
-  interface AssociationStatus {
-    is_appimage: boolean;
-    registered: boolean;
-    decision: string;
-    appimage_path?: string;
-    desktop_file?: string;
-  }
   const [associationStatus, setAssociationStatus] = useState<AssociationStatus | null>(null);
 
   useEffect(() => {
@@ -2161,9 +2155,7 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                     Open .flow files with Cero
                   </div>
                   <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginTop: '3px', lineHeight: 1.45 }}>
-                    {associationStatus?.desktop_file
-                      ? `Registered desktop handler at ${associationStatus.desktop_file}`
-                      : 'Registers Cero as the system handler for .flow files.'}
+                    {describeAssociation(associationStatus)}
                   </div>
                 </div>
               </div>
@@ -2172,8 +2164,9 @@ export const AiSettingsPage: React.FC<AiSettingsPageProps> = ({
                 <input
                   type="checkbox"
                   checked={associationStatus?.registered ?? false}
+                  disabled={isAssociationToggleLocked(associationStatus)}
                   onChange={(e) => void handleToggleAssociation(e.target.checked)}
-                  style={{ accentColor: '#ffffff', cursor: 'pointer', width: '16px', height: '16px' }}
+                  style={{ accentColor: '#ffffff', cursor: isAssociationToggleLocked(associationStatus) ? 'not-allowed' : 'pointer', width: '16px', height: '16px' }}
                 />
                 <span style={{ fontSize: '12px', color: associationStatus?.registered ? '#ffffff' : 'rgba(255, 255, 255, 0.5)', fontWeight: 500 }}>
                   {associationStatus?.registered ? 'Enabled' : 'Disabled'}

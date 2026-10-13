@@ -1,5 +1,7 @@
+mod assoc;
 mod encoding;
 mod engine_support;
+mod file_uri;
 mod home;
 mod job;
 mod osc;

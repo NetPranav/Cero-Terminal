@@ -13,7 +13,7 @@ use tauri::{AppHandle, Manager, State};
 pub struct OpenedFiles(pub Mutex<Vec<String>>);
 
 pub fn is_flow_path(p: &str) -> bool {
-    let lower = p.to_lowercase();
+    let lower = p.trim().trim_matches('"').to_lowercase();
     lower.ends_with(".flow") || lower.ends_with(".workflow.json") || lower.ends_with(".cero-workflow.json")
 }
 
@@ -59,19 +59,21 @@ pub fn is_main_window_visible(app: AppHandle) -> bool {
     app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(true)
 }
 
-fn resolve_file_path(arg: &str) -> Option<std::path::PathBuf> {
-    if let Some(stripped) = arg.strip_prefix("file://") {
-        let stripped = stripped.trim_start_matches('/');
-        let path = std::path::PathBuf::from(stripped);
-        if path.is_file() {
-            return Some(path);
+/// The path a launch argument names: quotes around it are removed and a `file:///C:/...` or
+/// `file://server/share/...` URL becomes a Windows path (percent escapes decoded).
+pub fn flow_arg_path(arg: &str) -> String {
+    let arg = arg.trim().trim_matches('"').trim();
+    if arg.len() >= 7 && arg[..7].eq_ignore_ascii_case("file://") {
+        if let Some(path) = crate::file_uri::file_uri_to_path(arg) {
+            return path;
         }
     }
-    let path = std::path::PathBuf::from(arg);
-    if path.is_file() {
-        return Some(path);
-    }
-    None
+    arg.to_string()
+}
+
+fn resolve_file_path(arg: &str) -> Option<std::path::PathBuf> {
+    let path = std::path::PathBuf::from(flow_arg_path(arg));
+    path.is_file().then_some(path)
 }
 
 /// Filters command line arguments from a launch or single-instance event:
@@ -84,7 +86,7 @@ pub fn filter_flow_argv(args: &[String]) -> Vec<String> {
             if arg.starts_with('-') {
                 return None;
             }
-            if !is_flow_path(arg) {
+            if !is_flow_path(&flow_arg_path(arg)) {
                 return None;
             }
             if let Some(path) = resolve_file_path(arg) {
@@ -98,7 +100,7 @@ pub fn filter_flow_argv(args: &[String]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::is_flow_path;
+    use super::{flow_arg_path, is_flow_path};
 
     #[test]
     fn recognises_flow_files() {
@@ -107,6 +109,40 @@ mod tests {
         assert!(is_flow_path("file:///tmp/deploy.workflow.json"));
         assert!(!is_flow_path("/tmp/package.json"));
         assert!(!is_flow_path("cero://open?path=/tmp"));
+    }
+
+    #[test]
+    fn launch_arguments_become_windows_paths() {
+        assert_eq!(flow_arg_path(r"C:\Users\a b\x.flow"), r"C:\Users\a b\x.flow");
+        assert_eq!(flow_arg_path(r#""C:\Users\a b\x.flow""#), r"C:\Users\a b\x.flow");
+        assert_eq!(flow_arg_path("file:///C:/Users/a%20b/x.flow"), r"C:\Users\a b\x.flow");
+        assert_eq!(flow_arg_path("FILE:///c:/x.flow"), r"c:\x.flow");
+        assert_eq!(flow_arg_path(r"\\server\share\x.flow"), r"\\server\share\x.flow");
+        assert_eq!(flow_arg_path("file://server/share/x.flow"), r"\\server\share\x.flow");
+        assert_eq!(flow_arg_path("  setup.flow  "), "setup.flow");
+    }
+
+    #[test]
+    fn quoted_and_url_arguments_count_as_flow_files() {
+        assert!(is_flow_path(r#""C:\Users\a b\x.flow""#));
+        assert!(is_flow_path("file:///C:/Users/a%20b/x.flow"));
+        assert!(is_flow_path(r"\\server\share\x.flow"));
+    }
+
+    #[test]
+    fn filter_flow_argv_accepts_url_and_quoted_forms_of_an_existing_file() {
+        let dir = std::env::temp_dir().join(format!("cero launch test {}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("my setup.flow");
+        std::fs::write(&file, b"{}").unwrap();
+        let plain = file.to_string_lossy().to_string();
+        let quoted = format!("\"{}\"", plain);
+        let url = format!("file:///{}", plain.replace('\\', "/").replace(' ', "%20"));
+
+        let argv = vec!["cero".to_string(), quoted, url, plain.clone()];
+        let found = super::filter_flow_argv(&argv);
+        assert_eq!(found, vec![plain.clone(), plain.clone(), plain]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
