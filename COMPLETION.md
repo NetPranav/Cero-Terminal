@@ -18,7 +18,7 @@ This file tracks progress on [ROADMAP.md](ROADMAP.md). The numbers match the roa
 | Phase | Title | Subphases done | Status |
 |---|---|---|---|
 | 0 | Groundwork and baseline | 2 / 5 | In progress |
-| 1 | Bring the windows branch up to date | 3 / 6 | In progress |
+| 1 | Bring the windows branch up to date | 4 / 6 | In progress |
 | 2 | Rust backend for Windows | 0 / 10 | Not started |
 | 3 | Frontend platform layer | 0 / 8 | Not started |
 | 4 | AI agent and security for Windows | 0 / 7 | Not started |
@@ -28,7 +28,7 @@ This file tracks progress on [ROADMAP.md](ROADMAP.md). The numbers match the roa
 | 8 | Verification on real Windows | 0 / 8 | Not started |
 | 9 | Documentation and release | 0 / 3 | Not started |
 | 10 | After release (optional) | 0 / 4 | Not started |
-| **Total** | | **5 / 67** | |
+| **Total** | | **6 / 67** | |
 
 ---
 
@@ -40,7 +40,7 @@ This file tracks progress on [ROADMAP.md](ROADMAP.md). The numbers match the roa
 | [x] | 0.1 | Branch strategy (`windows` branch in worktree `../Cero-windows`) | 2026-10-12 | | Recorded in ROADMAP "Branches and folders" |
 | [x] | 0.2 | Audit of existing Windows work (`origin/windows`, `v2.2.0-windows`, `cfg(windows)` code, CI) | 2026-10-12 | | Findings are in the ROADMAP "Starting point" section |
 | [ ] | 0.3 | Windows development and test environment (VM or PC, toolchain, `cargo xwin`) | | | Linux side done 2026-10-12: `cargo xwin check` passes. Still open: a Windows PC or VM where `npm run tauri dev` starts. Setup notes below the table |
-| [ ] | 0.4 | Green baseline (fix `escapeKey.test.ts`, root `check:triple` green) | | `1de1eb8` | Fix committed on `windows` only (Node 22 ignores a bare `true` capture flag on remove). `npm run check:triple` is green on Linux since `a0e419e`. Open: CI result after push, and the same fix on `linux-v2-update` |
+| [ ] | 0.4 | Green baseline (fix `escapeKey.test.ts`, root `check:triple` green) | | `1de1eb8` | Fix committed on `windows` only (Node 22 ignores a bare `true` capture flag on remove). `npm run check:triple` is green on Linux since `a0e419e`. The same fix is on `linux-v2-update` as `2b1b561` (cherry-pick -x, 9/9 on Node 22). Open: CI result after push |
 | [ ] | 0.5 | Definition of done and test matrix | | | |
 
 **Linux cross-check setup (0.3).** The machine has Arch's system Rust (no rustup), so a user-space toolchain was added
@@ -66,7 +66,7 @@ without touching the system one:
 | [x] | 1.2 | Worktree for the Windows branch (`../Cero-windows`) | 2026-10-12 | | |
 | [x] | 1.3 | Merge `linux-v2-update` into `windows` (one time only) | 2026-10-12 | `0342a4f` | Pushed (`4631b4e..1ed7fe6`); 2600 tests, build, cargo check passed on Linux; CI result to be checked |
 | [ ] | 1.4 | Make the branch Windows-only (remove Linux and macOS code, 9 steps) | | `7dd555b` | All nine steps committed 2026-10-13: 1 `a2b58d7`, 2 `03f5ce8`, 3 `af7926a`, 4 in five parts `9e3b762` `060c3d2` `789c916` `15a49a5` `87fa05c`, 5 `062ee46`, 6 `a0e419e`, 7 `9e1c009`, 8 `0c12f54`, 9 `7dd555b`. `npm run check:triple` passes on Linux (cargo xwin). Open: the Windows CI run after the push. Removed features are listed below the table |
-| [ ] | 1.5 | Porting Linux changes (`LINUX_PORT_LOG.md`, cherry-pick / port / skip routine) | | | |
+| [x] | 1.5 | Porting Linux changes (`LINUX_PORT_LOG.md`, cherry-pick / port / skip routine) | 2026-10-13 | | Log starts at `77fd178`; first review covered the one new Linux commit (`2b1b561`, the escapeKey fix, which started on `windows`) |
 | [ ] | 1.6 | Feature parity matrix | | | |
 
 **Removed or stubbed in 1.4 (input for the 1.6 matrix).** Stubs answer "not available on Windows yet" and carry a
