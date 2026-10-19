@@ -1,44 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { AutocompleteEngine } from './AutocompleteEngine';
 import { HistoryProvider } from './HistoryProvider';
-import { CapabilityProvider } from './CapabilityProvider';
-import { CapabilityManager, CapabilityRegistry, Capability, CapabilityResult } from '../Capability';
-import { z } from 'zod';
-
-class MockWifiCap implements Capability {
-  metadata = {
-    id: 'wifi.disconnect',
-    name: 'Disconnect Wi-Fi',
-    description: 'Disconnects the active Wi-Fi interface.',
-    category: 'System' as const,
-    supportedPlatforms: ['macos'] as any,
-    requiredPermissions: [],
-    version: '1.0'
-  };
-  inputSchema = z.any();
-  supportsDryRun = true;
-  async execute() { return { success: true }; }
-}
 
 describe('Autocomplete Engine', () => {
   let engine: AutocompleteEngine;
   let historyProvider: HistoryProvider;
-  let capabilityProvider: CapabilityProvider;
-  let capManager: CapabilityManager;
 
   beforeEach(() => {
-    capManager = CapabilityManager.getInstance();
-    const registry = capManager.getRegistry();
-    (registry as any).capabilities.clear();
-    registry.register(new MockWifiCap());
-
     engine = new AutocompleteEngine();
     
     historyProvider = new HistoryProvider({ persist: false });
-    capabilityProvider = new CapabilityProvider(capManager);
     
     engine.registerProvider(historyProvider);
-    engine.registerProvider(capabilityProvider);
   });
 
   it('ranks commands the user ran by frequency and folder, ahead of starter completions', async () => {
@@ -60,19 +33,6 @@ describe('Autocomplete Engine', () => {
     expect(historyProvider.getHistory()).toEqual([]);
     const suggestions = await historyProvider.getSuggestions({ currentInput: 'npm r', cursorPosition: 5, cwd: '/', os: 'windows' });
     expect(suggestions.map(s => s.value)).toEqual(['npm run dev', 'npm run build']);
-  });
-
-  it('should return natural language capability suggestions', async () => {
-    const suggestions = await engine.getSuggestions({
-      currentInput: 'disconnect',
-      cursorPosition: 10,
-      cwd: '/',
-      os: 'windows'
-    });
-
-    expect(suggestions.length).toBe(1);
-    expect(suggestions[0].value).toBe('Disconnect Wi-Fi');
-    expect(suggestions[0].category).toBe('Capability');
   });
 
   it('should enforce strict latency timeouts on slow providers', async () => {

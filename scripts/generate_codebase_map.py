@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate docs/CODEBASE_MAP.md from the import graph: python3 scripts/generate_codebase_map.py > docs/CODEBASE_MAP.md"""
-import os, re, json, subprocess, collections
+import os, posixpath, re, json, subprocess, collections, sys
+sys.stdout.reconfigure(encoding="utf-8")
 root='.'
 tracked=set(subprocess.check_output(['git','ls-files'],text=True).split('\n'))
 files={}
@@ -8,12 +9,12 @@ for base in ['src','scripts']:
     for dp,dn,fn in os.walk(base):
         for f in fn:
             if f.endswith(('.ts','.tsx')):
-                p=os.path.normpath(os.path.join(dp,f)); files[p]=open(p,encoding='utf-8',errors='ignore').read()
+                p=posixpath.normpath(posixpath.join(dp.replace(os.sep,'/'),f)); files[p]=open(p,encoding='utf-8',errors='ignore').read()
 imp=re.compile(r'''(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)|import\s+['"]([^'"]+)['"]''',re.S)
 def res(frm,spec):
     if not spec.startswith('.'): return None
-    b=os.path.normpath(os.path.join(os.path.dirname(frm),spec))
-    for c in [b,b+'.ts',b+'.tsx',os.path.join(b,'index.ts'),os.path.join(b,'index.tsx')]:
+    b=posixpath.normpath(posixpath.join(posixpath.dirname(frm),spec))
+    for c in [b,b+'.ts',b+'.tsx',b+'/index.ts',b+'/index.tsx']:
         if c in files: return c
 g={f:{r for m in imp.finditer(t) for r in [res(f,m.group(1) or m.group(2) or m.group(3))] if r} for f,t in files.items()}
 def reach(st):

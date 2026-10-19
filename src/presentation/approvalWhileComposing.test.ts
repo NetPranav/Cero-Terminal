@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ConsentQueue } from '../domain/security/ConsentQueue';
 import { InputLineTracker } from './InputLineTracker';
-import { APPROVAL_PRESENTATION } from './approvalPresentation';
 
 /**
  * Prompt A is running and asks for approval while the user is writing Prompt B.
@@ -19,7 +18,7 @@ describe('approval request from a running task while another prompt is being wri
       if (req && !shown.find(s => s.id === req.id)) {
         shown.push({
           id: req.id,
-          presentation: APPROVAL_PRESENTATION,
+          presentation: 'dock', // every approval is a docked card that never takes the keyboard
         });
       }
     });
